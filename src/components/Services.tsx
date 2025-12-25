@@ -1,32 +1,5 @@
-import { Bot, MessageSquare, Globe, ArrowRight } from "lucide-react";
+import { Bot, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const services = [
-  {
-    icon: Bot,
-    title: "AI Chatbot",
-    subtitle: "Primary Product",
-    description: "Intelligent conversational AI that handles customer inquiries 24/7. Automated lead qualification, booking, and support.",
-    features: ["24/7 Customer Support", "Lead Qualification", "Appointment Booking", "Multi-language Support"],
-    highlight: true,
-  },
-  {
-    icon: MessageSquare,
-    title: "WhatsApp Outreach",
-    subtitle: "Add-on",
-    description: "Professional outreach campaigns with warm-up systems, validated contacts, and detailed analytics.",
-    features: ["7-Day Warm-Up", "98% Delivery Rate", "Daily Analytics", "Copy Optimization"],
-    highlight: false,
-  },
-  {
-    icon: Globe,
-    title: "Web Development",
-    subtitle: "Add-on",
-    description: "Design and build websites that convert. Landing pages, CRM integrations, and lead tracking.",
-    features: ["Landing Pages", "CRM Integration", "Lead Tracking", "Responsive Design"],
-    highlight: false,
-  },
-];
 
 export const Services = () => {
   const scrollToContact = () => {
@@ -38,79 +11,78 @@ export const Services = () => {
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
-            Our Services
+            Your 24/7 AI Sales Agent
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Expand your communication power with our AI-driven solutions and creative add-ons.
+            Replace repetitive manual work with intelligent automation that never sleeps.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {services.map((service, index) => (
-            <div
-              key={service.title}
-              className={`rounded-3xl p-8 transition-all duration-300 hover:-translate-y-2 ${
-                service.highlight
-                  ? "bg-gradient-to-br from-iskra-emerald to-iskra-emerald-dark text-primary-foreground shadow-glow"
-                  : "glass-card"
-              }`}
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${
-                service.highlight 
-                  ? "bg-primary-foreground/20 text-primary-foreground" 
-                  : "bg-iskra-emerald/10 text-iskra-emerald"
-              }`}>
-                {service.subtitle}
+        <div className="max-w-4xl mx-auto">
+          {/* Main AI Bot Card */}
+          <div className="rounded-3xl p-8 md:p-12 transition-all duration-300 bg-gradient-to-br from-iskra-emerald to-iskra-emerald-dark text-primary-foreground shadow-glow">
+            <div className="flex flex-col md:flex-row gap-8 items-start">
+              <div className="flex-1">
+                <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 bg-primary-foreground/20 text-primary-foreground">
+                  AI-Powered • Works 24/7
+                </div>
+                
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 bg-primary-foreground/20">
+                  <Bot className="w-8 h-8 text-primary-foreground" />
+                </div>
+                
+                <h3 className="font-display text-3xl md:text-4xl font-bold mb-4">
+                  AI Chatbot Agent
+                </h3>
+                
+                <p className="text-primary-foreground/80 text-lg mb-8 leading-relaxed">
+                  Intelligent conversational AI that handles customer inquiries, qualifies leads, and books meetings — all on autopilot. Your tireless digital employee.
+                </p>
+                
+                <div className="grid sm:grid-cols-2 gap-4 mb-8">
+                  {[
+                    "Reply to leads instantly",
+                    "Qualify prospects automatically",
+                    "Book meetings to your calendar",
+                    "Handle FAQs 24/7",
+                    "Multi-language support",
+                    "CRM integration ready",
+                  ].map((feature) => (
+                    <div key={feature} className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+                      <span className="text-primary-foreground/90">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <Button
+                  variant="glass"
+                  size="lg"
+                  className="bg-primary-foreground/20 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/30 group"
+                  onClick={scrollToContact}
+                >
+                  Get Your AI Agent
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
               </div>
               
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center mb-6 ${
-                service.highlight 
-                  ? "bg-primary-foreground/20" 
-                  : "bg-iskra-emerald/10"
-              }`}>
-                <service.icon className={`w-7 h-7 ${
-                  service.highlight ? "text-primary-foreground" : "text-iskra-emerald"
-                }`} />
+              {/* Stats column */}
+              <div className="w-full md:w-auto grid grid-cols-2 md:grid-cols-1 gap-4">
+                <div className="bg-primary-foreground/10 rounded-2xl p-6 text-center">
+                  <div className="text-4xl font-bold mb-1">70%</div>
+                  <div className="text-sm text-primary-foreground/70">Cost Reduction</div>
+                </div>
+                <div className="bg-primary-foreground/10 rounded-2xl p-6 text-center">
+                  <div className="text-4xl font-bold mb-1">40h+</div>
+                  <div className="text-sm text-primary-foreground/70">Saved Weekly</div>
+                </div>
+                <div className="bg-primary-foreground/10 rounded-2xl p-6 text-center">
+                  <div className="text-4xl font-bold mb-1">&lt;2m</div>
+                  <div className="text-sm text-primary-foreground/70">Response Time</div>
+                </div>
               </div>
-              
-              <h3 className="font-display text-2xl font-bold mb-3">
-                {service.title}
-              </h3>
-              
-              <p className={`mb-6 leading-relaxed ${
-                service.highlight ? "text-primary-foreground/80" : "text-muted-foreground"
-              }`}>
-                {service.description}
-              </p>
-              
-              <ul className="space-y-2 mb-8">
-                {service.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm">
-                    <div className={`w-1.5 h-1.5 rounded-full ${
-                      service.highlight ? "bg-primary-foreground" : "bg-iskra-emerald"
-                    }`} />
-                    <span className={service.highlight ? "text-primary-foreground/90" : ""}>
-                      {feature}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              
-              <Button
-                variant={service.highlight ? "glass" : "outline"}
-                className={`w-full group ${
-                  service.highlight 
-                    ? "bg-primary-foreground/20 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/30" 
-                    : ""
-                }`}
-                onClick={scrollToContact}
-              >
-                Learn More
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Button>
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </section>
