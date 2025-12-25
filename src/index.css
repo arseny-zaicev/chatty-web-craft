@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -40,19 +40,19 @@
 
     --radius: 0.75rem;
 
-    /* Custom ISKRA colors */
+    /* Custom ISKRA colors - more vibrant green */
     --iskra-beige: 45 30% 92%;
-    --iskra-emerald: 160 55% 28%;
-    --iskra-emerald-light: 155 45% 40%;
-    --iskra-emerald-dark: 165 60% 18%;
+    --iskra-emerald: 150 55% 35%;
+    --iskra-emerald-light: 145 50% 45%;
+    --iskra-emerald-dark: 155 60% 22%;
     --iskra-gold: 42 75% 55%;
     --iskra-cream: 48 35% 97%;
 
-    /* Gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(48 35% 97%) 0%, hsl(155 35% 75%) 50%, hsl(160 55% 28%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(45 30% 96% / 0.9) 0%, hsl(155 30% 85% / 0.6) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(155 45% 40%) 0%, hsl(160 55% 28%) 100%);
-    --gradient-button: linear-gradient(135deg, hsl(160 50% 25%) 0%, hsl(165 60% 18%) 100%);
+    /* Gradients - more vibrant */
+    --gradient-hero: linear-gradient(135deg, hsl(45 35% 95%) 0%, hsl(140 40% 70%) 50%, hsl(150 55% 35%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(45 30% 96% / 0.9) 0%, hsl(145 35% 80% / 0.6) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(145 50% 45%) 0%, hsl(150 55% 35%) 100%);
+    --gradient-button: linear-gradient(135deg, hsl(150 50% 30%) 0%, hsl(155 60% 22%) 100%);
 
     /* Shadows */
     --shadow-soft: 0 4px 24px hsl(160 30% 20% / 0.08);
