@@ -2,9 +2,13 @@ import { Helmet } from "react-helmet-async";
 import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
 import { ClientLogos } from "@/components/ClientLogos";
+import { LiveCounter } from "@/components/LiveCounter";
 import { HowItWorks } from "@/components/HowItWorks";
 import { DashboardPreview } from "@/components/DashboardPreview";
 import { Services } from "@/components/Services";
+import { Pricing } from "@/components/Pricing";
+import { FAQ } from "@/components/FAQ";
+import { UrgencyBanner } from "@/components/UrgencyBanner";
 import { FounderSection } from "@/components/FounderSection";
 import { QualificationForm } from "@/components/QualificationForm";
 import { Footer } from "@/components/Footer";
@@ -26,9 +30,13 @@ const Index = () => {
         <Navbar />
         <HeroSection />
         <ClientLogos />
+        <LiveCounter />
         <HowItWorks />
         <DashboardPreview />
         <Services />
+        <Pricing />
+        <FAQ />
+        <UrgencyBanner />
         <FounderSection />
         <QualificationForm />
         <Footer />

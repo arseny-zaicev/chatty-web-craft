@@ -3,6 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { SellerLeadsForm } from "@/components/SellerLeadsForm";
+import { SellerLeadsHowItWorks } from "@/components/SellerLeadsHowItWorks";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star } from "lucide-react";
 
@@ -169,6 +170,10 @@ const SellerLeads = () => {
             </div>
           </div>
         </section>
+
+
+        {/* How It Works Section */}
+        <SellerLeadsHowItWorks />
 
         {/* Features Section */}
         <section id="features" className="py-24 border-t border-border/30">
