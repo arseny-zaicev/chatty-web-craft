@@ -40,8 +40,8 @@ export const HowItWorks = () => {
               className="glass-card rounded-2xl p-8 hover:shadow-glow transition-all duration-300 group"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <div className="w-14 h-14 rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-6 group-hover:bg-iskra-emerald/20 transition-colors">
-                <step.icon className="w-7 h-7 text-iskra-emerald" />
+              <div className="w-14 h-14 rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-6 group-hover:bg-iskra-emerald/20 group-hover:scale-110 transition-all duration-300">
+                <step.icon className="w-7 h-7 text-iskra-emerald group-hover:rotate-12 transition-transform duration-300" />
               </div>
               <div className="text-sm text-iskra-emerald font-semibold mb-2">
                 Step {index + 1}
