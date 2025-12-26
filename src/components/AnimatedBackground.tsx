@@ -424,7 +424,7 @@ export const AnimatedBackground = () => {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 w-full h-full -z-10"
+      className="absolute inset-0 w-full h-full z-0"
       style={{ pointerEvents: "none" }}
     />
   );

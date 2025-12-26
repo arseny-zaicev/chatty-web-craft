@@ -14,8 +14,8 @@ export const HeroSection = () => {
       <AnimatedBackground />
       <Sparkles count={20} />
       
-      {/* Premium overlay gradient for better text readability */}
-      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background/80 z-[1]" />
+      {/* Premium overlay gradient - covers only left side for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent z-[1]" />
       
       <div className="container mx-auto px-4 py-16 md:py-24 relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
