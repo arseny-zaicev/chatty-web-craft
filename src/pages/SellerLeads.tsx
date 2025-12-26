@@ -7,33 +7,33 @@ import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2 } from "
 const features = [
   {
     icon: MapPin,
-    title: "Dubai-Focused Leads",
-    description: "Exclusively targeting property sellers in Dubai's hottest markets",
-  },
-  {
-    icon: Users,
-    title: "Pre-Qualified Sellers",
-    description: "Every lead is verified and ready to sell within 30-90 days",
-  },
-  {
-    icon: TrendingUp,
-    title: "High Conversion Rate",
-    description: "Our leads convert 3x higher than industry average",
+    title: "Choose Any Area",
+    description: "Select from any Dubai district — Palm Jumeirah, Downtown, Marina, JBR, and more",
   },
   {
     icon: Building2,
-    title: "Property Data Included",
-    description: "Get full property details, ownership info, and motivation level",
+    title: "Building-Level Access",
+    description: "Find owners in specific buildings, even if there's no listing on the market",
+  },
+  {
+    icon: Users,
+    title: "Direct Owner Contacts",
+    description: "Get WhatsApp-verified phone numbers of property owners ready to sell or rent",
+  },
+  {
+    icon: TrendingUp,
+    title: "Fresh Data Daily",
+    description: "Our database updates daily with the latest ownership and contact information",
   },
 ];
 
 const benefits = [
-  "Exclusive leads - not shared with competitors",
-  "Real-time delivery to your CRM",
-  "Detailed seller motivation scores",
-  "Property valuation estimates included",
-  "WhatsApp-verified contact numbers",
-  "30-day lead replacement guarantee",
+  "Search by district, building, or unit type",
+  "Off-market owners — no public listings required",
+  "WhatsApp-verified owner phone numbers",
+  "Updated daily with fresh data",
+  "Exclusive access — not shared with competitors",
+  "Full property details & ownership history",
 ];
 
 const SellerLeads = () => {
@@ -71,15 +71,13 @@ const SellerLeads = () => {
               </div>
 
               <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
-                Exclusive
+                Find Sellers
                 <br />
-                <span className="text-gradient">Seller Leads</span>
-                <br />
-                for Dubai
+                <span className="text-gradient">Before They List</span>
               </h1>
 
               <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                Stop chasing cold leads. Get pre-qualified, motivated property sellers delivered directly to your inbox — ready to list.
+                Access Dubai's most comprehensive owner database. Choose any district and building — find property owners ready to sell or rent, even if there's no listing on the market.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
