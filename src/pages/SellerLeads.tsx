@@ -3,6 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { SellerLeadsForm } from "@/components/SellerLeadsForm";
+import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star } from "lucide-react";
 
 import salesforgeLogo from "@/assets/clients/salesforge-new.png";
@@ -71,11 +72,12 @@ const SellerLeads = () => {
 
         {/* Hero Section - Premium Design */}
         <section className="relative pt-32 pb-24 overflow-hidden">
-          {/* Background effects */}
-          <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-background/95" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background/80" />
-          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-iskra-emerald/10 rounded-full blur-[120px]" />
-          <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-iskra-gold/5 rounded-full blur-[100px]" />
+          {/* 3D Animated Background */}
+          <AnimatedBackground />
+          
+          {/* Background overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent z-[1]" />
+          
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-4xl mx-auto text-center">
