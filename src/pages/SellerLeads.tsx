@@ -145,24 +145,24 @@ const SellerLeads = () => {
         </section>
 
         {/* Client Logos - Marquee */}
-        <section className="py-12 border-t border-border/30 bg-foreground/5 overflow-hidden">
+        <section className="py-12 border-t border-border/30 overflow-hidden">
           <div className="container mx-auto px-4">
-            <p className="text-center text-foreground/60 text-sm mb-8 font-medium">Trusted by top Dubai agents</p>
+            <p className="text-center text-foreground/60 text-sm mb-8 font-medium uppercase tracking-widest">Trusted by top Dubai agents</p>
           </div>
           <div className="relative">
-            <div className="flex animate-marquee">
-              {[...clientLogos, ...clientLogos, ...clientLogos].map((client, idx) => (
+            <div className="flex animate-marquee-slow">
+              {[...clientLogos, ...clientLogos, ...clientLogos, ...clientLogos].map((client, idx) => (
                 <a
                   key={`${client.name}-${idx}`}
                   href={client.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-shrink-0 mx-8 opacity-90 hover:opacity-100 transition-all duration-300 hover:scale-110 bg-white rounded-xl px-6 py-3 shadow-lg"
+                  className="flex-shrink-0 mx-10 opacity-70 hover:opacity-100 transition-all duration-500 hover:scale-110 grayscale hover:grayscale-0"
                 >
                   <img
                     src={client.logo}
                     alt={`${client.name} logo`}
-                    className="h-10 md:h-12 w-auto object-contain"
+                    className="h-12 md:h-16 w-auto object-contain"
                   />
                 </a>
               ))}

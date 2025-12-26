@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Sparkles } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 const navItems = [
   { label: "AI Agent", href: "/#chatbot" },
@@ -10,17 +10,46 @@ const navItems = [
   { label: "Contact", href: "/#contact" },
 ];
 
+// ISKRA Logo Component with spark icon
+const IskraLogo = () => (
+  <div className="flex items-center gap-2">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-foreground">
+      <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor"/>
+      <circle cx="12" cy="10" r="2" fill="currentColor" opacity="0.6"/>
+    </svg>
+    <span className="font-display text-xl font-bold tracking-tight text-foreground">ISKRA</span>
+  </div>
+);
+
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    e.preventDefault();
+    
+    if (href.startsWith("/#")) {
+      const sectionId = href.substring(2);
+      
+      if (location.pathname !== "/") {
+        navigate("/");
+        setTimeout(() => {
+          document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      } else {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border/50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-iskra-emerald" />
-            <span className="font-display text-xl font-bold text-foreground">ISKRA</span>
+          <Link to="/" className="hover:opacity-80 transition-opacity">
+            <IskraLogo />
           </Link>
 
           {/* Desktop Navigation */}
@@ -38,6 +67,7 @@ export const Navbar = () => {
                 <a
                   key={item.label}
                   href={item.href}
+                  onClick={(e) => handleNavClick(e, item.href)}
                   className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
                 >
                   {item.label}
@@ -48,7 +78,10 @@ export const Navbar = () => {
 
           {/* CTA Button */}
           <div className="hidden md:block">
-            <a href="/#contact">
+            <a 
+              href="/#contact"
+              onClick={(e) => handleNavClick(e, "/#contact")}
+            >
               <Button variant="hero" size="default">
                 Get Started
               </Button>
@@ -84,13 +117,22 @@ export const Navbar = () => {
                     key={item.label}
                     href={item.href}
                     className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 py-2"
-                    onClick={() => setIsOpen(false)}
+                    onClick={(e) => {
+                      handleNavClick(e, item.href);
+                      setIsOpen(false);
+                    }}
                   >
                     {item.label}
                   </a>
                 )
               ))}
-              <a href="/#contact" onClick={() => setIsOpen(false)}>
+              <a 
+                href="/#contact" 
+                onClick={(e) => {
+                  handleNavClick(e, "/#contact");
+                  setIsOpen(false);
+                }}
+              >
                 <Button variant="hero" size="default" className="mt-2 w-full">
                   Get Started
                 </Button>

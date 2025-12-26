@@ -18,9 +18,9 @@ export const HeroSection = () => {
       <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent z-[1]" />
       
       <div className="container mx-auto px-4 py-16 md:py-24 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Left Content */}
-          <div className="relative z-10 animate-fade-in">
+        <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          {/* Left Content - takes 7 columns */}
+          <div className="lg:col-span-7 relative z-10 animate-fade-in">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-iskra-emerald/15 border border-iskra-emerald/30 text-iskra-emerald text-sm font-medium mb-8 shadow-lg shadow-iskra-emerald/10">
               <Zap className="w-4 h-4" />
               AI-Powered Automation
@@ -75,32 +75,30 @@ export const HeroSection = () => {
             </div>
           </div>
 
-          {/* Right Content - Live Counter Card */}
-          <div className="relative flex flex-col items-center lg:items-end gap-6">
-            {/* Floating stats cards */}
-            <div className="grid grid-cols-2 gap-4 w-full max-w-md">
-              <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.2s" }}>
-                <div className="text-4xl font-bold text-iskra-emerald mb-2">3x</div>
+          {/* Right Content - takes 5 columns */}
+          <div className="lg:col-span-5 relative flex flex-col gap-4">
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="glass-card rounded-2xl p-5 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.2s" }}>
+                <div className="text-3xl lg:text-4xl font-bold text-iskra-emerald mb-1">3x</div>
                 <div className="text-sm text-foreground/70 font-medium">More Bookings</div>
               </div>
-              <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.3s" }}>
-                <div className="text-4xl font-bold text-iskra-emerald mb-2">&lt;2min</div>
+              <div className="glass-card rounded-2xl p-5 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.3s" }}>
+                <div className="text-3xl lg:text-4xl font-bold text-iskra-emerald mb-1">&lt;2min</div>
                 <div className="text-sm text-foreground/70 font-medium">Avg Response</div>
               </div>
-              <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.4s" }}>
-                <div className="text-4xl font-bold text-iskra-emerald mb-2">90%</div>
+              <div className="glass-card rounded-2xl p-5 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.4s" }}>
+                <div className="text-3xl lg:text-4xl font-bold text-iskra-emerald mb-1">90%</div>
                 <div className="text-sm text-foreground/70 font-medium">Lead Capture</div>
               </div>
-              <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.5s" }}>
-                <div className="text-4xl font-bold text-iskra-emerald mb-2">$0</div>
+              <div className="glass-card rounded-2xl p-5 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.5s" }}>
+                <div className="text-3xl lg:text-4xl font-bold text-iskra-emerald mb-1">$0</div>
                 <div className="text-sm text-foreground/70 font-medium">Missed Revenue</div>
               </div>
             </div>
             
             {/* Live Counter Card */}
-            <div className="w-full max-w-md">
-              <LiveCounter />
-            </div>
+            <LiveCounter />
           </div>
         </div>
       </div>

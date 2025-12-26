@@ -12,24 +12,28 @@ const clients = [
 
 export const ClientLogos = () => {
   return (
-    <section className="py-16 border-t border-border/30">
+    <section className="py-16 border-t border-border/30 overflow-hidden">
       <div className="container mx-auto px-4">
         <p className="text-center text-sm text-muted-foreground mb-10 uppercase tracking-widest">
           Trusted by industry leaders
         </p>
-        <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12">
-          {clients.map((client) => (
+      </div>
+      
+      {/* Marquee container */}
+      <div className="relative">
+        <div className="flex animate-marquee-slow">
+          {[...clients, ...clients, ...clients, ...clients].map((client, idx) => (
             <a
-              key={client.name}
+              key={`${client.name}-${idx}`}
               href={client.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="opacity-90 hover:opacity-100 transition-all duration-300 hover:scale-105 bg-white/90 rounded-lg px-4 py-2"
+              className="flex-shrink-0 mx-10 opacity-70 hover:opacity-100 transition-all duration-500 hover:scale-110 grayscale hover:grayscale-0"
             >
               <img
                 src={client.logo}
                 alt={`${client.name} logo`}
-                className="h-8 md:h-10 w-auto object-contain"
+                className="h-12 md:h-16 w-auto object-contain"
               />
             </a>
           ))}
