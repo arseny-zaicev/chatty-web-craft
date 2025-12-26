@@ -134,7 +134,7 @@ const SellerLeads = () => {
         </section>
 
         {/* Client Logos */}
-        <section className="py-12 border-t border-border/30">
+        <section className="py-12 border-t border-border/30 bg-foreground/5">
           <div className="container mx-auto px-4">
             <p className="text-center text-foreground/60 text-sm mb-8 font-medium">Trusted by top Dubai agents</p>
             <div className="flex flex-wrap justify-center items-center gap-10 md:gap-16">
@@ -144,12 +144,12 @@ const SellerLeads = () => {
                   href={client.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="opacity-80 hover:opacity-100 transition-all duration-300 hover:scale-105"
+                  className="opacity-90 hover:opacity-100 transition-all duration-300 hover:scale-105 bg-white/90 rounded-lg px-4 py-2"
                 >
                   <img
                     src={client.logo}
                     alt={`${client.name} logo`}
-                    className="h-10 md:h-12 w-auto object-contain brightness-0 invert opacity-80 hover:opacity-100"
+                    className="h-8 md:h-10 w-auto object-contain"
                   />
                 </a>
               ))}
