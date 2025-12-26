@@ -48,9 +48,11 @@ export const Navbar = () => {
 
           {/* CTA Button */}
           <div className="hidden md:block">
-            <Button variant="hero" size="default">
-              Start Campaign
-            </Button>
+            <a href="/#contact">
+              <Button variant="hero" size="default">
+                Get Started
+              </Button>
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -88,9 +90,11 @@ export const Navbar = () => {
                   </a>
                 )
               ))}
-              <Button variant="hero" size="default" className="mt-2">
-                Start Campaign
-              </Button>
+              <a href="/#contact" onClick={() => setIsOpen(false)}>
+                <Button variant="hero" size="default" className="mt-2 w-full">
+                  Get Started
+                </Button>
+              </a>
             </div>
           </div>
         )}
