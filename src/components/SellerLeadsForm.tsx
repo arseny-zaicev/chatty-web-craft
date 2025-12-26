@@ -4,16 +4,19 @@ import { Input } from "@/components/ui/input";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 
-type FormStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type FormStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 interface FormData {
-  revenue: string;
-  timeline: string;
-  bottlenecks: string[];
-  techStack: string[];
-  budget: string;
-  focus: string;
-  // Contact fields
+  currentSource: string;
+  duration: string;
+  satisfaction: string;
+  salesCount: string;
+  areas: string;
+  propertyType: string;
+  leadsPerListing: string;
+  commission: string;
+  responseTime: string;
+  // Contact info
   fullName: string;
   phone: string;
   email: string;
@@ -21,68 +24,77 @@ interface FormData {
   webLink: string;
 }
 
-const revenueOptions = [
-  { key: "A", label: "$250k – $500k" },
-  { key: "B", label: "$500k – $1M" },
-  { key: "C", label: "$1M – $3M" },
-  { key: "D", label: "$3M+" },
+const currentSourceOptions = [
+  { key: "A", label: "Cold calling / Door knocking" },
+  { key: "B", label: "Referrals from existing clients" },
+  { key: "C", label: "Paid ads (Facebook, Google)" },
+  { key: "D", label: "Portals (Bayut, Property Finder)" },
+  { key: "E", label: "Developer partnerships" },
+  { key: "F", label: "No consistent system yet" },
 ];
 
-const timelineOptions = [
-  { key: "A", label: "ASAP (this month)" },
-  { key: "B", label: "30–60 days" },
-  { key: "C", label: "60–90 days" },
-  { key: "D", label: "Just researching" },
+const durationOptions = [
+  { key: "A", label: "Less than 6 months" },
+  { key: "B", label: "6–12 months" },
+  { key: "C", label: "1–2 years" },
+  { key: "D", label: "More than 2 years" },
 ];
 
-const bottleneckOptions = [
-  { key: "A", label: "Replying to leads manually" },
-  { key: "B", label: "Following up with leads" },
-  { key: "C", label: "Booking meetings / scheduling" },
-  { key: "D", label: "Managing chats across platforms" },
-  { key: "E", label: "Updating CRM / pipelines" },
-  { key: "F", label: "Paying staff for repetitive work" },
-  { key: "G", label: "Other" },
+const satisfactionOptions = [
+  { key: "A", label: "Very happy — getting enough quality leads" },
+  { key: "B", label: "It works, but could be better" },
+  { key: "C", label: "Struggling to find motivated sellers" },
+  { key: "D", label: "Need a completely new approach" },
 ];
 
-const techStackOptions = [
-  { key: "A", label: "WhatsApp Business" },
-  { key: "B", label: "Instagram DMs" },
-  { key: "C", label: "HubSpot" },
-  { key: "D", label: "Salesforce" },
-  { key: "E", label: "Pipedrive" },
-  { key: "F", label: "Kommo" },
-  { key: "G", label: "Calendly" },
-  { key: "H", label: "Google Sheets" },
-  { key: "I", label: "No real system yet" },
+const salesCountOptions = [
+  { key: "A", label: "0 sales" },
+  { key: "B", label: "1–3 sales" },
+  { key: "C", label: "4–6 sales" },
+  { key: "D", label: "7+ sales" },
 ];
 
-const budgetOptions = [
-  { key: "A", label: "$2,000 – $5,000" },
-  { key: "B", label: "$5,000 – $10,000" },
-  { key: "C", label: "$10,000+" },
+const propertyTypeOptions = [
+  { key: "A", label: "Mostly ready properties" },
+  { key: "B", label: "Mostly off-plan" },
+  { key: "C", label: "Mix of both" },
 ];
 
-const focusOptions = [
-  { key: "A", label: "Closing more deals" },
-  { key: "B", label: "Scaling the business" },
-  { key: "C", label: "Marketing & growth" },
-  { key: "D", label: "Operations" },
-  { key: "E", label: "Personal time" },
-  { key: "F", label: "Other" },
+const leadsPerListingOptions = [
+  { key: "A", label: "5–10 leads" },
+  { key: "B", label: "10–20 leads" },
+  { key: "C", label: "20–50 leads" },
+  { key: "D", label: "50+ leads" },
 ];
 
-const totalSteps = 7;
+const commissionOptions = [
+  { key: "A", label: "Under AED 50,000" },
+  { key: "B", label: "AED 50,000 – 100,000" },
+  { key: "C", label: "AED 100,000 – 200,000" },
+  { key: "D", label: "AED 200,000+" },
+];
 
-export const QualificationForm = () => {
+const responseTimeOptions = [
+  { key: "A", label: "Within 5 minutes" },
+  { key: "B", label: "Within 1 hour" },
+  { key: "C", label: "Same day" },
+  { key: "D", label: "Next day or later" },
+];
+
+const totalSteps = 8;
+
+export const SellerLeadsForm = () => {
   const [step, setStep] = useState<FormStep>(1);
   const [formData, setFormData] = useState<FormData>({
-    revenue: "",
-    timeline: "",
-    bottlenecks: [],
-    techStack: [],
-    budget: "",
-    focus: "",
+    currentSource: "",
+    duration: "",
+    satisfaction: "",
+    salesCount: "",
+    areas: "",
+    propertyType: "",
+    leadsPerListing: "",
+    commission: "",
+    responseTime: "",
     fullName: "",
     phone: "",
     email: "",
@@ -103,25 +115,22 @@ export const QualificationForm = () => {
     }
   };
 
-  const toggleArrayItem = (array: string[], item: string): string[] => {
-    return array.includes(item)
-      ? array.filter((i) => i !== item)
-      : [...array, item];
-  };
-
   const handleSubmit = async () => {
     setIsSubmitting(true);
     await new Promise((resolve) => setTimeout(resolve, 1500));
     setIsSubmitting(false);
-    toast.success("Application submitted! We'll be in touch within 24 hours.");
+    toast.success("Thank you! We'll reach out to schedule a quick 15-minute call.");
     setStep(1);
     setFormData({
-      revenue: "",
-      timeline: "",
-      bottlenecks: [],
-      techStack: [],
-      budget: "",
-      focus: "",
+      currentSource: "",
+      duration: "",
+      satisfaction: "",
+      salesCount: "",
+      areas: "",
+      propertyType: "",
+      leadsPerListing: "",
+      commission: "",
+      responseTime: "",
       fullName: "",
       phone: "",
       email: "",
@@ -133,18 +142,20 @@ export const QualificationForm = () => {
   const isStepValid = () => {
     switch (step) {
       case 1:
-        return formData.revenue.length > 0;
+        return formData.currentSource.length > 0;
       case 2:
-        return formData.timeline.length > 0;
+        return formData.duration.length > 0;
       case 3:
-        return formData.bottlenecks.length > 0;
+        return formData.satisfaction.length > 0;
       case 4:
-        return formData.techStack.length > 0;
+        return formData.salesCount.length > 0;
       case 5:
-        return formData.budget.length > 0;
+        return formData.areas.length > 0 && formData.propertyType.length > 0;
       case 6:
-        return true; // Optional step
+        return formData.leadsPerListing.length > 0 && formData.commission.length > 0;
       case 7:
+        return formData.responseTime.length > 0;
+      case 8:
         return (
           formData.fullName.length > 0 &&
           formData.phone.length >= 10 &&
@@ -182,78 +193,55 @@ export const QualificationForm = () => {
     </div>
   );
 
-  const renderMultiSelect = (
-    options: { key: string; label: string }[],
-    values: string[],
-    onChange: (key: string) => void
-  ) => (
-    <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2">
-      {options.map((option) => (
-        <button
-          key={option.key}
-          onClick={() => onChange(option.key)}
-          className={`flex items-center gap-4 p-4 rounded-xl border transition-all duration-200 text-left ${
-            values.includes(option.key)
-              ? "bg-iskra-emerald border-iskra-emerald text-background"
-              : "bg-background/5 border-background/20 text-background hover:bg-background/10"
-          }`}
-        >
-          <span className="w-8 h-8 rounded-lg bg-background/20 flex items-center justify-center text-sm font-semibold shrink-0">
-            {option.key}
-          </span>
-          <span className="font-medium">{option.label}</span>
-          {values.includes(option.key) && (
-            <Check className="w-5 h-5 ml-auto shrink-0" />
-          )}
-        </button>
-      ))}
-    </div>
-  );
-
   const getStepContent = () => {
     switch (step) {
       case 1:
         return {
-          title: "What is your current annual revenue?",
-          subtitle: "Current Annual Revenue",
+          title: "How are you currently getting seller leads?",
+          subtitle: "Current Lead Source",
           required: true,
         };
       case 2:
         return {
-          title: "When do you want this AI system live?",
-          subtitle: "Project Timeline",
+          title: "How long have you been doing it this way?",
+          subtitle: "Experience Duration",
           required: true,
         };
       case 3:
         return {
-          title: "Which manual process is costing you the most time or money?",
-          subtitle: "Main Bottleneck",
-          note: "Select all that apply",
+          title: "Are you happy with the results?",
+          subtitle: "Current Satisfaction",
           required: true,
         };
       case 4:
         return {
-          title: "What tools are you currently using?",
-          subtitle: "Current Tech Stack",
-          note: "Select all that apply",
-          required: false,
+          title: "Roughly how many property sales have you closed in the last 3 months?",
+          subtitle: "Recent Sales",
+          required: true,
         };
       case 5:
         return {
-          title: "What budget range are you comfortable investing to replace manual work with AI?",
-          subtitle: "Estimated Budget",
+          title: "Tell us about your focus area",
+          subtitle: "Geography & Property Type",
           required: true,
         };
       case 6:
         return {
-          title: "If AI handled your chats and bookings, what would you focus on instead?",
-          subtitle: "Your Focus (Optional)",
-          required: false,
+          title: "Let's talk numbers",
+          subtitle: "Lead Economics",
+          required: true,
         };
       case 7:
         return {
-          title: "How can we reach you?",
+          title: "How quickly do you usually respond to new leads?",
+          subtitle: "Response Time",
+          required: true,
+        };
+      case 8:
+        return {
+          title: "Great! Let's schedule a quick call",
           subtitle: "Contact Information",
+          note: "We'll show you how this could work for you and run the numbers together.",
           required: true,
         };
       default:
@@ -264,16 +252,16 @@ export const QualificationForm = () => {
   const content = getStepContent();
 
   return (
-    <section id="contact" className="py-24 bg-foreground">
+    <section id="seller-leads-form" className="py-24 bg-foreground">
       <div className="container mx-auto px-4">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
             <h2 className="font-display text-3xl md:text-4xl font-bold text-background mb-4">
-              Check If You Qualify
+              See If You Qualify
             </h2>
             <p className="text-background/70">
-              Answer a few quick questions to see if ISKRA is the right fit for your business.
+              Answer a few questions so we can understand your business and show you how our leads can help.
             </p>
           </div>
 
@@ -316,42 +304,68 @@ export const QualificationForm = () => {
               {!content.note && <div className="mb-6" />}
 
               {step === 1 &&
-                renderSingleSelect(revenueOptions, formData.revenue, (key) =>
-                  setFormData({ ...formData, revenue: key })
+                renderSingleSelect(currentSourceOptions, formData.currentSource, (key) =>
+                  setFormData({ ...formData, currentSource: key })
                 )}
 
               {step === 2 &&
-                renderSingleSelect(timelineOptions, formData.timeline, (key) =>
-                  setFormData({ ...formData, timeline: key })
+                renderSingleSelect(durationOptions, formData.duration, (key) =>
+                  setFormData({ ...formData, duration: key })
                 )}
 
               {step === 3 &&
-                renderMultiSelect(bottleneckOptions, formData.bottlenecks, (key) =>
-                  setFormData({
-                    ...formData,
-                    bottlenecks: toggleArrayItem(formData.bottlenecks, key),
-                  })
+                renderSingleSelect(satisfactionOptions, formData.satisfaction, (key) =>
+                  setFormData({ ...formData, satisfaction: key })
                 )}
 
               {step === 4 &&
-                renderMultiSelect(techStackOptions, formData.techStack, (key) =>
-                  setFormData({
-                    ...formData,
-                    techStack: toggleArrayItem(formData.techStack, key),
-                  })
+                renderSingleSelect(salesCountOptions, formData.salesCount, (key) =>
+                  setFormData({ ...formData, salesCount: key })
                 )}
 
-              {step === 5 &&
-                renderSingleSelect(budgetOptions, formData.budget, (key) =>
-                  setFormData({ ...formData, budget: key })
+              {step === 5 && (
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-background/80 text-sm mb-2">Which areas do you mainly work in?</label>
+                    <Input
+                      value={formData.areas}
+                      onChange={(e) => setFormData({ ...formData, areas: e.target.value })}
+                      placeholder="e.g., Dubai Marina, Downtown, JBR..."
+                      className="bg-background/10 border-background/20 text-background placeholder:text-background/40 h-14"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-background/80 text-sm mb-3">Property focus:</label>
+                    {renderSingleSelect(propertyTypeOptions, formData.propertyType, (key) =>
+                      setFormData({ ...formData, propertyType: key })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {step === 6 && (
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-background/80 text-sm mb-3">On average, how many leads do you need to get one listing?</label>
+                    {renderSingleSelect(leadsPerListingOptions, formData.leadsPerListing, (key) =>
+                      setFormData({ ...formData, leadsPerListing: key })
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-background/80 text-sm mb-3">What's the typical commission per deal for you?</label>
+                    {renderSingleSelect(commissionOptions, formData.commission, (key) =>
+                      setFormData({ ...formData, commission: key })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {step === 7 &&
+                renderSingleSelect(responseTimeOptions, formData.responseTime, (key) =>
+                  setFormData({ ...formData, responseTime: key })
                 )}
 
-              {step === 6 &&
-                renderSingleSelect(focusOptions, formData.focus, (key) =>
-                  setFormData({ ...formData, focus: key })
-                )}
-
-              {step === 7 && (
+              {step === 8 && (
                 <div className="space-y-4">
                   <Input
                     value={formData.fullName}
@@ -419,7 +433,7 @@ export const QualificationForm = () => {
                   disabled={!isStepValid() || isSubmitting}
                   className="group"
                 >
-                  {isSubmitting ? "Submitting..." : "Submit Application"}
+                  {isSubmitting ? "Submitting..." : "Schedule Call"}
                   {!isSubmitting && (
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   )}
