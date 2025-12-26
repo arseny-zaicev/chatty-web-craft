@@ -80,78 +80,89 @@ const SellerLeads = () => {
           
 
           <div className="container mx-auto px-4 relative z-10">
-            <div className="max-w-4xl mx-auto text-center">
-              <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-iskra-emerald/15 border border-iskra-emerald/30 text-iskra-emerald text-sm font-medium mb-8 shadow-lg shadow-iskra-emerald/10">
-                <Database className="w-4 h-4" />
-                Dubai's Most Comprehensive Owner Database
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              {/* Left Content */}
+              <div className="animate-fade-in">
+                <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-iskra-emerald/15 border border-iskra-emerald/30 text-iskra-emerald text-sm font-medium mb-8 shadow-lg shadow-iskra-emerald/10">
+                  <Database className="w-4 h-4" />
+                  Dubai's Most Comprehensive Owner Database
+                </div>
+
+                <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-8">
+                  <span className="text-foreground">Find Sellers</span>
+                  <br />
+                  <span className="text-gradient">Before They List</span>
+                </h1>
+
+                <p className="text-xl md:text-2xl text-foreground/80 mb-10 max-w-xl leading-relaxed">
+                  Access Dubai's most comprehensive owner database. Choose any district and building — find property owners ready to sell or rent, even if there's no listing on the market.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-4 mb-12">
+                  <Button 
+                    variant="hero" 
+                    size="lg" 
+                    onClick={scrollToForm} 
+                    className="group text-lg px-8 py-6 shadow-xl shadow-iskra-emerald/20"
+                  >
+                    Get Started
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="lg"
+                    onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+                    className="text-lg px-8 py-6 border-2 border-foreground/20 text-foreground hover:bg-foreground/10"
+                  >
+                    Learn More
+                  </Button>
+                </div>
               </div>
 
-              <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-8">
-                <span className="text-foreground">Find Sellers</span>
-                <br />
-                <span className="text-gradient">Before They List</span>
-              </h1>
-
-              <p className="text-xl md:text-2xl text-foreground/80 mb-10 max-w-2xl mx-auto leading-relaxed">
-                Access Dubai's most comprehensive owner database. Choose any district and building — find property owners ready to sell or rent, even if there's no listing on the market.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-                <Button 
-                  variant="hero" 
-                  size="lg" 
-                  onClick={scrollToForm} 
-                  className="group text-lg px-8 py-6 shadow-xl shadow-iskra-emerald/20"
-                >
-                  Get Started
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="lg"
-                  onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
-                  className="text-lg px-8 py-6 border-2 border-foreground/20 text-foreground hover:bg-foreground/10"
-                >
-                  Learn More
-                </Button>
-              </div>
-
-              {/* Stats - more prominent */}
-              <div className="grid grid-cols-3 gap-8 max-w-xl mx-auto">
-                <div className="glass-card rounded-2xl p-6 border-iskra-emerald/20">
-                  <div className="text-4xl md:text-5xl font-bold text-iskra-emerald mb-2">150K+</div>
-                  <div className="text-sm text-foreground/70 font-medium">Owners in Database</div>
-                </div>
-                <div className="glass-card rounded-2xl p-6 border-iskra-emerald/20">
-                  <div className="text-4xl md:text-5xl font-bold text-iskra-emerald mb-2">85%</div>
-                  <div className="text-sm text-foreground/70 font-medium">Contact Rate</div>
-                </div>
-                <div className="glass-card rounded-2xl p-6 border-iskra-emerald/20">
-                  <div className="text-4xl md:text-5xl font-bold text-iskra-emerald mb-2">3x</div>
-                  <div className="text-sm text-foreground/70 font-medium">Conversion</div>
+              {/* Right Content - Stats */}
+              <div className="relative flex flex-col items-center lg:items-end gap-6">
+                <div className="grid grid-cols-2 gap-4 w-full max-w-md">
+                  <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.2s" }}>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">150K+</div>
+                    <div className="text-sm text-foreground/70 font-medium">Owners in Database</div>
+                  </div>
+                  <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.3s" }}>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">85%</div>
+                    <div className="text-sm text-foreground/70 font-medium">Contact Rate</div>
+                  </div>
+                  <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.4s" }}>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">3x</div>
+                    <div className="text-sm text-foreground/70 font-medium">Conversion</div>
+                  </div>
+                  <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.5s" }}>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">Daily</div>
+                    <div className="text-sm text-foreground/70 font-medium">Fresh Data</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Client Logos */}
-        <section className="py-12 border-t border-border/30 bg-foreground/5">
+        {/* Client Logos - Marquee */}
+        <section className="py-12 border-t border-border/30 bg-foreground/5 overflow-hidden">
           <div className="container mx-auto px-4">
             <p className="text-center text-foreground/60 text-sm mb-8 font-medium">Trusted by top Dubai agents</p>
-            <div className="flex flex-wrap justify-center items-center gap-10 md:gap-16">
-              {clientLogos.map((client) => (
+          </div>
+          <div className="relative">
+            <div className="flex animate-marquee">
+              {[...clientLogos, ...clientLogos, ...clientLogos].map((client, idx) => (
                 <a
-                  key={client.name}
+                  key={`${client.name}-${idx}`}
                   href={client.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="opacity-90 hover:opacity-100 transition-all duration-300 hover:scale-105 bg-white/90 rounded-lg px-4 py-2"
+                  className="flex-shrink-0 mx-8 opacity-90 hover:opacity-100 transition-all duration-300 hover:scale-110 bg-white rounded-xl px-6 py-3 shadow-lg"
                 >
                   <img
                     src={client.logo}
                     alt={`${client.name} logo`}
-                    className="h-8 md:h-10 w-auto object-contain"
+                    className="h-10 md:h-12 w-auto object-contain"
                   />
                 </a>
               ))}
@@ -175,11 +186,11 @@ const SellerLeads = () => {
               {features.map((feature, index) => (
                 <div
                   key={feature.title}
-                  className="glass-card rounded-2xl p-8 hover:border-iskra-emerald/30 transition-all duration-300"
+                  className="glass-card rounded-2xl p-8 hover:border-iskra-emerald/30 transition-all duration-300 group"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
-                  <div className="w-14 h-14 rounded-xl bg-iskra-emerald/15 flex items-center justify-center mb-6">
-                    <feature.icon className="w-7 h-7 text-iskra-emerald" />
+                  <div className="w-14 h-14 rounded-xl bg-iskra-emerald/15 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-iskra-emerald/25 transition-all duration-300">
+                    <feature.icon className="w-7 h-7 text-iskra-emerald group-hover:rotate-12 transition-transform duration-300" />
                   </div>
                   <h3 className="font-display text-xl font-semibold mb-3 text-foreground">{feature.title}</h3>
                   <p className="text-foreground/70">{feature.description}</p>
