@@ -1,7 +1,7 @@
-import salesforgeLogo from "@/assets/clients/salesforge-2.jpeg";
-import pathosLogo from "@/assets/clients/pathos.png";
-import leadbookLogo from "@/assets/clients/leadbook.png";
-import fbMediaLogo from "@/assets/clients/fb-media.png";
+import salesforgeLogo from "@/assets/clients/salesforge-new.png";
+import pathosLogo from "@/assets/clients/pathos-new.png";
+import leadbookLogo from "@/assets/clients/leadbook-new.png";
+import fbMediaLogo from "@/assets/clients/fb-media-new.png";
 
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
@@ -24,12 +24,12 @@ export const ClientLogos = () => {
               href={client.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="grayscale hover:grayscale-0 opacity-70 hover:opacity-100 transition-all duration-300 hover:scale-105"
+              className="opacity-80 hover:opacity-100 transition-all duration-300 hover:scale-105"
             >
               <img
                 src={client.logo}
                 alt={`${client.name} logo`}
-                className="h-12 md:h-14 w-auto object-contain"
+                className="h-10 md:h-12 w-auto object-contain brightness-0 invert opacity-80 hover:opacity-100"
               />
             </a>
           ))}

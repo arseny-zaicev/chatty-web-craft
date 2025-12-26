@@ -5,6 +5,18 @@ import { Button } from "@/components/ui/button";
 import { SellerLeadsForm } from "@/components/SellerLeadsForm";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star } from "lucide-react";
 
+import salesforgeLogo from "@/assets/clients/salesforge-new.png";
+import pathosLogo from "@/assets/clients/pathos-new.png";
+import leadbookLogo from "@/assets/clients/leadbook-new.png";
+import fbMediaLogo from "@/assets/clients/fb-media-new.png";
+
+const clientLogos = [
+  { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
+  { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com/" },
+  { name: "Leadbook", logo: leadbookLogo, url: "https://www.leadbook.app/home57663300" },
+  { name: "FB Media", logo: fbMediaLogo, url: "https://www.instagram.com/f.b.marketing/" },
+];
+
 const features = [
   {
     icon: MapPin,
@@ -121,19 +133,25 @@ const SellerLeads = () => {
           </div>
         </section>
 
-        {/* Client Logos Placeholder */}
+        {/* Client Logos */}
         <section className="py-12 border-t border-border/30">
           <div className="container mx-auto px-4">
             <p className="text-center text-foreground/60 text-sm mb-8 font-medium">Trusted by top Dubai agents</p>
-            <div className="flex flex-wrap justify-center items-center gap-12">
-              {/* Placeholder for logos */}
-              {[1, 2, 3, 4].map((i) => (
-                <div 
-                  key={i} 
-                  className="w-32 h-12 rounded-lg bg-foreground/5 border border-dashed border-foreground/20 flex items-center justify-center"
+            <div className="flex flex-wrap justify-center items-center gap-10 md:gap-16">
+              {clientLogos.map((client) => (
+                <a
+                  key={client.name}
+                  href={client.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="opacity-80 hover:opacity-100 transition-all duration-300 hover:scale-105"
                 >
-                  <span className="text-xs text-foreground/40">Logo {i}</span>
-                </div>
+                  <img
+                    src={client.logo}
+                    alt={`${client.name} logo`}
+                    className="h-10 md:h-12 w-auto object-contain brightness-0 invert opacity-80 hover:opacity-100"
+                  />
+                </a>
               ))}
             </div>
           </div>
