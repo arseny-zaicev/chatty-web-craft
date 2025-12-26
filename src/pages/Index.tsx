@@ -1,9 +1,11 @@
 import { Helmet } from "react-helmet-async";
 import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
+import { ClientLogos } from "@/components/ClientLogos";
 import { HowItWorks } from "@/components/HowItWorks";
 import { DashboardPreview } from "@/components/DashboardPreview";
 import { Services } from "@/components/Services";
+import { FounderSection } from "@/components/FounderSection";
 import { QualificationForm } from "@/components/QualificationForm";
 import { Footer } from "@/components/Footer";
 
@@ -23,9 +25,11 @@ const Index = () => {
       <main className="min-h-screen">
         <Navbar />
         <HeroSection />
+        <ClientLogos />
         <HowItWorks />
         <DashboardPreview />
         <Services />
+        <FounderSection />
         <QualificationForm />
         <Footer />
       </main>
