@@ -20,20 +20,20 @@ export const ClientLogos = () => {
       </div>
       
       {/* Marquee container */}
-      <div className="relative">
-        <div className="flex animate-marquee-slow">
+      <div className="relative py-8 bg-background/50 backdrop-blur-sm rounded-2xl mx-4">
+        <div className="flex animate-marquee-slow items-center">
           {[...clients, ...clients, ...clients, ...clients].map((client, idx) => (
             <a
               key={`${client.name}-${idx}`}
               href={client.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 mx-10 opacity-70 hover:opacity-100 transition-all duration-500 hover:scale-110 grayscale hover:grayscale-0"
+              className="flex-shrink-0 mx-16 opacity-90 hover:opacity-100 transition-all duration-500 hover:scale-110"
             >
               <img
                 src={client.logo}
                 alt={`${client.name} logo`}
-                className="h-12 md:h-16 w-auto object-contain"
+                className="h-10 md:h-14 w-auto object-contain brightness-0 invert opacity-80 hover:opacity-100 transition-opacity"
               />
             </a>
           ))}
