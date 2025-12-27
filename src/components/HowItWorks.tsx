@@ -1,20 +1,23 @@
-import { Settings, CheckCircle, TrendingUp } from "lucide-react";
+import { Target, Code, Sparkles } from "lucide-react";
 
 const steps = [
   {
-    icon: Settings,
-    title: "7-Day Warm-Up",
-    description: "We warm up all accounts before launch. Aged (5+ year) accounts warm the new ones exclusively for your campaigns.",
+    icon: Target,
+    title: "Discovery & ROI Planning",
+    description: "We deeply understand your needs and calculate exactly how AI will generate revenue for your business. Clear goals, measurable outcomes.",
+    duration: "1-2 days",
   },
   {
-    icon: CheckCircle,
-    title: "Validation & Copy Approval",
-    description: "During this warm-up period, we validate all contact data on WhatsApp and finalize your message copy for approval.",
+    icon: Code,
+    title: "Development Phase",
+    description: "Our team builds your custom AI agent — from conversation flows to CRM integration. Fast delivery without compromising quality.",
+    duration: "~7 days",
   },
   {
-    icon: TrendingUp,
-    title: "Continuous Flow & Analytics",
-    description: "Once the campaign starts, messages flow daily. We refine your copy, monitor delivery, and send detailed daily analytics.",
+    icon: Sparkles,
+    title: "Fine-Tuning & Training",
+    description: "Active monitoring, adding small details, and continuous agent training. We optimize responses until your AI performs perfectly.",
+    duration: "20-25 days",
   },
 ];
 
@@ -27,9 +30,9 @@ export const HowItWorks = () => {
             How It Works
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            <span className="text-iskra-emerald font-semibold">Simple. Scalable. Secure.</span>
+            <span className="text-iskra-emerald font-semibold">Fast. Reliable. Results-Driven.</span>
             <br />
-            The real process behind every ISKRA campaign.
+            The real process behind every AI agent we build.
           </p>
         </div>
 
@@ -43,8 +46,13 @@ export const HowItWorks = () => {
               <div className="w-14 h-14 rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-6 group-hover:bg-iskra-emerald/20 group-hover:scale-110 transition-all duration-300">
                 <step.icon className="w-7 h-7 text-iskra-emerald group-hover:rotate-12 transition-transform duration-300" />
               </div>
-              <div className="text-sm text-iskra-emerald font-semibold mb-2">
-                Step {index + 1}
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-sm text-iskra-emerald font-semibold">
+                  Step {index + 1}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-iskra-emerald/10 text-iskra-emerald font-medium">
+                  {step.duration}
+                </span>
               </div>
               <h3 className="font-display text-xl font-semibold mb-3">
                 {step.title}
