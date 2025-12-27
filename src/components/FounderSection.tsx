@@ -1,5 +1,6 @@
-import { Play, Mail, Linkedin } from "lucide-react";
+import { Play, Instagram, Linkedin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import founderPhoto from "@/assets/founder/arsenijs-zaicevs.png";
 
 export const FounderSection = () => {
   return (
@@ -19,18 +20,14 @@ export const FounderSection = () => {
           </div>
 
           <div className="grid md:grid-cols-2 gap-12 items-center">
-            {/* Photo Placeholder */}
+            {/* Founder Photo */}
             <div className="relative">
-              <div className="aspect-[4/5] rounded-2xl bg-secondary/50 border border-border/50 flex items-center justify-center overflow-hidden">
-                {/* Placeholder for founder photo */}
-                <div className="text-center p-8">
-                  <div className="w-24 h-24 rounded-full bg-iskra-emerald/20 border-2 border-dashed border-iskra-emerald/40 mx-auto mb-4 flex items-center justify-center">
-                    <span className="text-4xl text-iskra-emerald/60">👤</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Founder photo placeholder
-                  </p>
-                </div>
+              <div className="aspect-[4/5] rounded-2xl bg-secondary/50 border border-border/50 overflow-hidden">
+                <img 
+                  src={founderPhoto} 
+                  alt="Arsenijs Zaicevs - Founder & CEO of ISKRA Digital"
+                  className="w-full h-full object-cover object-top"
+                />
               </div>
               
               {/* Decorative elements */}
@@ -42,7 +39,7 @@ export const FounderSection = () => {
             <div className="space-y-6">
               <div>
                 <h3 className="font-display text-2xl font-bold mb-2">
-                  [Founder Name]
+                  Arsenijs Zaicevs
                 </h3>
                 <p className="text-iskra-emerald font-medium">
                   Founder & CEO, ISKRA Digital
@@ -50,7 +47,7 @@ export const FounderSection = () => {
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                [Brief bio about the founder - their background, expertise, and vision for ISKRA Digital. What drives them and why they started this company.]
+                With deep expertise in AI-powered sales automation and B2B lead generation, Arsenijs founded ISKRA Digital to help businesses scale their outreach without scaling their teams. His vision is to make enterprise-grade sales technology accessible to growing companies.
               </p>
 
               {/* Video Message Placeholder */}
@@ -74,14 +71,18 @@ export const FounderSection = () => {
               {/* Social Links */}
               <div className="flex gap-4 pt-4">
                 <a
-                  href="#"
+                  href="https://www.instagram.com/arszaicev/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Mail className="w-4 h-4" />
-                  <span>Email</span>
+                  <Instagram className="w-4 h-4" />
+                  <span>Instagram</span>
                 </a>
                 <a
-                  href="#"
+                  href="https://www.linkedin.com/in/arsenijs-zaicevs-45419b323/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Linkedin className="w-4 h-4" />
