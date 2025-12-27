@@ -11,10 +11,10 @@ export const Testimonials = () => {
     <section className="py-24 bg-iskra-cream">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
+          <h2 className="font-display text-3xl md:text-4xl font-bold mb-4 text-foreground">
             What Our Clients Say
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-lg text-foreground/70 max-w-2xl mx-auto">
             Real results from real businesses using our AI solutions.
           </p>
         </div>
@@ -111,7 +111,7 @@ export const Testimonials = () => {
               </div>
 
               <div className="text-center">
-                <p className="text-muted-foreground mb-4">
+                <p className="text-foreground/70 mb-4">
                   Want to see more real examples?
                 </p>
                 <Link to="/ai-agent">

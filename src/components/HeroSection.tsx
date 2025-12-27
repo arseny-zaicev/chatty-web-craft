@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/Sparkles";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
@@ -22,19 +23,27 @@ const HeroStat = ({ value, suffix, label }: { value: number; suffix: string; lab
 };
 
 const LiveMessagesCounter = () => {
-  const { formattedValue, elementRef } = useCountUp({
-    end: 10405,
-    duration: 2500,
-  });
+  const [count, setCount] = useState(10405);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Add 1-3 messages every 3-5 seconds
+      setCount(prev => prev + Math.floor(Math.random() * 3) + 1);
+    }, 3000 + Math.random() * 2000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const formattedCount = count.toLocaleString('en-US').replace(/,/g, ' ');
 
   return (
-    <div ref={elementRef} className="glass-card rounded-2xl p-6 group hover:border-iskra-emerald/40 transition-all duration-300">
+    <div className="glass-card rounded-2xl p-6 group hover:border-iskra-emerald/40 transition-all duration-300">
       <div className="flex items-center gap-2 text-foreground/60 text-sm mb-3">
         <span>Messages sent</span>
         <span className="text-iskra-emerald">· 98% delivery</span>
       </div>
-      <div className="text-4xl lg:text-5xl font-bold text-foreground font-headline tracking-tight">
-        {formattedValue.replace(/,/g, " ")}
+      <div className="text-4xl lg:text-5xl font-bold text-foreground font-headline tracking-tight transition-all duration-500">
+        {formattedCount}
       </div>
       <div className="flex items-center gap-2 mt-3 text-foreground/50 text-sm">
         <span className="w-2 h-2 bg-iskra-emerald rounded-full animate-pulse" />
