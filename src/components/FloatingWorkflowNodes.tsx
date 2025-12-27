@@ -1,30 +1,33 @@
 import { useEffect, useState } from "react";
 import { Bot, MessageCircle, Calendar, Database, Zap, Send, Mail, Globe, Webhook, FileText } from "lucide-react";
 
-// Grid-based workflow nodes like n8n
+// Grid-based workflow nodes like n8n - repositioned to right side
 const nodes = [
-  // Row 1
-  { id: 0, icon: Webhook, label: "Webhook", color: "#f97316", x: 12, y: 12 },
-  { id: 1, icon: MessageCircle, label: "WhatsApp", color: "#22c55e", x: 32, y: 12 },
-  { id: 2, icon: Bot, label: "AI Agent", color: "#10b981", x: 52, y: 12 },
-  { id: 3, icon: Database, label: "CRM", color: "#a855f7", x: 72, y: 12 },
-  // Row 2
-  { id: 4, icon: Zap, label: "Trigger", color: "#eab308", x: 22, y: 42 },
-  { id: 5, icon: Globe, label: "API", color: "#3b82f6", x: 42, y: 42 },
-  { id: 6, icon: Mail, label: "Email", color: "#ec4899", x: 62, y: 42 },
-  // Row 3
-  { id: 7, icon: FileText, label: "Data", color: "#06b6d4", x: 17, y: 72 },
-  { id: 8, icon: Calendar, label: "Calendar", color: "#8b5cf6", x: 37, y: 72 },
-  { id: 9, icon: Send, label: "Notify", color: "#14b8a6", x: 57, y: 72 },
+  // Row 1 - top right area
+  { id: 0, icon: Webhook, label: "Webhook", color: "#f97316", x: 55, y: 8 },
+  { id: 1, icon: MessageCircle, label: "WhatsApp", color: "#22c55e", x: 72, y: 8 },
+  { id: 2, icon: Bot, label: "AI Agent", color: "#10b981", x: 89, y: 8 },
+  // Row 2 - middle right
+  { id: 3, icon: Database, label: "CRM", color: "#a855f7", x: 60, y: 35 },
+  { id: 4, icon: Zap, label: "Trigger", color: "#eab308", x: 77, y: 35 },
+  { id: 5, icon: Globe, label: "API", color: "#3b82f6", x: 94, y: 35 },
+  // Row 3 - bottom right
+  { id: 6, icon: Mail, label: "Email", color: "#ec4899", x: 65, y: 62 },
+  { id: 7, icon: Calendar, label: "Calendar", color: "#8b5cf6", x: 82, y: 62 },
+  // Row 4 - very bottom
+  { id: 8, icon: FileText, label: "Data", color: "#06b6d4", x: 70, y: 85 },
+  { id: 9, icon: Send, label: "Notify", color: "#14b8a6", x: 87, y: 85 },
 ];
 
 // Connections between nodes (flow pattern)
 const connections: [number, number][] = [
-  [0, 1], [1, 2], [2, 3], // Row 1 horizontal
-  [1, 4], [2, 5], [3, 6], // Vertical down
-  [4, 5], [5, 6],         // Row 2 horizontal
-  [4, 7], [5, 8], [6, 9], // Vertical down
-  [7, 8], [8, 9],         // Row 3 horizontal
+  [0, 1], [1, 2],           // Row 1 horizontal
+  [0, 3], [1, 4], [2, 5],   // Vertical down to row 2
+  [3, 4], [4, 5],           // Row 2 horizontal
+  [3, 6], [4, 7],           // Vertical down to row 3
+  [6, 7],                   // Row 3 horizontal
+  [6, 8], [7, 9],           // Vertical down to row 4
+  [8, 9],                   // Row 4 horizontal
 ];
 
 const WorkflowNode = ({ 
@@ -80,21 +83,27 @@ const WorkflowNode = ({
       }}
     >
       <div className="relative">
-        {/* Glow effect */}
+        {/* Glow effect - stronger */}
         <div 
-          className="absolute -inset-3 rounded-2xl blur-xl"
-          style={{ backgroundColor: color, opacity: glowIntensity }}
+          className="absolute -inset-4 rounded-2xl blur-2xl"
+          style={{ backgroundColor: color, opacity: glowIntensity + 0.2 }}
         />
         
-        {/* Node card */}
-        <div className="relative flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card/95 backdrop-blur-sm border border-border/80 shadow-2xl">
+        {/* Node card - lighter background */}
+        <div 
+          className="relative flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl"
+          style={{ 
+            backgroundColor: 'rgba(30, 40, 35, 0.95)',
+            borderColor: `${color}50`,
+          }}
+        >
           <div 
-            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg"
+            className="w-9 h-9 rounded-lg flex items-center justify-center shadow-lg"
             style={{ backgroundColor: color }}
           >
-            <Icon className="w-4 h-4 text-white" />
+            <Icon className="w-5 h-5 text-white" />
           </div>
-          <span className="text-sm font-semibold text-foreground whitespace-nowrap">{label}</span>
+          <span className="text-sm font-bold text-white whitespace-nowrap">{label}</span>
         </div>
       </div>
     </div>
@@ -164,26 +173,26 @@ const AnimatedConnections = () => {
 
         return (
           <g key={`conn-${fromIdx}-${toIdx}`}>
-            {/* Base line - visible */}
+            {/* Base line - more visible */}
             <path
               d={pathD}
-              stroke="#10b981"
-              strokeWidth="0.4"
-              strokeOpacity="0.5"
+              stroke="#22c55e"
+              strokeWidth="0.6"
+              strokeOpacity="0.7"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
             
-            {/* Glowing animated line */}
+            {/* Glowing animated line - brighter */}
             <path
               d={pathD}
               stroke="#10b981"
-              strokeWidth="0.6"
+              strokeWidth="1"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeDasharray="4 4"
+              strokeDasharray="5 5"
               filter="url(#strongGlow)"
             >
               <animate
