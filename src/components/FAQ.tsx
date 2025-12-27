@@ -36,23 +36,19 @@ const faqData: Record<FAQCategory, { question: string; answer: string }[]> = {
   "whatsapp": [
     {
       question: "How does the WhatsApp outreach work?",
-      answer: "We use aged, warmed-up WhatsApp accounts to send personalized messages to your target audience. All contacts are validated, and we handle the entire campaign — from copy approval to daily analytics.",
+      answer: "We use two unique approaches: sending from physical phones using our custom software, or leveraging very old, well-warmed API accounts that can handle the required volume. Everything depends on the country and database — we tailor the approach individually for each client.",
     },
     {
       question: "How do you ensure message delivery on WhatsApp?",
-      answer: "We maintain a 98%+ delivery rate by using aged accounts (5+ years), proper warm-up procedures, and smart sending patterns. Each campaign is monitored in real-time for optimal performance.",
+      answer: "The key is database validation. This is what allows us to achieve a 98% message delivery rate statistically. Every contact is verified before sending.",
     },
     {
       question: "What kind of targeting is available?",
-      answer: "We can target by location, industry, company size, job title, and more. You provide your ideal customer profile, and we source the contacts or use your existing database.",
-    },
-    {
-      question: "How many messages can you send per day?",
-      answer: "Depending on your campaign, we can send 500-2000+ messages per day per account. We scale gradually to maintain account health and high delivery rates.",
+      answer: "We build databases for outreach by location, industry, company size, job title, and more. Alternatively, we can reactivate your warm database or use your existing contacts. Depending on your needs, some clients need only 50 messages per day, others 1000+ per day.",
     },
     {
       question: "What's included in the campaign management?",
-      answer: "Full service: target list building, message copywriting, A/B testing, daily sending, response handling, analytics dashboard, and weekly performance reports.",
+      answer: "Full service includes: target list building, message copywriting, A/B testing, and daily sending. We provide detailed statistics on messages sent and delivered. For reply handling, we can help you build an AI Agent that manages responses automatically — giving you clear daily analytics without manual work.",
     },
   ],
   "seller-leads": [
