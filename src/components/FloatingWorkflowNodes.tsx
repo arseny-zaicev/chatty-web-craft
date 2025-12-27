@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Bot, MessageCircle, Calendar, Database, Zap, Send } from "lucide-react";
 
 const nodes = [
-  { id: 0, icon: MessageCircle, label: "WhatsApp", color: "#22c55e", x: 3, y: 25 },
-  { id: 1, icon: Bot, label: "AI Agent", color: "#10b981", x: 3, y: 50 },
-  { id: 2, icon: Calendar, label: "Meeting", color: "#3b82f6", x: 3, y: 75 },
-  { id: 3, icon: Zap, label: "Trigger", color: "#f97316", x: 85, y: 20 },
-  { id: 4, icon: Database, label: "CRM", color: "#a855f7", x: 85, y: 50 },
-  { id: 5, icon: Send, label: "Notify", color: "#ec4899", x: 85, y: 80 },
+  // Left side - outside content area
+  { id: 0, icon: MessageCircle, label: "WhatsApp", color: "#22c55e", x: -2, y: 20 },
+  { id: 1, icon: Bot, label: "AI Agent", color: "#10b981", x: -3, y: 45 },
+  { id: 2, icon: Calendar, label: "Meeting", color: "#3b82f6", x: -2, y: 70 },
+  // Right side - outside content area  
+  { id: 3, icon: Zap, label: "Trigger", color: "#f97316", x: 92, y: 8 },
+  { id: 4, icon: Database, label: "CRM", color: "#a855f7", x: 94, y: 35 },
+  { id: 5, icon: Send, label: "Notify", color: "#ec4899", x: 92, y: 88 },
 ];
 
 // Connections: WhatsApp -> AI Agent -> Meeting, Trigger -> CRM -> Notify
