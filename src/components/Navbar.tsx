@@ -49,9 +49,19 @@ export const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link to="/" className="hover:opacity-80 transition-opacity">
+          <a 
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              if (location.pathname !== "/") {
+                navigate("/");
+              }
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="hover:opacity-80 transition-opacity cursor-pointer"
+          >
             <IskraLogo />
-          </Link>
+          </a>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">

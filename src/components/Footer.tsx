@@ -47,7 +47,19 @@ export const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Logo */}
-          <IskraLogo />
+          <a 
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              if (location.pathname !== "/") {
+                navigate("/");
+              }
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            <IskraLogo />
+          </a>
 
           {/* Links */}
           <nav className="flex flex-wrap items-center justify-center gap-6">
