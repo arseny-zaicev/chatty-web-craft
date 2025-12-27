@@ -1,7 +1,7 @@
 import { Play, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import founderPhoto from "@/assets/founder/arsenijs-zaicevs.png";
+import founderPhoto from "@/assets/founder/arsenijs-new.png";
 
 export const FounderSection = () => {
   return (
