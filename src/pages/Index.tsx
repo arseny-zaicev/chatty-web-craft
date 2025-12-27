@@ -38,7 +38,7 @@ const Index = () => {
         <Services />
         <Pricing />
         <FAQ />
-        <UrgencyBanner />
+        <UrgencyBanner type="ai-agent" />
         <FounderSection />
         <QualificationForm />
         <Footer />

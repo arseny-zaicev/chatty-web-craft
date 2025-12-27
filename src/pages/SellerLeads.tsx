@@ -7,6 +7,7 @@ import { SellerLeadsHowItWorks } from "@/components/SellerLeadsHowItWorks";
 import { SellerLeadsStats } from "@/components/SellerLeadsStats";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { FloatingWorkflowNodes } from "@/components/FloatingWorkflowNodes";
+import { UrgencyBanner } from "@/components/UrgencyBanner";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star, Zap, Check } from "lucide-react";
 
 import salesforgeLogo from "@/assets/clients/salesforge-new.png";
@@ -377,6 +378,9 @@ const SellerLeads = () => {
             </div>
           </div>
         </section>
+
+        {/* Urgency Banner */}
+        <UrgencyBanner type="seller-leads" />
 
         {/* Form Section */}
         <SellerLeadsForm />

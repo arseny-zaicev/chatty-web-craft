@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { QualificationForm } from "@/components/QualificationForm";
+import { UrgencyBanner } from "@/components/UrgencyBanner";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, MessageCircle, Calendar, Bot, Database, Settings, Globe, CheckCircle, Play, Building, ShoppingCart, Briefcase, Heart, X } from "lucide-react";
 
@@ -107,6 +108,27 @@ const AIAgent = () => {
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
               See exactly how our AI handles WhatsApp conversations, qualifies leads, and books meetings — with real examples.
             </p>
+            
+            {/* Key Benefits */}
+            <div className="flex flex-wrap justify-center gap-6 mb-10">
+              <div className="flex items-center gap-2 text-foreground/80">
+                <CheckCircle className="w-5 h-5 text-iskra-emerald" />
+                <span>Responds in under 60 seconds</span>
+              </div>
+              <div className="flex items-center gap-2 text-foreground/80">
+                <CheckCircle className="w-5 h-5 text-iskra-emerald" />
+                <span>Works 24/7, no breaks</span>
+              </div>
+              <div className="flex items-center gap-2 text-foreground/80">
+                <CheckCircle className="w-5 h-5 text-iskra-emerald" />
+                <span>Books meetings via dialogue</span>
+              </div>
+              <div className="flex items-center gap-2 text-foreground/80">
+                <CheckCircle className="w-5 h-5 text-iskra-emerald" />
+                <span>Syncs with your CRM</span>
+              </div>
+            </div>
+            
             <Button 
               size="lg" 
               className="bg-iskra-emerald hover:bg-iskra-emerald-dark text-primary-foreground"
@@ -370,6 +392,9 @@ const AIAgent = () => {
             </div>
           </div>
         </section>
+
+        {/* Urgency Banner */}
+        <UrgencyBanner type="ai-agent" />
 
         {/* Contact Form */}
         <QualificationForm />
