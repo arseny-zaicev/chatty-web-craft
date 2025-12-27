@@ -2,12 +2,14 @@ import salesforgeLogo from "@/assets/clients/salesforge-new.png";
 import pathosLogo from "@/assets/clients/pathos-new.png";
 import leadbookLogo from "@/assets/clients/leadbook-new.png";
 import fbMediaLogo from "@/assets/clients/fb-media-new.png";
+import florianLogo from "@/assets/clients/florian-logo.png";
 
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
   { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com/" },
   { name: "Leadbook", logo: leadbookLogo, url: "https://www.leadbook.app/home57663300" },
   { name: "FB Media", logo: fbMediaLogo, url: "https://www.instagram.com/f.b.marketing/" },
+  { name: "Florian", logo: florianLogo, url: "#" },
 ];
 
 export const ClientLogos = () => {
