@@ -1,6 +1,6 @@
 import salesforgeLogo from "@/assets/clients/salesforge-new.png";
 import pathosLogo from "@/assets/clients/pathos-new.png";
-import florianLogo from "@/assets/clients/florian-logo.png";
+import fbMarketingLogo from "@/assets/clients/fb-marketing-logo.png";
 import enaraLogo from "@/assets/clients/enara-logo.png";
 import propAiLogo from "@/assets/clients/prop-ai-logo.png";
 import moreConvosLogo from "@/assets/clients/more-convos-logo.png";
@@ -8,7 +8,7 @@ import moreConvosLogo from "@/assets/clients/more-convos-logo.png";
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
   { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com/" },
-  { name: "Florian", logo: florianLogo, url: "#" },
+  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://www.instagram.com/f.b.marketing/" },
   { name: "Enara Properties", logo: enaraLogo, url: "https://enaraproperties.ae/" },
   { name: "Prop AI", logo: propAiLogo, url: "https://prop-ai.com/" },
   { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com/" },
