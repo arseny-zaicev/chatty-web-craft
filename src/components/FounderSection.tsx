@@ -1,4 +1,4 @@
-import { Play, Instagram, Linkedin } from "lucide-react";
+import { Play, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import founderPhoto from "@/assets/founder/arsenijs-zaicevs.png";
 
@@ -69,7 +69,23 @@ export const FounderSection = () => {
               </div>
 
               {/* Social Links */}
-              <div className="flex gap-4 pt-4">
+              <div className="flex flex-wrap gap-4 pt-4">
+                <a
+                  href="mailto:arseny@iskradigital.com"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Email</span>
+                </a>
+                <a
+                  href="http://wa.me/971568785008"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-iskra-emerald transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>WhatsApp</span>
+                </a>
                 <a
                   href="https://www.instagram.com/arszaicev/"
                   target="_blank"
