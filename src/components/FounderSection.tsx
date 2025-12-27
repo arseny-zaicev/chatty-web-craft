@@ -48,7 +48,11 @@ export const FounderSection = () => {
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                We're a team with one clear mission: to help you with what you REALLY need — not just sell you something. That's why we only collect positive reviews and are always happy to learn how we can be useful to you, whatever the outcome. With deep expertise in AI-powered sales automation and B2B lead generation, ISKRA Digital helps businesses scale their outreach without scaling their teams.
+                We're a team with one clear mission: to help you with what you REALLY need — not just sell you something. That's why we only collect positive reviews and are always happy to learn how we can be useful to you, whatever the outcome.
+              </p>
+              
+              <p className="text-muted-foreground leading-relaxed">
+                Our team has experience building <span className="text-iskra-emerald font-semibold">27+ AI agents</span> and knows all the ins and outs of WhatsApp outreach. We want to see your growth!
               </p>
 
               {/* Video Message Placeholder */}
