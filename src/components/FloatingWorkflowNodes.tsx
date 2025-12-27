@@ -27,10 +27,10 @@ interface ActiveNode {
   opacity: number;
 }
 
-const MAX_NODES = 8;
-const SPAWN_INTERVAL = 2000;
-const MIN_LIFETIME = 8000;
-const MAX_LIFETIME = 15000;
+const MAX_NODES = 10;
+const SPAWN_INTERVAL = 2500;
+const MIN_LIFETIME = 12000;
+const MAX_LIFETIME = 20000;
 
 export const FloatingWorkflowNodes = () => {
   const [nodes, setNodes] = useState<ActiveNode[]>([]);
@@ -63,8 +63,8 @@ export const FloatingWorkflowNodes = () => {
       baseX: 20 + Math.random() * 60, // 20-80% of width
       baseY: 15 + Math.random() * 70, // 15-85% of height
       orbitAngle: Math.random() * Math.PI * 2,
-      orbitRadius: 2 + Math.random() * 4,
-      orbitSpeed: 0.0003 + Math.random() * 0.0004,
+      orbitRadius: 1.5 + Math.random() * 3,
+      orbitSpeed: 0.00015 + Math.random() * 0.00015, // Much slower orbit
       spawnTime: Date.now(),
       lifetime: MIN_LIFETIME + Math.random() * (MAX_LIFETIME - MIN_LIFETIME),
       opacity: 0,
@@ -99,12 +99,16 @@ export const FloatingWorkflowNodes = () => {
           const age = now - node.spawnTime;
           const lifeProgress = age / node.lifetime;
           
-          // Fade in (first 10%), full opacity (middle), fade out (last 20%)
+          // Fade in (first 20%), full opacity (middle), fade out (last 25%) - more gradual
           let opacity = 1;
-          if (lifeProgress < 0.1) {
-            opacity = lifeProgress / 0.1;
-          } else if (lifeProgress > 0.8) {
-            opacity = (1 - lifeProgress) / 0.2;
+          if (lifeProgress < 0.2) {
+            opacity = lifeProgress / 0.2;
+            // Ease in cubic
+            opacity = opacity * opacity * opacity;
+          } else if (lifeProgress > 0.75) {
+            opacity = (1 - lifeProgress) / 0.25;
+            // Ease out
+            opacity = 1 - Math.pow(1 - opacity, 3);
           }
           
           return {
@@ -129,14 +133,15 @@ export const FloatingWorkflowNodes = () => {
 
   // Calculate node position with parallax + orbit
   const getNodePosition = (node: ActiveNode) => {
-    // Orbit movement
+    // Smooth orbit movement
     const orbitX = Math.cos(node.orbitAngle) * node.orbitRadius;
-    const orbitY = Math.sin(node.orbitAngle) * node.orbitRadius;
+    const orbitY = Math.sin(node.orbitAngle) * node.orbitRadius * 0.6; // Elliptical orbit
     
-    // Parallax based on mouse (subtle effect)
-    const parallaxStrength = 3;
-    const parallaxX = (mousePos.x - 0.5) * parallaxStrength * (node.baseX / 50);
-    const parallaxY = (mousePos.y - 0.5) * parallaxStrength * (node.baseY / 50);
+    // Parallax based on mouse (subtle, smooth effect)
+    const parallaxStrength = 5;
+    const depthFactor = 0.5 + (node.baseY / 100) * 0.5; // Deeper nodes move more
+    const parallaxX = (mousePos.x - 0.5) * parallaxStrength * depthFactor;
+    const parallaxY = (mousePos.y - 0.5) * parallaxStrength * depthFactor * 0.5;
     
     return {
       x: node.baseX + orbitX + parallaxX,
@@ -147,7 +152,7 @@ export const FloatingWorkflowNodes = () => {
   // Find connections between nearby nodes
   const getConnections = () => {
     const connections: { from: ActiveNode; to: ActiveNode; distance: number }[] = [];
-    const maxDistance = 35;
+    const maxDistance = 50; // Increased for more connections
 
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
@@ -258,11 +263,11 @@ export const FloatingWorkflowNodes = () => {
         return (
           <div
             key={node.id}
-            className="absolute transition-opacity duration-300"
+            className="absolute transition-all duration-700 ease-out"
             style={{
               left: `${pos.x}%`,
               top: `${pos.y}%`,
-              transform: 'translate(-50%, -50%)',
+              transform: `translate(-50%, -50%) scale(${0.9 + node.opacity * 0.1})`,
               opacity: node.opacity,
             }}
           >
