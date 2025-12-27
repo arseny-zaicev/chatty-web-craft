@@ -1,5 +1,5 @@
 import { useCountUp } from "@/hooks/useCountUp";
-import { Database, RefreshCw, MapPin, CheckCircle } from "lucide-react";
+import { Database, RefreshCw, Users, CheckCircle } from "lucide-react";
 
 const stats = [
   {
@@ -10,15 +10,16 @@ const stats = [
   },
   {
     icon: RefreshCw,
-    value: 4,
-    suffix: "x",
-    label: "Updates Per Year",
+    value: 0,
+    suffix: "",
+    label: "Database Updated Every Quarter",
+    displayValue: "Quarterly",
   },
   {
-    icon: MapPin,
+    icon: Users,
     value: 50,
     suffix: "+",
-    label: "Dubai Districts Covered",
+    label: "New Leads Every Week",
   },
   {
     icon: CheckCircle,
@@ -28,7 +29,15 @@ const stats = [
   },
 ];
 
-const StatCard = ({ icon: Icon, value, suffix, label }: typeof stats[0]) => {
+interface StatItem {
+  icon: React.ComponentType<{ className?: string }>;
+  value: number;
+  suffix: string;
+  label: string;
+  displayValue?: string;
+}
+
+const StatCard = ({ icon: Icon, value, suffix, label, displayValue }: StatItem) => {
   const { formattedValue, elementRef } = useCountUp({
     end: value,
     duration: 2500,
@@ -44,7 +53,7 @@ const StatCard = ({ icon: Icon, value, suffix, label }: typeof stats[0]) => {
         <Icon className="w-6 h-6 text-iskra-emerald" />
       </div>
       <div className="text-3xl md:text-4xl font-bold text-iskra-emerald mb-2">
-        {formattedValue}
+        {displayValue || formattedValue}
       </div>
       <div className="text-sm text-foreground/60 font-medium">{label}</div>
     </div>
