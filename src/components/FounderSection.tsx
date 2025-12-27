@@ -26,7 +26,7 @@ export const FounderSection = () => {
               <div className="aspect-[4/5] rounded-2xl bg-secondary/50 border border-border/50 overflow-hidden">
                 <img 
                   src={founderPhoto} 
-                  alt="Arsenijs Zaicevs - Founder & CEO of ISKRA Digital"
+                  alt="Arseny Zaicev - Founder & CEO of ISKRA Digital"
                   className="w-full h-full object-cover object-top"
                 />
               </div>
@@ -40,7 +40,7 @@ export const FounderSection = () => {
             <div className="space-y-6">
               <div>
                 <h3 className="font-display text-2xl font-bold mb-2">
-                  Arsenijs Zaicevs
+                  Arseny Zaicev
                 </h3>
                 <p className="text-iskra-emerald font-medium">
                   Founder & CEO, ISKRA Digital
@@ -48,7 +48,7 @@ export const FounderSection = () => {
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                With deep expertise in AI-powered sales automation and B2B lead generation, Arsenijs founded ISKRA Digital to help businesses scale their outreach without scaling their teams. His vision is to make enterprise-grade sales technology accessible to growing companies.
+                We're a team with one clear mission: to help you with what you REALLY need — not just sell you something. That's why we only collect positive reviews and are always happy to learn how we can be useful to you, whatever the outcome. With deep expertise in AI-powered sales automation and B2B lead generation, ISKRA Digital helps businesses scale their outreach without scaling their teams.
               </p>
 
               {/* Video Message Placeholder */}
