@@ -80,16 +80,16 @@ const WorkflowNode = ({
       <div className="relative">
         {/* Glow effect */}
         <div 
-          className="absolute inset-0 rounded-lg blur-lg bg-iskra-emerald"
-          style={{ opacity: glowIntensity }}
+          className="absolute -inset-2 rounded-xl blur-xl bg-iskra-emerald"
+          style={{ opacity: glowIntensity + 0.2 }}
         />
         
         {/* Node card */}
-        <div className="relative flex items-center gap-2 px-2.5 py-2 rounded-lg bg-card/80 backdrop-blur-sm border border-iskra-emerald/30 shadow-lg">
-          <div className="w-7 h-7 rounded-md bg-iskra-emerald/20 flex items-center justify-center">
-            <Icon className="w-4 h-4 text-iskra-emerald" />
+        <div className="relative flex items-center gap-2 px-3 py-2.5 rounded-lg bg-card/95 backdrop-blur-sm border border-iskra-emerald/50 shadow-xl">
+          <div className="w-8 h-8 rounded-md bg-iskra-emerald flex items-center justify-center">
+            <Icon className="w-4 h-4 text-white" />
           </div>
-          <span className="text-xs font-medium text-foreground/70 whitespace-nowrap">{label}</span>
+          <span className="text-sm font-semibold text-foreground/90 whitespace-nowrap">{label}</span>
         </div>
       </div>
     </div>
@@ -156,8 +156,8 @@ const AnimatedConnections = () => {
             <path
               d={pathD}
               stroke="#10b981"
-              strokeWidth="0.15"
-              strokeOpacity="0.2"
+              strokeWidth="0.25"
+              strokeOpacity="0.4"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -167,11 +167,11 @@ const AnimatedConnections = () => {
             <path
               d={pathD}
               stroke="#10b981"
-              strokeWidth="0.3"
+              strokeWidth="0.5"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeDasharray="2 8"
+              strokeDasharray="3 6"
               filter="url(#connectionGlow)"
             >
               <animate
@@ -211,7 +211,7 @@ const AnimatedConnections = () => {
 
 export const FloatingWorkflowNodes = () => {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none z-[1] opacity-60">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-[1]">
       {/* Animated connection lines */}
       <AnimatedConnections />
       
