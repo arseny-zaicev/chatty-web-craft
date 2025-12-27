@@ -93,8 +93,7 @@ export const Testimonials = () => {
                 <Quote className="absolute top-6 left-6 w-8 h-8 text-iskra-emerald/20" />
                 <div className="pl-8 pt-4">
                   <p className="text-lg text-foreground mb-6 leading-relaxed">
-                    "We were skeptical about AI outreach, but ISKRA delivered real meetings from day one. 
-                    The WhatsApp automation feels completely natural — leads don't even realize it's AI."
+                    "Арсений помог создать шикарное copy которое принесло 8 встреч за 2 дня работы. Рекомендую к сотрудничеству!"
                   </p>
                   <div className="flex items-center gap-3">
                     <img 
