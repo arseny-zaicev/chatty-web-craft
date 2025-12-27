@@ -109,6 +109,28 @@ export default {
           "0%, 100%": { boxShadow: "0 0 20px hsl(var(--iskra-emerald) / 0.2)" },
           "50%": { boxShadow: "0 0 40px hsl(var(--iskra-emerald) / 0.4)" },
         },
+        "flow": {
+          "0%": { left: "-20%" },
+          "100%": { left: "120%" },
+        },
+        "node-pulse": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.03)" },
+        },
+        "pulse-slow": {
+          "0%, 100%": { opacity: "0.3", transform: "scale(1)" },
+          "50%": { opacity: "0.6", transform: "scale(1.1)" },
+        },
+        "float-particle": {
+          "0%, 100%": { opacity: "0", transform: "translateY(0) translateX(0)" },
+          "25%": { opacity: "0.8" },
+          "50%": { opacity: "0.4", transform: "translateY(-30px) translateX(10px)" },
+          "75%": { opacity: "0.8" },
+        },
+        "marquee-slow": {
+          "0%": { transform: "translateX(0%)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -119,6 +141,11 @@ export default {
         "float": "float 6s ease-in-out infinite",
         "sparkle": "sparkle 2s ease-in-out infinite",
         "pulse-glow": "pulse-glow 3s ease-in-out infinite",
+        "flow": "flow 3s linear infinite",
+        "node-pulse": "node-pulse 2s ease-in-out infinite",
+        "pulse-slow": "pulse-slow 3s ease-in-out infinite",
+        "float-particle": "float-particle 4s ease-in-out infinite",
+        "marquee-slow": "marquee-slow 30s linear infinite",
       },
       backgroundImage: {
         "gradient-hero": "var(--gradient-hero)",
