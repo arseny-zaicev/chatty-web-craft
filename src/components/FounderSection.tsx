@@ -70,13 +70,17 @@ export const FounderSection = () => {
 
               {/* Social Links */}
               <div className="flex flex-wrap gap-4 pt-4">
-                <a
-                  href="mailto:arseny@iskradigital.com"
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText("arseny@iskradigital.com");
+                    // Could add toast notification here
+                  }}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group"
+                  title="Click to copy"
                 >
                   <Mail className="w-4 h-4" />
-                  <span>Email</span>
-                </a>
+                  <span className="group-hover:underline">arseny@iskradigital.com</span>
+                </button>
                 <a
                   href="http://wa.me/971568785008"
                   target="_blank"

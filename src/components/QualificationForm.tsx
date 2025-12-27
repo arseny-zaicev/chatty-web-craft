@@ -22,10 +22,11 @@ interface FormData {
 }
 
 const revenueOptions = [
-  { key: "A", label: "$250k – $500k" },
-  { key: "B", label: "$500k – $1M" },
-  { key: "C", label: "$1M – $3M" },
-  { key: "D", label: "$3M+" },
+  { key: "A", label: "0 – $250k" },
+  { key: "B", label: "$250k – $500k" },
+  { key: "C", label: "$500k – $1M" },
+  { key: "D", label: "$1M – $3M" },
+  { key: "E", label: "$3M+" },
 ];
 
 const timelineOptions = [

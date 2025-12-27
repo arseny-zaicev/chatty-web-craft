@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SellerLeadsForm } from "@/components/SellerLeadsForm";
 import { SellerLeadsHowItWorks } from "@/components/SellerLeadsHowItWorks";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
-import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star } from "lucide-react";
+import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star, Zap, Check } from "lucide-react";
 
 import salesforgeLogo from "@/assets/clients/salesforge-new.png";
 import pathosLogo from "@/assets/clients/pathos-new.png";
@@ -249,6 +249,69 @@ const SellerLeads = () => {
                 <div className="absolute -inset-4 bg-iskra-emerald/10 rounded-3xl blur-2xl -z-10" />
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Pricing Section */}
+        <section id="pricing" className="py-24 border-t border-border/30">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
+                Simple <span className="text-gradient">Pay-Per-Lead</span> Pricing
+              </h2>
+              <p className="text-xl text-foreground/70 max-w-2xl mx-auto">
+                Only pay for leads that respond positively. No subscriptions, no hidden fees.
+              </p>
+            </div>
+
+            <div className="max-w-lg mx-auto">
+              <div className="relative glass-card rounded-3xl p-8 md:p-10 border-iskra-emerald/50 shadow-glow">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-iskra-emerald rounded-full text-sm font-semibold text-primary-foreground flex items-center gap-2">
+                  <Zap className="w-4 h-4" />
+                  Pay Per Result
+                </div>
+
+                <div className="text-center mb-8">
+                  <div className="flex items-baseline justify-center gap-2 mb-2">
+                    <span className="text-5xl font-bold text-iskra-emerald">150 AED</span>
+                    <span className="text-foreground/50">/ lead</span>
+                  </div>
+                  <p className="text-foreground/60">~€38 per qualified lead</p>
+                </div>
+
+                <ul className="space-y-4 mb-8">
+                  {[
+                    "Choose any district in Dubai",
+                    "Get leads instantly after positive response",
+                    "WhatsApp-verified owner contacts",
+                    "Full property & ownership details",
+                    "No monthly subscription",
+                    "Pay only for interested sellers",
+                  ].map((feature) => (
+                    <li key={feature} className="flex items-center gap-3">
+                      <div className="w-5 h-5 rounded-full bg-iskra-emerald/20 flex items-center justify-center flex-shrink-0">
+                        <Check className="w-3 h-3 text-iskra-emerald" />
+                      </div>
+                      <span className="text-foreground/80">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  variant="hero"
+                  size="lg"
+                  className="w-full group"
+                  onClick={scrollToForm}
+                >
+                  Start Getting Leads
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-center text-foreground/50 mt-8 text-sm">
+              Bulk packages available for agencies. Contact us for volume discounts.
+            </p>
           </div>
         </section>
 
