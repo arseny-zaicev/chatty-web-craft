@@ -30,7 +30,7 @@ const faqData: Record<FAQCategory, { question: string; answer: string }[]> = {
     },
     {
       question: "Do you offer a guarantee?",
-      answer: "Yes! We offer a 30-day money-back guarantee. If you're not satisfied with the AI agent performance, we'll refund you — no questions asked.",
+      answer: "Yes! Every client receives a custom guarantee based on their specific goals and expected results. We align our success with yours — if we don't deliver what was promised, you don't pay.",
     },
   ],
   "whatsapp": [
