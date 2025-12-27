@@ -4,8 +4,6 @@ import leadbookLogo from "@/assets/clients/leadbook-new.png";
 import fbMediaLogo from "@/assets/clients/fb-media-new.png";
 import florianLogo from "@/assets/clients/florian-logo.png";
 import enaraLogo from "@/assets/clients/enara-logo.png";
-import propAiLogo from "@/assets/clients/prop-ai-logo.png";
-import moreConvosLogo from "@/assets/clients/more-convos-logo.png";
 
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
@@ -14,8 +12,6 @@ const clients = [
   { name: "FB Media", logo: fbMediaLogo, url: "https://www.instagram.com/f.b.marketing/" },
   { name: "Florian", logo: florianLogo, url: "#" },
   { name: "Enara Properties", logo: enaraLogo, url: "https://enaraproperties.ae/" },
-  { name: "Prop AI", logo: propAiLogo, url: "https://prop-ai.com/" },
-  { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com/" },
 ];
 
 export const ClientLogos = () => {
