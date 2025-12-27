@@ -58,7 +58,7 @@ const FloatingNode = ({ icon: Icon, color, baseX, baseY, delay }: FloatingNodePr
   return (
     <div
       className={`absolute transition-all duration-1000 ${
-        isVisible ? "opacity-[0.12]" : "opacity-0"
+        isVisible ? "opacity-30" : "opacity-0"
       }`}
       style={{
         left: `${position.x}%`,
