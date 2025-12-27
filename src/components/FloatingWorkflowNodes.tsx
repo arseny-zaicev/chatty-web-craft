@@ -4,18 +4,18 @@ import { Bot, MessageCircle, Calendar, Database, Zap, Send, Mail, Globe, Webhook
 // Grid-based workflow nodes like n8n
 const nodes = [
   // Row 1
-  { id: 0, icon: Webhook, label: "Webhook", x: 15, y: 15 },
-  { id: 1, icon: MessageCircle, label: "WhatsApp", x: 35, y: 15 },
-  { id: 2, icon: Bot, label: "AI Agent", x: 55, y: 15 },
-  { id: 3, icon: Database, label: "CRM", x: 75, y: 15 },
+  { id: 0, icon: Webhook, label: "Webhook", color: "#f97316", x: 12, y: 12 },
+  { id: 1, icon: MessageCircle, label: "WhatsApp", color: "#22c55e", x: 32, y: 12 },
+  { id: 2, icon: Bot, label: "AI Agent", color: "#10b981", x: 52, y: 12 },
+  { id: 3, icon: Database, label: "CRM", color: "#a855f7", x: 72, y: 12 },
   // Row 2
-  { id: 4, icon: Zap, label: "Trigger", x: 25, y: 45 },
-  { id: 5, icon: Globe, label: "API", x: 45, y: 45 },
-  { id: 6, icon: Mail, label: "Email", x: 65, y: 45 },
+  { id: 4, icon: Zap, label: "Trigger", color: "#eab308", x: 22, y: 42 },
+  { id: 5, icon: Globe, label: "API", color: "#3b82f6", x: 42, y: 42 },
+  { id: 6, icon: Mail, label: "Email", color: "#ec4899", x: 62, y: 42 },
   // Row 3
-  { id: 7, icon: FileText, label: "Data", x: 20, y: 75 },
-  { id: 8, icon: Calendar, label: "Calendar", x: 40, y: 75 },
-  { id: 9, icon: Send, label: "Notify", x: 60, y: 75 },
+  { id: 7, icon: FileText, label: "Data", color: "#06b6d4", x: 17, y: 72 },
+  { id: 8, icon: Calendar, label: "Calendar", color: "#8b5cf6", x: 37, y: 72 },
+  { id: 9, icon: Send, label: "Notify", color: "#14b8a6", x: 57, y: 72 },
 ];
 
 // Connections between nodes (flow pattern)
@@ -30,21 +30,23 @@ const connections: [number, number][] = [
 const WorkflowNode = ({ 
   icon: Icon, 
   label, 
+  color,
   x, 
   y, 
   delay 
 }: { 
   icon: React.ComponentType<{ className?: string }>;
   label: string;
+  color: string;
   x: number;
   y: number;
   delay: number;
 }) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [glowIntensity, setGlowIntensity] = useState(0.3);
+  const [glowIntensity, setGlowIntensity] = useState(0.4);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), delay * 150);
+    const timer = setTimeout(() => setIsVisible(true), delay * 100);
     return () => clearTimeout(timer);
   }, [delay]);
 
@@ -57,7 +59,7 @@ const WorkflowNode = ({
     
     const animate = () => {
       time += 16;
-      const glow = 0.2 + Math.sin(time / 2000) * 0.15;
+      const glow = 0.4 + Math.sin(time / 1500) * 0.3;
       setGlowIntensity(glow);
       animationId = requestAnimationFrame(animate);
     };
@@ -80,16 +82,19 @@ const WorkflowNode = ({
       <div className="relative">
         {/* Glow effect */}
         <div 
-          className="absolute -inset-2 rounded-xl blur-xl bg-iskra-emerald"
-          style={{ opacity: glowIntensity + 0.2 }}
+          className="absolute -inset-3 rounded-2xl blur-xl"
+          style={{ backgroundColor: color, opacity: glowIntensity }}
         />
         
         {/* Node card */}
-        <div className="relative flex items-center gap-2 px-3 py-2.5 rounded-lg bg-card/95 backdrop-blur-sm border border-iskra-emerald/50 shadow-xl">
-          <div className="w-8 h-8 rounded-md bg-iskra-emerald flex items-center justify-center">
+        <div className="relative flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card/95 backdrop-blur-sm border border-border/80 shadow-2xl">
+          <div 
+            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg"
+            style={{ backgroundColor: color }}
+          >
             <Icon className="w-4 h-4 text-white" />
           </div>
-          <span className="text-sm font-semibold text-foreground/90 whitespace-nowrap">{label}</span>
+          <span className="text-sm font-semibold text-foreground whitespace-nowrap">{label}</span>
         </div>
       </div>
     </div>
@@ -97,33 +102,40 @@ const WorkflowNode = ({
 };
 
 const AnimatedConnections = () => {
+  const [, setTick] = useState(0);
+  
+  // Force re-render for smooth animations
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 50);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
       <defs>
-        {/* Base line gradient */}
-        <linearGradient id="baseLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.1" />
-          <stop offset="50%" stopColor="#10b981" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0.1" />
+        {/* Glowing line gradient */}
+        <linearGradient id="glowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+          <stop offset="50%" stopColor="#10b981" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0.3" />
         </linearGradient>
         
-        {/* Flowing pulse gradient */}
-        <linearGradient id="pulseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0">
-            <animate attributeName="offset" values="-0.3;1" dur="3s" repeatCount="indefinite" />
-          </stop>
-          <stop offset="10%" stopColor="#10b981" stopOpacity="0.8">
-            <animate attributeName="offset" values="-0.2;1.1" dur="3s" repeatCount="indefinite" />
-          </stop>
-          <stop offset="20%" stopColor="#10b981" stopOpacity="0">
-            <animate attributeName="offset" values="-0.1;1.2" dur="3s" repeatCount="indefinite" />
-          </stop>
-        </linearGradient>
-        
-        {/* Glow filter */}
-        <filter id="connectionGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="0.3" result="blur"/>
+        {/* Strong glow filter */}
+        <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="0.8" result="blur"/>
           <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        
+        {/* Particle glow */}
+        <filter id="particleGlow" x="-200%" y="-200%" width="500%" height="500%">
+          <feGaussianBlur stdDeviation="1" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="blur"/>
             <feMergeNode in="blur"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
@@ -152,54 +164,64 @@ const AnimatedConnections = () => {
 
         return (
           <g key={`conn-${fromIdx}-${toIdx}`}>
-            {/* Base line */}
+            {/* Base line - visible */}
             <path
               d={pathD}
               stroke="#10b981"
-              strokeWidth="0.25"
-              strokeOpacity="0.4"
+              strokeWidth="0.4"
+              strokeOpacity="0.5"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
             
-            {/* Animated flowing current */}
+            {/* Glowing animated line */}
             <path
               d={pathD}
               stroke="#10b981"
-              strokeWidth="0.5"
+              strokeWidth="0.6"
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeDasharray="3 6"
-              filter="url(#connectionGlow)"
+              strokeDasharray="4 4"
+              filter="url(#strongGlow)"
             >
               <animate
                 attributeName="stroke-dashoffset"
-                values="0;-10"
-                dur={`${2 + (index % 3)}s`}
+                values="0;-16"
+                dur={`${1.5 + (index % 3) * 0.5}s`}
                 repeatCount="indefinite"
               />
               <animate
                 attributeName="stroke-opacity"
-                values="0.3;0.8;0.3"
-                dur={`${1.5 + (index % 2)}s`}
+                values="0.6;1;0.6"
+                dur={`${1 + (index % 2) * 0.5}s`}
                 repeatCount="indefinite"
               />
             </path>
             
-            {/* Traveling dot */}
-            <circle r="0.4" fill="#10b981" filter="url(#connectionGlow)">
+            {/* Bright traveling particle */}
+            <circle r="0.8" fill="#10b981" filter="url(#particleGlow)">
               <animateMotion
-                dur={`${3 + index % 2}s`}
+                dur={`${2.5 + index % 2}s`}
                 repeatCount="indefinite"
                 path={pathD}
               />
               <animate
-                attributeName="opacity"
-                values="0.5;1;0.5"
+                attributeName="r"
+                values="0.6;1;0.6"
                 dur="1s"
                 repeatCount="indefinite"
+              />
+            </circle>
+            
+            {/* Second particle offset */}
+            <circle r="0.5" fill="#22c55e" filter="url(#particleGlow)">
+              <animateMotion
+                dur={`${2.5 + index % 2}s`}
+                repeatCount="indefinite"
+                path={pathD}
+                begin={`${1 + index * 0.1}s`}
               />
             </circle>
           </g>
@@ -221,6 +243,7 @@ export const FloatingWorkflowNodes = () => {
           key={node.id}
           icon={node.icon}
           label={node.label}
+          color={node.color}
           x={node.x}
           y={node.y}
           delay={index}
