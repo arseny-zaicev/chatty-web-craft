@@ -96,13 +96,9 @@ const SellerLeads = () => {
                   <span className="text-gradient">Before They List</span>
                 </h1>
 
-                <p className="text-xl md:text-2xl text-foreground/80 mb-6 max-w-xl leading-relaxed">
-100:                   Access Dubai's most comprehensive owner database. Choose any district and building — find property owners ready to sell or rent, even if there's no listing on the market.
-101:                 </p>
-102: 
-103:                 <p className="text-lg text-iskra-emerald/90 mb-10 max-w-xl font-medium">
-104:                   Let your agents work with leads who are already interested — no more wasting hours on cold outreach.
-105:                 </p>
+                <p className="text-xl md:text-2xl text-foreground/80 mb-10 max-w-xl leading-relaxed">
+                  Access Dubai's most comprehensive owner database. Choose any district and building — find property owners ready to sell or rent, even if there's no listing on the market.
+                </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 mb-12">
                   <Button 
@@ -222,8 +218,11 @@ const SellerLeads = () => {
                   <br />
                   <span className="text-gradient">Close More Deals</span>
                 </h2>
-                <p className="text-xl text-foreground/70 mb-10">
+                <p className="text-xl text-foreground/70 mb-4">
                   Our leads come with comprehensive data so you can focus on what matters — closing deals.
+                </p>
+                <p className="text-lg text-iskra-emerald font-medium mb-10">
+                  Let your agents work with leads who are already interested — no more wasting hours on cold outreach.
                 </p>
 
                 <div className="space-y-4">
