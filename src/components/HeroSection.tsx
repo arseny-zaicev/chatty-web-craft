@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/Sparkles";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
+import { FloatingWorkflowNodes } from "@/components/FloatingWorkflowNodes";
 import { ArrowRight, Zap } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
 
@@ -62,6 +63,7 @@ export const HeroSection = () => {
     <section className="relative min-h-screen flex items-center pt-20 overflow-hidden">
       <AnimatedBackground />
       <Sparkles count={15} />
+      <FloatingWorkflowNodes />
       
       {/* Premium overlay gradient */}
       <div className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background/70 z-[1]" />
