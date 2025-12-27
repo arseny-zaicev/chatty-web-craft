@@ -314,32 +314,43 @@ const AIAgent = () => {
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
               {/* Testimonial 1 - Kristaps */}
-              <div className="bg-card border border-border rounded-2xl p-6 hover:border-iskra-emerald/50 transition-all">
-                <div className="aspect-video bg-muted rounded-xl mb-6 overflow-hidden">
+              <div className="bg-card border border-iskra-emerald/30 rounded-2xl p-6 hover:border-iskra-emerald transition-all shadow-lg hover:shadow-iskra-emerald/20">
+                <div className="aspect-video bg-gradient-to-br from-iskra-emerald/20 to-iskra-emerald/5 rounded-xl mb-6 overflow-hidden relative group">
                   <iframe
                     src="https://drive.google.com/file/d/1NNQ8gBN-64xXEvRVxQdbBiqGqRkIQz8L/preview"
-                    className="w-full h-full"
+                    className="w-full h-full relative z-10"
                     allow="autoplay"
                     allowFullScreen
                     title="Kristaps testimonial video"
                   />
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none" />
                 </div>
-                <div>
-                  <p className="font-semibold text-lg">Kristaps</p>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Founder,{" "}
-                    <a 
-                      href="https://key-digital.lv" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-iskra-emerald hover:underline"
-                    >
-                      key-digital.lv
-                    </a>
-                  </p>
-                  <p className="text-sm text-muted-foreground italic">
-                    WhatsApp Outreach Product
-                  </p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-iskra-emerald/20 flex items-center justify-center">
+                      <MessageCircle className="w-5 h-5 text-iskra-emerald" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">Kristaps</p>
+                      <p className="text-sm text-muted-foreground">
+                        Founder,{" "}
+                        <a 
+                          href="https://key-digital.lv" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-iskra-emerald hover:underline"
+                        >
+                          key-digital.lv
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-iskra-emerald/10 rounded-xl p-4 border border-iskra-emerald/20">
+                    <p className="text-sm font-medium text-iskra-emerald mb-1">Result:</p>
+                    <p className="font-display text-lg font-bold">
+                      500 messages → 8 meetings booked in 2 days
+                    </p>
+                  </div>
                 </div>
               </div>
 
