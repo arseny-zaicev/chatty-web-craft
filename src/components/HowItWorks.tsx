@@ -10,21 +10,21 @@ const steps = [
   },
   {
     icon: Code,
-    title: "Development Phase",
-    description: "Our team builds your custom AI agent — from conversation flows to CRM integration. Fast delivery without compromising quality.",
+    title: "Development & Launch",
+    description: "We build your custom AI agent and launch it live. Your agent starts working immediately — handling chats, qualifying leads, booking meetings.",
     duration: "~7 days",
   },
   {
     icon: Sparkles,
-    title: "Fine-Tuning & Training",
-    description: "Active monitoring, adding small details, and continuous agent training. We optimize responses until your AI performs perfectly.",
-    duration: "20-25 days",
+    title: "Fine-Tuning",
+    description: "Minor adjustments based on real conversations. We optimize responses, add edge cases, and polish until your AI performs perfectly.",
+    duration: "2-3 weeks",
   },
   {
     icon: Rocket,
-    title: "Launch & Scale",
-    description: "Your AI agent goes live. We provide ongoing support and optimization as your business grows.",
-    duration: "Go live!",
+    title: "Scale & Support",
+    description: "Ongoing monitoring and optimization as your business grows. We're always here to help you get the most out of your AI agent.",
+    duration: "Ongoing",
   },
 ];
 

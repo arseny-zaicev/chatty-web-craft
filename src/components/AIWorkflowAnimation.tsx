@@ -3,8 +3,8 @@ import { Target, Code, Sparkles, Rocket } from "lucide-react";
 const stages = [
   { icon: Target, label: "Discovery", sublabel: "1-2 days" },
   { icon: Code, label: "Development", sublabel: "~7 days" },
-  { icon: Sparkles, label: "Training", sublabel: "20-25 days" },
-  { icon: Rocket, label: "Launch", sublabel: "Go live!" },
+  { icon: Sparkles, label: "Fine-Tuning", sublabel: "2-3 weeks" },
+  { icon: Rocket, label: "Scale", sublabel: "Ongoing" },
 ];
 
 export const AIWorkflowAnimation = () => {
