@@ -1,13 +1,52 @@
+import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, MessageCircle, Calendar, Bot, Database, Settings, Globe, CheckCircle, Play } from "lucide-react";
+import { ArrowRight, MessageCircle, Calendar, Bot, Database, Settings, Globe, CheckCircle, Play, Building, ShoppingCart, Briefcase, Heart, X } from "lucide-react";
+
+// Placeholder for case study images - will be replaced with real ones
+const caseStudies = [
+  {
+    id: 1,
+    industry: "Real Estate",
+    icon: Building,
+    title: "Property Seller Lead Qualification",
+    description: "Coming soon — full workflow breakdown of how AI handles real estate seller inquiries.",
+    result: "",
+    workflowImages: [], // Will add real images later
+  },
+  {
+    id: 2,
+    industry: "E-commerce",
+    icon: ShoppingCart,
+    title: "Product Inquiry & Order Support",
+    description: "Coming soon — see how AI manages customer questions and drives conversions.",
+    result: "",
+    workflowImages: [],
+  },
+  {
+    id: 3,
+    industry: "B2B Services",
+    icon: Briefcase,
+    title: "Lead Nurturing & Meeting Booking",
+    description: "Coming soon — end-to-end B2B sales automation case study.",
+    result: "",
+    workflowImages: [],
+  },
+  {
+    id: 4,
+    industry: "Healthcare",
+    icon: Heart,
+    title: "Patient Appointment Scheduling",
+    description: "Coming soon — AI-powered clinic booking and FAQ handling.",
+    result: "",
+    workflowImages: [],
+  },
+];
 
 const AIAgent = () => {
-  const scrollToContact = () => {
-    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
-  };
+  const [selectedCase, setSelectedCase] = useState<number | null>(null);
 
   const workflowSteps = [
     {
@@ -70,7 +109,7 @@ const AIAgent = () => {
             <Button 
               size="lg" 
               className="bg-iskra-emerald hover:bg-iskra-emerald-dark text-primary-foreground"
-              onClick={scrollToContact}
+              onClick={() => window.location.href = "/#contact"}
             >
               Get Your AI Agent
               <ArrowRight className="w-5 h-5 ml-2" />
@@ -78,8 +117,122 @@ const AIAgent = () => {
           </div>
         </section>
 
-        {/* Workflow Section */}
+        {/* Video Demo Section */}
+        <section className="py-24 bg-muted/30">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-12">
+              <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
+                Watch It in Action
+              </h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                See a real AI RAG Agent conversation from start to meeting booked.
+              </p>
+            </div>
+
+            {/* Video Placeholder */}
+            <div className="max-w-4xl mx-auto">
+              <div className="aspect-video bg-card border border-border rounded-2xl flex items-center justify-center relative overflow-hidden group cursor-pointer">
+                <div className="absolute inset-0 bg-gradient-to-br from-iskra-emerald/10 to-iskra-emerald/5" />
+                <div className="relative z-10 text-center">
+                  <div className="w-20 h-20 rounded-full bg-iskra-emerald/20 border-2 border-iskra-emerald flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                    <Play className="w-8 h-8 text-iskra-emerald ml-1" />
+                  </div>
+                  <p className="text-muted-foreground">Video demo coming soon</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Industry Case Studies */}
         <section className="py-24">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
+                Case Studies by Industry
+              </h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                Click on any industry to see the detailed workflow and results.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+              {caseStudies.map((study) => (
+                <button
+                  key={study.id}
+                  onClick={() => setSelectedCase(selectedCase === study.id ? null : study.id)}
+                  className={`bg-card border rounded-2xl p-6 text-left transition-all duration-300 hover:border-iskra-emerald/50 ${
+                    selectedCase === study.id ? "border-iskra-emerald ring-2 ring-iskra-emerald/20" : "border-border"
+                  }`}
+                >
+                  <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-4">
+                    <study.icon className="w-6 h-6 text-iskra-emerald" />
+                  </div>
+                  <p className="text-xs text-iskra-emerald font-medium mb-2">{study.industry}</p>
+                  <h3 className="font-display text-lg font-semibold mb-2">{study.title}</h3>
+                  <p className="text-sm text-muted-foreground">{study.description}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Expanded Case Study View */}
+            {selectedCase && (
+              <div className="mt-12 max-w-4xl mx-auto">
+                <div className="bg-card border border-iskra-emerald/30 rounded-2xl p-8 relative">
+                  <button 
+                    onClick={() => setSelectedCase(null)}
+                    className="absolute top-4 right-4 p-2 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  
+                  {(() => {
+                    const study = caseStudies.find(s => s.id === selectedCase);
+                    if (!study) return null;
+                    
+                    return (
+                      <div>
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-xl bg-iskra-emerald/10 flex items-center justify-center">
+                            <study.icon className="w-5 h-5 text-iskra-emerald" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-iskra-emerald font-medium">{study.industry}</p>
+                            <h3 className="font-display text-xl font-semibold">{study.title}</h3>
+                          </div>
+                        </div>
+                        
+                        {/* Workflow Images Placeholder */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                          {[1, 2, 3, 4].map((i) => (
+                            <div 
+                              key={i}
+                              className="aspect-[3/4] bg-muted border border-dashed border-border rounded-xl flex items-center justify-center"
+                            >
+                              <p className="text-xs text-muted-foreground text-center px-2">
+                                Workflow Step {i}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="bg-muted/50 rounded-xl p-6">
+                          <h4 className="font-semibold mb-2">What Was Done:</h4>
+                          <p className="text-muted-foreground">
+                            Detailed description of the implementation, workflow setup, and results will be added here.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Workflow Section */}
+        <section className="py-24 bg-muted/30">
           <div className="container mx-auto px-4">
             <div className="text-center mb-16">
               <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
@@ -108,7 +261,7 @@ const AIAgent = () => {
         </section>
 
         {/* Key Features */}
-        <section className="py-24 bg-muted/30">
+        <section className="py-24">
           <div className="container mx-auto px-4">
             <div className="text-center mb-16">
               <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
@@ -148,7 +301,7 @@ const AIAgent = () => {
         </section>
 
         {/* Testimonials Section */}
-        <section className="py-24">
+        <section className="py-24 bg-muted/30">
           <div className="container mx-auto px-4">
             <div className="text-center mb-16">
               <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">

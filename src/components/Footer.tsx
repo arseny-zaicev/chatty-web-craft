@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 
 const footerLinks = [
   { label: "AI Agent", href: "/#chatbot" },
+  { label: "AI Use Cases", href: "/ai-agent", isPage: true },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Services", href: "/#services" },
   { label: "Contact", href: "/#contact" },
