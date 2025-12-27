@@ -1,26 +1,33 @@
-import { useEffect, useState } from "react";
-import { Bot, MessageCircle, Calendar, Database, Zap, Mail, Globe, Send } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Bot, MessageCircle, Calendar, Database, Zap, Send } from "lucide-react";
 
 const nodes = [
-  { icon: Bot, label: "AI Agent", color: "bg-iskra-emerald", delay: 0 },
-  { icon: MessageCircle, label: "WhatsApp", color: "bg-green-500", delay: 0.5 },
-  { icon: Calendar, label: "Book Meeting", color: "bg-blue-500", delay: 1 },
-  { icon: Database, label: "CRM Sync", color: "bg-purple-500", delay: 1.5 },
-  { icon: Zap, label: "Trigger", color: "bg-orange-500", delay: 2 },
-  { icon: Mail, label: "Email", color: "bg-red-400", delay: 2.5 },
-  { icon: Globe, label: "Webhook", color: "bg-cyan-500", delay: 3 },
-  { icon: Send, label: "Notify", color: "bg-pink-500", delay: 3.5 },
+  { id: 1, icon: Bot, label: "AI Agent", color: "#10b981" },
+  { id: 2, icon: MessageCircle, label: "WhatsApp", color: "#22c55e" },
+  { id: 3, icon: Calendar, label: "Meeting", color: "#3b82f6" },
+  { id: 4, icon: Database, label: "CRM", color: "#a855f7" },
+  { id: 5, icon: Zap, label: "Trigger", color: "#f97316" },
+  { id: 6, icon: Send, label: "Notify", color: "#ec4899" },
 ];
 
-const positions = [
-  { top: "5%", left: "10%" },
-  { top: "15%", right: "15%" },
-  { top: "35%", left: "5%" },
-  { top: "45%", right: "8%" },
-  { top: "60%", left: "12%" },
-  { top: "70%", right: "20%" },
-  { top: "85%", left: "8%" },
-  { top: "80%", right: "5%" },
+// Positions for nodes (percentages)
+const nodePositions = [
+  { x: 8, y: 15 },
+  { x: 5, y: 45 },
+  { x: 10, y: 75 },
+  { x: 88, y: 20 },
+  { x: 90, y: 50 },
+  { x: 85, y: 80 },
+];
+
+// Define connections between nodes (by index)
+const connections = [
+  [0, 1],
+  [1, 2],
+  [3, 4],
+  [4, 5],
+  [0, 3],
+  [2, 5],
 ];
 
 interface FloatingNodeProps {
@@ -28,10 +35,12 @@ interface FloatingNodeProps {
   label: string;
   color: string;
   delay: number;
-  position: { top?: string; left?: string; right?: string; bottom?: string };
+  x: number;
+  y: number;
+  floatOffset: number;
 }
 
-const FloatingNode = ({ icon: Icon, label, color, delay, position }: FloatingNodeProps) => {
+const FloatingNode = ({ icon: Icon, label, color, delay, x, y, floatOffset }: FloatingNodeProps) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -41,65 +50,115 @@ const FloatingNode = ({ icon: Icon, label, color, delay, position }: FloatingNod
 
   return (
     <div
-      className={`absolute transition-all duration-700 ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+      className={`absolute transition-all duration-1000 ease-out ${
+        isVisible ? "opacity-70 scale-100" : "opacity-0 scale-90"
       }`}
       style={{
-        ...position,
-        animationDelay: `${delay}s`,
+        left: `${x}%`,
+        top: `${y}%`,
+        transform: `translate(-50%, -50%)`,
+        animation: isVisible ? `smoothFloat ${8 + floatOffset}s ease-in-out infinite` : 'none',
+        animationDelay: `${floatOffset}s`,
       }}
     >
       <div className="relative group">
-        {/* Connection line hint */}
-        <div className="absolute -right-8 top-1/2 w-8 h-px bg-gradient-to-r from-border to-transparent opacity-50" />
-        <div className="absolute -left-8 top-1/2 w-8 h-px bg-gradient-to-l from-border to-transparent opacity-50" />
-        
         {/* Node */}
-        <div 
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg hover:border-iskra-emerald/40 transition-all duration-300 hover:scale-105 animate-float-node cursor-default"
-          style={{ animationDelay: `${delay * 0.5}s` }}
-        >
-          <div className={`w-7 h-7 rounded-md ${color} flex items-center justify-center shadow-md`}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-card/60 backdrop-blur-md border border-border/30 shadow-xl transition-all duration-500 hover:opacity-100 hover:border-iskra-emerald/50">
+          <div 
+            className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg"
+            style={{ backgroundColor: color }}
+          >
             <Icon className="w-4 h-4 text-white" />
           </div>
-          <span className="text-xs font-medium text-foreground/80 whitespace-nowrap">{label}</span>
+          <span className="text-xs font-medium text-foreground/70 whitespace-nowrap hidden sm:block">{label}</span>
         </div>
-        
-        {/* Glow effect on hover */}
-        <div className={`absolute inset-0 rounded-lg ${color} opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300`} />
       </div>
     </div>
   );
 };
 
-// Connection lines between nodes
-const ConnectionLines = () => (
-  <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-20" style={{ zIndex: -1 }}>
-    <defs>
-      <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stopColor="currentColor" stopOpacity="0" />
-        <stop offset="50%" stopColor="currentColor" stopOpacity="0.5" />
-        <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-      </linearGradient>
-    </defs>
-    {/* Animated flowing lines */}
-    <path
-      d="M 50 100 Q 150 50 250 150 T 450 100"
-      stroke="url(#lineGradient)"
-      strokeWidth="1"
-      fill="none"
-      className="text-iskra-emerald animate-dash"
-    />
-    <path
-      d="M 100 300 Q 200 250 300 350 T 500 300"
-      stroke="url(#lineGradient)"
-      strokeWidth="1"
-      fill="none"
-      className="text-iskra-emerald animate-dash"
-      style={{ animationDelay: "1s" }}
-    />
-  </svg>
-);
+// Animated connection lines with flowing current
+const ConnectionLines = () => {
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  return (
+    <svg 
+      ref={svgRef}
+      className="absolute inset-0 w-full h-full pointer-events-none" 
+      style={{ zIndex: -1 }}
+      preserveAspectRatio="none"
+    >
+      <defs>
+        {/* Gradient for the base line */}
+        <linearGradient id="lineBase" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.1" />
+          <stop offset="50%" stopColor="#10b981" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0.1" />
+        </linearGradient>
+        
+        {/* Animated gradient for flowing current */}
+        <linearGradient id="flowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0">
+            <animate attributeName="offset" values="-0.3;1" dur="3s" repeatCount="indefinite" />
+          </stop>
+          <stop offset="0.1" stopColor="#10b981" stopOpacity="0.8">
+            <animate attributeName="offset" values="-0.2;1.1" dur="3s" repeatCount="indefinite" />
+          </stop>
+          <stop offset="0.2" stopColor="#10b981" stopOpacity="0">
+            <animate attributeName="offset" values="-0.1;1.2" dur="3s" repeatCount="indefinite" />
+          </stop>
+        </linearGradient>
+
+        {/* Glow filter */}
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+
+      {/* Draw connections */}
+      {connections.map(([from, to], index) => {
+        const fromPos = nodePositions[from];
+        const toPos = nodePositions[to];
+        
+        // Calculate control points for curved line
+        const midX = (fromPos.x + toPos.x) / 2;
+        const midY = (fromPos.y + toPos.y) / 2;
+        const curveOffset = (index % 2 === 0 ? 1 : -1) * 10;
+        
+        const pathD = `M ${fromPos.x}% ${fromPos.y}% Q ${midX + curveOffset}% ${midY}% ${toPos.x}% ${toPos.y}%`;
+
+        return (
+          <g key={`${from}-${to}`}>
+            {/* Base line */}
+            <path
+              d={pathD}
+              stroke="url(#lineBase)"
+              strokeWidth="1.5"
+              fill="none"
+              strokeLinecap="round"
+            />
+            {/* Flowing current */}
+            <path
+              d={pathD}
+              stroke="url(#flowGradient)"
+              strokeWidth="2"
+              fill="none"
+              strokeLinecap="round"
+              filter="url(#glow)"
+              style={{ 
+                animationDelay: `${index * 0.5}s`,
+              }}
+            />
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
 
 export const FloatingWorkflowNodes = () => {
   return (
@@ -107,9 +166,14 @@ export const FloatingWorkflowNodes = () => {
       <ConnectionLines />
       {nodes.map((node, index) => (
         <FloatingNode
-          key={node.label}
-          {...node}
-          position={positions[index]}
+          key={node.id}
+          icon={node.icon}
+          label={node.label}
+          color={node.color}
+          delay={index * 0.3}
+          x={nodePositions[index].x}
+          y={nodePositions[index].y}
+          floatOffset={index * 0.8}
         />
       ))}
     </div>

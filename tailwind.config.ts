@@ -140,6 +140,10 @@ export default {
           "0%": { strokeDashoffset: "100" },
           "100%": { strokeDashoffset: "0" },
         },
+        "smoothFloat": {
+          "0%, 100%": { transform: "translate(-50%, -50%) translateY(0px)" },
+          "50%": { transform: "translate(-50%, -50%) translateY(-12px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
