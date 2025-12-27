@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { QualificationForm } from "@/components/QualificationForm";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, MessageCircle, Calendar, Bot, Database, Settings, Globe, CheckCircle, Play, Building, ShoppingCart, Briefcase, Heart, X } from "lucide-react";
 
@@ -370,25 +371,8 @@ const AIAgent = () => {
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section id="contact" className="py-24 bg-gradient-to-br from-iskra-emerald to-iskra-emerald-dark text-primary-foreground">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              Ready to Automate Your Sales?
-            </h2>
-            <p className="text-xl text-primary-foreground/80 max-w-2xl mx-auto mb-8">
-              Get your AI RAG Agent set up in days, not months. Start converting more leads today.
-            </p>
-            <Button 
-              size="lg" 
-              className="bg-primary-foreground text-iskra-emerald-dark hover:bg-primary-foreground/90 font-semibold"
-              onClick={() => window.location.href = "/#contact"}
-            >
-              Get Your AI Agent
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-          </div>
-        </section>
+        {/* Contact Form */}
+        <QualificationForm />
 
         <Footer />
       </main>
