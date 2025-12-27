@@ -6,7 +6,6 @@ import { SellerLeadsForm } from "@/components/SellerLeadsForm";
 import { SellerLeadsHowItWorks } from "@/components/SellerLeadsHowItWorks";
 import { SellerLeadsStats } from "@/components/SellerLeadsStats";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
-import { FloatingWorkflowNodes } from "@/components/FloatingWorkflowNodes";
 import { UrgencyBanner } from "@/components/UrgencyBanner";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star, Zap, Check } from "lucide-react";
 
@@ -78,7 +77,6 @@ const SellerLeads = () => {
         <section className="relative pt-32 pb-24 overflow-hidden">
           {/* 3D Animated Background */}
           <AnimatedBackground />
-          <FloatingWorkflowNodes />
           
           {/* Background overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent z-[1]" />
