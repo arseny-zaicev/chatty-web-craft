@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 const plans = [
   {
     name: "AI RAG Agent",
-    price: "Custom",
+    priceEur: "Custom",
+    priceAed: "",
     period: "pricing",
     description: "Tailored AI solution based on your needs",
     features: [
@@ -20,7 +21,8 @@ const plans = [
   },
   {
     name: "WhatsApp Outreach",
-    price: "from $497",
+    priceEur: "from €497",
+    priceAed: "~1,950 AED",
     period: "/month",
     description: "High-volume personalized messaging",
     features: [
@@ -73,9 +75,14 @@ export const Pricing = () => {
               <div className="mb-8">
                 <h3 className="font-display text-xl font-bold mb-2">{plan.name}</h3>
                 <p className="text-foreground/60 text-sm mb-4">{plan.description}</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-iskra-emerald">{plan.price}</span>
-                  <span className="text-foreground/50">{plan.period}</span>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-iskra-emerald">{plan.priceEur}</span>
+                    <span className="text-foreground/50">{plan.period}</span>
+                  </div>
+                  {plan.priceAed && (
+                    <span className="text-sm text-foreground/40">{plan.priceAed}</span>
+                  )}
                 </div>
               </div>
 
