@@ -1,5 +1,6 @@
-import { Bot, ArrowRight } from "lucide-react";
+import { Bot, ArrowRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 export const Services = () => {
   const scrollToContact = () => {
@@ -31,22 +32,26 @@ export const Services = () => {
                   <Bot className="w-8 h-8 text-primary-foreground" />
                 </div>
                 
-                <h3 className="font-display text-3xl md:text-4xl font-bold mb-4">
-                  AI Chatbot Agent
+                <h3 className="font-display text-3xl md:text-4xl font-bold mb-2">
+                  AI RAG Agent
                 </h3>
                 
+                <p className="text-primary-foreground/70 text-sm mb-4">
+                  RAG = Retrieval-Augmented Generation — AI that uses your real business data to answer leads accurately.
+                </p>
+                
                 <p className="text-primary-foreground/80 text-lg mb-8 leading-relaxed">
-                  Intelligent conversational AI that handles customer inquiries, qualifies leads, and books meetings — all on autopilot. Your tireless digital employee.
+                  Intelligent conversational AI that handles WhatsApp inquiries, qualifies leads, and books meetings through natural dialogue — all on autopilot.
                 </p>
                 
                 <div className="grid sm:grid-cols-2 gap-4 mb-8">
                   {[
-                    "Reply to leads instantly",
-                    "Qualify prospects automatically",
-                    "Book meetings to your calendar",
-                    "Handle FAQs 24/7",
-                    "Multi-language support",
-                    "CRM integration ready",
+                    "Leads receive WhatsApp messages instantly",
+                    "Natural conversation like a real human",
+                    "Books meetings through dialogue, not links",
+                    "Any language configuration",
+                    "Full CRM sync with statuses & updates",
+                    "Custom setup based on your needs",
                   ].map((feature) => (
                     <div key={feature} className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-primary-foreground" />
@@ -55,15 +60,27 @@ export const Services = () => {
                   ))}
                 </div>
                 
-                <Button
-                  variant="glass"
-                  size="lg"
-                  className="bg-primary-foreground/20 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/30 group"
-                  onClick={scrollToContact}
-                >
-                  Get Your AI Agent
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Button
+                    size="lg"
+                    className="bg-primary-foreground text-iskra-emerald-dark hover:bg-primary-foreground/90 font-semibold group"
+                    onClick={scrollToContact}
+                  >
+                    Get Your AI Agent
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                  
+                  <Link to="/ai-agent">
+                    <Button
+                      variant="glass"
+                      size="lg"
+                      className="bg-primary-foreground/10 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/20 group w-full sm:w-auto"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      See Real Use Cases
+                    </Button>
+                  </Link>
+                </div>
               </div>
               
               {/* Stats column */}
