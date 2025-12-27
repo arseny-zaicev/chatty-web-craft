@@ -12,6 +12,7 @@ import { UrgencyBanner } from "@/components/UrgencyBanner";
 import { FounderSection } from "@/components/FounderSection";
 import { QualificationForm } from "@/components/QualificationForm";
 import { Footer } from "@/components/Footer";
+import { ServiceRouterPopup } from "@/components/ServiceRouterPopup";
 
 const Index = () => {
   return (
@@ -27,6 +28,7 @@ const Index = () => {
       </Helmet>
       
       <main className="min-h-screen">
+        <ServiceRouterPopup />
         <Navbar />
         <HeroSection />
         <ClientLogos />
