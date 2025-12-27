@@ -1,5 +1,6 @@
 import { Play, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import founderPhoto from "@/assets/founder/arsenijs-zaicevs.png";
 
 export const FounderSection = () => {
@@ -73,7 +74,7 @@ export const FounderSection = () => {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText("arseny@iskradigital.com");
-                    // Could add toast notification here
+                    toast.success("Email copied to clipboard!");
                   }}
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group"
                   title="Click to copy"
