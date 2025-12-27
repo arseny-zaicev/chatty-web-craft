@@ -54,7 +54,7 @@ const faqData: Record<FAQCategory, { question: string; answer: string }[]> = {
   "seller-leads": [
     {
       question: "What's included in the Seller Leads database?",
-      answer: "You get access to property owner contacts including WhatsApp-verified phone numbers, property details, ownership history, and building information. Data is updated daily and exclusive to you.",
+      answer: "You can choose any district or building. You'll get precise transaction information, property size, ownership details, and more. We update the data every quarter to ensure accuracy.",
     },
     {
       question: "How are the leads verified?",
@@ -66,7 +66,7 @@ const faqData: Record<FAQCategory, { question: string; answer: string }[]> = {
     },
     {
       question: "How quickly do I receive leads?",
-      answer: "Leads are delivered instantly after positive response. Once a property owner shows interest, their contact goes directly to your CRM or dashboard.",
+      answer: "Leads are typically delivered instantly after we launch the campaign — we share them via Google Sheets. To start a campaign, we need to validate contacts and allocate accounts, which usually takes up to 3 days. Need it faster? We can expedite the process if you urgently need to find a seller.",
     },
     {
       question: "What's the cost per lead?",
