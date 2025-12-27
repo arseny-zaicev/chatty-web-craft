@@ -4,6 +4,7 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { SellerLeadsForm } from "@/components/SellerLeadsForm";
 import { SellerLeadsHowItWorks } from "@/components/SellerLeadsHowItWorks";
+import { SellerLeadsStats } from "@/components/SellerLeadsStats";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star, Zap, Check } from "lucide-react";
 
@@ -171,6 +172,8 @@ const SellerLeads = () => {
           </div>
         </section>
 
+        {/* Stats Section */}
+        <SellerLeadsStats />
 
         {/* How It Works Section */}
         <SellerLeadsHowItWorks />

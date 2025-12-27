@@ -1,30 +1,30 @@
 import { useCountUp } from "@/hooks/useCountUp";
-import { Bot, Calendar, MessageCircle, TrendingUp } from "lucide-react";
+import { Database, RefreshCw, MapPin, CheckCircle } from "lucide-react";
 
 const stats = [
   {
-    icon: Bot,
+    icon: Database,
+    value: 220,
+    suffix: "K+",
+    label: "Property Owners in Database",
+  },
+  {
+    icon: RefreshCw,
+    value: 4,
+    suffix: "x",
+    label: "Updates Per Year",
+  },
+  {
+    icon: MapPin,
     value: 50,
     suffix: "+",
-    label: "AI Agents Deployed",
+    label: "Dubai Districts Covered",
   },
   {
-    icon: Calendar,
-    value: 1200,
-    suffix: "+",
-    label: "Meetings Booked",
-  },
-  {
-    icon: MessageCircle,
-    value: 2,
-    suffix: "M+",
-    label: "Messages Sent",
-  },
-  {
-    icon: TrendingUp,
-    value: 98,
+    icon: CheckCircle,
+    value: 85,
     suffix: "%",
-    label: "Response Rate",
+    label: "Contact Accuracy",
   },
 ];
 
@@ -51,7 +51,7 @@ const StatCard = ({ icon: Icon, value, suffix, label }: typeof stats[0]) => {
   );
 };
 
-export const LiveCounter = () => {
+export const SellerLeadsStats = () => {
   return (
     <section className="py-20 border-y border-border/30">
       <div className="container mx-auto px-4">
