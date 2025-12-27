@@ -4,20 +4,20 @@ import { Bot, Calendar, MessageCircle, TrendingUp } from "lucide-react";
 const stats = [
   {
     icon: Bot,
-    value: 50,
+    value: 27,
     suffix: "+",
     label: "AI Agents Deployed",
   },
   {
     icon: Calendar,
-    value: 1200,
+    value: 1000,
     suffix: "+",
     label: "Meetings Booked",
   },
   {
     icon: MessageCircle,
-    value: 2,
-    suffix: "M+",
+    value: 500,
+    suffix: "K+",
     label: "Messages Sent",
   },
   {
