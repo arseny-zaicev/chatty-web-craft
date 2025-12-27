@@ -46,12 +46,12 @@ export const ServiceRouterPopup = () => {
       return;
     }
 
-    // Show popup after 5 seconds
+    // Show popup after 13 seconds
     const timer = setTimeout(() => {
       setIsOpen(true);
       setHasShown(true);
       sessionStorage.setItem("iskra-popup-shown", "true");
-    }, 5000);
+    }, 13000);
 
     return () => clearTimeout(timer);
   }, []);
