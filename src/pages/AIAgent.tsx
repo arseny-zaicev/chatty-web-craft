@@ -315,17 +315,14 @@ const AIAgent = () => {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
               {/* Testimonial 1 - Kristaps */}
               <div className="bg-card border border-border rounded-2xl p-6 hover:border-iskra-emerald/50 transition-all">
-                <div className="aspect-video bg-muted rounded-xl mb-6 flex items-center justify-center overflow-hidden relative group cursor-pointer">
-                  <a 
-                    href="https://drive.google.com/file/d/1NNQ8gBN-64xXEvRVxQdbBiqGqRkIQz8L/view" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-full h-full flex items-center justify-center bg-gradient-to-br from-iskra-emerald/20 to-iskra-emerald/5"
-                  >
-                    <div className="w-16 h-16 rounded-full bg-iskra-emerald flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Play className="w-6 h-6 text-primary-foreground ml-1" />
-                    </div>
-                  </a>
+                <div className="aspect-video bg-muted rounded-xl mb-6 overflow-hidden">
+                  <iframe
+                    src="https://drive.google.com/file/d/1NNQ8gBN-64xXEvRVxQdbBiqGqRkIQz8L/preview"
+                    className="w-full h-full"
+                    allow="autoplay"
+                    allowFullScreen
+                    title="Kristaps testimonial video"
+                  />
                 </div>
                 <div>
                   <p className="font-semibold text-lg">Kristaps</p>
