@@ -1,4 +1,4 @@
-import salesforgeLogo from "@/assets/clients/salesforge-new.png";
+import salesforgeLogo from "@/assets/clients/salesforge-logo.png";
 import pathosLogo from "@/assets/clients/pathos-new.png";
 import fbMarketingLogo from "@/assets/clients/fb-marketing-logo.png";
 import enaraLogo from "@/assets/clients/enara-logo.png";
