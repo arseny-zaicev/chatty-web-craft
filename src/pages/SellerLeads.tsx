@@ -125,20 +125,20 @@ const SellerLeads = () => {
               <div className="relative flex flex-col items-center lg:items-end gap-6">
                 <div className="grid grid-cols-2 gap-4 w-full max-w-md">
                   <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.2s" }}>
-                    <div className="text-4xl font-bold text-iskra-emerald mb-2">150K+</div>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">220K+</div>
                     <div className="text-sm text-foreground/70 font-medium">Owners in Database</div>
                   </div>
                   <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.3s" }}>
-                    <div className="text-4xl font-bold text-iskra-emerald mb-2">85%</div>
-                    <div className="text-sm text-foreground/70 font-medium">Contact Rate</div>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">Quarterly</div>
+                    <div className="text-sm text-foreground/70 font-medium">Database Updates</div>
                   </div>
                   <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.4s" }}>
-                    <div className="text-4xl font-bold text-iskra-emerald mb-2">3x</div>
-                    <div className="text-sm text-foreground/70 font-medium">Conversion</div>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">50+</div>
+                    <div className="text-sm text-foreground/70 font-medium">Leads Every Week</div>
                   </div>
                   <div className="glass-card rounded-2xl p-6 animate-fade-in border-iskra-emerald/20" style={{ animationDelay: "0.5s" }}>
-                    <div className="text-4xl font-bold text-iskra-emerald mb-2">Daily</div>
-                    <div className="text-sm text-foreground/70 font-medium">Fresh Data</div>
+                    <div className="text-4xl font-bold text-iskra-emerald mb-2">85%</div>
+                    <div className="text-sm text-foreground/70 font-medium">Contact Accuracy</div>
                   </div>
                 </div>
               </div>
