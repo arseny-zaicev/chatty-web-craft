@@ -60,8 +60,8 @@ export const FloatingWorkflowNodes = () => {
     const newNode: ActiveNode = {
       id: nodeIdRef.current++,
       typeIndex: Math.floor(Math.random() * nodeTypes.length),
-      baseX: 20 + Math.random() * 60, // 20-80% of width
-      baseY: 15 + Math.random() * 70, // 15-85% of height
+      baseX: 55 + Math.random() * 40, // 55-95% of width (right side only)
+      baseY: 10 + Math.random() * 80, // 10-90% of height
       orbitAngle: Math.random() * Math.PI * 2,
       orbitRadius: 1.5 + Math.random() * 3,
       orbitSpeed: 0.00015 + Math.random() * 0.00015, // Much slower orbit
