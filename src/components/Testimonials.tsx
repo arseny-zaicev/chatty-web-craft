@@ -93,7 +93,7 @@ export const Testimonials = () => {
                 <Quote className="absolute top-6 left-6 w-8 h-8 text-iskra-emerald/20" />
                 <div className="pl-8 pt-4">
                   <p className="text-lg text-foreground mb-6 leading-relaxed">
-                    "Арсений помог создать шикарное copy которое принесло 8 встреч за 2 дня работы. Рекомендую к сотрудничеству!"
+                    "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
                   </p>
                   <div className="flex items-center gap-3">
                     <img 
