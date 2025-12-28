@@ -29,11 +29,11 @@ const FullLogo = ({ size = "md", bgColor = "transparent", textColor = "#ffffff" 
   );
 };
 
-// Download helper function
+// Download helper functions
 const downloadSVG = (svgContent: string, filename: string) => {
-  const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+  const blob = new Blob([svgContent], { type: "image/svg+xml" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
@@ -42,10 +42,74 @@ const downloadSVG = (svgContent: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const downloadPNGFromSVG = async (svgContent: string, filename: string, width: number, height: number) => {
+  const svgBlob = new Blob([svgContent], { type: "image/svg+xml" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const img = new Image();
+    img.decoding = "async";
+
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Failed to render SVG"));
+      img.src = svgUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context not available");
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => {
+        if (!b) return reject(new Error("Failed to export PNG"));
+        resolve(b);
+      }, "image/png");
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+};
+
+const DownloadButtons = ({
+  svg,
+  baseName,
+  pngWidth,
+  pngHeight,
+}: {
+  svg: string;
+  baseName: string;
+  pngWidth: number;
+  pngHeight: number;
+}) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <Button variant="outline" className="w-full" onClick={() => downloadSVG(svg, `${baseName}.svg`)}>
+      <Download className="w-4 h-4 mr-2" />
+      Скачать SVG
+    </Button>
+    <Button variant="outline" className="w-full" onClick={() => void downloadPNGFromSVG(svg, `${baseName}.png`, pngWidth, pngHeight)}>
+      <Download className="w-4 h-4 mr-2" />
+      Скачать PNG
+    </Button>
+  </div>
+);
+
 // SVG templates for download
-const logoOnlySVG = (color: string) => `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M256 77L287 200L410 256L287 312L256 435L225 312L102 256L225 200L256 77Z" fill="${color}"/>
-</svg>`;
 
 const fullLogoSVG = (bgColor: string, textColor: string) => `<svg width="400" height="120" viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="400" height="120" fill="${bgColor}"/>
@@ -183,14 +247,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Тёмный фон</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(avatarSVG(180, "#0a0a0a"), "iskra-avatar-dark-180x180.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={avatarSVG(180, "#0a0a0a")}
+                    baseName="iskra-avatar-dark-180x180"
+                    pngWidth={180}
+                    pngHeight={180}
+                  />
                 </div>
 
                 {/* Green/teal background */}
@@ -201,14 +263,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Зеленоватый градиент</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(avatarSVG(180, "#0d1f1a", true), "iskra-avatar-green-180x180.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={avatarSVG(180, "#0d1f1a", true)}
+                    baseName="iskra-avatar-green-180x180"
+                    pngWidth={180}
+                    pngHeight={180}
+                  />
                 </div>
               </div>
             </section>
@@ -233,14 +293,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">С градиентным эффектом</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(bannerSVG(true), "iskra-facebook-banner-gradient-820x312.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={bannerSVG(true)}
+                    baseName="iskra-facebook-banner-gradient-820x312"
+                    pngWidth={820}
+                    pngHeight={312}
+                  />
                 </div>
 
                 {/* Simple dark */}
@@ -255,14 +313,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Простой тёмный фон</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(bannerSVG(false), "iskra-facebook-banner-dark-820x312.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={bannerSVG(false)}
+                    baseName="iskra-facebook-banner-dark-820x312"
+                    pngWidth={820}
+                    pngHeight={312}
+                  />
                 </div>
               </div>
             </section>
@@ -279,14 +335,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Белый (прозрачный фон)</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(iconOnlyTransparentSVG("#ffffff"), "iskra-icon-white.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={iconOnlyTransparentSVG("#ffffff")}
+                    baseName="iskra-icon-white"
+                    pngWidth={512}
+                    pngHeight={512}
+                  />
                 </div>
 
                 {/* Black on transparent */}
@@ -297,14 +351,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Чёрный (прозрачный фон)</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(iconOnlyTransparentSVG("#0a0a0a"), "iskra-icon-black.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={iconOnlyTransparentSVG("#0a0a0a")}
+                    baseName="iskra-icon-black"
+                    pngWidth={512}
+                    pngHeight={512}
+                  />
                 </div>
 
                 {/* Primary color */}
@@ -315,14 +367,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Зелёный (прозрачный фон)</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(iconOnlyTransparentSVG("#22c55e"), "iskra-icon-green.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={iconOnlyTransparentSVG("#22c55e")}
+                    baseName="iskra-icon-green"
+                    pngWidth={512}
+                    pngHeight={512}
+                  />
                 </div>
               </div>
             </section>
@@ -339,14 +389,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Белый на тёмном</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(fullLogoSVG("#0a0a0a", "#ffffff"), "iskra-logo-white-on-dark.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={fullLogoSVG("#0a0a0a", "#ffffff")}
+                    baseName="iskra-logo-white-on-dark"
+                    pngWidth={400}
+                    pngHeight={120}
+                  />
                 </div>
 
                 {/* Black on white */}
@@ -357,14 +405,12 @@ export default function BrandAssets() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Чёрный на белом</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => downloadSVG(fullLogoSVG("#ffffff", "#0a0a0a"), "iskra-logo-black-on-white.svg")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать SVG
-                  </Button>
+                  <DownloadButtons
+                    svg={fullLogoSVG("#ffffff", "#0a0a0a")}
+                    baseName="iskra-logo-black-on-white"
+                    pngWidth={400}
+                    pngHeight={120}
+                  />
                 </div>
               </div>
             </section>
@@ -373,11 +419,11 @@ export default function BrandAssets() {
             <section className="rounded-xl border border-border p-8 bg-card">
               <h2 className="text-2xl font-display font-semibold mb-4">Рекомендации по использованию</h2>
               <ul className="space-y-3 text-muted-foreground">
-                <li>• SVG файлы можно конвертировать в PNG через любой онлайн конвертер</li>
-                <li>• Для Facebook аватара используйте размер 180×180 пикселей</li>
-                <li>• Для Facebook баннера используйте размер 820×312 пикселей</li>
+                <li>• Скачивайте PNG — они сразу готовы для загрузки в Facebook</li>
+                <li>• SVG оставил для векторной печати/дизайна (без потери качества)</li>
+                <li>• Для Facebook аватара используйте 180×180 пикселей</li>
+                <li>• Для Facebook баннера используйте 820×312 пикселей</li>
                 <li>• Не искажайте пропорции логотипа</li>
-                <li>• Сохраняйте достаточно пространства вокруг логотипа</li>
               </ul>
             </section>
           </div>
