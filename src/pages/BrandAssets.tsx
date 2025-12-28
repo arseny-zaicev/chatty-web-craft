@@ -43,8 +43,8 @@ const downloadSVG = (svgContent: string, filename: string) => {
 };
 
 // SVG templates for download
-const logoOnlySVG = (color: string) => `<svg width="512" height="512" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M12 2L14 9L21 12L14 15L12 22L10 15L3 12L10 9L12 2Z" fill="${color}"/>
+const logoOnlySVG = (color: string) => `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M256 77L287 200L410 256L287 312L256 435L225 312L102 256L225 200L256 77Z" fill="${color}"/>
 </svg>`;
 
 const fullLogoSVG = (bgColor: string, textColor: string) => `<svg width="400" height="120" viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -88,15 +88,27 @@ const bannerSVG = (withGradient: boolean) => {
 </svg>`;
 };
 
-const avatarSVG = (size: number, bgColor: string) => `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${size}" height="${size}" fill="${bgColor}"/>
-  <g transform="translate(${size * 0.25}, ${size * 0.25})">
-    <path d="M${size * 0.25} 0L${size * 0.3} ${size * 0.175}L${size * 0.5} ${size * 0.25}L${size * 0.3} ${size * 0.325}L${size * 0.25} ${size * 0.5}L${size * 0.2} ${size * 0.325}L0 ${size * 0.25}L${size * 0.2} ${size * 0.175}L${size * 0.25} 0Z" fill="#ffffff"/>
-  </g>
+const avatarSVG = (size: number, bgColor: string, withGradient = false) => {
+  if (withGradient) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="avatarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1f1a"/>
+      <stop offset="100%" style="stop-color:#134e3a"/>
+    </linearGradient>
+  </defs>
+  <rect width="${size}" height="${size}" fill="url(#avatarGradient)"/>
+  <path d="M${size/2} ${size*0.15}L${size*0.56} ${size*0.39}L${size*0.85} ${size/2}L${size*0.56} ${size*0.61}L${size/2} ${size*0.85}L${size*0.44} ${size*0.61}L${size*0.15} ${size/2}L${size*0.44} ${size*0.39}L${size/2} ${size*0.15}Z" fill="#ffffff"/>
 </svg>`;
+  }
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${size}" height="${size}" fill="${bgColor}"/>
+  <path d="M${size/2} ${size*0.15}L${size*0.56} ${size*0.39}L${size*0.85} ${size/2}L${size*0.56} ${size*0.61}L${size/2} ${size*0.85}L${size*0.44} ${size*0.61}L${size*0.15} ${size/2}L${size*0.44} ${size*0.39}L${size/2} ${size*0.15}Z" fill="#ffffff"/>
+</svg>`;
+};
 
-const avatarIconOnlySVG = (size: number) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M12 2L14 9L21 12L14 15L12 22L10 15L3 12L10 9L12 2Z" fill="#ffffff"/>
+const iconOnlyTransparentSVG = (color: string) => `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M256 77L287 200L410 256L287 312L256 435L225 312L102 256L225 200L256 77Z" fill="${color}"/>
 </svg>`;
 
 export default function BrandAssets() {
@@ -150,7 +162,7 @@ export default function BrandAssets() {
                   <Button 
                     variant="outline" 
                     className="w-full"
-                    onClick={() => downloadSVG(avatarSVG(180, "#0d1f1a"), "iskra-avatar-green-180x180.svg")}
+                    onClick={() => downloadSVG(avatarSVG(180, "#0d1f1a", true), "iskra-avatar-green-180x180.svg")}
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Скачать SVG
@@ -228,7 +240,7 @@ export default function BrandAssets() {
                   <Button 
                     variant="outline" 
                     className="w-full"
-                    onClick={() => downloadSVG(logoOnlySVG("#ffffff"), "iskra-icon-white.svg")}
+                    onClick={() => downloadSVG(iconOnlyTransparentSVG("#ffffff"), "iskra-icon-white.svg")}
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Скачать SVG
@@ -246,7 +258,7 @@ export default function BrandAssets() {
                   <Button 
                     variant="outline" 
                     className="w-full"
-                    onClick={() => downloadSVG(logoOnlySVG("#0a0a0a"), "iskra-icon-black.svg")}
+                    onClick={() => downloadSVG(iconOnlyTransparentSVG("#0a0a0a"), "iskra-icon-black.svg")}
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Скачать SVG
@@ -264,7 +276,7 @@ export default function BrandAssets() {
                   <Button 
                     variant="outline" 
                     className="w-full"
-                    onClick={() => downloadSVG(logoOnlySVG("#22c55e"), "iskra-icon-green.svg")}
+                    onClick={() => downloadSVG(iconOnlyTransparentSVG("#22c55e"), "iskra-icon-green.svg")}
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Скачать SVG
