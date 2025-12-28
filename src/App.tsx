@@ -8,6 +8,7 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import Index from "./pages/Index";
 import SellerLeads from "./pages/SellerLeads";
 import AIAgent from "./pages/AIAgent";
+import BrandAssets from "./pages/BrandAssets";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/seller-leads" element={<SellerLeads />} />
             <Route path="/ai-agent" element={<AIAgent />} />
+            <Route path="/brand" element={<BrandAssets />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
