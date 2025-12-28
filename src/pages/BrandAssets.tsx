@@ -89,27 +89,69 @@ const bannerSVG = (withGradient: boolean) => {
 };
 
 const avatarSVG = (size: number, bgColor: string, withGradient = false) => {
+  // Звезда занимает 70% от размера, центрирована
+  const starSize = size * 0.7;
+  const offset = (size - starSize) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = starSize / 2;
+  
+  // Точки 4-конечной звезды
+  const top = `${cx} ${offset}`;
+  const right = `${size - offset} ${cy}`;
+  const bottom = `${cx} ${size - offset}`;
+  const left = `${offset} ${cy}`;
+  const innerOffset = r * 0.35;
+  const tr = `${cx + innerOffset} ${cy - innerOffset}`;
+  const br = `${cx + innerOffset} ${cy + innerOffset}`;
+  const bl = `${cx - innerOffset} ${cy + innerOffset}`;
+  const tl = `${cx - innerOffset} ${cy - innerOffset}`;
+  
+  const starPath = `M${top}L${tr}L${right}L${br}L${bottom}L${bl}L${left}L${tl}Z`;
+  
   if (withGradient) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="avatarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0d1f1a"/>
-      <stop offset="100%" style="stop-color:#134e3a"/>
-    </linearGradient>
-  </defs>
-  <rect width="${size}" height="${size}" fill="url(#avatarGradient)"/>
-  <path d="M${size/2} ${size*0.15}L${size*0.56} ${size*0.39}L${size*0.85} ${size/2}L${size*0.56} ${size*0.61}L${size/2} ${size*0.85}L${size*0.44} ${size*0.61}L${size*0.15} ${size/2}L${size*0.44} ${size*0.39}L${size/2} ${size*0.15}Z" fill="#ffffff"/>
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="avatarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#0d1f1a"/>
+<stop offset="100%" stop-color="#134e3a"/>
+</linearGradient>
+</defs>
+<rect width="${size}" height="${size}" fill="url(#avatarGradient)"/>
+<path d="${starPath}" fill="#ffffff"/>
 </svg>`;
   }
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${size}" height="${size}" fill="${bgColor}"/>
-  <path d="M${size/2} ${size*0.15}L${size*0.56} ${size*0.39}L${size*0.85} ${size/2}L${size*0.56} ${size*0.61}L${size/2} ${size*0.85}L${size*0.44} ${size*0.61}L${size*0.15} ${size/2}L${size*0.44} ${size*0.39}L${size/2} ${size*0.15}Z" fill="#ffffff"/>
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+<rect width="${size}" height="${size}" fill="${bgColor}"/>
+<path d="${starPath}" fill="#ffffff"/>
 </svg>`;
 };
 
-const iconOnlyTransparentSVG = (color: string) => `<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M256 77L287 200L410 256L287 312L256 435L225 312L102 256L225 200L256 77Z" fill="${color}"/>
+const iconOnlyTransparentSVG = (color: string) => {
+  // Звезда на прозрачном фоне, 512x512
+  const size = 512;
+  const starSize = size * 0.8;
+  const offset = (size - starSize) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = starSize / 2;
+  
+  const top = `${cx} ${offset}`;
+  const right = `${size - offset} ${cy}`;
+  const bottom = `${cx} ${size - offset}`;
+  const left = `${offset} ${cy}`;
+  const innerOffset = r * 0.35;
+  const tr = `${cx + innerOffset} ${cy - innerOffset}`;
+  const br = `${cx + innerOffset} ${cy + innerOffset}`;
+  const bl = `${cx - innerOffset} ${cy + innerOffset}`;
+  const tl = `${cx - innerOffset} ${cy - innerOffset}`;
+  
+  const starPath = `M${top}L${tr}L${right}L${br}L${bottom}L${bl}L${left}L${tl}Z`;
+  
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+<path d="${starPath}" fill="${color}"/>
 </svg>`;
+};
 
 export default function BrandAssets() {
   return (
