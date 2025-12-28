@@ -10,10 +10,9 @@ const footerLinks = [
 
 // ISKRA Logo Component
 const IskraLogo = () => (
-  <div className="flex items-center gap-2">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-foreground">
-      <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor"/>
-      <circle cx="12" cy="10" r="2" fill="currentColor" opacity="0.6"/>
+  <div className="flex items-center gap-2.5">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-foreground">
+      <path d="M12 2L14 9L21 12L14 15L12 22L10 15L3 12L10 9L12 2Z" fill="currentColor"/>
     </svg>
     <span className="font-display text-lg font-bold tracking-tight">ISKRA</span>
   </div>
