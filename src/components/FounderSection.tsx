@@ -77,14 +77,14 @@ export const FounderSection = () => {
               <div className="flex flex-wrap gap-4 pt-4">
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText("arseny@iskradigital.com");
+                    navigator.clipboard.writeText("arseny@iskra.ae");
                     toast.success("Email copied to clipboard!");
                   }}
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group"
                   title="Click to copy"
                 >
                   <Mail className="w-4 h-4" />
-                  <span className="group-hover:underline">arseny@iskradigital.com</span>
+                  <span className="group-hover:underline">arseny@iskra.ae</span>
                 </button>
                 <a
                   href="http://wa.me/971568785008"
