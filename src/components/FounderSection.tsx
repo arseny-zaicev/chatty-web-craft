@@ -16,7 +16,7 @@ export const FounderSection = () => {
               Meet the <span className="text-gradient">Founder</span>
             </h2>
             <p className="text-muted-foreground">
-              The person behind ISKRA Digital
+              The person behind ISKRA
             </p>
           </div>
 
@@ -26,7 +26,7 @@ export const FounderSection = () => {
               <div className="aspect-[4/5] rounded-2xl bg-secondary/50 border border-border/50 overflow-hidden">
                 <img 
                   src={founderPhoto} 
-                  alt="Arseny Zaicev - Founder & CEO of ISKRA Digital"
+                  alt="Arseny Zaicev - Founder & CEO of ISKRA"
                   className="w-full h-full object-cover object-top"
                 />
               </div>
@@ -43,7 +43,7 @@ export const FounderSection = () => {
                   Arseny Zaicev
                 </h3>
                 <p className="text-iskra-emerald font-medium">
-                  Founder & CEO, ISKRA Digital
+                  Founder & CEO, ISKRA
                 </p>
               </div>
 
