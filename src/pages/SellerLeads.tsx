@@ -61,13 +61,13 @@ const SellerLeads = () => {
   return (
     <>
       <Helmet>
-        <title>Seller Leads for Dubai | ISKRA Digital - Exclusive Property Seller Leads</title>
+        <title>Seller Leads for Dubai | ISKRA - Exclusive Property Seller Leads</title>
         <meta
           name="description"
           content="Get exclusive, pre-qualified property seller leads in Dubai. High conversion rates, WhatsApp-verified contacts, and 30-day replacement guarantee."
         />
         <meta name="keywords" content="Dubai seller leads, property leads Dubai, real estate leads, motivated sellers Dubai" />
-        <link rel="canonical" href="https://iskradigital.com/seller-leads" />
+        <link rel="canonical" href="https://iskra.ae/seller-leads" />
       </Helmet>
 
       <main className="min-h-screen">

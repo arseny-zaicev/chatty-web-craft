@@ -18,13 +18,13 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>ISKRA Digital | AI Chatbots & WhatsApp Outreach Solutions</title>
+        <title>ISKRA | AI Chatbots & WhatsApp Outreach Solutions</title>
         <meta 
           name="description" 
           content="The first choice for WhatsApp outreach. Send thousands of messages, manage AI chatbots, and build converting websites. 98% delivery rate guaranteed." 
         />
         <meta name="keywords" content="AI chatbot, WhatsApp outreach, lead generation, web development, ISKRA" />
-        <link rel="canonical" href="https://iskradigital.com" />
+        <link rel="canonical" href="https://iskra.ae" />
       </Helmet>
       
       <main className="min-h-screen">

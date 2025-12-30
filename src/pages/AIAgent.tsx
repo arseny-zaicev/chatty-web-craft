@@ -86,7 +86,7 @@ const AIAgent = () => {
   return (
     <>
       <Helmet>
-        <title>AI RAG Agent Use Cases | ISKRA Digital</title>
+        <title>AI RAG Agent Use Cases | ISKRA</title>
         <meta 
           name="description" 
           content="See how AI RAG Agent works in real scenarios. WhatsApp automation, lead qualification, meeting booking through natural conversation." 
