@@ -87,6 +87,16 @@ const ClientAuth = () => {
     }
   };
 
+  // ISKRA Logo Component
+  const IskraLogo = () => (
+    <div className="flex items-center gap-2.5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-primary">
+        <path d="M12 2L14 9L21 12L14 15L12 22L10 15L3 12L10 9L12 2Z" fill="currentColor"/>
+      </svg>
+      <span className="font-display text-xl font-bold tracking-tight text-foreground">ISKRA</span>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative">
       {/* Back to Home button */}
@@ -100,6 +110,10 @@ const ClientAuth = () => {
       
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          {/* ISKRA Logo */}
+          <Link to="/" className="flex justify-center mb-4">
+            <IskraLogo />
+          </Link>
           <CardTitle className="text-2xl font-display">
             {isAdminSetup ? "Admin Setup" : "Client Login"}
           </CardTitle>
