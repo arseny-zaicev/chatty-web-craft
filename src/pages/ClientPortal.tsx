@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, ExternalLink } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, ExternalLink, Download, Filter, HelpCircle } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -50,6 +50,7 @@ const ClientPortal = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [updatingLeads, setUpdatingLeads] = useState<Set<string>>(new Set());
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
@@ -58,6 +59,7 @@ const ClientPortal = () => {
   const [editingCallDetails, setEditingCallDetails] = useState<string | null>(null);
   const [callDetailsText, setCallDetailsText] = useState("");
   const [showStatusReminder, setShowStatusReminder] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -135,6 +137,13 @@ const ClientPortal = () => {
 
       setLeads(rows);
       toast.success(`Loaded ${rows.length} leads`);
+      
+      // Check if first visit (show tutorial)
+      const tutorialShown = localStorage.getItem(`tutorial_shown_${userId}`);
+      if (!tutorialShown && rows.length > 0) {
+        setShowTutorial(true);
+        localStorage.setItem(`tutorial_shown_${userId}`, "true");
+      }
       
       // Check for uncalled leads and show reminder after 13 seconds
       const uncalledLeads = rows.filter(l => !l.data["Call Status"] || l.data["Call Status"] === "Not Called");
@@ -239,11 +248,45 @@ const ClientPortal = () => {
     return CALL_STATUS_OPTIONS.find(s => s.value === status) || CALL_STATUS_OPTIONS[0];
   };
 
-  const filteredLeads = leads.filter((lead) =>
-    Object.values(lead.data).some((val) =>
+  const filteredLeads = leads.filter((lead) => {
+    const matchesSearch = Object.values(lead.data).some((val) =>
       val?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+    );
+    const callStatus = lead.data["Call Status"] || "Not Called";
+    const matchesFilter = statusFilter === "all" || callStatus === statusFilter;
+    return matchesSearch && matchesFilter;
+  });
+
+  // Export to CSV function
+  const exportToCSV = () => {
+    if (leads.length === 0) {
+      toast.error("No leads to export");
+      return;
+    }
+
+    const headers = ["Lead Name", "Phone Number", "Location", "Interest Type", "Source", "Details", "Date", "Call Status", "Call Count", "Last Call Date", "Client Comment"];
+    const csvRows = [headers.join(",")];
+
+    leads.forEach(lead => {
+      const row = headers.map(header => {
+        const value = lead.data[header] || "";
+        // Escape quotes and wrap in quotes
+        return `"${value.replace(/"/g, '""')}"`;
+      });
+      csvRows.push(row.join(","));
+    });
+
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `leads_${clientData?.company_name || "export"}_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Leads exported to CSV");
+  };
 
   if (isLoading) {
     return (
@@ -290,26 +333,80 @@ const ClientPortal = () => {
         <Card>
           <CardHeader className="p-3 md:p-6">
             <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-base md:text-xl">Your Leads ({leads.length})</CardTitle>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleRefresh}
-                  disabled={isLoadingLeads}
-                >
-                  <RefreshCw className={`h-4 w-4 ${isLoadingLeads ? "animate-spin" : ""}`} />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportToCSV}
+                    disabled={leads.length === 0}
+                  >
+                    <Download className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Export CSV</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowTutorial(true)}
+                    title="Как пользоваться"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleRefresh}
+                    disabled={isLoadingLeads}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isLoadingLeads ? "animate-spin" : ""}`} />
+                  </Button>
+                </div>
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search leads..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
+              
+              {/* Search and Filter Row */}
+              <div className="flex flex-col md:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search leads..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                
+                {/* Status Filter */}
+                <div className="flex gap-1 flex-wrap">
+                  <Button
+                    variant={statusFilter === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setStatusFilter("all")}
+                    className="text-xs"
+                  >
+                    <Filter className="h-3 w-3 mr-1" />
+                    All
+                  </Button>
+                  {CALL_STATUS_OPTIONS.map(option => (
+                    <Button
+                      key={option.value}
+                      variant={statusFilter === option.value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStatusFilter(option.value)}
+                      className="text-xs"
+                    >
+                      <option.icon className="h-3 w-3 mr-1" />
+                      <span className="hidden sm:inline">{option.label}</span>
+                    </Button>
+                  ))}
+                </div>
               </div>
+              
+              {statusFilter !== "all" && (
+                <p className="text-sm text-muted-foreground">
+                  Showing {filteredLeads.length} of {leads.length} leads
+                </p>
+              )}
             </div>
           </CardHeader>
           <CardContent className="p-2 md:p-6 pt-0">
@@ -617,6 +714,70 @@ const ClientPortal = () => {
           <div className="flex justify-end pt-2">
             <Button onClick={() => setShowStatusReminder(false)}>
               Got it!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tutorial Popup */}
+      <Dialog open={showTutorial} onOpenChange={setShowTutorial}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HelpCircle className="h-5 w-5 text-primary" />
+              Добро пожаловать в Client Portal!
+            </DialogTitle>
+            <DialogDescription className="pt-4 space-y-4 text-left">
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                    <span className="font-bold text-primary">1</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Просматривайте лиды</p>
+                    <p className="text-sm text-muted-foreground">Нажмите на карточку лида чтобы увидеть детали</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                    <span className="font-bold text-primary">2</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Обновляйте статус звонка</p>
+                    <p className="text-sm text-muted-foreground">После каждого звонка выберите статус: Answered, Not Answered или Call Back</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                    <span className="font-bold text-primary">3</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Добавляйте заметки</p>
+                    <p className="text-sm text-muted-foreground">Поля "Details from the call" и "Your Comment" — ваши зоны для записей</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                    <span className="font-bold text-primary">4</span>
+                  </div>
+                  <div>
+                    <p className="font-medium">Экспортируйте данные</p>
+                    <p className="text-sm text-muted-foreground">Используйте кнопку "Export CSV" для скачивания лидов</p>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-xs text-muted-foreground text-center pt-2">
+                Нажмите на ? в любое время чтобы увидеть это снова
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end pt-2">
+            <Button onClick={() => setShowTutorial(false)}>
+              Понятно!
             </Button>
           </div>
         </DialogContent>
