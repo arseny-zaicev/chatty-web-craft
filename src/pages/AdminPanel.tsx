@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface Client {
@@ -32,6 +32,14 @@ interface LeadRow {
   id: string;
   data: Record<string, string>;
   isNew?: boolean;
+}
+
+interface ClientStats {
+  totalLeads: number;
+  answered: number;
+  notAnswered: number;
+  callBack: number;
+  notCalled: number;
 }
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
@@ -70,6 +78,8 @@ const AdminPanel = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [editedCells, setEditedCells] = useState<Set<string>>(new Set());
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
+  const [clientStatsMap, setClientStatsMap] = useState<Map<string, ClientStats>>(new Map());
+  const [showOverallStats, setShowOverallStats] = useState(false);
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -134,11 +144,50 @@ const AdminPanel = () => {
       }
 
       setClients(data?.clients || []);
+      // Fetch stats for all clients
+      fetchAllClientStats(data?.clients || []);
     } catch (error) {
       console.error("Unexpected error:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchAllClientStats = async (clientsList: Client[]) => {
+    const statsMap = new Map<string, ClientStats>();
+    
+    for (const client of clientsList) {
+      try {
+        const { data, error } = await supabase.functions.invoke("admin-clients", {
+          body: { action: "get-leads", clientId: client.id },
+        });
+        
+        if (!error && data?.leads) {
+          const leads = data.leads as LeadRow[];
+          const stats: ClientStats = {
+            totalLeads: leads.length,
+            answered: 0,
+            notAnswered: 0,
+            callBack: 0,
+            notCalled: 0,
+          };
+          
+          leads.forEach(lead => {
+            const status = lead.data["Call Status"] || "Not Called";
+            if (status === "Answered") stats.answered++;
+            else if (status === "Not Answered") stats.notAnswered++;
+            else if (status === "Call Back") stats.callBack++;
+            else stats.notCalled++;
+          });
+          
+          statsMap.set(client.id, stats);
+        }
+      } catch (e) {
+        console.error("Error fetching stats for client:", client.id);
+      }
+    }
+    
+    setClientStatsMap(statsMap);
   };
 
   const fetchClientLeads = async (client: Client) => {
@@ -631,7 +680,83 @@ const AdminPanel = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 space-y-6">
+        {/* Overall Statistics Card */}
+        <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PieChart className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Overall Statistics</CardTitle>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowOverallStats(!showOverallStats)}
+              >
+                {showOverallStats ? "Hide" : "Show Details"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const allStats = Array.from(clientStatsMap.values());
+              const total = allStats.reduce((sum, s) => sum + s.totalLeads, 0);
+              const answered = allStats.reduce((sum, s) => sum + s.answered, 0);
+              const notAnswered = allStats.reduce((sum, s) => sum + s.notAnswered, 0);
+              const callBack = allStats.reduce((sum, s) => sum + s.callBack, 0);
+              const notCalled = allStats.reduce((sum, s) => sum + s.notCalled, 0);
+              const called = answered + notAnswered + callBack;
+              const callRate = total > 0 ? Math.round((called / total) * 100) : 0;
+              const answerRate = called > 0 ? Math.round((answered / called) * 100) : 0;
+
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-background/50 rounded-lg">
+                      <p className="text-2xl font-bold">{clients.length}</p>
+                      <p className="text-xs text-muted-foreground">Clients</p>
+                    </div>
+                    <div className="text-center p-3 bg-background/50 rounded-lg">
+                      <p className="text-2xl font-bold">{total}</p>
+                      <p className="text-xs text-muted-foreground">Total Leads</p>
+                    </div>
+                    <div className="text-center p-3 bg-background/50 rounded-lg">
+                      <p className="text-2xl font-bold text-primary">{callRate}%</p>
+                      <p className="text-xs text-muted-foreground">Call Rate</p>
+                    </div>
+                    <div className="text-center p-3 bg-background/50 rounded-lg">
+                      <p className="text-2xl font-bold text-green-500">{answerRate}%</p>
+                      <p className="text-xs text-muted-foreground">Answer Rate</p>
+                    </div>
+                  </div>
+                  
+                  {showOverallStats && (
+                    <div className="grid grid-cols-4 gap-2 pt-2 border-t">
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                        <span>Answered: {answered}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                        <span>Not Answered: {notAnswered}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                        <span>Call Back: {callBack}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-3 h-3 rounded-full bg-gray-400" />
+                        <span>Not Called: {notCalled}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -740,6 +865,11 @@ const AdminPanel = () => {
               <div className="space-y-2">
                 {clients.map((client) => {
                   const isPasswordVisible = visiblePasswords.has(client.id);
+                  const stats = clientStatsMap.get(client.id);
+                  const callRate = stats && stats.totalLeads > 0 
+                    ? Math.round(((stats.answered + stats.notAnswered + stats.callBack) / stats.totalLeads) * 100)
+                    : 0;
+                  
                   return (
                     <div
                       key={client.id}
@@ -747,7 +877,45 @@ const AdminPanel = () => {
                       onClick={() => handleSelectClient(client)}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium">{client.company_name || "Unnamed Client"}</p>
+                        <div className="flex items-center gap-3">
+                          <p className="font-medium">{client.company_name || "Unnamed Client"}</p>
+                          
+                          {/* Mini Stats Badge */}
+                          {stats && stats.totalLeads > 0 && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="bg-muted px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {stats.totalLeads}
+                              </span>
+                              <span className="bg-green-500/20 text-green-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <PhoneCall className="h-3 w-3" />
+                                {stats.answered}
+                              </span>
+                              <span className="bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <PhoneOff className="h-3 w-3" />
+                                {stats.notAnswered}
+                              </span>
+                              <span className="bg-yellow-500/20 text-yellow-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <PhoneMissed className="h-3 w-3" />
+                                {stats.callBack}
+                              </span>
+                              {stats.notCalled > 0 && (
+                                <span className="bg-gray-500/20 text-gray-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {stats.notCalled}
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded-full font-medium ${
+                                callRate >= 70 ? "bg-green-500/20 text-green-600" : 
+                                callRate >= 40 ? "bg-yellow-500/20 text-yellow-600" : 
+                                "bg-red-500/20 text-red-500"
+                              }`}>
+                                {callRate}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-muted-foreground mt-1">
                           {/* Email/Login */}
                           {client.email && (
