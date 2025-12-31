@@ -11,6 +11,8 @@ import AIAgent from "./pages/AIAgent";
 import BrandAssets from "./pages/BrandAssets";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import ClientAuth from "./pages/ClientAuth";
+import ClientPortal from "./pages/ClientPortal";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +32,8 @@ const App = () => (
             <Route path="/brand" element={<BrandAssets />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/client-auth" element={<ClientAuth />} />
+            <Route path="/client-portal" element={<ClientPortal />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
