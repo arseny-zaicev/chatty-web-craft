@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.admin-clients]
 verify_jwt = false
+
+[functions.init-admin]
+verify_jwt = false
