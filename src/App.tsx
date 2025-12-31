@@ -13,6 +13,8 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import ClientAuth from "./pages/ClientAuth";
 import ClientPortal from "./pages/ClientPortal";
+import AdminAuth from "./pages/AdminAuth";
+import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +36,8 @@ const App = () => (
             <Route path="/terms" element={<Terms />} />
             <Route path="/client-auth" element={<ClientAuth />} />
             <Route path="/client-portal" element={<ClientPortal />} />
+            <Route path="/admin-auth" element={<AdminAuth />} />
+            <Route path="/admin" element={<AdminPanel />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
