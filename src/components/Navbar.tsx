@@ -163,6 +163,16 @@ export const Navbar = () => {
                   </a>
                 )
               ))}
+              
+              {/* Client Login for mobile */}
+              <Link
+                to="/client-auth"
+                className="text-sm font-medium text-muted-foreground/70 hover:text-foreground transition-colors duration-200 py-2 border-t border-border/30 pt-4"
+                onClick={() => setIsOpen(false)}
+              >
+                Client Login
+              </Link>
+              
               <a 
                 href="/#contact" 
                 onClick={(e) => {
