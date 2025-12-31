@@ -472,13 +472,13 @@ const AdminPanel = () => {
                       <th 
                         key={col.key} 
                         className={`border border-border px-2 py-2 text-left font-medium whitespace-nowrap ${
-                          col.zone === "client" ? "bg-blue-100 dark:bg-blue-900/30" : ""
+                          col.zone === "client" ? "bg-blue-600/20 text-blue-200" : ""
                         }`}
                         style={{ minWidth: col.width }}
                       >
                         {col.key}
                         {col.zone === "client" && (
-                          <span className="ml-1 text-[10px] text-blue-600 dark:text-blue-400 font-normal">(client)</span>
+                          <span className="ml-1 text-[10px] text-blue-300 font-normal">(client)</span>
                         )}
                       </th>
                     ))}
@@ -496,7 +496,7 @@ const AdminPanel = () => {
                         const isEdited = editedCells.has(cellKey);
                         const value = lead.data[col.key] || "";
                         const isClientZone = col.zone === "client";
-                        const clientZoneClass = isClientZone ? "bg-blue-50 dark:bg-blue-950/20" : "";
+                        const clientZoneClass = isClientZone ? "bg-blue-600/10" : "";
                         
                         if (col.type === "select") {
                           return (
