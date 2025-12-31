@@ -77,59 +77,64 @@ export const ServiceRouterPopup = () => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-background/80 backdrop-blur-sm"
         onClick={() => setIsOpen(false)}
       />
       
-      {/* Popup */}
-      <div className="relative bg-card border border-border rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-fade-in">
+      {/* Popup - slides up from bottom on mobile */}
+      <div className="relative bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 w-full sm:max-w-lg shadow-2xl animate-slide-up-mobile sm:animate-fade-in max-h-[90vh] overflow-y-auto">
         {/* Close button */}
         <button
           onClick={() => setIsOpen(false)}
-          className="absolute top-4 right-4 p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 p-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
+        {/* Drag handle for mobile */}
+        <div className="sm:hidden w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+
         {/* Header */}
-        <div className="text-center mb-8">
-          <p className="text-xs font-semibold text-iskra-emerald tracking-wider uppercase mb-3">
+        <div className="text-center mb-6 sm:mb-8">
+          <p className="text-xs font-semibold text-iskra-emerald tracking-wider uppercase mb-2 sm:mb-3">
             Quick Navigator
           </p>
-          <h2 className="font-display text-2xl md:text-3xl font-bold mb-2">
+          <h2 className="font-display text-xl sm:text-2xl md:text-3xl font-bold mb-1 sm:mb-2">
             What are you looking for?
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm sm:text-base">
             Select what fits your needs — we'll guide you.
           </p>
         </div>
 
         {/* Service Options */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
           {services.map((service) => (
             <button
               key={service.id}
               onClick={() => handleServiceClick(service.action)}
-              className="flex flex-col items-start p-4 rounded-xl bg-muted/50 border border-border hover:border-iskra-emerald/50 hover:bg-muted transition-all duration-200 text-left group"
+              className="flex items-center sm:flex-col sm:items-start gap-3 sm:gap-0 p-3 sm:p-4 rounded-xl bg-muted/50 border border-border hover:border-iskra-emerald/50 hover:bg-muted transition-all duration-200 text-left group"
             >
-              <div className="w-10 h-10 rounded-lg bg-iskra-emerald/10 flex items-center justify-center mb-3 group-hover:bg-iskra-emerald/20 transition-colors">
+              <div className="w-10 h-10 rounded-lg bg-iskra-emerald/10 flex items-center justify-center sm:mb-3 group-hover:bg-iskra-emerald/20 transition-colors shrink-0">
                 <service.icon className="w-5 h-5 text-iskra-emerald" />
               </div>
-              <p className="font-semibold text-sm mb-1 group-hover:text-iskra-emerald transition-colors">
-                {service.title}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {service.description}
-              </p>
+              <div>
+                <p className="font-semibold text-sm mb-0.5 sm:mb-1 group-hover:text-iskra-emerald transition-colors">
+                  {service.title}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {service.description}
+                </p>
+              </div>
             </button>
           ))}
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-muted-foreground mt-6">
+        <p className="text-center text-xs text-muted-foreground mt-4 sm:mt-6">
           100+ businesses automated their sales with ISKRA
         </p>
       </div>
