@@ -12,9 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -50,6 +57,7 @@ const ClientPortal = () => {
   const [commentText, setCommentText] = useState("");
   const [editingCallDetails, setEditingCallDetails] = useState<string | null>(null);
   const [callDetailsText, setCallDetailsText] = useState("");
+  const [showStatusReminder, setShowStatusReminder] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -127,6 +135,12 @@ const ClientPortal = () => {
 
       setLeads(rows);
       toast.success(`Loaded ${rows.length} leads`);
+      
+      // Check for uncalled leads and show reminder
+      const uncalledLeads = rows.filter(l => !l.data["Call Status"] || l.data["Call Status"] === "Not Called");
+      if (uncalledLeads.length > 0 && rows.length > 0) {
+        setTimeout(() => setShowStatusReminder(true), 2000);
+      }
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("Failed to load leads");
@@ -439,9 +453,9 @@ const ClientPortal = () => {
                           
                           {/* Client editable: Details from the call */}
                           <div className="pt-2 border-t">
-                            <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1">
+                            <p className="text-xs font-medium text-emerald-500 mb-2 flex items-center gap-1">
                               <PhoneCall className="h-3 w-3" />
-                              Details from the call <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">your zone</span>
+                              Details from the call <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">your zone</span>
                             </p>
                             {editingCallDetails === lead.id ? (
                               <div className="space-y-2">
@@ -449,13 +463,14 @@ const ClientPortal = () => {
                                   value={callDetailsText}
                                   onChange={(e) => setCallDetailsText(e.target.value)}
                                   placeholder="Add details from your call..."
-                                  className="min-h-[80px]"
+                                  className="min-h-[80px] bg-background/50 border-border"
                                 />
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
                                     onClick={() => handleSaveCallDetails(lead.id)}
                                     disabled={isUpdating}
+                                    className="bg-emerald-600 hover:bg-emerald-700"
                                   >
                                     {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                                   </Button>
@@ -473,7 +488,7 @@ const ClientPortal = () => {
                               </div>
                             ) : (
                               <div
-                                className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
+                                className="bg-emerald-500/10 rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-emerald-500/20 transition-colors border border-emerald-500/30"
                                 onClick={() => {
                                   setEditingCallDetails(lead.id);
                                   setCallDetailsText(lead.data["Details from the call"] || "");
@@ -489,10 +504,10 @@ const ClientPortal = () => {
                           </div>
 
                           {/* Comment Section */}
-                          <div className="pt-2 border-t">
-                            <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1">
+                          <div className="pt-2 border-t border-border/50">
+                            <p className="text-xs font-medium text-emerald-500 mb-2 flex items-center gap-1">
                               <MessageSquare className="h-3 w-3" />
-                              Your Comment <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">your zone</span>
+                              Your Comment <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">your zone</span>
                             </p>
                             {editingComment === lead.id ? (
                               <div className="space-y-2">
@@ -500,13 +515,14 @@ const ClientPortal = () => {
                                   value={commentText}
                                   onChange={(e) => setCommentText(e.target.value)}
                                   placeholder="Add your notes about this lead..."
-                                  className="min-h-[80px]"
+                                  className="min-h-[80px] bg-background/50 border-border"
                                 />
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
                                     onClick={() => handleSaveComment(lead.id)}
                                     disabled={isUpdating}
+                                    className="bg-emerald-600 hover:bg-emerald-700"
                                   >
                                     {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                                   </Button>
@@ -524,7 +540,7 @@ const ClientPortal = () => {
                               </div>
                             ) : (
                               <div
-                                className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
+                                className="bg-emerald-500/10 rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-emerald-500/20 transition-colors border border-emerald-500/30"
                                 onClick={() => {
                                   setEditingComment(lead.id);
                                   setCommentText(clientComment);
@@ -552,6 +568,45 @@ const ClientPortal = () => {
           </CardContent>
         </Card>
       </main>
+
+      {/* Status Reminder Popup */}
+      <Dialog open={showStatusReminder} onOpenChange={setShowStatusReminder}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              Don't Forget to Update Statuses!
+            </DialogTitle>
+            <DialogDescription className="pt-2 space-y-3">
+              <p>
+                You have leads that haven't been called yet. Please update the call status after each call:
+              </p>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2">
+                  <Badge className="bg-green-500 text-white text-xs">Answered</Badge>
+                  <span>— if the lead answered</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Badge className="bg-red-500 text-white text-xs">Not Answered</Badge>
+                  <span>— if no answer</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Badge className="bg-yellow-500 text-white text-xs">Call Back</Badge>
+                  <span>— if they asked to call later</span>
+                </li>
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                This helps us track performance and improve lead quality!
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end pt-2">
+            <Button onClick={() => setShowStatusReminder(false)}>
+              Got it!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
