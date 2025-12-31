@@ -88,10 +88,11 @@ async function fetchSheetData(
   spreadsheetId: string,
   sheetName: string = "Sheet1"
 ): Promise<any[][]> {
-  // Wrap sheet name in single quotes to handle special characters like |, spaces, etc.
-  const escapedSheetName = `'${sheetName}'`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(escapedSheetName)}`;
-  
+  // For sheet names with special characters, wrap in single quotes
+  // But encode only the sheet name part, not the quotes
+  const encodedSheetName = encodeURIComponent(sheetName);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${encodedSheetName}'`;
+
   console.log(`Fetching sheet data from: ${url}`);
   
   const response = await fetch(url, {
@@ -117,8 +118,9 @@ async function updateSheetCell(
   range: string,
   value: string
 ): Promise<void> {
-  // Wrap sheet name in single quotes to handle special characters
-  const fullRange = `'${sheetName}'!${range}`;
+  // For sheet names with special characters, wrap in single quotes
+  const encodedSheetName = encodeURIComponent(sheetName);
+  const fullRange = `'${encodedSheetName}'!${range}`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(fullRange)}?valueInputOption=USER_ENTERED`;
   
   console.log(`Updating cell at: ${fullRange} with value: ${value}`);
