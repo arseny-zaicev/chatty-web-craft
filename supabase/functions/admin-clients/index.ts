@@ -92,7 +92,7 @@ serve(async (req) => {
       const userId = authData.user.id;
       console.log(`User created with ID: ${userId}`);
 
-      // Create client record
+      // Create client record with password stored for admin convenience
       const { data: clientData, error: clientError } = await adminClient
         .from("clients")
         .insert({
@@ -100,6 +100,7 @@ serve(async (req) => {
           company_name: companyName || null,
           google_sheet_id: googleSheetId,
           sheet_name: sheetName || "Sheet1",
+          password: password, // Store password for admin viewing
         })
         .select()
         .single();
@@ -303,6 +304,12 @@ serve(async (req) => {
         console.error("Error resetting password:", error);
         throw new Error(error.message);
       }
+
+      // Also update stored password in clients table
+      await adminClient
+        .from("clients")
+        .update({ password: newPassword })
+        .eq("user_id", userId);
 
       return new Response(
         JSON.stringify({ success: true }),

@@ -23,6 +23,7 @@ interface Client {
   company_name: string | null;
   google_sheet_id: string;
   sheet_name: string | null;
+  password: string | null;
   created_at: string;
 }
 
@@ -67,6 +68,7 @@ const AdminPanel = () => {
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editedCells, setEditedCells] = useState<Set<string>>(new Set());
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -274,6 +276,7 @@ const AdminPanel = () => {
         </div>,
         { duration: 10000 }
       );
+      fetchClients(); // Refresh to show new password
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("Failed to reset password");
@@ -722,45 +725,89 @@ const AdminPanel = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {clients.map((client) => (
-                  <div
-                    key={client.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => handleSelectClient(client)}
-                  >
-                    <div>
-                      <p className="font-medium">{client.company_name || "Unnamed Client"}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Created {new Date(client.created_at).toLocaleDateString()}
-                      </p>
+                {clients.map((client) => {
+                  const isPasswordVisible = visiblePasswords.has(client.id);
+                  return (
+                    <div
+                      key={client.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => handleSelectClient(client)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">{client.company_name || "Unnamed Client"}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>Created {new Date(client.created_at).toLocaleDateString()}</span>
+                          {client.password && (
+                            <>
+                              <span>•</span>
+                              <span className="flex items-center gap-1">
+                                Pass: 
+                                <code className="bg-muted px-1 rounded text-xs">
+                                  {isPasswordVisible ? client.password : "••••••••"}
+                                </code>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setVisiblePasswords(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(client.id)) {
+                                        next.delete(client.id);
+                                      } else {
+                                        next.add(client.id);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  {isPasswordVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(client.password!);
+                                  }}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Сменить пароль"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleResetPassword(client.user_id, client.company_name || "");
+                          }}
+                        >
+                          <Key className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          title="Удалить клиента"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClient(client.id, client.user_id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Сменить пароль"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleResetPassword(client.user_id, client.company_name || "");
-                        }}
-                      >
-                        <Key className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        title="Удалить клиента"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClient(client.id, client.user_id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
