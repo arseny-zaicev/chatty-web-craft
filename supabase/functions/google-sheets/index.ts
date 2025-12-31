@@ -6,6 +6,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============= RATE LIMITING =============
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(identifier: string, maxRequests: number = 30, windowMs: number = 60000): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const record = rateLimitMap.get(identifier);
+  
+  // Clean up old entries periodically
+  if (rateLimitMap.size > 10000) {
+    for (const [key, value] of rateLimitMap.entries()) {
+      if (now > value.resetTime) {
+        rateLimitMap.delete(key);
+      }
+    }
+  }
+  
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(identifier, { count: 1, resetTime: now + windowMs });
+    return { allowed: true, remaining: maxRequests - 1 };
+  }
+  
+  if (record.count >= maxRequests) {
+    return { allowed: false, remaining: 0 };
+  }
+  
+  record.count++;
+  return { allowed: true, remaining: maxRequests - record.count };
+}
+
 // Input validation schemas
 function validateSpreadsheetId(id: string): boolean {
   // Google Sheet IDs are typically 44 characters of alphanumeric, hyphens, underscores
@@ -175,6 +204,25 @@ serve(async (req) => {
   }
 
   try {
+    // ============= RATE LIMITING =============
+    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'anonymous';
+    const { allowed, remaining } = checkRateLimit(clientIP, 30, 60000); // 30 requests per minute
+    
+    if (!allowed) {
+      console.warn(`Rate limit exceeded for IP: ${clientIP}`);
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again later." }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "X-RateLimit-Remaining": "0",
+          } 
+        }
+      );
+    }
+
     // ============= AUTHENTICATION CHECK =============
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
