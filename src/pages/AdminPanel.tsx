@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface Client {
@@ -24,6 +24,7 @@ interface Client {
   google_sheet_id: string;
   sheet_name: string | null;
   password: string | null;
+  email: string | null;
   created_at: string;
 }
 
@@ -250,9 +251,20 @@ const AdminPanel = () => {
     }
   };
 
-  const handleResetPassword = async (userId: string, companyName: string) => {
-    const newPassword = prompt(`Введите новый пароль для ${companyName || "клиента"} (мин. 6 символов):`);
-    if (!newPassword) return;
+  const handleResetPassword = async (userId: string, companyName: string, generateNew: boolean = false) => {
+    let newPassword: string | null;
+    
+    if (generateNew) {
+      // Auto-generate password
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+      newPassword = "";
+      for (let i = 0; i < 12; i++) {
+        newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+    } else {
+      newPassword = prompt(`Введите новый пароль для ${companyName || "клиента"} (мин. 6 символов):`);
+      if (!newPassword) return;
+    }
 
     if (newPassword.length < 6) {
       toast.error("Пароль должен быть минимум 6 символов");
@@ -276,6 +288,7 @@ const AdminPanel = () => {
         </div>,
         { duration: 10000 }
       );
+      copyToClipboard(newPassword);
       fetchClients(); // Refresh to show new password
     } catch (error) {
       console.error("Unexpected error:", error);
@@ -735,59 +748,91 @@ const AdminPanel = () => {
                     >
                       <div className="flex-1 min-w-0">
                         <p className="font-medium">{client.company_name || "Unnamed Client"}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>Created {new Date(client.created_at).toLocaleDateString()}</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-muted-foreground mt-1">
+                          {/* Email/Login */}
+                          {client.email && (
+                            <span className="flex items-center gap-1">
+                              <Mail className="h-3 w-3" />
+                              <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{client.email}</code>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(client.email!);
+                                }}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </span>
+                          )}
+                          {/* Password */}
                           {client.password && (
-                            <>
-                              <span>•</span>
-                              <span className="flex items-center gap-1">
-                                Pass: 
-                                <code className="bg-muted px-1 rounded text-xs">
-                                  {isPasswordVisible ? client.password : "••••••••"}
-                                </code>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setVisiblePasswords(prev => {
-                                      const next = new Set(prev);
-                                      if (next.has(client.id)) {
-                                        next.delete(client.id);
-                                      } else {
-                                        next.add(client.id);
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  {isPasswordVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    copyToClipboard(client.password!);
-                                  }}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              </span>
-                            </>
+                            <span className="flex items-center gap-1">
+                              <Key className="h-3 w-3" />
+                              <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                                {isPasswordVisible ? client.password : "••••••••"}
+                              </code>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setVisiblePasswords(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(client.id)) {
+                                      next.delete(client.id);
+                                    } else {
+                                      next.add(client.id);
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              >
+                                {isPasswordVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(client.password!);
+                                }}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </span>
+                          )}
+                          {/* No credentials stored yet */}
+                          {!client.email && !client.password && (
+                            <span className="text-xs italic">Created {new Date(client.created_at).toLocaleDateString()}</span>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        {/* Generate new password button */}
                         <Button
                           variant="ghost"
                           size="icon"
-                          title="Сменить пароль"
+                          title="Сгенерировать новый пароль"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleResetPassword(client.user_id, client.company_name || "");
+                            handleResetPassword(client.user_id, client.company_name || "", true);
+                          }}
+                        >
+                          <Shuffle className="h-4 w-4" />
+                        </Button>
+                        {/* Manual password reset */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Ввести свой пароль"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleResetPassword(client.user_id, client.company_name || "", false);
                           }}
                         >
                           <Key className="h-4 w-4" />

@@ -92,7 +92,7 @@ serve(async (req) => {
       const userId = authData.user.id;
       console.log(`User created with ID: ${userId}`);
 
-      // Create client record with password stored for admin convenience
+      // Create client record with password and email stored for admin convenience
       const { data: clientData, error: clientError } = await adminClient
         .from("clients")
         .insert({
@@ -101,6 +101,7 @@ serve(async (req) => {
           google_sheet_id: googleSheetId,
           sheet_name: sheetName || "Sheet1",
           password: password, // Store password for admin viewing
+          email: email, // Store email for admin viewing
         })
         .select()
         .single();

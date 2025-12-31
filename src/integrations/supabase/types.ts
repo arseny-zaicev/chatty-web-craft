@@ -56,6 +56,7 @@ export type Database = {
         Row: {
           company_name: string | null
           created_at: string
+          email: string | null
           google_sheet_id: string
           id: string
           password: string | null
@@ -66,6 +67,7 @@ export type Database = {
         Insert: {
           company_name?: string | null
           created_at?: string
+          email?: string | null
           google_sheet_id: string
           id?: string
           password?: string | null
@@ -76,6 +78,7 @@ export type Database = {
         Update: {
           company_name?: string | null
           created_at?: string
+          email?: string | null
           google_sheet_id?: string
           id?: string
           password?: string | null
