@@ -34,21 +34,24 @@ interface LeadRow {
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
+// Admin zone: editable by admin only
+// Client zone: fields after Status - editable by client
 const COLUMNS = [
-  { key: "Lead Name", width: "150px" },
-  { key: "Phone Number", width: "130px" },
-  { key: "Location", width: "200px" },
-  { key: "Interest Type", width: "100px", type: "select", options: ["Seller", "Buyer", "Investor", "Tenant"] },
-  { key: "Source", width: "100px", type: "select", options: ["WhatsApp", "Call", "Website", "Referral", "Other"] },
-  { key: "Details", width: "250px" },
-  { key: "Date", width: "100px" },
-  { key: "Status", width: "120px", type: "select", options: ["", "New", "Contacted", "Interested", "Not Interested", "Closed"] },
-  { key: "Allocated To", width: "120px" },
-  { key: "Details from the call", width: "200px" },
-  { key: "Call Status", width: "120px", type: "select", options: ["Not Called", "Answered", "Not Answered", "Call Back"] },
-  { key: "Call Count", width: "80px", readonly: true },
-  { key: "Last Call Date", width: "100px", readonly: true },
-  { key: "Client Comment", width: "200px", readonly: true },
+  { key: "Lead Name", width: "150px", zone: "admin" },
+  { key: "Phone Number", width: "130px", zone: "admin" },
+  { key: "Location", width: "200px", zone: "admin" },
+  { key: "Interest Type", width: "100px", type: "select", options: ["Seller", "Buyer", "Investor", "Tenant"], zone: "admin" },
+  { key: "Source", width: "100px", type: "select", options: ["WhatsApp", "Call", "Website", "Referral", "Other"], zone: "admin" },
+  { key: "Details", width: "250px", zone: "admin" },
+  { key: "Date", width: "100px", zone: "admin" },
+  { key: "Status", width: "120px", type: "select", options: ["", "New", "Contacted", "Interested", "Not Interested", "Closed"], zone: "admin" },
+  // Client zone starts here
+  { key: "Allocated To", width: "120px", zone: "client" },
+  { key: "Details from the call", width: "200px", zone: "client" },
+  { key: "Call Status", width: "120px", type: "select", options: ["Not Called", "Answered", "Not Answered", "Call Back"], zone: "client" },
+  { key: "Call Count", width: "80px", zone: "client" },
+  { key: "Last Call Date", width: "100px", zone: "client" },
+  { key: "Client Comment", width: "200px", zone: "client" },
 ];
 
 const AdminPanel = () => {
@@ -468,10 +471,15 @@ const AdminPanel = () => {
                     {COLUMNS.map(col => (
                       <th 
                         key={col.key} 
-                        className="border border-border px-2 py-2 text-left font-medium whitespace-nowrap"
+                        className={`border border-border px-2 py-2 text-left font-medium whitespace-nowrap ${
+                          col.zone === "client" ? "bg-blue-100 dark:bg-blue-900/30" : ""
+                        }`}
                         style={{ minWidth: col.width }}
                       >
                         {col.key}
+                        {col.zone === "client" && (
+                          <span className="ml-1 text-[10px] text-blue-600 dark:text-blue-400 font-normal">(client)</span>
+                        )}
                       </th>
                     ))}
                     <th className="border border-border px-2 py-2 w-10"></th>
@@ -487,21 +495,12 @@ const AdminPanel = () => {
                         const cellKey = `${lead.id}-${col.key}`;
                         const isEdited = editedCells.has(cellKey);
                         const value = lead.data[col.key] || "";
-                        
-                        if (col.readonly) {
-                          return (
-                            <td 
-                              key={col.key} 
-                              className="border border-border px-2 py-1 bg-muted/30 text-muted-foreground"
-                            >
-                              {value}
-                            </td>
-                          );
-                        }
+                        const isClientZone = col.zone === "client";
+                        const clientZoneClass = isClientZone ? "bg-blue-50 dark:bg-blue-950/20" : "";
                         
                         if (col.type === "select") {
                           return (
-                            <td key={col.key} className="border border-border p-0">
+                            <td key={col.key} className={`border border-border p-0 ${clientZoneClass}`}>
                               <Select
                                 value={value}
                                 onValueChange={(v) => handleCellChange(lead.id, col.key, v)}
@@ -509,7 +508,7 @@ const AdminPanel = () => {
                                 <SelectTrigger className={`border-0 rounded-none h-8 text-xs ${isEdited ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}>
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-popover border shadow-lg">
                                   {col.options?.map(opt => (
                                     <SelectItem key={opt} value={opt || "empty"}>
                                       {opt || "(empty)"}
@@ -522,7 +521,7 @@ const AdminPanel = () => {
                         }
                         
                         return (
-                          <td key={col.key} className="border border-border p-0">
+                          <td key={col.key} className={`border border-border p-0 ${clientZoneClass}`}>
                             <Input
                               value={value}
                               onChange={(e) => handleCellChange(lead.id, col.key, e.target.value)}
