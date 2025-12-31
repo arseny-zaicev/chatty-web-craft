@@ -8,13 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
+const ADMIN_EMAIL = "arseny@iskra.ae";
+
 const ClientAuth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
@@ -25,20 +28,53 @@ const ClientAuth = () => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      if (isSignUp) {
+        // Only allow admin to sign up (for initial setup)
+        if (email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+          toast.error("Self-registration is disabled. Please contact your account manager.");
+          setIsLoading(false);
+          return;
+        }
 
-      if (error) {
-        console.error("Login error:", error);
-        toast.error(error.message);
-        return;
-      }
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/admin`,
+          },
+        });
 
-      if (data.user) {
-        toast.success("Welcome back!");
-        navigate("/client-portal");
+        if (error) {
+          console.error("Signup error:", error);
+          toast.error(error.message);
+          return;
+        }
+
+        if (data.user) {
+          toast.success("Account created! Redirecting...");
+          navigate("/admin");
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (error) {
+          console.error("Login error:", error);
+          toast.error(error.message);
+          return;
+        }
+
+        if (data.user) {
+          toast.success("Welcome back!");
+          // Redirect admin to admin panel, clients to client portal
+          if (data.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+            navigate("/admin");
+          } else {
+            navigate("/client-portal");
+          }
+        }
       }
     } catch (error) {
       console.error("Unexpected error:", error);
@@ -52,13 +88,17 @@ const ClientAuth = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-display">Client Portal</CardTitle>
+          <CardTitle className="text-2xl font-display">
+            {isSignUp ? "Create Account" : "Client Login"}
+          </CardTitle>
           <CardDescription>
-            Sign in to view your leads and data
+            {isSignUp 
+              ? "Create your admin account" 
+              : "Sign in to view your leads and data"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -87,16 +127,32 @@ const ClientAuth = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  {isSignUp ? "Creating account..." : "Signing in..."}
                 </>
               ) : (
-                "Sign In"
+                isSignUp ? "Create Account" : "Sign In"
               )}
             </Button>
           </form>
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            Contact your account manager if you need access
-          </p>
+          
+          {/* Toggle for admin setup */}
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isSignUp 
+                ? "Already have an account? Sign in" 
+                : "Admin? Create account"}
+            </button>
+          </div>
+          
+          {!isSignUp && (
+            <p className="text-center text-sm text-muted-foreground mt-4">
+              Contact your account manager if you need access
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
