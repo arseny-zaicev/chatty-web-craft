@@ -351,25 +351,6 @@ const SellerLeads = () => {
           </div>
         </section>
 
-        {/* Guarantee Section */}
-        <section className="py-16 bg-iskra-emerald/10 border-y border-iskra-emerald/20">
-          <div className="container mx-auto px-4">
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 text-center md:text-left">
-              <div className="w-20 h-20 rounded-full bg-iskra-emerald/20 flex items-center justify-center">
-                <Shield className="w-10 h-10 text-iskra-emerald" />
-              </div>
-              <div>
-                <h3 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
-                  30-Day Money Back Guarantee
-                </h3>
-                <p className="text-lg text-foreground/70">
-                  Not happy with the leads? We'll refund you — no questions asked.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Urgency Banner */}
         <UrgencyBanner type="seller-leads" />
 
