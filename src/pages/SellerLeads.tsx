@@ -9,16 +9,20 @@ import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { UrgencyBanner } from "@/components/UrgencyBanner";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star, Zap, Check } from "lucide-react";
 
-import salesforgeLogo from "@/assets/clients/salesforge-new.png";
+import salesforgeLogo from "@/assets/clients/salesforge-logo.png";
 import pathosLogo from "@/assets/clients/pathos-new.png";
-import leadbookLogo from "@/assets/clients/leadbook-new.png";
-import fbMediaLogo from "@/assets/clients/fb-media-new.png";
+import fbMarketingLogo from "@/assets/clients/fb-marketing-logo.png";
+import enaraLogo from "@/assets/clients/enara-logo.png";
+import propAiLogo from "@/assets/clients/prop-ai-logo.png";
+import moreConvosLogo from "@/assets/clients/more-convos-logo.png";
 
 const clientLogos = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
   { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com/" },
-  { name: "Leadbook", logo: leadbookLogo, url: "https://www.leadbook.app/home57663300" },
-  { name: "FB Media", logo: fbMediaLogo, url: "https://www.instagram.com/f.b.marketing/" },
+  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://www.instagram.com/f.b.marketing/" },
+  { name: "Enara Properties", logo: enaraLogo, url: "https://enaraproperties.ae/" },
+  { name: "Prop AI", logo: propAiLogo, url: "https://prop-ai.com/" },
+  { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com/" },
 ];
 
 const features = [
