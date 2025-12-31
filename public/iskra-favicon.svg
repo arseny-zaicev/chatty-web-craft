@@ -1,7 +1,15 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" fill="#1a9960"/>
-  <path d="M256 64L280 200L256 220L232 200L256 64Z" fill="white"/>
-  <path d="M256 448L232 312L256 292L280 312L256 448Z" fill="white"/>
-  <path d="M64 256L200 232L220 256L200 280L64 256Z" fill="white"/>
-  <path d="M448 256L312 280L292 256L312 232L448 256Z" fill="white"/>
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2d9d74"/>
+      <stop offset="100%" stop-color="#1a7a5a"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background with gradient -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bgGrad)"/>
+  <!-- 4-pointed star sparkle - large and centered -->
+  <path d="M256 96 L276 220 L256 240 L236 220 Z" fill="white"/>
+  <path d="M256 416 L236 292 L256 272 L276 292 Z" fill="white"/>
+  <path d="M96 256 L220 236 L240 256 L220 276 Z" fill="white"/>
+  <path d="M416 256 L292 276 L272 256 L292 236 Z" fill="white"/>
 </svg>
