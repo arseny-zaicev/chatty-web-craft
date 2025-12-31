@@ -9,7 +9,6 @@ const navItems = [
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Pricing", href: "/#pricing", sellerLeadsHref: "/seller-leads#pricing" },
   { label: "Contact", href: "/#contact" },
-  { label: "Client Login", href: "/client-auth", isPage: true },
 ];
 
 // ISKRA Logo Component with spark icon
@@ -108,8 +107,14 @@ export const Navbar = () => {
             ))}
           </div>
 
-          {/* CTA Button */}
-          <div className="hidden md:block">
+          {/* CTA Button + Client Login */}
+          <div className="hidden md:flex items-center gap-4">
+            <Link
+              to="/client-auth"
+              className="text-xs font-medium text-muted-foreground/70 hover:text-foreground transition-colors duration-200"
+            >
+              Client Login
+            </Link>
             <a 
               href="/#contact"
               onClick={(e) => handleNavClick(e, { label: "Contact", href: "/#contact" })}
