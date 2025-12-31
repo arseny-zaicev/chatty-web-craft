@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface Client {
@@ -35,6 +35,8 @@ const AdminPanel = () => {
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newSheetId, setNewSheetId] = useState("");
   const [newSheetName, setNewSheetName] = useState("Sheet1");
+  const [showPassword, setShowPassword] = useState(true);
+  const [lastCreatedCredentials, setLastCreatedCredentials] = useState<{email: string, password: string} | null>(null);
   
   const navigate = useNavigate();
 
@@ -140,7 +142,17 @@ const AdminPanel = () => {
         return;
       }
 
-      toast.success(`Client ${newEmail} created successfully!`);
+      // Save credentials for display
+      setLastCreatedCredentials({ email: newEmail.trim(), password: newPassword });
+      
+      toast.success(
+        <div className="space-y-1">
+          <p>Client created!</p>
+          <p className="text-xs font-mono">Email: {newEmail.trim()}</p>
+          <p className="text-xs font-mono">Password: {newPassword}</p>
+        </div>,
+        { duration: 10000 }
+      );
       
       // Reset form
       setNewEmail("");
@@ -270,17 +282,34 @@ const AdminPanel = () => {
                     <div className="space-y-2">
                       <Label htmlFor="clientPassword">Password *</Label>
                       <div className="flex gap-2">
-                        <Input
-                          id="clientPassword"
-                          type="text"
-                          placeholder="Min 6 characters"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          required
-                        />
+                        <div className="relative flex-1">
+                          <Input
+                            id="clientPassword"
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Min 6 characters"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            required
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
                         <Button type="button" variant="outline" onClick={generatePassword}>
                           Generate
                         </Button>
+                        {newPassword && (
+                          <Button type="button" variant="outline" size="icon" onClick={() => copyToClipboard(newPassword)}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-2">
