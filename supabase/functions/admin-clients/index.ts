@@ -257,6 +257,30 @@ serve(async (req) => {
       );
     }
 
+    // Update a single lead
+    if (action === "update-lead") {
+      const { leadId, data } = body;
+
+      if (!leadId || !data) {
+        throw new Error("leadId and data are required");
+      }
+
+      const { error } = await adminClient
+        .from("client_leads")
+        .update({ data })
+        .eq("id", leadId);
+
+      if (error) {
+        console.error("Error updating lead:", error);
+        throw new Error(error.message);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error(`Unknown action: ${action}`);
 
   } catch (error: unknown) {

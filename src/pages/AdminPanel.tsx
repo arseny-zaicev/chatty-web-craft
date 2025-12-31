@@ -1,15 +1,20 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Upload, Phone, MessageSquare, PhoneCall, PhoneOff, PhoneMissed, Edit, Search } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface Client {
@@ -24,15 +29,26 @@ interface Client {
 interface LeadRow {
   id: string;
   data: Record<string, string>;
+  isNew?: boolean;
 }
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
-const CALL_STATUS_OPTIONS = [
-  { value: "Not Called", color: "bg-gray-400", icon: Phone },
-  { value: "Answered", color: "bg-green-500", icon: PhoneCall },
-  { value: "Not Answered", color: "bg-red-500", icon: PhoneOff },
-  { value: "Call Back", color: "bg-yellow-500", icon: PhoneMissed },
+const COLUMNS = [
+  { key: "Lead Name", width: "150px" },
+  { key: "Phone Number", width: "130px" },
+  { key: "Location", width: "200px" },
+  { key: "Interest Type", width: "100px", type: "select", options: ["Seller", "Buyer", "Investor", "Tenant"] },
+  { key: "Source", width: "100px", type: "select", options: ["WhatsApp", "Call", "Website", "Referral", "Other"] },
+  { key: "Details", width: "250px" },
+  { key: "Date", width: "100px" },
+  { key: "Status", width: "120px", type: "select", options: ["", "New", "Contacted", "Interested", "Not Interested", "Closed"] },
+  { key: "Allocated To", width: "120px" },
+  { key: "Details from the call", width: "200px" },
+  { key: "Call Status", width: "120px", type: "select", options: ["Not Called", "Answered", "Not Answered", "Call Back"] },
+  { key: "Call Count", width: "80px", readonly: true },
+  { key: "Last Call Date", width: "100px", readonly: true },
+  { key: "Client Comment", width: "200px", readonly: true },
 ];
 
 const AdminPanel = () => {
@@ -46,9 +62,8 @@ const AdminPanel = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientLeads, setClientLeads] = useState<LeadRow[]>([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isImporting, setIsImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editedCells, setEditedCells] = useState<Set<string>>(new Set());
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -139,6 +154,7 @@ const AdminPanel = () => {
       }));
 
       setClientLeads(rows);
+      setEditedCells(new Set());
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("Failed to load leads");
@@ -209,7 +225,7 @@ const AdminPanel = () => {
   };
 
   const handleDeleteClient = async (clientId: string, userId: string) => {
-    if (!confirm("Are you sure you want to delete this client and ALL their leads?")) return;
+    if (!confirm("Delete this client and ALL their leads?")) return;
 
     try {
       const { data, error } = await supabase.functions.invoke("admin-clients", {
@@ -230,6 +246,14 @@ const AdminPanel = () => {
   };
 
   const handleDeleteLead = async (leadId: string) => {
+    const lead = clientLeads.find(l => l.id === leadId);
+    
+    // If it's a new unsaved row, just remove from state
+    if (lead?.isNew) {
+      setClientLeads(prev => prev.filter(l => l.id !== leadId));
+      return;
+    }
+
     if (!confirm("Delete this lead?")) return;
 
     try {
@@ -256,100 +280,112 @@ const AdminPanel = () => {
   };
 
   const handleBackToClients = () => {
+    if (editedCells.size > 0) {
+      if (!confirm("You have unsaved changes. Discard them?")) return;
+    }
     setSelectedClient(null);
     setClientLeads([]);
-    setSearchTerm("");
+    setEditedCells(new Set());
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
+  const handleAddRow = () => {
+    const newRow: LeadRow = {
+      id: `new-${Date.now()}`,
+      data: {
+        "Lead Name": "",
+        "Phone Number": "",
+        "Location": "",
+        "Interest Type": "Seller",
+        "Source": "WhatsApp",
+        "Details": "",
+        "Date": new Date().toLocaleDateString("en-GB"),
+        "Status": "",
+        "Allocated To": "",
+        "Details from the call": "",
+        "Call Status": "Not Called",
+        "Call Count": "0",
+        "Last Call Date": "",
+        "Client Comment": "",
+      },
+      isNew: true,
+    };
+    setClientLeads(prev => [...prev, newRow]);
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedClient) return;
+  const handleCellChange = (leadId: string, columnKey: string, value: string) => {
+    setClientLeads(prev => prev.map(lead => {
+      if (lead.id === leadId) {
+        return { ...lead, data: { ...lead.data, [columnKey]: value } };
+      }
+      return lead;
+    }));
+    setEditedCells(prev => new Set(prev).add(`${leadId}-${columnKey}`));
+  };
 
-    setIsImporting(true);
-
+  const handleSaveAll = async () => {
+    if (!selectedClient) return;
+    
+    setIsSaving(true);
+    
     try {
-      const text = await file.text();
-      let rows: Record<string, string>[] = [];
-
-      if (file.name.endsWith(".json")) {
-        const json = JSON.parse(text);
-        rows = Array.isArray(json) ? json : [json];
-      } else {
-        const lines = text.split(/\r?\n/).filter((line) => line.trim());
-        if (lines.length === 0) {
-          toast.error("Empty file");
-          return;
-        }
-        
-        const parseCSVLine = (line: string): string[] => {
-          const result: string[] = [];
-          let current = '';
-          let inQuotes = false;
-          
-          for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            if (char === '"') {
-              inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-              result.push(current.trim());
-              current = '';
-            } else {
-              current += char;
-            }
-          }
-          result.push(current.trim());
-          return result;
-        };
-        
-        const csvHeaders = parseCSVLine(lines[0]);
-        for (let i = 1; i < lines.length; i++) {
-          const vals = parseCSVLine(lines[i]);
-          if (vals.every(v => !v)) continue;
-          
-          const obj: Record<string, string> = {};
-          csvHeaders.forEach((h, idx) => {
-            if (h) obj[h] = vals[idx] || "";
-          });
-          if (obj["Lead Name"] || obj["Phone Number"]) {
-            rows.push(obj);
+      // Separate new and existing leads
+      const newLeads = clientLeads.filter(l => l.isNew);
+      const existingLeads = clientLeads.filter(l => !l.isNew && editedCells.has(`${l.id}-`));
+      
+      // Find all edited existing leads
+      const editedExistingLeads: LeadRow[] = [];
+      clientLeads.forEach(lead => {
+        if (!lead.isNew) {
+          const hasEdits = COLUMNS.some(col => editedCells.has(`${lead.id}-${col.key}`));
+          if (hasEdits) {
+            editedExistingLeads.push(lead);
           }
         }
-      }
-
-      if (rows.length === 0) {
-        toast.error("No valid data to import");
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke("admin-clients", {
-        body: {
-          action: "import-leads",
-          clientId: selectedClient.id,
-          userId: selectedClient.user_id,
-          leads: rows,
-        },
       });
 
-      if (error || data?.error) {
-        console.error("Import error:", error || data?.error);
-        toast.error("Failed to import leads");
-        return;
+      // Save new leads
+      if (newLeads.length > 0) {
+        const { error } = await supabase.functions.invoke("admin-clients", {
+          body: {
+            action: "import-leads",
+            clientId: selectedClient.id,
+            userId: selectedClient.user_id,
+            leads: newLeads.map(l => l.data),
+          },
+        });
+
+        if (error) {
+          console.error("Error saving new leads:", error);
+          toast.error("Failed to save new leads");
+          return;
+        }
       }
 
-      toast.success(`Imported ${rows.length} leads`);
+      // Update existing leads
+      for (const lead of editedExistingLeads) {
+        const { error } = await supabase.functions.invoke("admin-clients", {
+          body: {
+            action: "update-lead",
+            leadId: lead.id,
+            data: lead.data,
+          },
+        });
+
+        if (error) {
+          console.error("Error updating lead:", error);
+        }
+      }
+
+      toast.success("Saved!");
+      setEditedCells(new Set());
+      
+      // Refresh to get proper IDs for new rows
       fetchClientLeads(selectedClient);
     } catch (error) {
-      console.error("Import error:", error);
-      toast.error("Failed to parse file");
+      console.error("Error saving:", error);
+      toast.error("Failed to save");
     } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      setIsSaving(false);
     }
   };
 
@@ -372,15 +408,7 @@ const AdminPanel = () => {
     setNewPassword(password);
   };
 
-  const getCallStatusOption = (status: string) => {
-    return CALL_STATUS_OPTIONS.find(s => s.value === status) || CALL_STATUS_OPTIONS[0];
-  };
-
-  const filteredLeads = clientLeads.filter((lead) =>
-    Object.values(lead.data).some((val) =>
-      val?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+  const hasUnsavedChanges = editedCells.size > 0 || clientLeads.some(l => l.isNew);
 
   if (isLoading) {
     return (
@@ -390,138 +418,144 @@ const AdminPanel = () => {
     );
   }
 
-  // Client Leads View
+  // Spreadsheet View for Client Leads
   if (selectedClient) {
     return (
-      <div className="min-h-screen bg-background">
-        <header className="border-b bg-card">
-          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="border-b bg-card shrink-0">
+          <div className="px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" onClick={handleBackToClients}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div>
-                <h1 className="text-xl font-display font-bold">{selectedClient.company_name || "Client"}</h1>
+                <h1 className="text-lg font-display font-bold">{selectedClient.company_name || "Client"}</h1>
                 <p className="text-sm text-muted-foreground">{clientLeads.length} leads</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.json"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <Button onClick={handleImportClick} disabled={isImporting}>
-                {isImporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Button variant="outline" size="sm" onClick={handleAddRow}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Row
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={handleSaveAll} 
+                disabled={!hasUnsavedChanges || isSaving}
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
                 ) : (
-                  <Upload className="h-4 w-4 mr-2" />
+                  <Save className="h-4 w-4 mr-1" />
                 )}
-                Import CSV
+                Save
               </Button>
             </div>
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-6">
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search leads..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 max-w-md"
-              />
-            </div>
-          </div>
-
+        <main className="flex-1 overflow-auto">
           {isLoadingLeads ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : clientLeads.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <p>No leads yet</p>
-                <p className="text-sm mt-2">Import a CSV file to add leads</p>
-              </CardContent>
-            </Card>
           ) : (
-            <div className="space-y-3">
-              {filteredLeads.map((lead) => {
-                const name = lead.data["Lead Name"] || "Unknown";
-                const phone = lead.data["Phone Number"] || "";
-                const callStatus = lead.data["Call Status"] || "Not Called";
-                const callCount = lead.data["Call Count"] || "0";
-                const lastCallDate = lead.data["Last Call Date"] || "";
-                const clientComment = lead.data["Client Comment"] || "";
-                const details = lead.data["Details"] || "";
-                const statusOption = getCallStatusOption(callStatus);
-
-                return (
-                  <Card key={lead.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-semibold">{name}</span>
-                            <Badge className={`${statusOption.color} text-white text-xs`}>
-                              <statusOption.icon className="h-3 w-3 mr-1" />
-                              {callStatus}
-                            </Badge>
-                          </div>
-                          
-                          {phone && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                              <Phone className="h-4 w-4" />
-                              <span>{phone}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => copyToClipboard(phone)}
+            <div className="overflow-x-auto">
+              <table className="w-max border-collapse text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-muted">
+                    <th className="border border-border px-2 py-2 text-left font-medium w-10">#</th>
+                    {COLUMNS.map(col => (
+                      <th 
+                        key={col.key} 
+                        className="border border-border px-2 py-2 text-left font-medium whitespace-nowrap"
+                        style={{ minWidth: col.width }}
+                      >
+                        {col.key}
+                      </th>
+                    ))}
+                    <th className="border border-border px-2 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientLeads.map((lead, index) => (
+                    <tr key={lead.id} className={lead.isNew ? "bg-green-50 dark:bg-green-950/20" : ""}>
+                      <td className="border border-border px-2 py-1 text-muted-foreground text-center">
+                        {index + 1}
+                      </td>
+                      {COLUMNS.map(col => {
+                        const cellKey = `${lead.id}-${col.key}`;
+                        const isEdited = editedCells.has(cellKey);
+                        const value = lead.data[col.key] || "";
+                        
+                        if (col.readonly) {
+                          return (
+                            <td 
+                              key={col.key} 
+                              className="border border-border px-2 py-1 bg-muted/30 text-muted-foreground"
+                            >
+                              {value}
+                            </td>
+                          );
+                        }
+                        
+                        if (col.type === "select") {
+                          return (
+                            <td key={col.key} className="border border-border p-0">
+                              <Select
+                                value={value}
+                                onValueChange={(v) => handleCellChange(lead.id, col.key, v)}
                               >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
-
-                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-2">
-                            <span>{callCount} calls</span>
-                            {lastCallDate && <span>Last call: {lastCallDate}</span>}
-                          </div>
-
-                          {details && (
-                            <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{details}</p>
-                          )}
-
-                          {clientComment && (
-                            <div className="bg-muted/50 rounded-lg p-3 mt-2">
-                              <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                                <MessageSquare className="h-3 w-3" />
-                                Client Comment
-                              </p>
-                              <p className="text-sm">{clientComment}</p>
-                            </div>
-                          )}
-                        </div>
-
+                                <SelectTrigger className={`border-0 rounded-none h-8 text-xs ${isEdited ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {col.options?.map(opt => (
+                                    <SelectItem key={opt} value={opt || "empty"}>
+                                      {opt || "(empty)"}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                          );
+                        }
+                        
+                        return (
+                          <td key={col.key} className="border border-border p-0">
+                            <Input
+                              value={value}
+                              onChange={(e) => handleCellChange(lead.id, col.key, e.target.value)}
+                              className={`border-0 rounded-none h-8 text-xs focus-visible:ring-1 focus-visible:ring-inset ${isEdited ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}
+                            />
+                          </td>
+                        );
+                      })}
+                      <td className="border border-border px-1 py-1">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-destructive hover:text-destructive shrink-0"
+                          className="h-6 w-6 text-destructive hover:text-destructive"
                           onClick={() => handleDeleteLead(lead.id)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <X className="h-3 w-3" />
                         </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Empty row hint */}
+                  <tr>
+                    <td 
+                      colSpan={COLUMNS.length + 2} 
+                      className="border border-border px-4 py-3 text-center text-muted-foreground cursor-pointer hover:bg-muted/50"
+                      onClick={handleAddRow}
+                    >
+                      <Plus className="h-4 w-4 inline mr-2" />
+                      Click to add new lead
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
         </main>
@@ -555,7 +589,7 @@ const AdminPanel = () => {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Clients</CardTitle>
-              <CardDescription>Click on a client to manage their leads</CardDescription>
+              <CardDescription>Click to open and manage leads</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" onClick={fetchClients}>
@@ -572,7 +606,7 @@ const AdminPanel = () => {
                   <DialogHeader>
                     <DialogTitle>Add New Client</DialogTitle>
                     <DialogDescription>
-                      Create a client account. You can import leads after.
+                      Create a client account
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleAddClient} className="space-y-4 mt-4">
@@ -654,7 +688,6 @@ const AdminPanel = () => {
               <div className="text-center py-12 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No clients yet</p>
-                <p className="text-sm mt-2">Click "Add Client" to create the first one</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -670,19 +703,17 @@ const AdminPanel = () => {
                         Created {new Date(client.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClient(client.id, client.user_id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClient(client.id, client.user_id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
