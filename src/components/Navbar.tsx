@@ -7,7 +7,7 @@ const navItems = [
   { label: "AI Agent", href: "/#chatbot" },
   { label: "AI Use Cases", href: "/ai-agent", isPage: true },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
-  { label: "Pricing", href: "/#pricing" },
+  { label: "Pricing", href: "/#pricing", sellerLeadsHref: "/seller-leads#pricing" },
   { label: "Contact", href: "/#contact" },
 ];
 
@@ -26,10 +26,31 @@ export const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  const isSellerLeadsPage = location.pathname === "/seller-leads";
+
+  const getHref = (item: typeof navItems[0]) => {
+    // If on Seller Leads page and item has a special href for that page, use it
+    if (isSellerLeadsPage && item.sellerLeadsHref) {
+      return item.sellerLeadsHref;
+    }
+    return item.href;
+  };
+
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, item: typeof navItems[0]) => {
     e.preventDefault();
+    const href = getHref(item);
     
-    if (href.startsWith("/#")) {
+    if (href.startsWith("/seller-leads#")) {
+      const sectionId = href.split("#")[1];
+      if (location.pathname === "/seller-leads") {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
+      } else {
+        navigate("/seller-leads");
+        setTimeout(() => {
+          document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      }
+    } else if (href.startsWith("/#")) {
       const sectionId = href.substring(2);
       
       if (location.pathname !== "/") {
@@ -76,8 +97,8 @@ export const Navbar = () => {
               ) : (
                 <a
                   key={item.label}
-                  href={item.href}
-                  onClick={(e) => handleNavClick(e, item.href)}
+                  href={getHref(item)}
+                  onClick={(e) => handleNavClick(e, item)}
                   className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
                 >
                   {item.label}
@@ -90,7 +111,7 @@ export const Navbar = () => {
           <div className="hidden md:block">
             <a 
               href="/#contact"
-              onClick={(e) => handleNavClick(e, "/#contact")}
+              onClick={(e) => handleNavClick(e, { label: "Contact", href: "/#contact" })}
             >
               <Button variant="hero" size="default">
                 Get Started
@@ -125,10 +146,10 @@ export const Navbar = () => {
                 ) : (
                   <a
                     key={item.label}
-                    href={item.href}
+                    href={getHref(item)}
                     className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 py-2"
                     onClick={(e) => {
-                      handleNavClick(e, item.href);
+                      handleNavClick(e, item);
                       setIsOpen(false);
                     }}
                   >
@@ -139,7 +160,7 @@ export const Navbar = () => {
               <a 
                 href="/#contact" 
                 onClick={(e) => {
-                  handleNavClick(e, "/#contact");
+                  handleNavClick(e, { label: "Contact", href: "/#contact" });
                   setIsOpen(false);
                 }}
               >
