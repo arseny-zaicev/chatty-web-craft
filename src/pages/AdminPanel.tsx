@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface Client {
@@ -245,6 +245,38 @@ const AdminPanel = () => {
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("Failed to delete client");
+    }
+  };
+
+  const handleResetPassword = async (userId: string, companyName: string) => {
+    const newPassword = prompt(`Введите новый пароль для ${companyName || "клиента"} (мин. 6 символов):`);
+    if (!newPassword) return;
+
+    if (newPassword.length < 6) {
+      toast.error("Пароль должен быть минимум 6 символов");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-clients", {
+        body: { action: "reset-password", userId, newPassword },
+      });
+
+      if (error || data?.error) {
+        toast.error(error?.message || data?.error || "Failed to reset password");
+        return;
+      }
+
+      toast.success(
+        <div className="space-y-1">
+          <p>Пароль изменён!</p>
+          <p className="text-xs font-mono">Новый пароль: {newPassword}</p>
+        </div>,
+        { duration: 10000 }
+      );
+    } catch (error) {
+      console.error("Unexpected error:", error);
+      toast.error("Failed to reset password");
     }
   };
 
@@ -702,17 +734,31 @@ const AdminPanel = () => {
                         Created {new Date(client.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteClient(client.id, client.user_id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Сменить пароль"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResetPassword(client.user_id, client.company_name || "");
+                        }}
+                      >
+                        <Key className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        title="Удалить клиента"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClient(client.id, client.user_id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -281,6 +281,35 @@ serve(async (req) => {
       );
     }
 
+    // Reset client password
+    if (action === "reset-password") {
+      const { userId, newPassword } = body;
+
+      if (!userId || !newPassword) {
+        throw new Error("userId and newPassword are required");
+      }
+
+      if (newPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+      }
+
+      console.log(`Resetting password for user: ${userId}`);
+
+      const { error } = await adminClient.auth.admin.updateUserById(userId, {
+        password: newPassword,
+      });
+
+      if (error) {
+        console.error("Error resetting password:", error);
+        throw new Error(error.message);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error(`Unknown action: ${action}`);
 
   } catch (error: unknown) {
