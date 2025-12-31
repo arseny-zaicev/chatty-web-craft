@@ -48,6 +48,8 @@ const ClientPortal = () => {
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [editingCallDetails, setEditingCallDetails] = useState<string | null>(null);
+  const [callDetailsText, setCallDetailsText] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -193,6 +195,12 @@ const ClientPortal = () => {
     handleLeadUpdate(leadId, { "Client Comment": commentText });
     setEditingComment(null);
     setCommentText("");
+  };
+
+  const handleSaveCallDetails = (leadId: string) => {
+    handleLeadUpdate(leadId, { "Details from the call": callDetailsText });
+    setEditingCallDetails(null);
+    setCallDetailsText("");
   };
 
   const handleRefresh = () => {
@@ -370,7 +378,7 @@ const ClientPortal = () => {
                                   </Badge>
                                 )}
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="bg-popover border shadow-lg">
                                 {CALL_STATUS_OPTIONS.map((opt) => (
                                   <SelectItem key={opt.value} value={opt.value}>
                                     <div className="flex items-center gap-2">
@@ -429,9 +437,63 @@ const ClientPortal = () => {
                             </div>
                           )}
                           
+                          {/* Client editable: Details from the call */}
+                          <div className="pt-2 border-t">
+                            <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1">
+                              <PhoneCall className="h-3 w-3" />
+                              Details from the call <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">your zone</span>
+                            </p>
+                            {editingCallDetails === lead.id ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={callDetailsText}
+                                  onChange={(e) => setCallDetailsText(e.target.value)}
+                                  placeholder="Add details from your call..."
+                                  className="min-h-[80px]"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleSaveCallDetails(lead.id)}
+                                    disabled={isUpdating}
+                                  >
+                                    {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingCallDetails(null);
+                                      setCallDetailsText("");
+                                    }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
+                                onClick={() => {
+                                  setEditingCallDetails(lead.id);
+                                  setCallDetailsText(lead.data["Details from the call"] || "");
+                                }}
+                              >
+                                {lead.data["Details from the call"] ? (
+                                  <p className="text-sm whitespace-pre-wrap">{lead.data["Details from the call"]}</p>
+                                ) : (
+                                  <p className="text-sm text-muted-foreground italic">Click to add call details...</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
                           {/* Comment Section */}
                           <div className="pt-2 border-t">
-                            <p className="text-xs font-medium text-muted-foreground mb-2">Your Comment</p>
+                            <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1">
+                              <MessageSquare className="h-3 w-3" />
+                              Your Comment <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">your zone</span>
+                            </p>
                             {editingComment === lead.id ? (
                               <div className="space-y-2">
                                 <Textarea
@@ -462,7 +524,7 @@ const ClientPortal = () => {
                               </div>
                             ) : (
                               <div
-                                className="bg-background rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-muted/50 transition-colors"
+                                className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
                                 onClick={() => {
                                   setEditingComment(lead.id);
                                   setCommentText(clientComment);
