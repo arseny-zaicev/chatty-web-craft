@@ -208,6 +208,55 @@ serve(async (req) => {
       );
     }
 
+    // Get leads for a client
+    if (action === "get-leads") {
+      const { clientId } = body;
+
+      if (!clientId) {
+        throw new Error("clientId is required");
+      }
+
+      const { data: leads, error } = await adminClient
+        .from("client_leads")
+        .select("id, data")
+        .eq("client_id", clientId)
+        .order("row_index", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching leads:", error);
+        throw new Error(error.message);
+      }
+
+      return new Response(
+        JSON.stringify({ leads }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Delete a single lead
+    if (action === "delete-lead") {
+      const { leadId } = body;
+
+      if (!leadId) {
+        throw new Error("leadId is required");
+      }
+
+      const { error } = await adminClient
+        .from("client_leads")
+        .delete()
+        .eq("id", leadId);
+
+      if (error) {
+        console.error("Error deleting lead:", error);
+        throw new Error(error.message);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error(`Unknown action: ${action}`);
 
   } catch (error: unknown) {

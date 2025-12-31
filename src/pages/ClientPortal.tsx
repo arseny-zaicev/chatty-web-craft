@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Upload, Phone, MapPin, User as UserIcon, Calendar, MessageSquare } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -28,15 +29,11 @@ interface LeadRow {
   data: Record<string, string>;
 }
 
-const STATUS_OPTIONS = [
-  { value: "New", color: "bg-blue-500" },
-  { value: "Contacted", color: "bg-yellow-500" },
-  { value: "Qualified", color: "bg-purple-500" },
-  { value: "Meeting Scheduled", color: "bg-orange-500" },
-  { value: "Interested", color: "bg-emerald-500" },
-  { value: "Not Interested", color: "bg-gray-500" },
-  { value: "Closed Won", color: "bg-green-600" },
-  { value: "Closed Lost", color: "bg-red-500" },
+const CALL_STATUS_OPTIONS = [
+  { value: "Not Called", label: "Not Called", icon: Phone, color: "bg-gray-400" },
+  { value: "Answered", label: "Answered", icon: PhoneCall, color: "bg-green-500" },
+  { value: "Not Answered", label: "Not Answered", icon: PhoneOff, color: "bg-red-500" },
+  { value: "Call Back", label: "Call Back", icon: PhoneMissed, color: "bg-yellow-500" },
 ];
 
 const ClientPortal = () => {
@@ -47,9 +44,10 @@ const ClientPortal = () => {
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [updatingLeads, setUpdatingLeads] = useState<Set<string>>(new Set());
-  const [isImporting, setIsImporting] = useState(false);
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+  const [editingComment, setEditingComment] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -135,14 +133,14 @@ const ClientPortal = () => {
     }
   };
 
-  const handleStatusUpdate = async (leadId: string, value: string) => {
+  const handleLeadUpdate = async (leadId: string, updates: Record<string, string>) => {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead) return;
 
-    const cellKey = `${leadId}-Status`;
+    const cellKey = `${leadId}-update`;
     setUpdatingLeads((prev) => new Set(prev).add(cellKey));
 
-    const updatedData = { ...lead.data, Status: value, "Status Date Change": new Date().toLocaleDateString() };
+    const updatedData = { ...lead.data, ...updates };
 
     try {
       const { error } = await supabase
@@ -160,7 +158,7 @@ const ClientPortal = () => {
         prev.map((l) => (l.id === leadId ? { ...l, data: updatedData } : l))
       );
 
-      toast.success("Status updated");
+      toast.success("Updated");
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("Failed to update");
@@ -171,6 +169,30 @@ const ClientPortal = () => {
         return next;
       });
     }
+  };
+
+  const handleCallStatusChange = (leadId: string, status: string) => {
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return;
+
+    const currentCalls = parseInt(lead.data["Call Count"] || "0", 10);
+    const updates: Record<string, string> = {
+      "Call Status": status,
+      "Last Call Date": new Date().toLocaleDateString(),
+    };
+
+    // Increment call count only when marking as called (not for "Not Called")
+    if (status !== "Not Called") {
+      updates["Call Count"] = String(currentCalls + 1);
+    }
+
+    handleLeadUpdate(leadId, updates);
+  };
+
+  const handleSaveComment = (leadId: string) => {
+    handleLeadUpdate(leadId, { "Client Comment": commentText });
+    setEditingComment(null);
+    setCommentText("");
   };
 
   const handleRefresh = () => {
@@ -184,109 +206,15 @@ const ClientPortal = () => {
     navigate("/client-auth");
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
+  const copyToClipboard = (phone: string) => {
+    navigator.clipboard.writeText(phone);
+    setCopiedPhone(phone);
+    toast.success("Phone copied");
+    setTimeout(() => setCopiedPhone(null), 2000);
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !clientData || !user) return;
-
-    setIsImporting(true);
-
-    try {
-      const text = await file.text();
-      let rows: Record<string, string>[] = [];
-
-      if (file.name.endsWith(".json")) {
-        const json = JSON.parse(text);
-        rows = Array.isArray(json) ? json : [json];
-      } else {
-        // Improved CSV parsing that handles quoted fields
-        const lines = text.split(/\r?\n/).filter((line) => line.trim());
-        if (lines.length === 0) {
-          toast.error("Empty file");
-          return;
-        }
-        
-        const parseCSVLine = (line: string): string[] => {
-          const result: string[] = [];
-          let current = '';
-          let inQuotes = false;
-          
-          for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            if (char === '"') {
-              inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-              result.push(current.trim());
-              current = '';
-            } else {
-              current += char;
-            }
-          }
-          result.push(current.trim());
-          return result;
-        };
-        
-        const csvHeaders = parseCSVLine(lines[0]);
-        for (let i = 1; i < lines.length; i++) {
-          const vals = parseCSVLine(lines[i]);
-          // Skip empty rows
-          if (vals.every(v => !v)) continue;
-          
-          const obj: Record<string, string> = {};
-          csvHeaders.forEach((h, idx) => {
-            if (h) obj[h] = vals[idx] || "";
-          });
-          // Only add if has a name or phone
-          if (obj["Lead Name"] || obj["Phone Number"]) {
-            rows.push(obj);
-          }
-        }
-      }
-
-      if (rows.length === 0) {
-        toast.error("No valid data to import");
-        return;
-      }
-
-      const inserts = rows.map((data, idx) => ({
-        client_id: clientData.id,
-        user_id: user.id,
-        row_index: leads.length + idx + 1,
-        data,
-      }));
-
-      const { error } = await supabase.from("client_leads").insert(inserts);
-
-      if (error) {
-        console.error("Import error:", error);
-        toast.error("Failed to import leads");
-        return;
-      }
-
-      toast.success(`Imported ${rows.length} leads`);
-      await fetchLeads(clientData.id, user.id);
-    } catch (error) {
-      console.error("Import error:", error);
-      toast.error("Failed to parse file");
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
-  const formatPhoneForCall = (phone: string): string => {
-    // Remove all non-digit characters
-    return phone.replace(/\D/g, '');
-  };
-
-  const getStatusColor = (status: string): string => {
-    const found = STATUS_OPTIONS.find(s => s.value.toLowerCase() === status?.toLowerCase());
-    return found?.color || "bg-gray-400";
+  const getCallStatusOption = (status: string) => {
+    return CALL_STATUS_OPTIONS.find(s => s.value === status) || CALL_STATUS_OPTIONS[0];
   };
 
   const filteredLeads = leads.filter((lead) =>
@@ -328,37 +256,14 @@ const ClientPortal = () => {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base md:text-xl">Your Leads ({leads.length})</CardTitle>
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.json"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleImportClick}
-                    disabled={isImporting}
-                    className="hidden md:flex"
-                  >
-                    {isImporting ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    Import
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleRefresh}
-                    disabled={isLoadingLeads}
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isLoadingLeads ? "animate-spin" : ""}`} />
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isLoadingLeads}
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoadingLeads ? "animate-spin" : ""}`} />
+                </Button>
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -379,31 +284,25 @@ const ClientPortal = () => {
             ) : leads.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p>No leads yet</p>
-                <p className="text-sm mt-2">Import a CSV or JSON file to get started</p>
-                <Button
-                  variant="outline"
-                  className="mt-4"
-                  onClick={handleImportClick}
-                  disabled={isImporting}
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Import CSV/JSON
-                </Button>
+                <p className="text-sm mt-2">Leads will appear here when added by admin</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {filteredLeads.map((lead) => {
                   const isExpanded = expandedLead === lead.id;
-                  const isUpdating = updatingLeads.has(`${lead.id}-Status`);
+                  const isUpdating = updatingLeads.has(`${lead.id}-update`);
                   const phone = lead.data["Phone Number"] || "";
                   const name = lead.data["Lead Name"] || "Unknown";
                   const location = lead.data["Location"] || "";
-                  const status = lead.data["Status"] || "New";
                   const date = lead.data["Date"] || "";
                   const details = lead.data["Details"] || "";
-                  const callDetails = lead.data["Details from the call"] || "";
                   const source = lead.data["Source"] || "";
                   const interestType = lead.data["Interest Type"] || "";
+                  const callStatus = lead.data["Call Status"] || "Not Called";
+                  const callCount = lead.data["Call Count"] || "0";
+                  const lastCallDate = lead.data["Last Call Date"] || "";
+                  const clientComment = lead.data["Client Comment"] || "";
+                  const statusOption = getCallStatusOption(callStatus);
 
                   return (
                     <div
@@ -422,16 +321,27 @@ const ClientPortal = () => {
                               <span className="font-semibold truncate">{name}</span>
                             </div>
                             
-                            {/* Phone - Click to Call */}
+                            {/* Phone with Copy */}
                             {phone && (
-                              <a
-                                href={`tel:${formatPhoneForCall(phone)}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-2 text-primary hover:underline mb-1"
-                              >
-                                <Phone className="h-4 w-4 shrink-0" />
+                              <div className="flex items-center gap-2 mb-1">
+                                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
                                 <span className="text-sm font-medium">{phone}</span>
-                              </a>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(phone);
+                                  }}
+                                >
+                                  {copiedPhone === phone ? (
+                                    <Check className="h-3 w-3 text-green-500" />
+                                  ) : (
+                                    <Copy className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </div>
                             )}
                             
                             {/* Location snippet */}
@@ -443,33 +353,37 @@ const ClientPortal = () => {
                             )}
                           </div>
                           
-                          {/* Status Badge & Selector */}
-                          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {/* Call Status & Count */}
+                          <div className="shrink-0 flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
                             <Select
-                              value={status}
-                              onValueChange={(value) => handleStatusUpdate(lead.id, value)}
+                              value={callStatus}
+                              onValueChange={(value) => handleCallStatusChange(lead.id, value)}
                               disabled={isUpdating}
                             >
                               <SelectTrigger className="w-auto h-8 border-0 bg-transparent p-0">
                                 {isUpdating ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <Badge className={`${getStatusColor(status)} text-white text-xs cursor-pointer`}>
-                                    {status || "New"}
+                                  <Badge className={`${statusOption.color} text-white text-xs cursor-pointer`}>
+                                    <statusOption.icon className="h-3 w-3 mr-1" />
+                                    {statusOption.label}
                                   </Badge>
                                 )}
                               </SelectTrigger>
                               <SelectContent>
-                                {STATUS_OPTIONS.map((opt) => (
+                                {CALL_STATUS_OPTIONS.map((opt) => (
                                   <SelectItem key={opt.value} value={opt.value}>
                                     <div className="flex items-center gap-2">
-                                      <div className={`w-2 h-2 rounded-full ${opt.color}`} />
-                                      {opt.value}
+                                      <opt.icon className="h-4 w-4" />
+                                      {opt.label}
                                     </div>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
+                            <span className="text-xs text-muted-foreground">
+                              {callCount} calls
+                            </span>
                           </div>
                         </div>
                         
@@ -479,6 +393,12 @@ const ClientPortal = () => {
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               {date}
+                            </span>
+                          )}
+                          {lastCallDate && (
+                            <span className="flex items-center gap-1 text-primary">
+                              <PhoneCall className="h-3 w-3" />
+                              Last: {lastCallDate}
                             </span>
                           )}
                           {source && (
@@ -502,12 +422,6 @@ const ClientPortal = () => {
                               <p className="text-sm whitespace-pre-wrap">{details}</p>
                             </div>
                           )}
-                          {callDetails && (
-                            <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-1">Call Notes</p>
-                              <p className="text-sm whitespace-pre-wrap">{callDetails}</p>
-                            </div>
-                          )}
                           {location && (
                             <div>
                               <p className="text-xs font-medium text-muted-foreground mb-1">Full Location</p>
@@ -515,16 +429,53 @@ const ClientPortal = () => {
                             </div>
                           )}
                           
-                          {/* Large Call Button */}
-                          {phone && (
-                            <a
-                              href={`tel:${formatPhoneForCall(phone)}`}
-                              className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors"
-                            >
-                              <Phone className="h-5 w-5" />
-                              Call {name}
-                            </a>
-                          )}
+                          {/* Comment Section */}
+                          <div className="pt-2 border-t">
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Your Comment</p>
+                            {editingComment === lead.id ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={commentText}
+                                  onChange={(e) => setCommentText(e.target.value)}
+                                  placeholder="Add your notes about this lead..."
+                                  className="min-h-[80px]"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleSaveComment(lead.id)}
+                                    disabled={isUpdating}
+                                  >
+                                    {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingComment(null);
+                                      setCommentText("");
+                                    }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                className="bg-background rounded-lg p-3 min-h-[60px] cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => {
+                                  setEditingComment(lead.id);
+                                  setCommentText(clientComment);
+                                }}
+                              >
+                                {clientComment ? (
+                                  <p className="text-sm whitespace-pre-wrap">{clientComment}</p>
+                                ) : (
+                                  <p className="text-sm text-muted-foreground italic">Click to add a comment...</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
