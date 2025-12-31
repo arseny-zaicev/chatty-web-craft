@@ -88,10 +88,10 @@ async function fetchSheetData(
   spreadsheetId: string,
   sheetName: string = "Sheet1"
 ): Promise<any[][]> {
-  // For sheet names with special characters (like |, spaces), wrap in single quotes
-  // and encode the entire range including quotes
-  const rangeWithQuotes = `'${sheetName}'`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(rangeWithQuotes)}`;
+  // Google Sheets Values API expects A1 notation. Passing only a (quoted) sheet name
+  // can fail to parse when the name has special characters. Request an explicit range.
+  const rangeA1 = `'${sheetName}'!A:ZZ`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(rangeA1)}`;
 
   console.log(`Fetching sheet data from: ${url}`);
   
