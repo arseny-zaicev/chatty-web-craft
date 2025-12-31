@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3 } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, ExternalLink } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -265,6 +265,12 @@ const ClientPortal = () => {
             <p className="text-xs md:text-sm text-muted-foreground">{user?.email}</p>
           </div>
           <div className="flex items-center gap-2">
+            <Link to="/" target="_blank">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                <ExternalLink className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Site</span>
+              </Button>
+            </Link>
             <Link to="/client-stats">
               <Button variant="outline" size="sm">
                 <BarChart3 className="h-4 w-4 md:mr-2" />
