@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, ExternalLink, Download, Filter, HelpCircle } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, Download, Filter, HelpCircle } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -296,24 +296,34 @@ const ClientPortal = () => {
     );
   }
 
+  // ISKRA Logo Component
+  const IskraLogo = () => (
+    <div className="flex items-center gap-2">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-primary">
+        <path d="M12 2L14 9L21 12L14 15L12 22L10 15L3 12L10 9L12 2Z" fill="currentColor"/>
+      </svg>
+      <span className="font-display text-lg font-bold tracking-tight text-foreground">ISKRA</span>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg md:text-xl font-display font-bold">
-              {clientData?.company_name || "Leads"}
-            </h1>
-            <p className="text-xs md:text-sm text-muted-foreground">{user?.email}</p>
+          <div className="flex items-center gap-4">
+            {/* ISKRA Logo */}
+            <Link to="/" target="_blank">
+              <IskraLogo />
+            </Link>
+            <div className="border-l pl-4">
+              <h1 className="text-base md:text-lg font-display font-bold">
+                {clientData?.company_name || "Leads"}
+              </h1>
+              <p className="text-xs text-muted-foreground">{user?.email}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/" target="_blank">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                <ExternalLink className="h-4 w-4 md:mr-2" />
-                <span className="hidden md:inline">Site</span>
-              </Button>
-            </Link>
             <Link to="/client-stats">
               <Button variant="outline" size="sm">
                 <BarChart3 className="h-4 w-4 md:mr-2" />
