@@ -143,12 +143,13 @@ const ClientPortal = () => {
       if (!tutorialShown && rows.length > 0) {
         setShowTutorial(true);
         localStorage.setItem(`tutorial_shown_${userId}`, "true");
-      }
-      
-      // Check for uncalled leads and show reminder after 13 seconds
-      const uncalledLeads = rows.filter(l => !l.data["Call Status"] || l.data["Call Status"] === "Not Called");
-      if (uncalledLeads.length > 0 && rows.length > 0) {
-        setTimeout(() => setShowStatusReminder(true), 13000);
+      } else {
+        // Only show reminder if tutorial was already shown (not first visit)
+        // Check for uncalled leads and show reminder after 13 seconds
+        const uncalledLeads = rows.filter(l => !l.data["Call Status"] || l.data["Call Status"] === "Not Called");
+        if (uncalledLeads.length > 0 && rows.length > 0) {
+          setTimeout(() => setShowStatusReminder(true), 13000);
+        }
       }
     } catch (error) {
       console.error("Unexpected error:", error);
@@ -359,7 +360,7 @@ const ClientPortal = () => {
                     variant="ghost"
                     size="icon"
                     onClick={() => setShowTutorial(true)}
-                    title="Как пользоваться"
+                    title="How to use"
                   >
                     <HelpCircle className="h-4 w-4" />
                   </Button>
@@ -735,7 +736,7 @@ const ClientPortal = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <HelpCircle className="h-5 w-5 text-primary" />
-              Добро пожаловать в Client Portal!
+              Welcome to Client Portal!
             </DialogTitle>
             <DialogDescription className="pt-4 space-y-4 text-left">
               <div className="space-y-3">
@@ -744,8 +745,8 @@ const ClientPortal = () => {
                     <span className="font-bold text-primary">1</span>
                   </div>
                   <div>
-                    <p className="font-medium">Просматривайте лиды</p>
-                    <p className="text-sm text-muted-foreground">Нажмите на карточку лида чтобы увидеть детали</p>
+                    <p className="font-medium">Browse Your Leads</p>
+                    <p className="text-sm text-muted-foreground">Click on a lead card to see details</p>
                   </div>
                 </div>
                 
@@ -754,8 +755,8 @@ const ClientPortal = () => {
                     <span className="font-bold text-primary">2</span>
                   </div>
                   <div>
-                    <p className="font-medium">Обновляйте статус звонка</p>
-                    <p className="text-sm text-muted-foreground">После каждого звонка выберите статус: Answered, Not Answered или Call Back</p>
+                    <p className="font-medium">Update Call Status</p>
+                    <p className="text-sm text-muted-foreground">After each call, select a status: Answered, Not Answered, or Call Back</p>
                   </div>
                 </div>
                 
@@ -764,8 +765,8 @@ const ClientPortal = () => {
                     <span className="font-bold text-primary">3</span>
                   </div>
                   <div>
-                    <p className="font-medium">Добавляйте заметки</p>
-                    <p className="text-sm text-muted-foreground">Поля "Details from the call" и "Your Comment" — ваши зоны для записей</p>
+                    <p className="font-medium">Add Notes</p>
+                    <p className="text-sm text-muted-foreground">"Details from the call" and "Your Comment" fields are for your notes</p>
                   </div>
                 </div>
                 
@@ -774,20 +775,20 @@ const ClientPortal = () => {
                     <span className="font-bold text-primary">4</span>
                   </div>
                   <div>
-                    <p className="font-medium">Экспортируйте данные</p>
-                    <p className="text-sm text-muted-foreground">Используйте кнопку "Export CSV" для скачивания лидов</p>
+                    <p className="font-medium">Export Data</p>
+                    <p className="text-sm text-muted-foreground">Use the "Export CSV" button to download your leads</p>
                   </div>
                 </div>
               </div>
               
               <p className="text-xs text-muted-foreground text-center pt-2">
-                Нажмите на ? в любое время чтобы увидеть это снова
+                Click ? anytime to see this again
               </p>
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end pt-2">
             <Button onClick={() => setShowTutorial(false)}>
-              Понятно!
+              Got it!
             </Button>
           </div>
         </DialogContent>
