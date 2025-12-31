@@ -1,13 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Save } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Upload } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -17,33 +30,43 @@ interface ClientData {
   sheet_name: string | null;
 }
 
-interface SheetRow {
-  [key: string]: string;
-  _rowIndex: string;
+interface LeadRow {
+  id: string;
+  data: Record<string, string>;
 }
 
-const STATUS_OPTIONS = ["New", "Contacted", "Qualified", "Meeting Scheduled", "Proposal Sent", "Closed Won", "Closed Lost"];
+const STATUS_OPTIONS = [
+  "New",
+  "Contacted",
+  "Qualified",
+  "Meeting Scheduled",
+  "Proposal Sent",
+  "Closed Won",
+  "Closed Lost",
+];
 
 const ClientPortal = () => {
   const [user, setUser] = useState<User | null>(null);
   const [clientData, setClientData] = useState<ClientData | null>(null);
-  const [sheetData, setSheetData] = useState<SheetRow[]>([]);
+  const [leads, setLeads] = useState<LeadRow[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingSheet, setIsLoadingSheet] = useState(false);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [updatingCells, setUpdatingCells] = useState<Set<string>>(new Set());
+  const [updatingLeads, setUpdatingLeads] = useState<Set<string>>(new Set());
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
-        if (!session?.user) {
-          navigate("/client-auth");
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      if (!session?.user) {
+        navigate("/client-auth");
       }
-    );
+    });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -78,7 +101,7 @@ const ClientPortal = () => {
       }
 
       setClientData(data);
-      await fetchSheetData(data.google_sheet_id, data.sheet_name || "Sheet1");
+      await fetchLeads(data.id, userId);
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("An unexpected error occurred");
@@ -87,77 +110,79 @@ const ClientPortal = () => {
     }
   };
 
-  const fetchSheetData = async (spreadsheetId: string, sheetName: string) => {
-    setIsLoadingSheet(true);
+  const fetchLeads = async (clientId: string, userId: string) => {
+    setIsLoadingLeads(true);
     try {
-      const { data, error } = await supabase.functions.invoke("google-sheets", {
-        body: { spreadsheetId, sheetName, action: "read" },
-      });
+      const { data, error } = await supabase
+        .from("client_leads")
+        .select("id, data")
+        .eq("client_id", clientId)
+        .eq("user_id", userId)
+        .order("row_index", { ascending: true });
 
       if (error) {
-        console.error("Error fetching sheet data:", error);
-        toast.error("Failed to load sheet data");
+        console.error("Error fetching leads:", error);
+        toast.error("Failed to load leads");
         return;
       }
 
-      if (data.error) {
-        console.error("Sheet error:", data.error);
-        toast.error(data.error);
-        return;
-      }
+      const rows: LeadRow[] = (data || []).map((row) => ({
+        id: row.id,
+        data: (row.data as Record<string, string>) || {},
+      }));
 
-      setHeaders(data.headers || []);
-      setSheetData(data.data || []);
-      toast.success(`Loaded ${data.rowCount || 0} leads`);
+      setLeads(rows);
+
+      // Derive headers from all keys across all rows
+      const allKeys = new Set<string>();
+      rows.forEach((r) => Object.keys(r.data).forEach((k) => allKeys.add(k)));
+      setHeaders(Array.from(allKeys));
+
+      toast.success(`Loaded ${rows.length} leads`);
     } catch (error) {
       console.error("Unexpected error:", error);
-      toast.error("Failed to connect to Google Sheets");
+      toast.error("Failed to load leads");
     } finally {
-      setIsLoadingSheet(false);
+      setIsLoadingLeads(false);
     }
   };
 
-  const handleCellUpdate = async (rowIndex: string, columnName: string, value: string) => {
-    if (!clientData) return;
+  const handleCellUpdate = async (
+    leadId: string,
+    columnName: string,
+    value: string
+  ) => {
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return;
 
-    const columnIndex = headers.indexOf(columnName);
-    if (columnIndex === -1) return;
+    const cellKey = `${leadId}-${columnName}`;
+    setUpdatingLeads((prev) => new Set(prev).add(cellKey));
 
-    const cellKey = `${rowIndex}-${columnName}`;
-    setUpdatingCells(prev => new Set(prev).add(cellKey));
-
-    // Convert column index to letter (A, B, C, etc.)
-    const columnLetter = String.fromCharCode(65 + columnIndex);
-    const range = `${columnLetter}${rowIndex}`;
+    const updatedData = { ...lead.data, [columnName]: value };
 
     try {
-      const { data, error } = await supabase.functions.invoke("google-sheets", {
-        body: {
-          spreadsheetId: clientData.google_sheet_id,
-          sheetName: clientData.sheet_name || "Sheet1",
-          action: "update",
-          range,
-          value,
-        },
-      });
+      const { error } = await supabase
+        .from("client_leads")
+        .update({ data: updatedData })
+        .eq("id", leadId);
 
-      if (error || data?.error) {
-        console.error("Error updating cell:", error || data?.error);
-        toast.error("Failed to update cell");
+      if (error) {
+        console.error("Error updating lead:", error);
+        toast.error("Failed to update");
         return;
       }
 
       // Update local state
-      setSheetData(prev => prev.map(row => 
-        row._rowIndex === rowIndex ? { ...row, [columnName]: value } : row
-      ));
-      
-      toast.success("Updated successfully");
+      setLeads((prev) =>
+        prev.map((l) => (l.id === leadId ? { ...l, data: updatedData } : l))
+      );
+
+      toast.success("Updated");
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("Failed to update");
     } finally {
-      setUpdatingCells(prev => {
+      setUpdatingLeads((prev) => {
         const next = new Set(prev);
         next.delete(cellKey);
         return next;
@@ -166,8 +191,8 @@ const ClientPortal = () => {
   };
 
   const handleRefresh = () => {
-    if (clientData) {
-      fetchSheetData(clientData.google_sheet_id, clientData.sheet_name || "Sheet1");
+    if (clientData && user) {
+      fetchLeads(clientData.id, user.id);
     }
   };
 
@@ -176,15 +201,88 @@ const ClientPortal = () => {
     navigate("/client-auth");
   };
 
-  const filteredData = sheetData.filter((row) =>
-    Object.entries(row)
-      .filter(([key]) => key !== "_rowIndex")
-      .some(([, value]) => value.toLowerCase().includes(searchTerm.toLowerCase()))
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !clientData || !user) return;
+
+    setIsImporting(true);
+
+    try {
+      const text = await file.text();
+
+      let rows: Record<string, string>[] = [];
+
+      if (file.name.endsWith(".json")) {
+        const json = JSON.parse(text);
+        rows = Array.isArray(json) ? json : [json];
+      } else {
+        // CSV parsing (simple)
+        const lines = text.split(/\r?\n/).filter((line) => line.trim());
+        if (lines.length === 0) {
+          toast.error("Empty file");
+          return;
+        }
+        const csvHeaders = lines[0].split(",").map((h) => h.trim());
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(",");
+          const obj: Record<string, string> = {};
+          csvHeaders.forEach((h, idx) => {
+            obj[h] = vals[idx]?.trim() || "";
+          });
+          rows.push(obj);
+        }
+      }
+
+      if (rows.length === 0) {
+        toast.error("No data to import");
+        return;
+      }
+
+      // Insert all rows
+      const inserts = rows.map((data, idx) => ({
+        client_id: clientData.id,
+        user_id: user.id,
+        row_index: leads.length + idx + 1,
+        data,
+      }));
+
+      const { error } = await supabase.from("client_leads").insert(inserts);
+
+      if (error) {
+        console.error("Import error:", error);
+        toast.error("Failed to import leads");
+        return;
+      }
+
+      toast.success(`Imported ${rows.length} leads`);
+      await fetchLeads(clientData.id, user.id);
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error("Failed to parse file");
+    } finally {
+      setIsImporting(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const filteredLeads = leads.filter((lead) =>
+    Object.values(lead.data).some((val) =>
+      val?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   const isStatusColumn = (header: string) => {
     const statusKeywords = ["status", "stage", "state", "progress"];
-    return statusKeywords.some(keyword => header.toLowerCase().includes(keyword));
+    return statusKeywords.some((keyword) =>
+      header.toLowerCase().includes(keyword)
+    );
   };
 
   if (isLoading) {
@@ -216,9 +314,9 @@ const ClientPortal = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
             <CardTitle>Your Leads</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -228,26 +326,48 @@ const ClientPortal = () => {
                   className="pl-9 w-64"
                 />
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.json"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleImportClick}
+                disabled={isImporting}
+              >
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Import CSV/JSON
+              </Button>
               <Button
                 variant="outline"
                 size="icon"
                 onClick={handleRefresh}
-                disabled={isLoadingSheet}
+                disabled={isLoadingLeads}
               >
-                <RefreshCw className={`h-4 w-4 ${isLoadingSheet ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`h-4 w-4 ${isLoadingLeads ? "animate-spin" : ""}`}
+                />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoadingSheet ? (
+            {isLoadingLeads ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : sheetData.length === 0 ? (
+            ) : leads.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
-                <p>No data available</p>
+                <p>No leads yet</p>
                 <p className="text-sm mt-2">
-                  Make sure the Google Sheet is shared with the service account
+                  Import a CSV or JSON file to get started
                 </p>
               </div>
             ) : (
@@ -263,19 +383,24 @@ const ClientPortal = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredData.map((row, rowIndex) => (
-                      <TableRow key={rowIndex}>
+                    {filteredLeads.map((lead) => (
+                      <TableRow key={lead.id}>
                         {headers.map((header, cellIndex) => {
-                          const cellKey = `${row._rowIndex}-${header}`;
-                          const isUpdating = updatingCells.has(cellKey);
-                          
+                          const cellKey = `${lead.id}-${header}`;
+                          const isUpdating = updatingLeads.has(cellKey);
+
                           // Render status dropdown for status columns
                           if (isStatusColumn(header)) {
                             return (
-                              <TableCell key={cellIndex} className="whitespace-nowrap">
+                              <TableCell
+                                key={cellIndex}
+                                className="whitespace-nowrap"
+                              >
                                 <Select
-                                  value={row[header] || ""}
-                                  onValueChange={(value) => handleCellUpdate(row._rowIndex, header, value)}
+                                  value={lead.data[header] || ""}
+                                  onValueChange={(value) =>
+                                    handleCellUpdate(lead.id, header, value)
+                                  }
                                   disabled={isUpdating}
                                 >
                                   <SelectTrigger className="w-40">
@@ -296,10 +421,13 @@ const ClientPortal = () => {
                               </TableCell>
                             );
                           }
-                          
+
                           return (
-                            <TableCell key={cellIndex} className="whitespace-nowrap">
-                              {row[header] || "—"}
+                            <TableCell
+                              key={cellIndex}
+                              className="whitespace-nowrap"
+                            >
+                              {lead.data[header] || "—"}
                             </TableCell>
                           );
                         })}
@@ -308,7 +436,7 @@ const ClientPortal = () => {
                   </TableBody>
                 </Table>
                 <p className="text-sm text-muted-foreground mt-4">
-                  Showing {filteredData.length} of {sheetData.length} leads
+                  Showing {filteredLeads.length} of {leads.length} leads
                 </p>
               </div>
             )}
