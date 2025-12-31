@@ -9,6 +9,7 @@ const navItems = [
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Pricing", href: "/#pricing", sellerLeadsHref: "/seller-leads#pricing" },
   { label: "Contact", href: "/#contact" },
+  { label: "Client Login", href: "/client-auth", isPage: true },
 ];
 
 // ISKRA Logo Component with spark icon

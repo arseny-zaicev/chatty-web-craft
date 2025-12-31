@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,14 +6,18 @@ const corsHeaders = {
 };
 
 // Google Sheets API helper using Service Account
-async function getAccessToken(serviceAccountKey: any): Promise<string> {
+async function getAccessToken(serviceAccountKey: any, writeAccess: boolean = false): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 3600;
+
+  const scope = writeAccess 
+    ? "https://www.googleapis.com/auth/spreadsheets"
+    : "https://www.googleapis.com/auth/spreadsheets.readonly";
 
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
     iss: serviceAccountKey.client_email,
-    scope: "https://www.googleapis.com/auth/spreadsheets.readonly",
+    scope: scope,
     aud: serviceAccountKey.token_uri,
     iat: now,
     exp: exp,
@@ -105,6 +108,39 @@ async function fetchSheetData(
   return data.values || [];
 }
 
+async function updateSheetCell(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  range: string,
+  value: string
+): Promise<void> {
+  const fullRange = `${sheetName}!${range}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(fullRange)}?valueInputOption=USER_ENTERED`;
+  
+  console.log(`Updating cell at: ${fullRange} with value: ${value}`);
+  
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      values: [[value]],
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error("Sheet update failed:", data);
+    throw new Error(`Failed to update sheet: ${data.error?.message || 'Unknown error'}`);
+  }
+
+  console.log("Cell updated successfully");
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -119,16 +155,32 @@ serve(async (req) => {
 
     const serviceAccountKey = JSON.parse(serviceAccountKeyRaw);
     
-    const { spreadsheetId, sheetName = "Sheet1" } = await req.json();
+    const body = await req.json();
+    const { spreadsheetId, sheetName = "Sheet1", action = "read", range, value } = body;
     
     if (!spreadsheetId) {
       throw new Error("spreadsheetId is required");
     }
 
-    console.log(`Processing request for spreadsheet: ${spreadsheetId}, sheet: ${sheetName}`);
+    console.log(`Processing ${action} request for spreadsheet: ${spreadsheetId}, sheet: ${sheetName}`);
 
-    // Get access token
-    const accessToken = await getAccessToken(serviceAccountKey);
+    // Handle update action
+    if (action === "update") {
+      if (!range || value === undefined) {
+        throw new Error("range and value are required for update action");
+      }
+
+      const accessToken = await getAccessToken(serviceAccountKey, true);
+      await updateSheetCell(accessToken, spreadsheetId, sheetName, range, value);
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Cell updated successfully" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Default: read action
+    const accessToken = await getAccessToken(serviceAccountKey, false);
     console.log("Successfully obtained access token");
 
     // Fetch sheet data
@@ -144,10 +196,10 @@ serve(async (req) => {
     }
 
     const headers = rows[0];
-    const data = rows.slice(1).map(row => {
-      const obj: Record<string, string> = {};
-      headers.forEach((header: string, index: number) => {
-        obj[header] = row[index] || "";
+    const data = rows.slice(1).map((row, index) => {
+      const obj: Record<string, string> = { _rowIndex: String(index + 2) }; // +2 because row 1 is headers
+      headers.forEach((header: string, colIndex: number) => {
+        obj[header] = row[colIndex] || "";
       });
       return obj;
     });
