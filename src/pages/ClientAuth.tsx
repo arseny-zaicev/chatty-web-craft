@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,11 @@ const ClientAuth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  // Only show signup if ?setup=admin is in URL
+  const isAdminSetup = searchParams.get("setup") === "admin";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,10 +31,10 @@ const ClientAuth = () => {
     setIsLoading(true);
 
     try {
-      if (isSignUp) {
-        // Only allow admin to sign up (for initial setup)
+      if (isAdminSetup) {
+        // Only allow admin to sign up
         if (email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-          toast.error("Self-registration is disabled. Please contact your account manager.");
+          toast.error("Access denied");
           setIsLoading(false);
           return;
         }
@@ -89,10 +92,10 @@ const ClientAuth = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-display">
-            {isSignUp ? "Create Account" : "Client Login"}
+            {isAdminSetup ? "Admin Setup" : "Client Login"}
           </CardTitle>
           <CardDescription>
-            {isSignUp 
+            {isAdminSetup 
               ? "Create your admin account" 
               : "Sign in to view your leads and data"}
           </CardDescription>
@@ -127,28 +130,15 @@ const ClientAuth = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isSignUp ? "Creating account..." : "Signing in..."}
+                  {isAdminSetup ? "Creating account..." : "Signing in..."}
                 </>
               ) : (
-                isSignUp ? "Create Account" : "Sign In"
+                isAdminSetup ? "Create Account" : "Sign In"
               )}
             </Button>
           </form>
           
-          {/* Toggle for admin setup */}
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {isSignUp 
-                ? "Already have an account? Sign in" 
-                : "Admin? Create account"}
-            </button>
-          </div>
-          
-          {!isSignUp && (
+          {!isAdminSetup && (
             <p className="text-center text-sm text-muted-foreground mt-4">
               Contact your account manager if you need access
             </p>
