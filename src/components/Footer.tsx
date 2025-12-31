@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { Mail, MapPin } from "lucide-react";
+import { toast } from "sonner";
 
 const footerLinks = [
   { label: "AI Agent", href: "/#chatbot" },
@@ -113,13 +114,17 @@ export const Footer = () => {
           <div>
             <h4 className="font-display font-semibold mb-4 text-foreground">Contact</h4>
             <div className="flex flex-col gap-3">
-              <a 
-                href="mailto:arseny@iskra.ae" 
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText("arseny@iskra.ae");
+                  toast.success("Email copied to clipboard!");
+                }}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group"
+                title="Click to copy"
               >
                 <Mail className="w-4 h-4 text-iskra-emerald" />
-                arseny@iskra.ae
-              </a>
+                <span className="group-hover:underline">arseny@iskra.ae</span>
+              </button>
             </div>
           </div>
         </div>
