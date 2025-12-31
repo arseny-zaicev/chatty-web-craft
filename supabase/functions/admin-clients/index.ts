@@ -129,7 +129,17 @@ serve(async (req) => {
 
       console.log(`Deleting client: ${clientId}, user: ${userId}`);
 
-      // Delete client record first
+      // Delete client leads first
+      const { error: leadsError } = await adminClient
+        .from("client_leads")
+        .delete()
+        .eq("client_id", clientId);
+
+      if (leadsError) {
+        console.error("Error deleting client leads:", leadsError);
+      }
+
+      // Delete client record
       const { error: clientError } = await adminClient
         .from("clients")
         .delete()
@@ -145,11 +155,55 @@ serve(async (req) => {
 
       if (authError) {
         console.error("Error deleting user:", authError);
-        // Client record is already deleted, just log the error
       }
 
       return new Response(
         JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Import leads for a client
+    if (action === "import-leads") {
+      const { clientId, userId, leads } = body;
+
+      if (!clientId || !userId || !leads || !Array.isArray(leads)) {
+        throw new Error("clientId, userId, and leads array are required");
+      }
+
+      console.log(`Importing ${leads.length} leads for client ${clientId}`);
+
+      // Get current max row_index
+      const { data: existingLeads } = await adminClient
+        .from("client_leads")
+        .select("row_index")
+        .eq("client_id", clientId)
+        .order("row_index", { ascending: false })
+        .limit(1);
+
+      const startIndex = (existingLeads?.[0]?.row_index || 0) + 1;
+
+      // Insert leads
+      const inserts = leads.map((data: Record<string, string>, idx: number) => ({
+        client_id: clientId,
+        user_id: userId,
+        row_index: startIndex + idx,
+        data,
+      }));
+
+      const { error } = await adminClient
+        .from("client_leads")
+        .insert(inserts);
+
+      if (error) {
+        console.error("Error importing leads:", error);
+        throw new Error(error.message);
+      }
+
+      console.log(`Successfully imported ${leads.length} leads`);
+
+      return new Response(
+        JSON.stringify({ success: true, count: leads.length }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

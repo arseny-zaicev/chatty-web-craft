@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, FileSpreadsheet, Upload } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface Client {
@@ -18,6 +18,7 @@ interface Client {
   google_sheet_id: string;
   sheet_name: string | null;
   created_at: string;
+  leads_count?: number;
 }
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
@@ -28,6 +29,10 @@ const AdminPanel = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingClient, setIsAddingClient] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [leadsDialogOpen, setLeadsDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -36,7 +41,6 @@ const AdminPanel = () => {
   const [newSheetId, setNewSheetId] = useState("");
   const [newSheetName, setNewSheetName] = useState("Sheet1");
   const [showPassword, setShowPassword] = useState(true);
-  const [lastCreatedCredentials, setLastCreatedCredentials] = useState<{email: string, password: string} | null>(null);
   
   const navigate = useNavigate();
 
@@ -77,14 +81,12 @@ const AdminPanel = () => {
   const fetchClients = async () => {
     setIsLoading(true);
     try {
-      // Admin needs to see all clients - we'll use a service role call via edge function
       const { data, error } = await supabase.functions.invoke("admin-clients", {
         body: { action: "list" },
       });
 
       if (error) {
         console.error("Error fetching clients:", error);
-        // Fallback: try direct query (will only work if RLS allows)
         const { data: directData, error: directError } = await supabase
           .from("clients")
           .select("*")
@@ -107,8 +109,8 @@ const AdminPanel = () => {
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newEmail || !newPassword || !newSheetId) {
-      toast.error("Email, password, and Sheet ID are required");
+    if (!newEmail || !newPassword) {
+      toast.error("Email and password are required");
       return;
     }
 
@@ -126,7 +128,7 @@ const AdminPanel = () => {
           email: newEmail.trim(),
           password: newPassword,
           companyName: newCompanyName.trim() || null,
-          googleSheetId: newSheetId.trim(),
+          googleSheetId: newSheetId.trim() || "not-used",
           sheetName: newSheetName.trim() || "Sheet1",
         },
       });
@@ -142,9 +144,6 @@ const AdminPanel = () => {
         return;
       }
 
-      // Save credentials for display
-      setLastCreatedCredentials({ email: newEmail.trim(), password: newPassword });
-      
       toast.success(
         <div className="space-y-1">
           <p>Client created!</p>
@@ -154,7 +153,6 @@ const AdminPanel = () => {
         { duration: 10000 }
       );
       
-      // Reset form
       setNewEmail("");
       setNewPassword("");
       setNewCompanyName("");
@@ -162,7 +160,6 @@ const AdminPanel = () => {
       setNewSheetName("Sheet1");
       setDialogOpen(false);
       
-      // Refresh clients list
       fetchClients();
     } catch (error) {
       console.error("Unexpected error:", error);
@@ -190,6 +187,105 @@ const AdminPanel = () => {
     } catch (error) {
       console.error("Unexpected error:", error);
       toast.error("Failed to delete client");
+    }
+  };
+
+  const handleOpenLeadsDialog = (client: Client) => {
+    setSelectedClient(client);
+    setLeadsDialogOpen(true);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedClient) return;
+
+    setIsImporting(true);
+
+    try {
+      const text = await file.text();
+      let rows: Record<string, string>[] = [];
+
+      if (file.name.endsWith(".json")) {
+        const json = JSON.parse(text);
+        rows = Array.isArray(json) ? json : [json];
+      } else {
+        const lines = text.split(/\r?\n/).filter((line) => line.trim());
+        if (lines.length === 0) {
+          toast.error("Empty file");
+          return;
+        }
+        
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current.trim());
+          return result;
+        };
+        
+        const csvHeaders = parseCSVLine(lines[0]);
+        for (let i = 1; i < lines.length; i++) {
+          const vals = parseCSVLine(lines[i]);
+          if (vals.every(v => !v)) continue;
+          
+          const obj: Record<string, string> = {};
+          csvHeaders.forEach((h, idx) => {
+            if (h) obj[h] = vals[idx] || "";
+          });
+          if (obj["Lead Name"] || obj["Phone Number"]) {
+            rows.push(obj);
+          }
+        }
+      }
+
+      if (rows.length === 0) {
+        toast.error("No valid data to import");
+        return;
+      }
+
+      // Use the admin edge function to insert leads for the client
+      const { data, error } = await supabase.functions.invoke("admin-clients", {
+        body: {
+          action: "import-leads",
+          clientId: selectedClient.id,
+          userId: selectedClient.user_id,
+          leads: rows,
+        },
+      });
+
+      if (error || data?.error) {
+        console.error("Import error:", error || data?.error);
+        toast.error("Failed to import leads");
+        return;
+      }
+
+      toast.success(`Imported ${rows.length} leads for ${selectedClient.company_name || 'client'}`);
+      setLeadsDialogOpen(false);
+      fetchClients();
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error("Failed to parse file");
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -247,7 +343,7 @@ const AdminPanel = () => {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Clients</CardTitle>
-              <CardDescription>Manage client accounts and their Google Sheets</CardDescription>
+              <CardDescription>Manage client accounts and their leads</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" onClick={fetchClients}>
@@ -264,7 +360,7 @@ const AdminPanel = () => {
                   <DialogHeader>
                     <DialogTitle>Add New Client</DialogTitle>
                     <DialogDescription>
-                      Create a client account and link it to their Google Sheet
+                      Create a client account. You can import leads after creating.
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleAddClient} className="space-y-4 mt-4">
@@ -321,28 +417,6 @@ const AdminPanel = () => {
                         onChange={(e) => setNewCompanyName(e.target.value)}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sheetId">Google Sheet ID *</Label>
-                      <Input
-                        id="sheetId"
-                        placeholder="e.g. 19k1bZWAUQWeI-7HBRdJCpaOtBz5GzZ152Br4ybPLBqk"
-                        value={newSheetId}
-                        onChange={(e) => setNewSheetId(e.target.value)}
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        The ID from the Google Sheets URL between /d/ and /edit
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sheetName">Sheet Name</Label>
-                      <Input
-                        id="sheetName"
-                        placeholder="Sheet1"
-                        value={newSheetName}
-                        onChange={(e) => setNewSheetName(e.target.value)}
-                      />
-                    </div>
                     <div className="flex justify-end gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                         Cancel
@@ -376,10 +450,9 @@ const AdminPanel = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Company</TableHead>
-                      <TableHead>Sheet ID</TableHead>
-                      <TableHead>Sheet Name</TableHead>
                       <TableHead>Created</TableHead>
-                      <TableHead className="w-20">Actions</TableHead>
+                      <TableHead className="text-center">Leads</TableHead>
+                      <TableHead className="w-32">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -388,24 +461,18 @@ const AdminPanel = () => {
                         <TableCell className="font-medium">
                           {client.company_name || "—"}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <code className="text-xs bg-muted px-2 py-1 rounded max-w-32 truncate">
-                              {client.google_sheet_id}
-                            </code>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => copyToClipboard(client.google_sheet_id)}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell>{client.sheet_name || "Sheet1"}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {new Date(client.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenLeadsDialog(client)}
+                          >
+                            <FileSpreadsheet className="h-4 w-4 mr-2" />
+                            Manage
+                          </Button>
                         </TableCell>
                         <TableCell>
                           <Button
@@ -425,6 +492,47 @@ const AdminPanel = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Leads Import Dialog */}
+        <Dialog open={leadsDialogOpen} onOpenChange={setLeadsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Manage Leads: {selectedClient?.company_name || 'Client'}</DialogTitle>
+              <DialogDescription>
+                Import leads for this client from a CSV or JSON file
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.json"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <Button
+                onClick={handleImportClick}
+                disabled={isImporting}
+                className="w-full"
+              >
+                {isImporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import CSV/JSON
+                  </>
+                )}
+              </Button>
+              <p className="text-sm text-muted-foreground text-center">
+                CSV should have columns: Lead Name, Phone Number, Location, Status, etc.
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
