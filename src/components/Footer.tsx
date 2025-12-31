@@ -8,6 +8,7 @@ const footerLinks = [
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Pricing", href: "/#pricing" },
   { label: "Contact", href: "/#contact" },
+  { label: "Client Login", href: "/client-auth", isPage: true },
 ];
 
 const legalLinks = [

@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Save } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -18,7 +19,10 @@ interface ClientData {
 
 interface SheetRow {
   [key: string]: string;
+  _rowIndex: string;
 }
+
+const STATUS_OPTIONS = ["New", "Contacted", "Qualified", "Meeting Scheduled", "Proposal Sent", "Closed Won", "Closed Lost"];
 
 const ClientPortal = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -28,6 +32,7 @@ const ClientPortal = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingSheet, setIsLoadingSheet] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [updatingCells, setUpdatingCells] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -86,7 +91,7 @@ const ClientPortal = () => {
     setIsLoadingSheet(true);
     try {
       const { data, error } = await supabase.functions.invoke("google-sheets", {
-        body: { spreadsheetId, sheetName },
+        body: { spreadsheetId, sheetName, action: "read" },
       });
 
       if (error) {
@@ -112,6 +117,54 @@ const ClientPortal = () => {
     }
   };
 
+  const handleCellUpdate = async (rowIndex: string, columnName: string, value: string) => {
+    if (!clientData) return;
+
+    const columnIndex = headers.indexOf(columnName);
+    if (columnIndex === -1) return;
+
+    const cellKey = `${rowIndex}-${columnName}`;
+    setUpdatingCells(prev => new Set(prev).add(cellKey));
+
+    // Convert column index to letter (A, B, C, etc.)
+    const columnLetter = String.fromCharCode(65 + columnIndex);
+    const range = `${columnLetter}${rowIndex}`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("google-sheets", {
+        body: {
+          spreadsheetId: clientData.google_sheet_id,
+          sheetName: clientData.sheet_name || "Sheet1",
+          action: "update",
+          range,
+          value,
+        },
+      });
+
+      if (error || data?.error) {
+        console.error("Error updating cell:", error || data?.error);
+        toast.error("Failed to update cell");
+        return;
+      }
+
+      // Update local state
+      setSheetData(prev => prev.map(row => 
+        row._rowIndex === rowIndex ? { ...row, [columnName]: value } : row
+      ));
+      
+      toast.success("Updated successfully");
+    } catch (error) {
+      console.error("Unexpected error:", error);
+      toast.error("Failed to update");
+    } finally {
+      setUpdatingCells(prev => {
+        const next = new Set(prev);
+        next.delete(cellKey);
+        return next;
+      });
+    }
+  };
+
   const handleRefresh = () => {
     if (clientData) {
       fetchSheetData(clientData.google_sheet_id, clientData.sheet_name || "Sheet1");
@@ -124,10 +177,15 @@ const ClientPortal = () => {
   };
 
   const filteredData = sheetData.filter((row) =>
-    Object.values(row).some((value) =>
-      value.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    Object.entries(row)
+      .filter(([key]) => key !== "_rowIndex")
+      .some(([, value]) => value.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const isStatusColumn = (header: string) => {
+    const statusKeywords = ["status", "stage", "state", "progress"];
+    return statusKeywords.some(keyword => header.toLowerCase().includes(keyword));
+  };
 
   if (isLoading) {
     return (
@@ -207,11 +265,44 @@ const ClientPortal = () => {
                   <TableBody>
                     {filteredData.map((row, rowIndex) => (
                       <TableRow key={rowIndex}>
-                        {headers.map((header, cellIndex) => (
-                          <TableCell key={cellIndex} className="whitespace-nowrap">
-                            {row[header] || "—"}
-                          </TableCell>
-                        ))}
+                        {headers.map((header, cellIndex) => {
+                          const cellKey = `${row._rowIndex}-${header}`;
+                          const isUpdating = updatingCells.has(cellKey);
+                          
+                          // Render status dropdown for status columns
+                          if (isStatusColumn(header)) {
+                            return (
+                              <TableCell key={cellIndex} className="whitespace-nowrap">
+                                <Select
+                                  value={row[header] || ""}
+                                  onValueChange={(value) => handleCellUpdate(row._rowIndex, header, value)}
+                                  disabled={isUpdating}
+                                >
+                                  <SelectTrigger className="w-40">
+                                    {isUpdating ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <SelectValue placeholder="Select status" />
+                                    )}
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {STATUS_OPTIONS.map((status) => (
+                                      <SelectItem key={status} value={status}>
+                                        {status}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                            );
+                          }
+                          
+                          return (
+                            <TableCell key={cellIndex} className="whitespace-nowrap">
+                              {row[header] || "—"}
+                            </TableCell>
+                          );
+                        })}
                       </TableRow>
                     ))}
                   </TableBody>
