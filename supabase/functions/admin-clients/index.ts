@@ -193,7 +193,7 @@ serve(async (req) => {
 
       if (authError) {
         console.error("Error creating user:", authError);
-        throw new Error(authError.message);
+        throw new Error("Failed to create user");
       }
 
       const userId = authData.user.id;
