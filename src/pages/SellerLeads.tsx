@@ -7,6 +7,7 @@ import { SellerLeadsHowItWorks } from "@/components/SellerLeadsHowItWorks";
 import { SellerLeadsStats } from "@/components/SellerLeadsStats";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { UrgencyBanner } from "@/components/UrgencyBanner";
+import { DashboardDemo } from "@/components/DashboardDemo";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star, Zap, Check } from "lucide-react";
 
 import salesforgeLogo from "@/assets/clients/salesforge-logo.png";
@@ -240,21 +241,9 @@ const SellerLeads = () => {
                 </div>
               </div>
 
-              {/* Placeholder for screenshot/demo */}
+              {/* Dashboard Demo */}
               <div className="relative">
-                <div className="aspect-video rounded-2xl bg-secondary/50 border border-border/50 flex items-center justify-center overflow-hidden">
-                  <div className="text-center p-8">
-                    <div className="w-20 h-20 rounded-full bg-iskra-emerald/20 border-2 border-dashed border-iskra-emerald/40 mx-auto mb-6 flex items-center justify-center">
-                      <span className="text-3xl">📊</span>
-                    </div>
-                    <p className="text-lg text-foreground/60 font-medium mb-2">
-                      Dashboard Screenshot
-                    </p>
-                    <p className="text-sm text-foreground/40">
-                      Coming soon
-                    </p>
-                  </div>
-                </div>
+                <DashboardDemo />
                 
                 {/* Glow effect */}
                 <div className="absolute -inset-4 bg-iskra-emerald/10 rounded-3xl blur-2xl -z-10" />
