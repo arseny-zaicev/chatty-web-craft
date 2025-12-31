@@ -154,7 +154,7 @@ const SellerLeads = () => {
         {/* Client Logos - Marquee */}
         <section className="py-12 border-t border-border/30 overflow-hidden">
           <div className="container mx-auto px-4">
-            <p className="text-center text-foreground/60 text-sm mb-8 font-medium uppercase tracking-widest">Trusted by top Dubai agents</p>
+            <p className="text-center text-foreground/60 text-sm mb-8 font-medium uppercase tracking-widest">Companies we work with</p>
           </div>
           <div className="relative py-8 bg-background/50 backdrop-blur-sm rounded-2xl mx-4">
             <div className="flex animate-marquee-slow items-center">
