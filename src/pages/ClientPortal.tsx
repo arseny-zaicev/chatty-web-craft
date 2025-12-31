@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3 } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -136,10 +136,10 @@ const ClientPortal = () => {
       setLeads(rows);
       toast.success(`Loaded ${rows.length} leads`);
       
-      // Check for uncalled leads and show reminder
+      // Check for uncalled leads and show reminder after 13 seconds
       const uncalledLeads = rows.filter(l => !l.data["Call Status"] || l.data["Call Status"] === "Not Called");
       if (uncalledLeads.length > 0 && rows.length > 0) {
-        setTimeout(() => setShowStatusReminder(true), 2000);
+        setTimeout(() => setShowStatusReminder(true), 13000);
       }
     } catch (error) {
       console.error("Unexpected error:", error);
@@ -264,10 +264,18 @@ const ClientPortal = () => {
             </h1>
             <p className="text-xs md:text-sm text-muted-foreground">{user?.email}</p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 md:mr-2" />
-            <span className="hidden md:inline">Sign Out</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link to="/client-stats">
+              <Button variant="outline" size="sm">
+                <BarChart3 className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Statistics</span>
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Sign Out</span>
+            </Button>
+          </div>
         </div>
       </header>
 
