@@ -7,7 +7,7 @@ const navItems = [
   { label: "AI Agent", href: "/#chatbot" },
   { label: "AI Use Cases", href: "/ai-agent", isPage: true },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
-  { label: "Services", href: "/#services" },
+  { label: "Pricing", href: "/#pricing" },
   { label: "Contact", href: "/#contact" },
 ];
 

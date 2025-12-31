@@ -1,11 +1,17 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { Mail, MapPin } from "lucide-react";
 
 const footerLinks = [
   { label: "AI Agent", href: "/#chatbot" },
   { label: "AI Use Cases", href: "/ai-agent", isPage: true },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
-  { label: "Services", href: "/#services" },
+  { label: "Pricing", href: "/#pricing" },
   { label: "Contact", href: "/#contact" },
+];
+
+const legalLinks = [
+  { label: "Privacy Policy", href: "/privacy", isPage: true },
+  { label: "Terms of Service", href: "/terms", isPage: true },
 ];
 
 // ISKRA Logo Component
@@ -42,41 +48,89 @@ export const Footer = () => {
   };
 
   return (
-    <footer className="py-12 border-t border-border">
+    <footer className="py-16 border-t border-border bg-background/50">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          {/* Logo */}
-          <a 
-            href="/"
-            onClick={(e) => {
-              e.preventDefault();
-              if (location.pathname !== "/") {
-                navigate("/");
-              }
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            className="hover:opacity-80 transition-opacity cursor-pointer"
-          >
-            <IskraLogo />
-          </a>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+          {/* Logo & Description */}
+          <div className="md:col-span-1">
+            <a 
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                if (location.pathname !== "/") {
+                  navigate("/");
+                }
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="hover:opacity-80 transition-opacity cursor-pointer inline-block mb-4"
+            >
+              <IskraLogo />
+            </a>
+            <p className="text-sm text-muted-foreground mb-4">
+              AI-powered sales automation and lead generation for B2B companies.
+            </p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="w-4 h-4 text-iskra-emerald" />
+              <span>Made in Dubai 🇦🇪</span>
+            </div>
+          </div>
 
-          {/* Links */}
-          <nav className="flex flex-wrap items-center justify-center gap-6">
-            {footerLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={(e) => handleNavClick(e, link.href)}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          {/* Navigation Links */}
+          <div>
+            <h4 className="font-display font-semibold mb-4 text-foreground">Navigation</h4>
+            <nav className="flex flex-col gap-3">
+              {footerLinks.map((link) => (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  onClick={(e) => handleNavClick(e, link.href)}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+
+          {/* Legal Links */}
+          <div>
+            <h4 className="font-display font-semibold mb-4 text-foreground">Legal</h4>
+            <nav className="flex flex-col gap-3">
+              {legalLinks.map((link) => (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  onClick={(e) => handleNavClick(e, link.href)}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <h4 className="font-display font-semibold mb-4 text-foreground">Contact</h4>
+            <div className="flex flex-col gap-3">
+              <a 
+                href="mailto:arseny@iskra.ae" 
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                {link.label}
+                <Mail className="w-4 h-4 text-iskra-emerald" />
+                arseny@iskra.ae
               </a>
-            ))}
-          </nav>
+            </div>
+          </div>
+        </div>
 
-          {/* Copyright */}
+        {/* Bottom Bar */}
+        <div className="pt-8 border-t border-border/50 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            Built by ISKRA SYSTEM · Operating Worldwide
+            © {new Date().getFullYear()} ISKRA. All rights reserved.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Operating Worldwide
           </p>
         </div>
       </div>
