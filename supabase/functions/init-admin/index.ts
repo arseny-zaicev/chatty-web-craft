@@ -14,8 +14,10 @@ serve(async (req) => {
   try {
     const { email, password, secretKey } = await req.json();
 
-    // Simple secret to prevent unauthorized access
-    if (secretKey !== "iskra-init-2024") {
+    // Validate secret key from environment variable
+    const expectedSecret = Deno.env.get("ADMIN_INIT_SECRET");
+    if (!expectedSecret || secretKey !== expectedSecret) {
+      console.error("Invalid or missing secret key attempt");
       throw new Error("Invalid secret key");
     }
 
