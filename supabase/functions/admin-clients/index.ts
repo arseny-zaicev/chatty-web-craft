@@ -8,6 +8,59 @@ const corsHeaders = {
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
+// ============= INPUT VALIDATION HELPERS =============
+function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email) && email.length <= 255;
+}
+
+function validatePassword(password: string): boolean {
+  return typeof password === 'string' && password.length >= 6 && password.length <= 128;
+}
+
+function validateCompanyName(name: string | undefined | null): boolean {
+  if (!name) return true; // Optional field
+  return typeof name === 'string' && name.length <= 200;
+}
+
+function validateGoogleSheetId(id: string): boolean {
+  // Google Sheet IDs are typically 44 characters of alphanumeric, hyphens, underscores
+  return /^[a-zA-Z0-9_-]{20,50}$/.test(id);
+}
+
+function validateSheetName(name: string | undefined | null): boolean {
+  if (!name) return true; // Optional, defaults to Sheet1
+  return typeof name === 'string' && name.length <= 100 && !/[<>"'`]/.test(name);
+}
+
+function validateUUID(id: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
+}
+
+function validateLeadData(data: any): boolean {
+  if (typeof data !== 'object' || data === null) return false;
+  
+  // Check for dangerous property names (prototype pollution)
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+  for (const key of Object.keys(data)) {
+    if (dangerousKeys.includes(key)) return false;
+    // Limit key length
+    if (key.length > 100) return false;
+    // Limit value length for string values
+    const value = data[key];
+    if (typeof value === 'string' && value.length > 5000) return false;
+  }
+  
+  return true;
+}
+
+function validateLeadsArray(leads: any): boolean {
+  if (!Array.isArray(leads)) return false;
+  if (leads.length > 1000) return false; // Max 1000 leads per import
+  return leads.every(lead => validateLeadData(lead));
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -18,7 +71,10 @@ serve(async (req) => {
     // Get auth header to verify admin
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      throw new Error("No authorization header");
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Create client with user's auth
@@ -34,11 +90,18 @@ serve(async (req) => {
     // Verify the user is admin
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError || !user) {
-      throw new Error("Not authenticated");
+      return new Response(
+        JSON.stringify({ error: "Authentication failed" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     if (user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-      throw new Error("Access denied. Admin only.");
+      console.error(`Access denied for user: ${user.email}`);
+      return new Response(
+        JSON.stringify({ error: "Access denied" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log(`Admin ${user.email} authenticated`);
@@ -58,7 +121,7 @@ serve(async (req) => {
 
       if (error) {
         console.error("Error listing clients:", error);
-        throw new Error(error.message);
+        throw new Error("Failed to list clients");
       }
 
       return new Response(
@@ -71,8 +134,52 @@ serve(async (req) => {
     if (action === "create") {
       const { email, password, companyName, googleSheetId, sheetName } = body;
 
+      // Validate required fields
       if (!email || !password || !googleSheetId) {
-        throw new Error("email, password, and googleSheetId are required");
+        return new Response(
+          JSON.stringify({ error: "email, password, and googleSheetId are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate email format
+      if (!validateEmail(email)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid email format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate password
+      if (!validatePassword(password)) {
+        return new Response(
+          JSON.stringify({ error: "Password must be between 6 and 128 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate company name
+      if (!validateCompanyName(companyName)) {
+        return new Response(
+          JSON.stringify({ error: "Company name must be less than 200 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate Google Sheet ID
+      if (!validateGoogleSheetId(googleSheetId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid Google Sheet ID format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate sheet name
+      if (!validateSheetName(sheetName)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid sheet name" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       console.log(`Creating user: ${email}`);
@@ -100,7 +207,7 @@ serve(async (req) => {
           company_name: companyName || null,
           google_sheet_id: googleSheetId,
           sheet_name: sheetName || "Sheet1",
-          password: password, // Store password for admin viewing
+          password: password, // Store password for admin viewing (known design decision)
           email: email, // Store email for admin viewing
         })
         .select()
@@ -110,7 +217,7 @@ serve(async (req) => {
         console.error("Error creating client record:", clientError);
         // Try to clean up the auth user
         await adminClient.auth.admin.deleteUser(userId);
-        throw new Error(clientError.message);
+        throw new Error("Failed to create client record");
       }
 
       console.log(`Client record created: ${clientData.id}`);
@@ -126,7 +233,18 @@ serve(async (req) => {
       const { clientId, userId } = body;
 
       if (!clientId || !userId) {
-        throw new Error("clientId and userId are required");
+        return new Response(
+          JSON.stringify({ error: "clientId and userId are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate UUIDs
+      if (!validateUUID(clientId) || !validateUUID(userId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid ID format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       console.log(`Deleting client: ${clientId}, user: ${userId}`);
@@ -149,7 +267,7 @@ serve(async (req) => {
 
       if (clientError) {
         console.error("Error deleting client record:", clientError);
-        throw new Error(clientError.message);
+        throw new Error("Failed to delete client");
       }
 
       // Delete auth user
@@ -169,8 +287,27 @@ serve(async (req) => {
     if (action === "import-leads") {
       const { clientId, userId, leads } = body;
 
-      if (!clientId || !userId || !leads || !Array.isArray(leads)) {
-        throw new Error("clientId, userId, and leads array are required");
+      if (!clientId || !userId || !leads) {
+        return new Response(
+          JSON.stringify({ error: "clientId, userId, and leads array are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate UUIDs
+      if (!validateUUID(clientId) || !validateUUID(userId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid ID format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate leads array
+      if (!validateLeadsArray(leads)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid leads data. Maximum 1000 leads allowed." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       console.log(`Importing ${leads.length} leads for client ${clientId}`);
@@ -199,7 +336,7 @@ serve(async (req) => {
 
       if (error) {
         console.error("Error importing leads:", error);
-        throw new Error(error.message);
+        throw new Error("Failed to import leads");
       }
 
       console.log(`Successfully imported ${leads.length} leads`);
@@ -215,7 +352,18 @@ serve(async (req) => {
       const { clientId } = body;
 
       if (!clientId) {
-        throw new Error("clientId is required");
+        return new Response(
+          JSON.stringify({ error: "clientId is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate UUID
+      if (!validateUUID(clientId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid clientId format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       const { data: leads, error } = await adminClient
@@ -226,7 +374,7 @@ serve(async (req) => {
 
       if (error) {
         console.error("Error fetching leads:", error);
-        throw new Error(error.message);
+        throw new Error("Failed to fetch leads");
       }
 
       return new Response(
@@ -240,7 +388,18 @@ serve(async (req) => {
       const { leadId } = body;
 
       if (!leadId) {
-        throw new Error("leadId is required");
+        return new Response(
+          JSON.stringify({ error: "leadId is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate UUID
+      if (!validateUUID(leadId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid leadId format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       const { error } = await adminClient
@@ -250,7 +409,7 @@ serve(async (req) => {
 
       if (error) {
         console.error("Error deleting lead:", error);
-        throw new Error(error.message);
+        throw new Error("Failed to delete lead");
       }
 
       return new Response(
@@ -264,7 +423,26 @@ serve(async (req) => {
       const { leadId, data } = body;
 
       if (!leadId || !data) {
-        throw new Error("leadId and data are required");
+        return new Response(
+          JSON.stringify({ error: "leadId and data are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate UUID
+      if (!validateUUID(leadId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid leadId format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate lead data
+      if (!validateLeadData(data)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid lead data format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       const { error } = await adminClient
@@ -274,7 +452,7 @@ serve(async (req) => {
 
       if (error) {
         console.error("Error updating lead:", error);
-        throw new Error(error.message);
+        throw new Error("Failed to update lead");
       }
 
       return new Response(
@@ -288,11 +466,26 @@ serve(async (req) => {
       const { userId, newPassword } = body;
 
       if (!userId || !newPassword) {
-        throw new Error("userId and newPassword are required");
+        return new Response(
+          JSON.stringify({ error: "userId and newPassword are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      if (newPassword.length < 6) {
-        throw new Error("Password must be at least 6 characters");
+      // Validate UUID
+      if (!validateUUID(userId)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid userId format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate password
+      if (!validatePassword(newPassword)) {
+        return new Response(
+          JSON.stringify({ error: "Password must be between 6 and 128 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       console.log(`Resetting password for user: ${userId}`);
@@ -303,10 +496,10 @@ serve(async (req) => {
 
       if (error) {
         console.error("Error resetting password:", error);
-        throw new Error(error.message);
+        throw new Error("Failed to reset password");
       }
 
-      // Also update stored password in clients table
+      // Also update stored password in clients table (known design decision for admin convenience)
       await adminClient
         .from("clients")
         .update({ password: newPassword })
@@ -318,13 +511,16 @@ serve(async (req) => {
       );
     }
 
-    throw new Error(`Unknown action: ${action}`);
+    return new Response(
+      JSON.stringify({ error: "Unknown action" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Error in admin-clients function:", error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "An error occurred processing your request" }),
       { 
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
