@@ -6,23 +6,57 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============= INPUT VALIDATION HELPERS =============
+function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email) && email.length <= 255;
+}
+
+function validatePassword(password: string): boolean {
+  return typeof password === 'string' && password.length >= 8 && password.length <= 128;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { email, password, secretKey } = await req.json();
+    const body = await req.json();
+    const { email, password, secretKey } = body;
 
     // Validate secret key from environment variable
     const expectedSecret = Deno.env.get("ADMIN_INIT_SECRET");
     if (!expectedSecret || secretKey !== expectedSecret) {
       console.error("Invalid or missing secret key attempt");
-      throw new Error("Invalid secret key");
+      return new Response(
+        JSON.stringify({ error: "Invalid credentials" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
+    // Validate required fields
     if (!email || !password) {
-      throw new Error("Email and password are required");
+      return new Response(
+        JSON.stringify({ error: "Email and password are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate email format
+    if (!validateEmail(email)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid email format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate password
+    if (!validatePassword(password)) {
+      return new Response(
+        JSON.stringify({ error: "Password must be between 8 and 128 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -30,7 +64,7 @@ serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log(`Creating admin user: ${email}`);
+    console.log(`Processing admin user request for: ${email}`);
 
     // Check if user already exists
     const { data: existingUsers } = await adminClient.auth.admin.listUsers();
@@ -44,7 +78,7 @@ serve(async (req) => {
       );
 
       if (updateError) {
-        throw new Error(`Failed to update user: ${updateError.message}`);
+        throw new Error("Failed to update user");
       }
 
       console.log(`User ${email} password updated`);
@@ -62,7 +96,7 @@ serve(async (req) => {
     });
 
     if (authError) {
-      throw new Error(`Failed to create user: ${authError.message}`);
+      throw new Error("Failed to create user");
     }
 
     console.log(`Admin user created: ${authData.user.id}`);
@@ -76,7 +110,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "An error occurred processing your request" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

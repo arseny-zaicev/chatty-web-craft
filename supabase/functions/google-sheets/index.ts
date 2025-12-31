@@ -1,9 +1,31 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schemas
+function validateSpreadsheetId(id: string): boolean {
+  // Google Sheet IDs are typically 44 characters of alphanumeric, hyphens, underscores
+  return /^[a-zA-Z0-9_-]{20,50}$/.test(id);
+}
+
+function validateSheetName(name: string): boolean {
+  // Sheet names should be reasonable length and not contain dangerous characters
+  return name.length > 0 && name.length <= 100 && !/[<>"'`]/.test(name);
+}
+
+function validateRange(range: string): boolean {
+  // A1 notation validation - basic format like A1, A1:Z100
+  return /^[A-Z]+[0-9]+(:[A-Z]+[0-9]+)?$/.test(range);
+}
+
+function validateValue(value: string): boolean {
+  // Limit value length to prevent abuse
+  return typeof value === 'string' && value.length <= 10000;
+}
 
 // Google Sheets API helper using Service Account
 async function getAccessToken(serviceAccountKey: any, writeAccess: boolean = false): Promise<string> {
@@ -77,7 +99,7 @@ async function getAccessToken(serviceAccountKey: any, writeAccess: boolean = fal
   
   if (!tokenResponse.ok) {
     console.error("Token exchange failed:", tokenData);
-    throw new Error(`Failed to get access token: ${tokenData.error_description || tokenData.error}`);
+    throw new Error("Failed to get access token");
   }
 
   return tokenData.access_token;
@@ -93,7 +115,7 @@ async function fetchSheetData(
   const rangeA1 = `'${sheetName}'!A:ZZ`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(rangeA1)}`;
 
-  console.log(`Fetching sheet data from: ${url}`);
+  console.log(`Fetching sheet data for authorized user`);
   
   const response = await fetch(url, {
     headers: {
@@ -105,7 +127,7 @@ async function fetchSheetData(
 
   if (!response.ok) {
     console.error("Sheet fetch failed:", data);
-    throw new Error(`Failed to fetch sheet: ${data.error?.message || 'Unknown error'}`);
+    throw new Error("Failed to fetch sheet data");
   }
 
   return data.values || [];
@@ -123,7 +145,7 @@ async function updateSheetCell(
   const fullRange = `'${sheetName}'!${range}`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(fullRange)}?valueInputOption=USER_ENTERED`;
   
-  console.log(`Updating cell at: ${fullRange} with value: ${value}`);
+  console.log(`Updating cell for authorized user`);
   
   const response = await fetch(url, {
     method: "PUT",
@@ -140,7 +162,7 @@ async function updateSheetCell(
 
   if (!response.ok) {
     console.error("Sheet update failed:", data);
-    throw new Error(`Failed to update sheet: ${data.error?.message || 'Unknown error'}`);
+    throw new Error("Failed to update sheet");
   }
 
   console.log("Cell updated successfully");
@@ -153,30 +175,126 @@ serve(async (req) => {
   }
 
   try {
-    const serviceAccountKeyRaw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-    if (!serviceAccountKeyRaw) {
-      throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY not configured");
+    // ============= AUTHENTICATION CHECK =============
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error("Missing authorization header");
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const serviceAccountKey = JSON.parse(serviceAccountKeyRaw);
+    // Verify user authentication
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      console.error("Authentication failed:", authError?.message);
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Authenticated user: ${user.id}`);
+
+    // ============= INPUT VALIDATION =============
     const body = await req.json();
     const { spreadsheetId, sheetName = "Sheet1", action = "read", range, value } = body;
     
     if (!spreadsheetId) {
-      throw new Error("spreadsheetId is required");
+      return new Response(
+        JSON.stringify({ error: "spreadsheetId is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    console.log(`Processing ${action} request for spreadsheet: ${spreadsheetId}, sheet: ${sheetName}`);
+    // Validate spreadsheet ID format
+    if (!validateSpreadsheetId(spreadsheetId)) {
+      console.error("Invalid spreadsheet ID format");
+      return new Response(
+        JSON.stringify({ error: "Invalid spreadsheet ID format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate sheet name
+    if (!validateSheetName(sheetName)) {
+      console.error("Invalid sheet name");
+      return new Response(
+        JSON.stringify({ error: "Invalid sheet name" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ============= AUTHORIZATION CHECK =============
+    // Verify user has access to this spreadsheet (owns a client record with this sheet_id)
+    const { data: clientData, error: clientError } = await supabaseClient
+      .from('clients')
+      .select('id')
+      .eq('google_sheet_id', spreadsheetId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (clientError) {
+      console.error("Database error during authorization check:", clientError.message);
+      return new Response(
+        JSON.stringify({ error: "Authorization check failed" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!clientData) {
+      console.error(`User ${user.id} attempted to access unauthorized spreadsheet`);
+      return new Response(
+        JSON.stringify({ error: "You don't have access to this spreadsheet" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Authorization verified for client: ${clientData.id}`);
+
+    // ============= PROCESS REQUEST =============
+    const serviceAccountKeyRaw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
+    if (!serviceAccountKeyRaw) {
+      throw new Error("Service configuration error");
+    }
+
+    const serviceAccountKey = JSON.parse(serviceAccountKeyRaw);
 
     // Handle update action
     if (action === "update") {
       if (!range || value === undefined) {
-        throw new Error("range and value are required for update action");
+        return new Response(
+          JSON.stringify({ error: "range and value are required for update action" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate range format
+      if (!validateRange(range)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid range format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate value
+      if (!validateValue(String(value))) {
+        return new Response(
+          JSON.stringify({ error: "Invalid value" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       const accessToken = await getAccessToken(serviceAccountKey, true);
-      await updateSheetCell(accessToken, spreadsheetId, sheetName, range, value);
+      await updateSheetCell(accessToken, spreadsheetId, sheetName, range, String(value));
 
       return new Response(
         JSON.stringify({ success: true, message: "Cell updated successfully" }),
@@ -218,7 +336,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Error in google-sheets function:", error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "An error occurred processing your request" }),
       { 
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
