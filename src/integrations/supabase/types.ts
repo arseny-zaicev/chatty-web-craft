@@ -88,6 +88,51 @@ export type Database = {
         }
         Relationships: []
       }
+      form_submissions: {
+        Row: {
+          contact_company: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          contact_website: string | null
+          created_at: string
+          data: Json
+          form_type: Database["public"]["Enums"]["form_type"]
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["submission_status"]
+          updated_at: string
+        }
+        Insert: {
+          contact_company?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_website?: string | null
+          created_at?: string
+          data?: Json
+          form_type: Database["public"]["Enums"]["form_type"]
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["submission_status"]
+          updated_at?: string
+        }
+        Update: {
+          contact_company?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_website?: string | null
+          created_at?: string
+          data?: Json
+          form_type?: Database["public"]["Enums"]["form_type"]
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["submission_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -120,10 +165,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      form_type: "qualification" | "seller_leads"
+      submission_status: "new" | "contacted" | "converted" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -250,6 +296,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      form_type: ["qualification", "seller_leads"],
+      submission_status: ["new", "contacted", "converted", "rejected"],
+    },
   },
 } as const

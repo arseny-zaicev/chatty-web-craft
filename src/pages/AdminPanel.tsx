@@ -14,8 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText } from "lucide-react";
 import { User } from "@supabase/supabase-js";
+import { AdminSubmissions } from "@/components/AdminSubmissions";
 
 interface Client {
   id: string;
@@ -80,6 +81,7 @@ const AdminPanel = () => {
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [clientStatsMap, setClientStatsMap] = useState<Map<string, ClientStats>>(new Map());
   const [showOverallStats, setShowOverallStats] = useState(false);
+  const [activeTab, setActiveTab] = useState<"clients" | "submissions">("clients");
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -678,9 +680,36 @@ const AdminPanel = () => {
             Sign Out
           </Button>
         </div>
+        {/* Tabs */}
+        <div className="container mx-auto px-4">
+          <div className="flex gap-1 border-t pt-2">
+            <Button
+              variant={activeTab === "clients" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setActiveTab("clients")}
+              className="gap-2"
+            >
+              <Users className="h-4 w-4" />
+              Clients
+            </Button>
+            <Button
+              variant={activeTab === "submissions" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setActiveTab("submissions")}
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Submissions
+            </Button>
+          </div>
+        </div>
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-6">
+        {activeTab === "submissions" ? (
+          <AdminSubmissions />
+        ) : (
+          <>
         {/* Overall Statistics Card */}
         <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
           <CardHeader className="pb-2">
@@ -1025,6 +1054,8 @@ const AdminPanel = () => {
             )}
           </CardContent>
         </Card>
+        </>
+        )}
       </main>
     </div>
   );

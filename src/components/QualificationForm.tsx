@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 type FormStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -112,23 +113,53 @@ export const QualificationForm = () => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    toast.success("Application submitted! We'll be in touch within 24 hours.");
-    setStep(1);
-    setFormData({
-      revenue: "",
-      timeline: "",
-      bottlenecks: [],
-      techStack: [],
-      budget: "",
-      focus: "",
-      fullName: "",
-      phone: "",
-      email: "",
-      companyName: "",
-      webLink: "",
-    });
+    
+    try {
+      const { error } = await supabase.from("form_submissions").insert({
+        form_type: "qualification" as const,
+        status: "new" as const,
+        contact_name: formData.fullName,
+        contact_email: formData.email,
+        contact_phone: formData.phone,
+        contact_company: formData.companyName,
+        contact_website: formData.webLink || null,
+        data: {
+          revenue: revenueOptions.find(o => o.key === formData.revenue)?.label || formData.revenue,
+          timeline: timelineOptions.find(o => o.key === formData.timeline)?.label || formData.timeline,
+          bottlenecks: formData.bottlenecks.map(k => bottleneckOptions.find(o => o.key === k)?.label || k),
+          techStack: formData.techStack.map(k => techStackOptions.find(o => o.key === k)?.label || k),
+          budget: budgetOptions.find(o => o.key === formData.budget)?.label || formData.budget,
+          focus: focusOptions.find(o => o.key === formData.focus)?.label || formData.focus,
+        },
+      });
+
+      if (error) {
+        console.error("Error submitting form:", error);
+        toast.error("Something went wrong. Please try again.");
+        return;
+      }
+
+      toast.success("Application submitted! We'll be in touch within 24 hours.");
+      setStep(1);
+      setFormData({
+        revenue: "",
+        timeline: "",
+        bottlenecks: [],
+        techStack: [],
+        budget: "",
+        focus: "",
+        fullName: "",
+        phone: "",
+        email: "",
+        companyName: "",
+        webLink: "",
+      });
+    } catch (error) {
+      console.error("Unexpected error:", error);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isStepValid = () => {
