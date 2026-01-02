@@ -257,7 +257,7 @@ export const QualificationForm = () => {
         return {
           title: "What tools are you currently using?",
           subtitle: "Current Tech Stack",
-          note: "Select all that apply",
+          note: "List your CRM, calendars, and other tools",
           required: false,
         };
       case 5:
@@ -364,7 +364,7 @@ export const QualificationForm = () => {
                     className="bg-background/10 border-background/20 text-background placeholder:text-background/40 h-14"
                   />
                   <p className="text-background/50 text-sm">
-                    Напишите CRM, календари и другие инструменты которые используете
+                    List your CRM, calendars, and other tools you currently use
                   </p>
                 </div>
               )}

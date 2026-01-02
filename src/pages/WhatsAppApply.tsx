@@ -14,9 +14,9 @@ const WhatsAppApply = () => {
         />
       </Helmet>
 
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-foreground">
         {/* Simple Header */}
-        <header className="py-6 px-4 border-b border-border/30">
+        <header className="py-6 px-4 border-b border-background/10">
           <div className="container mx-auto flex justify-center">
             <Link to="/">
               <img 
@@ -32,9 +32,9 @@ const WhatsAppApply = () => {
         <WhatsAppOutreachForm />
 
         {/* Simple Footer */}
-        <footer className="py-8 px-4 border-t border-border/30">
+        <footer className="py-8 px-4 border-t border-background/10">
           <div className="container mx-auto text-center">
-            <p className="text-muted-foreground text-sm">
+            <p className="text-background/50 text-sm">
               © {new Date().getFullYear()} ISKRA. All rights reserved.
             </p>
           </div>
