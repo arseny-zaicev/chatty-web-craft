@@ -18,6 +18,7 @@ import AdminAuth from "./pages/AdminAuth";
 import AdminPanel from "./pages/AdminPanel";
 import Apply from "./pages/Apply";
 import SellerLeadsApply from "./pages/SellerLeadsApply";
+import WhatsAppApply from "./pages/WhatsAppApply";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/apply" element={<Apply />} />
             <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
+            <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

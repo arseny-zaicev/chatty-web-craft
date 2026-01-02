@@ -1,5 +1,6 @@
 import { Check, ArrowRight, Sparkles, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 const plans = [
   {
@@ -39,8 +40,18 @@ const plans = [
 ];
 
 export const Pricing = () => {
+  const navigate = useNavigate();
+  
   const scrollToContact = () => {
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleGetStarted = (planName: string) => {
+    if (planName === "WhatsApp Outreach") {
+      navigate("/whatsapp/apply");
+    } else {
+      scrollToContact();
+    }
   };
 
   return (
@@ -100,7 +111,7 @@ export const Pricing = () => {
               <Button
                 variant={plan.highlighted ? "hero" : "outline"}
                 className="w-full group"
-                onClick={scrollToContact}
+                onClick={() => handleGetStarted(plan.name)}
               >
                 Get Started
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
