@@ -5,15 +5,14 @@ import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-type FormStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type FormStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface FormData {
-  revenue: string;
+  messageVolume: string;
+  targetAudience: string;
+  currentMethod: string;
   timeline: string;
-  bottlenecks: string[];
-  techStack: string; // Free text input for CRM/tools
   budget: string;
-  focus: string;
   // Contact fields
   fullName: string;
   phone: string;
@@ -22,59 +21,56 @@ interface FormData {
   webLink: string;
 }
 
-const revenueOptions = [
-  { key: "A", label: "0 – $250k" },
-  { key: "B", label: "$250k – $500k" },
-  { key: "C", label: "$500k – $1M" },
-  { key: "D", label: "$1M – $3M" },
-  { key: "E", label: "$3M+" },
+const messageVolumeOptions = [
+  { key: "A", label: "100–500 messages/month" },
+  { key: "B", label: "500–2,000 messages/month" },
+  { key: "C", label: "2,000–5,000 messages/month" },
+  { key: "D", label: "5,000–10,000 messages/month" },
+  { key: "E", label: "10,000+ messages/month" },
 ];
 
-const timelineOptions = [
-  { key: "A", label: "ASAP (this month)" },
-  { key: "B", label: "30–60 days" },
-  { key: "C", label: "60–90 days" },
-  { key: "D", label: "Just researching" },
-];
-
-const bottleneckOptions = [
-  { key: "A", label: "Replying to leads manually" },
-  { key: "B", label: "Following up with leads" },
-  { key: "C", label: "Booking meetings / scheduling" },
-  { key: "D", label: "Managing chats across platforms" },
-  { key: "E", label: "Updating CRM / pipelines" },
-  { key: "F", label: "Paying staff for repetitive work" },
-  { key: "G", label: "Other" },
-];
-
-// Tech stack is now a free text input
-
-const budgetOptions = [
-  { key: "A", label: "$2,000 – $5,000" },
-  { key: "B", label: "$5,000 – $10,000" },
-  { key: "C", label: "$10,000+" },
-];
-
-const focusOptions = [
-  { key: "A", label: "Closing more deals" },
-  { key: "B", label: "Scaling the business" },
-  { key: "C", label: "Marketing & growth" },
-  { key: "D", label: "Operations" },
-  { key: "E", label: "Personal time" },
+const targetAudienceOptions = [
+  { key: "A", label: "B2B – companies & decision makers" },
+  { key: "B", label: "B2C – consumers" },
+  { key: "C", label: "Real estate (buyers/sellers)" },
+  { key: "D", label: "E-commerce customers" },
+  { key: "E", label: "Event attendees" },
   { key: "F", label: "Other" },
 ];
 
-const totalSteps = 7;
+const currentMethodOptions = [
+  { key: "A", label: "Manual messaging" },
+  { key: "B", label: "Email marketing" },
+  { key: "C", label: "Cold calling" },
+  { key: "D", label: "Social media DMs" },
+  { key: "E", label: "Not doing outreach yet" },
+  { key: "F", label: "Other platform/tool" },
+];
 
-export const QualificationForm = () => {
+const timelineOptions = [
+  { key: "A", label: "ASAP (this week)" },
+  { key: "B", label: "Within 30 days" },
+  { key: "C", label: "1–3 months" },
+  { key: "D", label: "Just exploring options" },
+];
+
+const budgetOptions = [
+  { key: "A", label: "€500 – €1,000/month" },
+  { key: "B", label: "€1,000 – €2,500/month" },
+  { key: "C", label: "€2,500 – €5,000/month" },
+  { key: "D", label: "€5,000+/month" },
+];
+
+const totalSteps = 6;
+
+export const WhatsAppOutreachForm = () => {
   const [step, setStep] = useState<FormStep>(1);
   const [formData, setFormData] = useState<FormData>({
-    revenue: "",
+    messageVolume: "",
+    targetAudience: "",
+    currentMethod: "",
     timeline: "",
-    bottlenecks: [],
-    techStack: "",
     budget: "",
-    focus: "",
     fullName: "",
     phone: "",
     email: "",
@@ -95,18 +91,12 @@ export const QualificationForm = () => {
     }
   };
 
-  const toggleArrayItem = (array: string[], item: string): string[] => {
-    return array.includes(item)
-      ? array.filter((i) => i !== item)
-      : [...array, item];
-  };
-
   const handleSubmit = async () => {
     setIsSubmitting(true);
     
     try {
       const { error } = await supabase.from("form_submissions").insert({
-        form_type: "qualification" as const,
+        form_type: "qualification" as const, // Using qualification type for now
         status: "new" as const,
         contact_name: formData.fullName,
         contact_email: formData.email,
@@ -114,12 +104,12 @@ export const QualificationForm = () => {
         contact_company: formData.companyName,
         contact_website: formData.webLink || null,
         data: {
-          revenue: revenueOptions.find(o => o.key === formData.revenue)?.label || formData.revenue,
+          formSource: "WhatsApp Outreach",
+          messageVolume: messageVolumeOptions.find(o => o.key === formData.messageVolume)?.label || formData.messageVolume,
+          targetAudience: targetAudienceOptions.find(o => o.key === formData.targetAudience)?.label || formData.targetAudience,
+          currentMethod: currentMethodOptions.find(o => o.key === formData.currentMethod)?.label || formData.currentMethod,
           timeline: timelineOptions.find(o => o.key === formData.timeline)?.label || formData.timeline,
-          bottlenecks: formData.bottlenecks.map(k => bottleneckOptions.find(o => o.key === k)?.label || k),
-          techStack: formData.techStack || "Not specified",
           budget: budgetOptions.find(o => o.key === formData.budget)?.label || formData.budget,
-          focus: focusOptions.find(o => o.key === formData.focus)?.label || formData.focus,
         },
       });
 
@@ -132,12 +122,11 @@ export const QualificationForm = () => {
       toast.success("Application submitted! We'll be in touch within 24 hours.");
       setStep(1);
       setFormData({
-        revenue: "",
+        messageVolume: "",
+        targetAudience: "",
+        currentMethod: "",
         timeline: "",
-        bottlenecks: [],
-        techStack: "",
         budget: "",
-        focus: "",
         fullName: "",
         phone: "",
         email: "",
@@ -155,18 +144,16 @@ export const QualificationForm = () => {
   const isStepValid = () => {
     switch (step) {
       case 1:
-        return formData.revenue.length > 0;
+        return formData.messageVolume.length > 0;
       case 2:
-        return formData.timeline.length > 0;
+        return formData.targetAudience.length > 0;
       case 3:
-        return formData.bottlenecks.length > 0;
+        return formData.currentMethod.length > 0;
       case 4:
-        return formData.techStack.length > 0;
+        return formData.timeline.length > 0;
       case 5:
         return formData.budget.length > 0;
       case 6:
-        return true; // Optional step
-      case 7:
         return (
           formData.fullName.length > 0 &&
           formData.phone.length >= 10 &&
@@ -204,75 +191,39 @@ export const QualificationForm = () => {
     </div>
   );
 
-  const renderMultiSelect = (
-    options: { key: string; label: string }[],
-    values: string[],
-    onChange: (key: string) => void
-  ) => (
-    <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2">
-      {options.map((option) => (
-        <button
-          key={option.key}
-          onClick={() => onChange(option.key)}
-          className={`flex items-center gap-4 p-4 rounded-xl border transition-all duration-200 text-left ${
-            values.includes(option.key)
-              ? "bg-iskra-emerald border-iskra-emerald text-background"
-              : "bg-background/5 border-background/20 text-background hover:bg-background/10"
-          }`}
-        >
-          <span className="w-8 h-8 rounded-lg bg-background/20 flex items-center justify-center text-sm font-semibold shrink-0">
-            {option.key}
-          </span>
-          <span className="font-medium">{option.label}</span>
-          {values.includes(option.key) && (
-            <Check className="w-5 h-5 ml-auto shrink-0" />
-          )}
-        </button>
-      ))}
-    </div>
-  );
-
   const getStepContent = () => {
     switch (step) {
       case 1:
         return {
-          title: "What is your current annual revenue?",
-          subtitle: "Current Annual Revenue",
+          title: "How many WhatsApp messages do you need to send monthly?",
+          subtitle: "Message Volume",
           required: true,
         };
       case 2:
         return {
-          title: "When do you want this AI system live?",
-          subtitle: "Project Timeline",
+          title: "Who is your target audience?",
+          subtitle: "Target Audience",
           required: true,
         };
       case 3:
         return {
-          title: "Which manual process is costing you the most time or money?",
-          subtitle: "Main Bottleneck",
-          note: "Select all that apply",
+          title: "How are you currently reaching prospects?",
+          subtitle: "Current Outreach Method",
           required: true,
         };
       case 4:
         return {
-          title: "What tools are you currently using?",
-          subtitle: "Current Tech Stack",
-          note: "Select all that apply",
-          required: false,
+          title: "When do you want to start?",
+          subtitle: "Timeline",
+          required: true,
         };
       case 5:
         return {
-          title: "What budget range are you comfortable investing to replace manual work with AI?",
-          subtitle: "Estimated Budget",
+          title: "What's your monthly budget for WhatsApp outreach?",
+          subtitle: "Budget Range",
           required: true,
         };
       case 6:
-        return {
-          title: "If AI handled your chats and bookings, what would you focus on instead?",
-          subtitle: "Your Focus (Optional)",
-          required: false,
-        };
-      case 7:
         return {
           title: "How can we reach you?",
           subtitle: "Contact Information",
@@ -286,16 +237,16 @@ export const QualificationForm = () => {
   const content = getStepContent();
 
   return (
-    <section id="contact" className="py-24 bg-foreground">
+    <section id="whatsapp-contact" className="py-24 bg-foreground">
       <div className="container mx-auto px-4">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
             <h2 className="font-display text-3xl md:text-4xl font-bold text-background mb-4">
-              Check If You Qualify
+              Get WhatsApp Outreach Quote
             </h2>
             <p className="text-background/70">
-              Answer a few quick questions to see if ISKRA is the right fit for your business.
+              Answer a few questions to get a customized WhatsApp outreach plan.
             </p>
           </div>
 
@@ -329,57 +280,36 @@ export const QualificationForm = () => {
 
             {/* Step Content */}
             <div className="animate-fade-in" key={step}>
-              <h3 className="text-xl font-semibold text-background mb-2">
+              <h3 className="text-xl font-semibold text-background mb-6">
                 {content.title}
               </h3>
-              {content.note && (
-                <p className="text-background/60 mb-6">{content.note}</p>
-              )}
-              {!content.note && <div className="mb-6" />}
 
               {step === 1 &&
-                renderSingleSelect(revenueOptions, formData.revenue, (key) =>
-                  setFormData({ ...formData, revenue: key })
+                renderSingleSelect(messageVolumeOptions, formData.messageVolume, (key) =>
+                  setFormData({ ...formData, messageVolume: key })
                 )}
 
               {step === 2 &&
-                renderSingleSelect(timelineOptions, formData.timeline, (key) =>
-                  setFormData({ ...formData, timeline: key })
+                renderSingleSelect(targetAudienceOptions, formData.targetAudience, (key) =>
+                  setFormData({ ...formData, targetAudience: key })
                 )}
 
               {step === 3 &&
-                renderMultiSelect(bottleneckOptions, formData.bottlenecks, (key) =>
-                  setFormData({
-                    ...formData,
-                    bottlenecks: toggleArrayItem(formData.bottlenecks, key),
-                  })
+                renderSingleSelect(currentMethodOptions, formData.currentMethod, (key) =>
+                  setFormData({ ...formData, currentMethod: key })
                 )}
 
-              {step === 4 && (
-                <div className="space-y-4">
-                  <Input
-                    value={formData.techStack}
-                    onChange={(e) => setFormData({ ...formData, techStack: e.target.value })}
-                    placeholder="e.g. Pipedrive + Google Drive + Calendly..."
-                    className="bg-background/10 border-background/20 text-background placeholder:text-background/40 h-14"
-                  />
-                  <p className="text-background/50 text-sm">
-                    Напишите CRM, календари и другие инструменты которые используете
-                  </p>
-                </div>
-              )}
+              {step === 4 &&
+                renderSingleSelect(timelineOptions, formData.timeline, (key) =>
+                  setFormData({ ...formData, timeline: key })
+                )}
 
               {step === 5 &&
                 renderSingleSelect(budgetOptions, formData.budget, (key) =>
                   setFormData({ ...formData, budget: key })
                 )}
 
-              {step === 6 &&
-                renderSingleSelect(focusOptions, formData.focus, (key) =>
-                  setFormData({ ...formData, focus: key })
-                )}
-
-              {step === 7 && (
+              {step === 6 && (
                 <div className="space-y-4">
                   <Input
                     value={formData.fullName}
@@ -447,7 +377,7 @@ export const QualificationForm = () => {
                   disabled={!isStepValid() || isSubmitting}
                   className="group"
                 >
-                  {isSubmitting ? "Submitting..." : "Submit Application"}
+                  {isSubmitting ? "Submitting..." : "Get My Quote"}
                   {!isSubmitting && (
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   )}
