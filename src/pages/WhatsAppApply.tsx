@@ -1,7 +1,7 @@
-import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
+import { Link } from "react-router-dom";
 import { WhatsAppOutreachForm } from "@/components/WhatsAppOutreachForm";
-import logo from "@/assets/logo/iskra-logo-horizontal.png";
+import { Sparkles } from "lucide-react";
 
 const WhatsAppApply = () => {
   return (
@@ -13,33 +13,35 @@ const WhatsAppApply = () => {
           content="Get a customized WhatsApp outreach plan. High-volume messaging with 98% delivery rate." 
         />
       </Helmet>
-
-      <div className="min-h-screen bg-foreground">
-        {/* Simple Header */}
-        <header className="py-6 px-4 border-b border-background/10">
-          <div className="container mx-auto flex justify-center">
-            <Link to="/">
-              <img 
-                src={logo} 
-                alt="ISKRA" 
-                className="h-8 md:h-10 w-auto"
-              />
+      
+      <main className="min-h-screen bg-foreground">
+        {/* Header */}
+        <header className="py-6 border-b border-background/10">
+          <div className="container mx-auto px-4">
+            <Link to="/" className="flex items-center gap-2 w-fit">
+              <div className="relative">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-iskra-emerald to-iskra-emerald/70 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <span className="font-display text-xl font-bold tracking-tight text-background">
+                ISKRA
+              </span>
             </Link>
           </div>
         </header>
 
-        {/* Form */}
         <WhatsAppOutreachForm />
 
-        {/* Simple Footer */}
-        <footer className="py-8 px-4 border-t border-background/10">
-          <div className="container mx-auto text-center">
+        {/* Footer */}
+        <footer className="py-6 border-t border-background/10">
+          <div className="container mx-auto px-4 text-center">
             <p className="text-background/50 text-sm">
               © {new Date().getFullYear()} ISKRA. All rights reserved.
             </p>
           </div>
         </footer>
-      </div>
+      </main>
     </>
   );
 };

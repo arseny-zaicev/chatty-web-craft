@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 
@@ -527,6 +527,13 @@ const AdminPanel = () => {
         <header className="border-b bg-card shrink-0">
           <div className="px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
+              <Link to="/" className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-iskra-emerald to-iskra-emerald/70 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-display text-lg font-bold tracking-tight">ISKRA</span>
+              </Link>
+              <div className="w-px h-6 bg-border" />
               <Button variant="ghost" size="icon" onClick={handleBackToClients}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -667,9 +674,13 @@ const AdminPanel = () => {
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-              <Users className="w-5 h-5 text-primary" />
-            </div>
+            <Link to="/" className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-iskra-emerald to-iskra-emerald/70 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <span className="font-display text-lg font-bold tracking-tight">ISKRA</span>
+            </Link>
+            <div className="w-px h-6 bg-border" />
             <div>
               <h1 className="text-xl font-display font-bold">Admin Panel</h1>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
