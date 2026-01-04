@@ -135,6 +135,10 @@ export default {
           "0%": { transform: "translateX(0%)" },
           "100%": { transform: "translateX(-50%)" },
         },
+        "marquee": {
+          "0%": { transform: "translateX(0%)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
         "float-node": {
           "0%, 100%": { transform: "translateY(0px) translateX(0px)" },
           "33%": { transform: "translateY(-8px) translateX(3px)" },
@@ -164,6 +168,7 @@ export default {
         "pulse-slow": "pulse-slow 3s ease-in-out infinite",
         "float-particle": "float-particle 4s ease-in-out infinite",
         "marquee-slow": "marquee-slow 30s linear infinite",
+        "marquee": "marquee 20s linear infinite",
         "float-node": "float-node 5s ease-in-out infinite",
         "dash": "dash 3s linear infinite",
       },
