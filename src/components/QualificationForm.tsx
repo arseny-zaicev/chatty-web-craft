@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useFormAnalytics } from "@/hooks/useFormAnalytics";
 
+const STEP_NAMES = [
+  "Annual Revenue",
+  "Project Timeline",
+  "Main Bottleneck",
+  "Tech Stack",
+  "Budget",
+  "Focus (Optional)",
+  "Contact Info",
+];
 type FormStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 interface FormData {
@@ -83,8 +93,20 @@ export const QualificationForm = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { trackStepView, trackStepComplete, trackFormSubmit, resetSession } = useFormAnalytics({
+    formType: "qualification",
+    totalSteps,
+    stepNames: STEP_NAMES,
+  });
+
+  // Track step views
+  useEffect(() => {
+    trackStepView(step);
+  }, [step, trackStepView]);
+
   const handleNext = () => {
     if (step < totalSteps) {
+      trackStepComplete(step);
       setStep((prev) => (prev + 1) as FormStep);
     }
   };
@@ -130,6 +152,8 @@ export const QualificationForm = () => {
       }
 
       toast.success("Application submitted! We'll be in touch within 24 hours.");
+      await trackFormSubmit();
+      resetSession();
       setStep(1);
       setFormData({
         revenue: "",

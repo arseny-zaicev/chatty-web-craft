@@ -14,9 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles, Activity } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
+import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
 
 interface Client {
   id: string;
@@ -81,7 +82,7 @@ const AdminPanel = () => {
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [clientStatsMap, setClientStatsMap] = useState<Map<string, ClientStats>>(new Map());
   const [showOverallStats, setShowOverallStats] = useState(false);
-  const [activeTab, setActiveTab] = useState<"clients" | "submissions">("clients");
+  const [activeTab, setActiveTab] = useState<"clients" | "submissions" | "analytics">("clients");
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -712,6 +713,15 @@ const AdminPanel = () => {
               <FileText className="h-4 w-4" />
               Submissions
             </Button>
+            <Button
+              variant={activeTab === "analytics" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setActiveTab("analytics")}
+              className="gap-2"
+            >
+              <Activity className="h-4 w-4" />
+              Form Analytics
+            </Button>
           </div>
         </div>
       </header>
@@ -719,6 +729,8 @@ const AdminPanel = () => {
       <main className="container mx-auto px-4 py-8 space-y-6">
         {activeTab === "submissions" ? (
           <AdminSubmissions />
+        ) : activeTab === "analytics" ? (
+          <FormAnalyticsDashboard />
         ) : (
           <>
         {/* Overall Statistics Card */}
