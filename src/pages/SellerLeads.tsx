@@ -202,6 +202,9 @@ const SellerLeads = () => {
                   controls 
                   className="w-full aspect-video"
                   poster=""
+                  onLoadedMetadata={(e) => {
+                    (e.target as HTMLVideoElement).playbackRate = 1.25;
+                  }}
                 >
                   <source src="/videos/seller-leads-demo.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
