@@ -1,10 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useFormAnalytics } from "@/hooks/useFormAnalytics";
 
+const STEP_NAMES = [
+  "Current Lead Source",
+  "Experience Duration",
+  "Satisfaction",
+  "Recent Sales",
+  "Geography & Property",
+  "Lead Economics",
+  "Response Time",
+  "Contact Info",
+];
 type FormStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 interface FormData {
@@ -104,8 +115,20 @@ export const SellerLeadsForm = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { trackStepView, trackStepComplete, trackFormSubmit, resetSession } = useFormAnalytics({
+    formType: "seller_leads",
+    totalSteps,
+    stepNames: STEP_NAMES,
+  });
+
+  // Track step views
+  useEffect(() => {
+    trackStepView(step);
+  }, [step, trackStepView]);
+
   const handleNext = () => {
     if (step < totalSteps) {
+      trackStepComplete(step);
       setStep((prev) => (prev + 1) as FormStep);
     }
   };
@@ -148,6 +171,8 @@ export const SellerLeadsForm = () => {
       }
 
       toast.success("Thank you! We'll reach out to schedule a quick 15-minute call.");
+      await trackFormSubmit();
+      resetSession();
       setStep(1);
       setFormData({
         currentSource: "",

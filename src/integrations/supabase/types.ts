@@ -88,6 +88,39 @@ export type Database = {
         }
         Relationships: []
       }
+      form_analytics: {
+        Row: {
+          created_at: string
+          event_type: string
+          form_type: string
+          id: string
+          metadata: Json | null
+          session_id: string
+          step_name: string
+          step_number: number
+        }
+        Insert: {
+          created_at?: string
+          event_type?: string
+          form_type: string
+          id?: string
+          metadata?: Json | null
+          session_id: string
+          step_name: string
+          step_number: number
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          form_type?: string
+          id?: string
+          metadata?: Json | null
+          session_id?: string
+          step_name?: string
+          step_number?: number
+        }
+        Relationships: []
+      }
       form_submissions: {
         Row: {
           contact_company: string | null
