@@ -184,6 +184,33 @@ const SellerLeads = () => {
         {/* How It Works Section */}
         <SellerLeadsHowItWorks />
 
+        {/* Video Demo Section */}
+        <section className="py-24 border-t border-border/30">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-12">
+              <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
+                See How It <span className="text-gradient">Works</span>
+              </h2>
+              <p className="text-lg text-foreground/70 max-w-2xl mx-auto">
+                Watch how we generate exclusive seller leads for Dubai real estate agents
+              </p>
+            </div>
+            
+            <div className="max-w-4xl mx-auto">
+              <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-iskra-emerald/10 border border-iskra-emerald/20">
+                <video 
+                  controls 
+                  className="w-full aspect-video"
+                  poster=""
+                >
+                  <source src="/videos/seller-leads-demo.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Features Section */}
         <section id="features" className="py-24 border-t border-border/30">
           <div className="container mx-auto px-4">
