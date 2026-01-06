@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles, Activity } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles, Activity, Image, Upload, ExternalLink } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
@@ -60,6 +60,7 @@ const COLUMNS = [
   // Client zone starts here
   { key: "Allocated To", width: "120px", zone: "client" },
   { key: "Details from the call", width: "200px", zone: "client" },
+  { key: "Conversation Screenshot", width: "150px", type: "screenshot", zone: "client" },
   { key: "Call Status", width: "120px", type: "select", options: ["Not Called", "Answered", "Not Answered", "Call Back"], zone: "client" },
   { key: "Call Count", width: "80px", zone: "client" },
   { key: "Last Call Date", width: "100px", zone: "client" },
@@ -83,6 +84,8 @@ const AdminPanel = () => {
   const [clientStatsMap, setClientStatsMap] = useState<Map<string, ClientStats>>(new Map());
   const [showOverallStats, setShowOverallStats] = useState(false);
   const [activeTab, setActiveTab] = useState<"clients" | "submissions" | "analytics">("clients");
+  const [uploadingScreenshot, setUploadingScreenshot] = useState<string | null>(null);
+  const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -511,6 +514,45 @@ const AdminPanel = () => {
     setNewPassword(password);
   };
 
+  const handleScreenshotUpload = async (leadId: string, file: File) => {
+    if (!user || !selectedClient) return;
+    
+    setUploadingScreenshot(leadId);
+    
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `admin/${selectedClient.id}/${leadId}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('conversation-screenshots')
+        .upload(fileName, file);
+      
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        toast.error('Failed to upload screenshot');
+        return;
+      }
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('conversation-screenshots')
+        .getPublicUrl(fileName);
+      
+      // Update the lead data
+      handleCellChange(leadId, "Conversation Screenshot", publicUrl);
+      toast.success('Screenshot uploaded - click Save to persist');
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      toast.error('Failed to upload screenshot');
+    } finally {
+      setUploadingScreenshot(null);
+    }
+  };
+
+  const handleDeleteScreenshot = (leadId: string) => {
+    handleCellChange(leadId, "Conversation Screenshot", "");
+    toast.success('Screenshot removed - click Save to persist');
+  };
+
   const hasUnsavedChanges = editedCells.size > 0 || clientLeads.some(l => l.isNew);
 
   if (isLoading) {
@@ -626,6 +668,69 @@ const AdminPanel = () => {
                             </td>
                           );
                         }
+
+                        if (col.type === "screenshot") {
+                          return (
+                            <td key={col.key} className={`border border-border p-1 ${clientZoneClass} ${isEdited ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}>
+                              {value ? (
+                                <div className="flex items-center gap-1">
+                                  <img 
+                                    src={value} 
+                                    alt="Screenshot" 
+                                    className="h-6 w-10 object-cover rounded cursor-pointer hover:opacity-80"
+                                    onClick={() => setViewingScreenshot(value)}
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => window.open(value, '_blank')}
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 text-destructive"
+                                    onClick={() => handleDeleteScreenshot(lead.id)}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <label className="cursor-pointer">
+                                  <div className="flex items-center justify-center h-6 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors">
+                                    {uploadingScreenshot === lead.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Upload className="h-3 w-3 mr-1" />
+                                        Upload
+                                      </>
+                                    )}
+                                  </div>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        if (file.size > 5 * 1024 * 1024) {
+                                          toast.error('File too large. Max 5MB');
+                                          return;
+                                        }
+                                        handleScreenshotUpload(lead.id, file);
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                    disabled={uploadingScreenshot === lead.id}
+                                  />
+                                </label>
+                              )}
+                            </td>
+                          );
+                        }
                         
                         return (
                           <td key={col.key} className={`border border-border p-0 ${clientZoneClass}`}>
@@ -665,6 +770,31 @@ const AdminPanel = () => {
             </div>
           )}
         </main>
+
+        {/* Screenshot Viewer Dialog */}
+        <Dialog open={!!viewingScreenshot} onOpenChange={() => setViewingScreenshot(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle>Conversation Screenshot</DialogTitle>
+            </DialogHeader>
+            {viewingScreenshot && (
+              <div className="flex flex-col items-center gap-4">
+                <img 
+                  src={viewingScreenshot} 
+                  alt="Conversation screenshot" 
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(viewingScreenshot, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open in New Tab
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
