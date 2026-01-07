@@ -7,19 +7,25 @@ const corsHeaders = {
 
 // Rate limiting: track submissions by IP
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_MAX = 5; // 5 submissions
+const RATE_LIMIT_MAX = 5; // 5 submissions per hour
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
 
-function checkRateLimit(ip: string): boolean {
+// Separate rate limit for analytics (more permissive)
+const ANALYTICS_RATE_LIMIT_MAX = 100; // 100 analytics events per hour
+const analyticsRateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(ip: string, isAnalytics = false): boolean {
   const now = Date.now();
-  const record = rateLimitMap.get(ip);
+  const map = isAnalytics ? analyticsRateLimitMap : rateLimitMap;
+  const max = isAnalytics ? ANALYTICS_RATE_LIMIT_MAX : RATE_LIMIT_MAX;
+  const record = map.get(ip);
 
   if (!record || now > record.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    map.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
     return true;
   }
 
-  if (record.count >= RATE_LIMIT_MAX) {
+  if (record.count >= max) {
     return false;
   }
 
@@ -61,6 +67,38 @@ function validateJsonbSize(data: unknown): boolean {
   }
 }
 
+// Analytics validation functions
+const VALID_FORM_TYPES_ANALYTICS = ["qualification", "seller_leads", "whatsapp_outreach"];
+const VALID_EVENT_TYPES = ["step_viewed", "step_completed", "form_submitted"];
+
+function validateSessionId(sessionId: string): boolean {
+  // Format: timestamp-randomstring (e.g., "1704067200000-abc123def")
+  const sessionIdRegex = /^\d{13}-[a-z0-9]{9}$/;
+  return sessionIdRegex.test(sessionId);
+}
+
+function validateStepNumber(stepNumber: number): boolean {
+  return Number.isInteger(stepNumber) && stepNumber > 0 && stepNumber <= 20;
+}
+
+function validateStepName(stepName: string): boolean {
+  return typeof stepName === "string" && stepName.length >= 1 && stepName.length <= 100;
+}
+
+function validateEventType(eventType: string): boolean {
+  return VALID_EVENT_TYPES.includes(eventType);
+}
+
+function validateAnalyticsMetadata(metadata: unknown): boolean {
+  if (!metadata) return true;
+  try {
+    const jsonStr = JSON.stringify(metadata);
+    return jsonStr.length < 5120; // 5KB limit for metadata
+  } catch {
+    return false;
+  }
+}
+
 const VALID_FORM_TYPES = ["qualification", "seller_leads", "whatsapp_outreach"];
 
 Deno.serve(async (req) => {
@@ -75,8 +113,16 @@ Deno.serve(async (req) => {
                      req.headers.get("cf-connecting-ip") || 
                      "unknown";
 
-    // Check rate limit
-    if (!checkRateLimit(clientIp)) {
+    const body = await req.json();
+    
+    // Route to analytics handler if action is track-analytics
+    if (body.action === "track-analytics") {
+      return await handleAnalytics(body, clientIp);
+    }
+
+    // Original form submission handling
+    // Check rate limit for form submissions
+    if (!checkRateLimit(clientIp, false)) {
       console.log(`Rate limit exceeded for IP: ${clientIp}`);
       return new Response(
         JSON.stringify({ error: "Too many submissions. Please try again later." }),
@@ -84,7 +130,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const body = await req.json();
     console.log("Form submission received:", { form_type: body.form_type, ip: clientIp });
 
     // Validate form_type
@@ -189,3 +234,97 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// Analytics tracking handler
+async function handleAnalytics(body: Record<string, unknown>, clientIp: string): Promise<Response> {
+  // Check analytics rate limit
+  if (!checkRateLimit(clientIp, true)) {
+    console.log(`Analytics rate limit exceeded for IP: ${clientIp}`);
+    return new Response(
+      JSON.stringify({ error: "Too many requests. Please try again later." }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate session_id
+  if (!body.session_id || !validateSessionId(body.session_id as string)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid session ID format" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate form_type
+  if (!body.form_type || !VALID_FORM_TYPES_ANALYTICS.includes(body.form_type as string)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid form type" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate step_number
+  if (!body.step_number || !validateStepNumber(body.step_number as number)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid step number" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate step_name
+  if (!body.step_name || !validateStepName(body.step_name as string)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid step name" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate event_type
+  if (!body.event_type || !validateEventType(body.event_type as string)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid event type" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Validate metadata size
+  if (body.metadata && !validateAnalyticsMetadata(body.metadata)) {
+    return new Response(
+      JSON.stringify({ error: "Metadata is too large" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Create Supabase admin client
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  
+  const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  // Insert validated analytics data
+  const { error } = await adminClient.from("form_analytics").insert({
+    session_id: body.session_id,
+    form_type: body.form_type,
+    step_number: body.step_number,
+    step_name: body.step_name,
+    event_type: body.event_type,
+    metadata: body.metadata || {},
+  });
+
+  if (error) {
+    console.error("Analytics insert error:", error);
+    return new Response(
+      JSON.stringify({ error: "Failed to track analytics" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  return new Response(
+    JSON.stringify({ success: true }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
