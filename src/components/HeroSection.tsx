@@ -80,9 +80,9 @@ export const HeroSection = () => {
             <h1 className="font-headline text-5xl sm:text-6xl lg:text-7xl xl:text-[5.5rem] font-bold leading-[1.05] mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <span className="text-foreground">AI Agents That</span>
               <br />
-              <span className="text-gradient">Save You Time</span>
+              <span className="text-gradient">Save Time</span>
               <br />
-              <span className="text-gradient">& Money</span>
+              <span className="text-gradient">& Print Money</span>
             </h1>
             
             {/* Subheadline */}
