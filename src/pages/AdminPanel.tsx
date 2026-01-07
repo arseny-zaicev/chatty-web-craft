@@ -25,7 +25,6 @@ interface Client {
   company_name: string | null;
   google_sheet_id: string;
   sheet_name: string | null;
-  password: string | null;
   email: string | null;
   created_at: string;
 }
@@ -80,7 +79,7 @@ const AdminPanel = () => {
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editedCells, setEditedCells] = useState<Set<string>>(new Set());
-  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
+  const [lastGeneratedPassword, setLastGeneratedPassword] = useState<string | null>(null);
   const [clientStatsMap, setClientStatsMap] = useState<Map<string, ClientStats>>(new Map());
   const [showOverallStats, setShowOverallStats] = useState(false);
   const [activeTab, setActiveTab] = useState<"clients" | "submissions" | "analytics">("clients");
@@ -1046,7 +1045,6 @@ const AdminPanel = () => {
             ) : (
               <div className="space-y-2">
                 {clients.map((client) => {
-                  const isPasswordVisible = visiblePasswords.has(client.id);
                   const stats = clientStatsMap.get(client.id);
                   const callRate = stats && stats.totalLeads > 0 
                     ? Math.round(((stats.answered + stats.notAnswered + stats.callBack) / stats.totalLeads) * 100)
@@ -1117,47 +1115,8 @@ const AdminPanel = () => {
                               </Button>
                             </span>
                           )}
-                          {/* Password */}
-                          {client.password && (
-                            <span className="flex items-center gap-1">
-                              <Key className="h-3 w-3" />
-                              <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
-                                {isPasswordVisible ? client.password : "••••••••"}
-                              </code>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setVisiblePasswords(prev => {
-                                    const next = new Set(prev);
-                                    if (next.has(client.id)) {
-                                      next.delete(client.id);
-                                    } else {
-                                      next.add(client.id);
-                                    }
-                                    return next;
-                                  });
-                                }}
-                              >
-                                {isPasswordVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyToClipboard(client.password!);
-                                }}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            </span>
-                          )}
-                          {/* No credentials stored yet */}
-                          {!client.email && !client.password && (
+                          {/* Creation date shown when no email */}
+                          {!client.email && (
                             <span className="text-xs italic">Created {new Date(client.created_at).toLocaleDateString()}</span>
                           )}
                         </div>

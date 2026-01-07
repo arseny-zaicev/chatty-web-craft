@@ -59,7 +59,6 @@ export type Database = {
           email: string | null
           google_sheet_id: string
           id: string
-          password: string | null
           sheet_name: string | null
           updated_at: string
           user_id: string
@@ -70,7 +69,6 @@ export type Database = {
           email?: string | null
           google_sheet_id: string
           id?: string
-          password?: string | null
           sheet_name?: string | null
           updated_at?: string
           user_id: string
@@ -81,7 +79,6 @@ export type Database = {
           email?: string | null
           google_sheet_id?: string
           id?: string
-          password?: string | null
           sheet_name?: string | null
           updated_at?: string
           user_id?: string
