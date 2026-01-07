@@ -1,7 +1,7 @@
-import { Play, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
+import { FounderVideoPreview } from "./FounderVideoPreview";
 
 export const FounderSection = () => {
   return (
@@ -55,21 +55,19 @@ export const FounderSection = () => {
                 Our team has experience building <span className="text-iskra-emerald font-semibold">27+ AI agents</span> and knows all the ins and outs of WhatsApp outreach. We want to see your growth!
               </p>
 
-              {/* Video Message Placeholder */}
+              {/* Video Preview */}
               <div className="glass-card rounded-xl p-4 border border-border/50">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-lg bg-iskra-emerald/20 flex items-center justify-center">
-                    <Play className="w-6 h-6 text-iskra-emerald" />
-                  </div>
+                  <FounderVideoPreview size="sm" showPlayButton={true} />
                   <div className="flex-1">
                     <p className="font-medium text-sm">Video Introduction</p>
                     <p className="text-xs text-muted-foreground">
                       Watch a personal message from our founder
                     </p>
                   </div>
-                  <Button variant="outline" size="sm" disabled>
+                  <span className="text-xs text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
                     Coming Soon
-                  </Button>
+                  </span>
                 </div>
               </div>
 
