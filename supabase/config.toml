@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.init-admin]
 verify_jwt = false
+
+[functions.submit-form]
+verify_jwt = false

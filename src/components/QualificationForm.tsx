@@ -127,27 +127,28 @@ export const QualificationForm = () => {
     setIsSubmitting(true);
     
     try {
-      const { error } = await supabase.from("form_submissions").insert({
-        form_type: "qualification" as const,
-        status: "new" as const,
-        contact_name: formData.fullName,
-        contact_email: formData.email,
-        contact_phone: formData.phone,
-        contact_company: formData.companyName,
-        contact_website: formData.webLink || null,
-        data: {
-          revenue: revenueOptions.find(o => o.key === formData.revenue)?.label || formData.revenue,
-          timeline: timelineOptions.find(o => o.key === formData.timeline)?.label || formData.timeline,
-          bottlenecks: formData.bottlenecks.map(k => bottleneckOptions.find(o => o.key === k)?.label || k),
-          techStack: formData.techStack || "Not specified",
-          budget: budgetOptions.find(o => o.key === formData.budget)?.label || formData.budget,
-          focus: focusOptions.find(o => o.key === formData.focus)?.label || formData.focus,
+      const { data, error } = await supabase.functions.invoke("submit-form", {
+        body: {
+          form_type: "qualification",
+          contact_name: formData.fullName,
+          contact_email: formData.email,
+          contact_phone: formData.phone,
+          contact_company: formData.companyName,
+          contact_website: formData.webLink || null,
+          data: {
+            revenue: revenueOptions.find(o => o.key === formData.revenue)?.label || formData.revenue,
+            timeline: timelineOptions.find(o => o.key === formData.timeline)?.label || formData.timeline,
+            bottlenecks: formData.bottlenecks.map(k => bottleneckOptions.find(o => o.key === k)?.label || k),
+            techStack: formData.techStack || "Not specified",
+            budget: budgetOptions.find(o => o.key === formData.budget)?.label || formData.budget,
+            focus: focusOptions.find(o => o.key === formData.focus)?.label || formData.focus,
+          },
         },
       });
 
-      if (error) {
-        console.error("Error submitting form:", error);
-        toast.error("Something went wrong. Please try again.");
+      if (error || data?.error) {
+        console.error("Error submitting form:", error || data?.error);
+        toast.error(data?.error || "Something went wrong. Please try again.");
         return;
       }
 
