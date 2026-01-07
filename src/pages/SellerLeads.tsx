@@ -8,6 +8,7 @@ import { SellerLeadsStats } from "@/components/SellerLeadsStats";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { UrgencyBanner } from "@/components/UrgencyBanner";
 import { DashboardDemo } from "@/components/DashboardDemo";
+import { VideoThumbnail } from "@/components/VideoThumbnail";
 import { ArrowRight, MapPin, Users, TrendingUp, CheckCircle2, Building2, Database, Shield, Star, Zap, Check } from "lucide-react";
 
 import salesforgeLogo from "@/assets/clients/salesforge-logo.png";
@@ -197,19 +198,7 @@ const SellerLeads = () => {
             </div>
             
             <div className="max-w-4xl mx-auto">
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-iskra-emerald/10 border border-iskra-emerald/20">
-                <video 
-                  controls 
-                  className="w-full aspect-video"
-                  poster=""
-                  onLoadedMetadata={(e) => {
-                    (e.target as HTMLVideoElement).playbackRate = 1.25;
-                  }}
-                >
-                  <source src="/videos/seller-leads-demo.mp4" type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-              </div>
+              <VideoThumbnail videoSrc="/videos/seller-leads-demo.mp4" />
             </div>
           </div>
         </section>
