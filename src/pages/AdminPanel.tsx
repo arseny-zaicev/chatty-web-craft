@@ -55,12 +55,12 @@ const COLUMNS = [
   { key: "Interest Type", width: "100px", type: "select", options: ["Seller", "Buyer", "Investor", "Tenant"], zone: "admin" },
   { key: "Source", width: "100px", type: "select", options: ["WhatsApp", "Call", "Website", "Referral", "Other"], zone: "admin" },
   { key: "Details", width: "250px", zone: "admin" },
+  { key: "Conversation Screenshot", width: "150px", type: "screenshot", zone: "admin" },
   { key: "Date", width: "100px", zone: "admin" },
   { key: "Status", width: "120px", type: "select", options: ["", "New", "Contacted", "Interested", "Not Interested", "Closed"], zone: "admin" },
   // Client zone starts here
   { key: "Allocated To", width: "120px", zone: "client" },
   { key: "Details from the call", width: "200px", zone: "client" },
-  { key: "Conversation Screenshot", width: "150px", type: "screenshot", zone: "client" },
   { key: "Call Status", width: "120px", type: "select", options: ["Not Called", "Answered", "Not Answered", "Call Back"], zone: "client" },
   { key: "Call Count", width: "80px", zone: "client" },
   { key: "Last Call Date", width: "100px", zone: "client" },
