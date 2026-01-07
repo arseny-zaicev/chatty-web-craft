@@ -247,7 +247,7 @@ serve(async (req) => {
       const userId = authData.user.id;
       console.log(`User created with ID: ${userId}`);
 
-      // Create client record with password and email stored for admin convenience
+      // Create client record (password NOT stored - managed by Supabase Auth only)
       const { data: clientData, error: clientError } = await adminClient
         .from("clients")
         .insert({
@@ -255,7 +255,6 @@ serve(async (req) => {
           company_name: companyName || null,
           google_sheet_id: googleSheetId,
           sheet_name: sheetName || "Sheet1",
-          password: password, // Store password for admin viewing (known design decision)
           email: email, // Store email for admin viewing
         })
         .select()
@@ -547,11 +546,7 @@ serve(async (req) => {
         throw new Error("Failed to reset password");
       }
 
-      // Also update stored password in clients table (known design decision for admin convenience)
-      await adminClient
-        .from("clients")
-        .update({ password: newPassword })
-        .eq("user_id", userId);
+      // Password is managed by Supabase Auth only - not stored in clients table
 
       return new Response(
         JSON.stringify({ success: true }),
