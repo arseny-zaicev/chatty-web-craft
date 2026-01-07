@@ -143,30 +143,31 @@ export const SellerLeadsForm = () => {
     setIsSubmitting(true);
     
     try {
-      const { error } = await supabase.from("form_submissions").insert({
-        form_type: "seller_leads" as const,
-        status: "new" as const,
-        contact_name: formData.fullName,
-        contact_email: formData.email,
-        contact_phone: formData.phone,
-        contact_company: formData.companyName,
-        contact_website: formData.webLink || null,
-        data: {
-          currentSource: currentSourceOptions.find(o => o.key === formData.currentSource)?.label || formData.currentSource,
-          duration: durationOptions.find(o => o.key === formData.duration)?.label || formData.duration,
-          satisfaction: satisfactionOptions.find(o => o.key === formData.satisfaction)?.label || formData.satisfaction,
-          salesCount: salesCountOptions.find(o => o.key === formData.salesCount)?.label || formData.salesCount,
-          areas: formData.areas,
-          propertyType: propertyTypeOptions.find(o => o.key === formData.propertyType)?.label || formData.propertyType,
-          leadsPerListing: leadsPerListingOptions.find(o => o.key === formData.leadsPerListing)?.label || formData.leadsPerListing,
-          commission: commissionOptions.find(o => o.key === formData.commission)?.label || formData.commission,
-          responseTime: responseTimeOptions.find(o => o.key === formData.responseTime)?.label || formData.responseTime,
+      const { data, error } = await supabase.functions.invoke("submit-form", {
+        body: {
+          form_type: "seller_leads",
+          contact_name: formData.fullName,
+          contact_email: formData.email,
+          contact_phone: formData.phone,
+          contact_company: formData.companyName,
+          contact_website: formData.webLink || null,
+          data: {
+            currentSource: currentSourceOptions.find(o => o.key === formData.currentSource)?.label || formData.currentSource,
+            duration: durationOptions.find(o => o.key === formData.duration)?.label || formData.duration,
+            satisfaction: satisfactionOptions.find(o => o.key === formData.satisfaction)?.label || formData.satisfaction,
+            salesCount: salesCountOptions.find(o => o.key === formData.salesCount)?.label || formData.salesCount,
+            areas: formData.areas,
+            propertyType: propertyTypeOptions.find(o => o.key === formData.propertyType)?.label || formData.propertyType,
+            leadsPerListing: leadsPerListingOptions.find(o => o.key === formData.leadsPerListing)?.label || formData.leadsPerListing,
+            commission: commissionOptions.find(o => o.key === formData.commission)?.label || formData.commission,
+            responseTime: responseTimeOptions.find(o => o.key === formData.responseTime)?.label || formData.responseTime,
+          },
         },
       });
 
-      if (error) {
-        console.error("Error submitting form:", error);
-        toast.error("Something went wrong. Please try again.");
+      if (error || data?.error) {
+        console.error("Error submitting form:", error || data?.error);
+        toast.error(data?.error || "Something went wrong. Please try again.");
         return;
       }
 

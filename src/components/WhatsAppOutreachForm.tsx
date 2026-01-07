@@ -116,27 +116,28 @@ export const WhatsAppOutreachForm = () => {
     setIsSubmitting(true);
     
     try {
-      const { error } = await supabase.from("form_submissions").insert({
-        form_type: "qualification" as const, // Using qualification type for now
-        status: "new" as const,
-        contact_name: formData.fullName,
-        contact_email: formData.email,
-        contact_phone: formData.phone,
-        contact_company: formData.companyName,
-        contact_website: formData.webLink || null,
-        data: {
-          formSource: "WhatsApp Outreach",
-          messageVolume: messageVolumeOptions.find(o => o.key === formData.messageVolume)?.label || formData.messageVolume,
-          targetAudience: targetAudienceOptions.find(o => o.key === formData.targetAudience)?.label || formData.targetAudience,
-          currentMethod: currentMethodOptions.find(o => o.key === formData.currentMethod)?.label || formData.currentMethod,
-          timeline: timelineOptions.find(o => o.key === formData.timeline)?.label || formData.timeline,
-          budget: budgetOptions.find(o => o.key === formData.budget)?.label || formData.budget,
+      const { data, error } = await supabase.functions.invoke("submit-form", {
+        body: {
+          form_type: "whatsapp_outreach",
+          contact_name: formData.fullName,
+          contact_email: formData.email,
+          contact_phone: formData.phone,
+          contact_company: formData.companyName,
+          contact_website: formData.webLink || null,
+          data: {
+            formSource: "WhatsApp Outreach",
+            messageVolume: messageVolumeOptions.find(o => o.key === formData.messageVolume)?.label || formData.messageVolume,
+            targetAudience: targetAudienceOptions.find(o => o.key === formData.targetAudience)?.label || formData.targetAudience,
+            currentMethod: currentMethodOptions.find(o => o.key === formData.currentMethod)?.label || formData.currentMethod,
+            timeline: timelineOptions.find(o => o.key === formData.timeline)?.label || formData.timeline,
+            budget: budgetOptions.find(o => o.key === formData.budget)?.label || formData.budget,
+          },
         },
       });
 
-      if (error) {
-        console.error("Error submitting form:", error);
-        toast.error("Something went wrong. Please try again.");
+      if (error || data?.error) {
+        console.error("Error submitting form:", error || data?.error);
+        toast.error(data?.error || "Something went wrong. Please try again.");
         return;
       }
 
