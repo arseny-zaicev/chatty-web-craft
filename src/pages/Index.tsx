@@ -18,13 +18,41 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>ISKRA | AI Chatbots & WhatsApp Outreach Solutions</title>
+        <title>ISKRA | AI Chatbots & WhatsApp Outreach Dubai</title>
         <meta 
           name="description" 
-          content="The first choice for WhatsApp outreach. Send thousands of messages, manage AI chatbots, and build converting websites. 98% delivery rate guaranteed." 
+          content="Dubai's #1 WhatsApp outreach & AI chatbot agency. Send thousands of messages, automate lead qualification, book meetings 24/7. 98% delivery rate guaranteed." 
         />
-        <meta name="keywords" content="AI chatbot, WhatsApp outreach, lead generation, web development, ISKRA" />
-        <link rel="canonical" href="https://iskra.ae" />
+        <meta name="keywords" content="AI chatbot Dubai, WhatsApp outreach UAE, lead generation Dubai, real estate leads, AI agent, WhatsApp automation, seller leads Dubai" />
+        <link rel="canonical" href="https://iskra.ae/" />
+        
+        {/* Service Schema */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "ProfessionalService",
+            "name": "ISKRA",
+            "description": "AI Chatbots & WhatsApp Outreach Solutions in Dubai",
+            "url": "https://iskra.ae",
+            "telephone": "+971-56-878-5008",
+            "address": {
+              "@type": "PostalAddress",
+              "addressLocality": "Dubai",
+              "addressCountry": "AE"
+            },
+            "geo": {
+              "@type": "GeoCoordinates",
+              "latitude": "25.2048",
+              "longitude": "55.2708"
+            },
+            "areaServed": {
+              "@type": "City",
+              "name": "Dubai"
+            },
+            "serviceType": ["AI Chatbot Development", "WhatsApp Marketing", "Lead Generation"],
+            "priceRange": "$$"
+          })}
+        </script>
       </Helmet>
       
       <main className="min-h-screen">

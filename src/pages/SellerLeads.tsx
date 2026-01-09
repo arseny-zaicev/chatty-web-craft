@@ -67,13 +67,40 @@ const SellerLeads = () => {
   return (
     <>
       <Helmet>
-        <title>Seller Leads for Dubai | ISKRA - Exclusive Property Seller Leads</title>
+        <title>Dubai Seller Leads | ISKRA - Property Owner Database 220K+</title>
         <meta
           name="description"
-          content="Get exclusive, pre-qualified property seller leads in Dubai. High conversion rates, WhatsApp-verified contacts, and 30-day replacement guarantee."
+          content="Access Dubai's largest property owner database with 220K+ contacts. Find sellers before they list. WhatsApp-verified contacts, 85% accuracy. 150 AED per lead."
         />
-        <meta name="keywords" content="Dubai seller leads, property leads Dubai, real estate leads, motivated sellers Dubai" />
+        <meta name="keywords" content="Dubai seller leads, property leads Dubai, real estate leads UAE, off-market sellers Dubai, property owner database, motivated sellers Dubai" />
         <link rel="canonical" href="https://iskra.ae/seller-leads" />
+        
+        {/* Product Schema for Seller Leads */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": "Dubai Property Seller Leads",
+            "description": "Exclusive property seller leads in Dubai with WhatsApp-verified contacts",
+            "brand": {
+              "@type": "Brand",
+              "name": "ISKRA"
+            },
+            "offers": {
+              "@type": "Offer",
+              "price": "150",
+              "priceCurrency": "AED",
+              "priceValidUntil": "2026-12-31",
+              "availability": "https://schema.org/InStock",
+              "url": "https://iskra.ae/seller-leads"
+            },
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": "4.8",
+              "reviewCount": "50"
+            }
+          })}
+        </script>
       </Helmet>
 
       <main className="min-h-screen">
