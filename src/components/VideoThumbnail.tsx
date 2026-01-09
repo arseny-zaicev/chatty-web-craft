@@ -136,66 +136,66 @@ export const VideoThumbnail = ({ videoSrc, onPlay }: VideoThumbnailProps) => {
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-iskra-emerald/20" />
         </div>
 
-        {/* Founder Bubble - Loom style */}
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-1/3 z-20">
-          <div className="relative group cursor-pointer" onClick={isPlaying ? handlePause : handlePlay}>
-            {/* Outer glow */}
-            <div className="absolute inset-0 w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-br from-iskra-emerald/40 to-transparent blur-xl opacity-60 group-hover:opacity-100 transition-opacity" />
-            
-            {/* Pulsing ring */}
-            <div className="absolute inset-0 w-28 h-28 md:w-36 md:h-36 rounded-full border-2 border-iskra-emerald/30 animate-ping" style={{ animationDuration: '2s' }} />
-            
-            {/* Main circle */}
-            <div className="w-28 h-28 md:w-36 md:h-36 rounded-full p-[3px] bg-gradient-to-br from-iskra-emerald via-iskra-emerald/50 to-iskra-emerald/20 relative">
-              <div className="w-full h-full rounded-full overflow-hidden bg-background">
-                <img 
-                  src={founderPhoto} 
-                  alt="Arseny - ISKRA Founder"
-                  className="w-full h-full object-cover object-top scale-125 group-hover:scale-[1.35] transition-transform duration-500"
-                />
-                {/* Hover overlay */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Play className="w-10 h-10 text-white fill-white" />
+        {/* Founder Bubble - Loom style - hidden when playing */}
+        {!isPlaying && (
+          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-1/3 z-20">
+            <div className="relative group cursor-pointer" onClick={handlePlay}>
+              {/* Outer glow */}
+              <div className="absolute inset-0 w-28 h-28 md:w-36 md:h-36 rounded-full bg-gradient-to-br from-iskra-emerald/40 to-transparent blur-xl opacity-60 group-hover:opacity-100 transition-opacity" />
+              
+              {/* Pulsing ring */}
+              <div className="absolute inset-0 w-28 h-28 md:w-36 md:h-36 rounded-full border-2 border-iskra-emerald/30 animate-ping" style={{ animationDuration: '2s' }} />
+              
+              {/* Main circle */}
+              <div className="w-28 h-28 md:w-36 md:h-36 rounded-full p-[3px] bg-gradient-to-br from-iskra-emerald via-iskra-emerald/50 to-iskra-emerald/20 relative">
+                <div className="w-full h-full rounded-full overflow-hidden bg-background">
+                  <img 
+                    src={founderPhoto} 
+                    alt="Arseny - ISKRA Founder"
+                    className="w-full h-full object-cover object-top scale-125 group-hover:scale-[1.35] transition-transform duration-500"
+                  />
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Play className="w-10 h-10 text-white fill-white" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* 3 dots menu button */}
-            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1 bg-[#2a2a2a] rounded-full">
-              <MoreHorizontal className="w-4 h-4 text-white/50" />
+              {/* 3 dots menu button */}
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1 bg-[#2a2a2a] rounded-full">
+                <MoreHorizontal className="w-4 h-4 text-white/50" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Loom-style controls bar */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
-          <div className="flex items-center gap-2 px-3 py-2 bg-[#1a1a1a]/90 backdrop-blur-sm rounded-full border border-white/10">
-            <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-              <Square className="w-3.5 h-3.5 text-white/70" />
-            </button>
-            <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-              {isPlaying ? (
-                <Pause className="w-3.5 h-3.5 text-white/70" />
-              ) : (
+        {/* Loom-style controls bar - hidden when playing */}
+        {!isPlaying && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+            <div className="flex items-center gap-2 px-3 py-2 bg-[#1a1a1a]/90 backdrop-blur-sm rounded-full border border-white/10">
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <Square className="w-3.5 h-3.5 text-white/70" />
+              </button>
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
                 <Play className="w-3.5 h-3.5 text-white/70" />
-              )}
-            </button>
-            <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-              <Rewind className="w-3.5 h-3.5 text-white/70" />
-            </button>
-            <span className="text-white/50 text-xs px-2">0:00</span>
-            <div className="w-px h-4 bg-white/20" />
-            <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-              <Hash className="w-3.5 h-3.5 text-white/70" />
-            </button>
-            <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-              <Circle className="w-3.5 h-3.5 text-white/70" />
-            </button>
-            <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-              <Trash2 className="w-3.5 h-3.5 text-white/70" />
-            </button>
+              </button>
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <Rewind className="w-3.5 h-3.5 text-white/70" />
+              </button>
+              <span className="text-white/50 text-xs px-2">0:00</span>
+              <div className="w-px h-4 bg-white/20" />
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <Hash className="w-3.5 h-3.5 text-white/70" />
+              </button>
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <Circle className="w-3.5 h-3.5 text-white/70" />
+              </button>
+              <button className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <Trash2 className="w-3.5 h-3.5 text-white/70" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Play button overlay when not playing */}
         {!isPlaying && (
