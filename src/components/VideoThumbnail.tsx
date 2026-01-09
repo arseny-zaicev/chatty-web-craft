@@ -67,7 +67,7 @@ export const VideoThumbnail = ({ videoSrc, onPlay }: VideoThumbnailProps) => {
       </div>
 
       {/* Video Content Area */}
-      <div className="relative aspect-video bg-gradient-to-br from-[#0a1a12] via-[#0d2818] to-[#0a1a12]">
+      <div className="relative aspect-video bg-gradient-to-br from-[#0a1a12] via-[#0d2818] to-[#0a1a12] overflow-hidden">
         {/* Website Preview Background */}
         <div className="absolute inset-0 opacity-90">
           {/* Simulated ISKRA page content */}
