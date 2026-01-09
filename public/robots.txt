@@ -1,8 +1,13 @@
+# ISKRA - AI Chatbots & WhatsApp Outreach Solutions
+# https://iskra.ae
+
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Twitterbot
 Allow: /
@@ -10,5 +15,16 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
+User-agent: LinkedInBot
+Allow: /
+
 User-agent: *
 Allow: /
+Crawl-delay: 2
+
+# Sitemap location
+Sitemap: https://iskra.ae/sitemap.xml
+
+# Disallow admin and client areas
+Disallow: /admin
+Disallow: /client

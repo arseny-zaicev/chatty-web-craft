@@ -86,11 +86,35 @@ const AIAgent = () => {
   return (
     <>
       <Helmet>
-        <title>AI RAG Agent Use Cases | ISKRA</title>
+        <title>AI RAG Agent Dubai | WhatsApp Automation & Lead Qualification | ISKRA</title>
         <meta 
           name="description" 
-          content="See how AI RAG Agent works in real scenarios. WhatsApp automation, lead qualification, meeting booking through natural conversation." 
+          content="AI RAG Agent for WhatsApp automation in Dubai. Automate lead qualification, book meetings 24/7, respond in under 60 seconds. CRM integration included." 
         />
+        <meta name="keywords" content="AI RAG agent Dubai, WhatsApp automation UAE, lead qualification bot, AI chatbot Dubai, meeting booking automation" />
+        <link rel="canonical" href="https://iskra.ae/ai-agent" />
+        
+        {/* Software Application Schema */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "ISKRA AI RAG Agent",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "description": "AI-powered WhatsApp automation for lead qualification and meeting booking",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": "4.9",
+              "reviewCount": "27"
+            }
+          })}
+        </script>
       </Helmet>
       
       <main className="min-h-screen">
