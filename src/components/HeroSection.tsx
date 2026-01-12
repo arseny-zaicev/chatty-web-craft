@@ -78,16 +78,16 @@ export const HeroSection = () => {
             
             {/* Main headline - clean, bold typography like adcreative.ai */}
             <h1 className="font-headline text-5xl sm:text-6xl lg:text-7xl xl:text-[5.5rem] font-bold leading-[1.05] mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <span className="text-foreground">AI Agents That</span>
+              <span className="text-foreground">WhatsApp Booking</span>
               <br />
-              <span className="text-gradient">Save Time</span>
+              <span className="text-foreground">Engine that</span>
               <br />
-              <span className="text-gradient">& Print Money</span>
+              <span className="text-gradient">f*cking works.</span>
             </h1>
             
             {/* Subheadline */}
             <p className="text-lg md:text-xl text-foreground/70 mb-10 max-w-xl leading-relaxed font-medium animate-fade-in" style={{ animationDelay: "0.2s" }}>
-              Stop paying staff for repetitive tasks. Our AI handles your chats, qualifies leads, and books meetings — <span className="text-foreground">24/7, on autopilot.</span>
+              Send messages on our numbers without bans. Turn cold & warm leads into <span className="text-iskra-emerald font-semibold">meetings</span> using <span className="text-foreground font-semibold">AI.</span>
             </p>
 
             {/* CTA Buttons - cleaner style */}
