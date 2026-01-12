@@ -80,7 +80,7 @@ export const HeroSection = () => {
               <span className="text-foreground">WhatsApp Booking</span>
               <br />
               <span className="text-foreground">Engine that </span>
-              <span className="text-iskra-emerald">f*cking works.</span>
+              <span className="text-iskra-emerald whitespace-nowrap">f*cking works.</span>
             </h1>
             
             {/* Subheadline - compact */}
