@@ -59,59 +59,50 @@ export const HeroSection = () => {
   };
 
   return (
-    <section className="relative min-h-screen flex items-center pt-20 overflow-hidden">
+    <section className="relative min-h-[90vh] flex items-center pt-24 overflow-hidden">
       <AnimatedBackground />
       <Sparkles count={15} />
       
       {/* Premium overlay gradient */}
-      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background/70 z-[1]" />
+      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-background/60 z-[1]" />
       
-      <div className="container mx-auto px-4 py-16 md:py-24 relative z-10">
-        <div className="grid lg:grid-cols-12 gap-8 lg:gap-16 items-center">
-          {/* Left Content - 7 columns */}
-          <div className="lg:col-span-7 relative z-10">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-iskra-emerald/15 border border-iskra-emerald/30 text-iskra-emerald text-sm font-semibold mb-8 animate-fade-in">
-              <Zap className="w-4 h-4" />
-              AI-Powered Automation
-            </div>
+      <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 py-12 md:py-16 relative z-10">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-center">
+          {/* Left Content */}
+          <div className="flex-1 max-w-2xl">
+            {/* Small subtitle */}
+            <p className="text-foreground/60 text-sm md:text-base uppercase tracking-widest mb-4 animate-fade-in">
+              WhatsApp Outreach & AI Automation
+            </p>
             
-            {/* Main headline - clean, bold typography like adcreative.ai */}
-            <h1 className="font-headline text-5xl sm:text-6xl lg:text-7xl xl:text-[5.5rem] font-bold leading-[1.05] mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            {/* Main headline - compact like reference */}
+            <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <span className="text-foreground">WhatsApp Booking</span>
               <br />
-              <span className="text-foreground">Engine that</span>
-              <br />
-              <span className="text-gradient">f*cking works.</span>
+              <span className="text-foreground">Engine that </span>
+              <span className="text-iskra-emerald">f*cking works.</span>
             </h1>
             
-            {/* Subheadline */}
-            <p className="text-lg md:text-xl text-foreground/70 mb-10 max-w-xl leading-relaxed font-medium animate-fade-in" style={{ animationDelay: "0.2s" }}>
-              Send messages on our numbers without bans. Turn cold & warm leads into <span className="text-iskra-emerald font-semibold">meetings</span> using <span className="text-foreground font-semibold">AI.</span>
+            {/* Subheadline - compact */}
+            <p className="text-base md:text-lg text-foreground/70 mb-8 max-w-lg leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
+              Send from our warmed-up numbers. AI replies & books meetings for your setters.
             </p>
 
-            {/* CTA Buttons - cleaner style */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-12 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+            {/* Single CTA Button - like reference */}
+            <div className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
               <Button 
                 onClick={scrollToContact}
-                className="group text-base px-8 py-6 bg-foreground text-background hover:bg-foreground/90 rounded-xl font-semibold shadow-xl"
+                className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20"
               >
-                See If You Qualify
+                Get Started
                 <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
-                className="text-base px-8 py-6 rounded-xl font-semibold border-2 border-foreground/20 text-foreground hover:bg-foreground/5 hover:border-foreground/30"
-              >
-                How It Works
               </Button>
             </div>
           </div>
 
-          {/* Right Content - 5 columns with stats */}
-          <div className="lg:col-span-5 relative">
-            {/* Stats grid */}
+          {/* Right Content - Stats */}
+          <div className="w-full lg:w-auto lg:min-w-[360px]">
+            {/* Stats grid - more compact */}
             <div className="grid grid-cols-2 gap-3 mb-3 animate-fade-in" style={{ animationDelay: "0.3s" }}>
               <HeroStat value={3} suffix="x" label="More Bookings" />
               <HeroStat value={2} suffix="min" label="Avg Response" />
