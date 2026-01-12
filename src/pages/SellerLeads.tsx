@@ -125,13 +125,13 @@ const SellerLeads = () => {
                 </div>
 
                 <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-8">
-                  <span className="text-foreground">Find Sellers</span>
+                  <span className="text-foreground">Find Sellers & Buyers</span>
                   <br />
                   <span className="text-gradient">Before They List</span>
                 </h1>
 
                 <p className="text-xl md:text-2xl text-foreground/80 mb-10 max-w-xl leading-relaxed">
-                  Access Dubai's most comprehensive owner database. Choose any district and building — find property owners ready to sell or rent, even if there's no listing on the market.
+                  Access Dubai's most comprehensive owner database. Find property owners ready to <span className="text-iskra-emerald font-semibold">sell</span>, <span className="text-iskra-emerald font-semibold">rent</span>, or <span className="text-iskra-emerald font-semibold">buy</span> — even off-market.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 mb-12">
