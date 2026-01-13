@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, Download, Filter, HelpCircle, Image, Upload, X, ExternalLink } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, Download, Filter, HelpCircle, Image, ExternalLink } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
@@ -60,7 +60,6 @@ const ClientPortal = () => {
   const [callDetailsText, setCallDetailsText] = useState("");
   const [showStatusReminder, setShowStatusReminder] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [uploadingScreenshot, setUploadingScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -227,62 +226,6 @@ const ClientPortal = () => {
     handleLeadUpdate(leadId, { "Details from the call": callDetailsText });
     setEditingCallDetails(null);
     setCallDetailsText("");
-  };
-
-  const handleScreenshotUpload = async (leadId: string, file: File) => {
-    if (!user) return;
-    
-    setUploadingScreenshot(leadId);
-    
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${leadId}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('conversation-screenshots')
-        .upload(fileName, file);
-      
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        toast.error('Failed to upload screenshot');
-        return;
-      }
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('conversation-screenshots')
-        .getPublicUrl(fileName);
-      
-      await handleLeadUpdate(leadId, { "Conversation Screenshot": publicUrl });
-      toast.success('Screenshot uploaded');
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      toast.error('Failed to upload screenshot');
-    } finally {
-      setUploadingScreenshot(null);
-    }
-  };
-
-  const handleDeleteScreenshot = async (leadId: string) => {
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead || !lead.data["Conversation Screenshot"]) return;
-    
-    try {
-      // Extract file path from URL
-      const url = lead.data["Conversation Screenshot"];
-      const pathMatch = url.match(/conversation-screenshots\/(.+)$/);
-      
-      if (pathMatch) {
-        await supabase.storage
-          .from('conversation-screenshots')
-          .remove([pathMatch[1]]);
-      }
-      
-      await handleLeadUpdate(leadId, { "Conversation Screenshot": "" });
-      toast.success('Screenshot removed');
-    } catch (error) {
-      console.error('Error deleting screenshot:', error);
-      toast.error('Failed to remove screenshot');
-    }
   };
 
   const handleRefresh = () => {
@@ -683,20 +626,20 @@ const ClientPortal = () => {
                             )}
                           </div>
 
-                          {/* Conversation Screenshot Section */}
-                          <div className="pt-2 border-t border-border/50">
-                            <p className="text-xs font-medium text-emerald-500 mb-2 flex items-center gap-1">
-                              <Image className="h-3 w-3" />
-                              Conversation Screenshot <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">your zone</span>
-                            </p>
-                            
-                            {lead.data["Conversation Screenshot"] ? (
+                          {/* Conversation Screenshot Section - Read Only (uploaded by ISKRA) */}
+                          {lead.data["Conversation Screenshot"] && (
+                            <div className="pt-2 border-t border-border/50">
+                              <p className="text-xs font-medium text-blue-400 mb-2 flex items-center gap-1">
+                                <Image className="h-3 w-3" />
+                                Conversation Screenshot <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">from ISKRA</span>
+                              </p>
+                              
                               <div className="space-y-2">
                                 <div className="relative group">
                                   <img 
                                     src={lead.data["Conversation Screenshot"]} 
                                     alt="Conversation screenshot" 
-                                    className="w-full max-h-64 object-contain rounded-lg border border-emerald-500/30 bg-background/50 cursor-pointer"
+                                    className="w-full max-h-64 object-contain rounded-lg border border-blue-500/30 bg-background/50 cursor-pointer"
                                     onClick={() => setViewingScreenshot(lead.data["Conversation Screenshot"])}
                                   />
                                   <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -711,53 +654,11 @@ const ClientPortal = () => {
                                     >
                                       <ExternalLink className="h-4 w-4" />
                                     </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="destructive"
-                                      className="h-8 w-8"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteScreenshot(lead.id);
-                                      }}
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
                                   </div>
                                 </div>
                               </div>
-                            ) : (
-                              <label className="block">
-                                <div className="bg-emerald-500/10 rounded-lg p-4 min-h-[80px] cursor-pointer hover:bg-emerald-500/20 transition-colors border border-dashed border-emerald-500/30 flex flex-col items-center justify-center gap-2">
-                                  {uploadingScreenshot === lead.id ? (
-                                    <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
-                                  ) : (
-                                    <>
-                                      <Upload className="h-6 w-6 text-emerald-500" />
-                                      <p className="text-sm text-muted-foreground">Click to upload screenshot</p>
-                                      <p className="text-xs text-muted-foreground">JPG, PNG up to 5MB</p>
-                                    </>
-                                  )}
-                                </div>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      if (file.size > 5 * 1024 * 1024) {
-                                        toast.error('File too large. Max 5MB');
-                                        return;
-                                      }
-                                      handleScreenshotUpload(lead.id, file);
-                                    }
-                                    e.target.value = '';
-                                  }}
-                                  disabled={uploadingScreenshot === lead.id}
-                                />
-                              </label>
-                            )}
-                          </div>
+                            </div>
+                          )}
 
                           {/* Comment Section */}
                           <div className="pt-2 border-t border-border/50">
