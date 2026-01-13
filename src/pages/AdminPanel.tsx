@@ -565,7 +565,7 @@ const AdminPanel = () => {
   // Spreadsheet View for Client Leads
   if (selectedClient) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
         <header className="border-b bg-card shrink-0">
           <div className="px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -611,16 +611,16 @@ const AdminPanel = () => {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto h-full">
               <table className="w-max border-collapse text-sm">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-muted">
-                    <th className="border border-border px-2 py-2 text-left font-medium w-10">#</th>
+                <thead className="sticky top-0 z-10 bg-muted">
+                  <tr>
+                    <th className="border border-border px-2 py-2 text-left font-medium w-10 bg-muted">#</th>
                     {COLUMNS.map(col => (
                       <th 
                         key={col.key} 
                         className={`border border-border px-2 py-2 text-left font-medium whitespace-nowrap ${
-                          col.zone === "client" ? "bg-blue-600/20 text-blue-200" : ""
+                          col.zone === "client" ? "bg-blue-600/30 text-blue-200" : "bg-muted"
                         }`}
                         style={{ minWidth: col.width }}
                       >
@@ -630,7 +630,7 @@ const AdminPanel = () => {
                         )}
                       </th>
                     ))}
-                    <th className="border border-border px-2 py-2 w-10"></th>
+                    <th className="border border-border px-2 py-2 w-10 bg-muted"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -653,7 +653,7 @@ const AdminPanel = () => {
                                 value={value}
                                 onValueChange={(v) => handleCellChange(lead.id, col.key, v)}
                               >
-                                <SelectTrigger className={`border-0 rounded-none h-8 text-xs ${isEdited ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}>
+                                <SelectTrigger className={`border-0 rounded-none h-8 text-xs ${isEdited ? "bg-primary/20 ring-1 ring-primary/40" : ""}`}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-popover border shadow-lg">
@@ -670,7 +670,7 @@ const AdminPanel = () => {
 
                         if (col.type === "screenshot") {
                           return (
-                            <td key={col.key} className={`border border-border p-1 ${clientZoneClass} ${isEdited ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}>
+                            <td key={col.key} className={`border border-border p-1 ${clientZoneClass} ${isEdited ? "bg-primary/20 ring-1 ring-primary/40" : ""}`}>
                               {value ? (
                                 <div className="flex items-center gap-1">
                                   <img 
@@ -736,7 +736,7 @@ const AdminPanel = () => {
                             <Input
                               value={value}
                               onChange={(e) => handleCellChange(lead.id, col.key, e.target.value)}
-                              className={`border-0 rounded-none h-8 text-xs focus-visible:ring-1 focus-visible:ring-inset ${isEdited ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}
+                              className={`border-0 rounded-none h-8 text-xs focus-visible:ring-1 focus-visible:ring-inset ${isEdited ? "bg-primary/20 text-foreground" : ""}`}
                             />
                           </td>
                         );
