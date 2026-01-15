@@ -3,6 +3,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import workspaceAvatar from "@/assets/logo/iskra-workspace-avatar.png";
 
 // ISKRA Logo SVG Component
 const IskraLogoSVG = ({ className = "", size = 64, color = "#ffffff" }: { className?: string; size?: number; color?: string }) => (
@@ -269,6 +270,29 @@ export default function BrandAssets() {
                     pngWidth={180}
                     pngHeight={180}
                   />
+                </div>
+              </div>
+            </section>
+
+            {/* WhatsApp Workspace Avatar */}
+            <section className="mb-16">
+              <h2 className="text-2xl font-display font-semibold mb-6">WhatsApp Workspace Аватар</h2>
+              <div className="rounded-xl border border-border p-6">
+                <div className="flex justify-center mb-4">
+                  <img 
+                    src={workspaceAvatar} 
+                    alt="ISKRA Workspace Avatar" 
+                    className="w-[256px] h-[256px] rounded-lg object-cover"
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-4">Для групп WhatsApp с клиентами</p>
+                <div className="flex justify-center">
+                  <a href={workspaceAvatar} download="iskra-workspace-avatar.png">
+                    <Button variant="outline">
+                      <Download className="w-4 h-4 mr-2" />
+                      Скачать PNG
+                    </Button>
+                  </a>
                 </div>
               </div>
             </section>
