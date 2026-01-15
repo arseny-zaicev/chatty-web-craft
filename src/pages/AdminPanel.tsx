@@ -85,6 +85,7 @@ const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState<"clients" | "submissions" | "analytics">("clients");
   const [uploadingScreenshot, setUploadingScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
+  const [expandedCell, setExpandedCell] = useState<{ leadId: string; columnKey: string; value: string } | null>(null);
   
   // New client form
   const [newEmail, setNewEmail] = useState("");
@@ -736,7 +737,9 @@ const AdminPanel = () => {
                             <Input
                               value={value}
                               onChange={(e) => handleCellChange(lead.id, col.key, e.target.value)}
-                              className={`border-0 rounded-none h-8 text-xs focus-visible:ring-1 focus-visible:ring-inset ${isEdited ? "bg-primary/20 text-foreground" : ""}`}
+                              onDoubleClick={() => setExpandedCell({ leadId: lead.id, columnKey: col.key, value })}
+                              className={`border-0 rounded-none h-8 text-xs focus-visible:ring-1 focus-visible:ring-inset cursor-pointer ${isEdited ? "bg-primary/20 text-foreground" : ""}`}
+                              title="Double-click to expand"
                             />
                           </td>
                         );
@@ -790,6 +793,34 @@ const AdminPanel = () => {
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open in New Tab
                 </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Expanded Cell Dialog */}
+        <Dialog open={!!expandedCell} onOpenChange={() => setExpandedCell(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{expandedCell?.columnKey}</DialogTitle>
+            </DialogHeader>
+            {expandedCell && (
+              <div className="space-y-4">
+                <textarea
+                  value={expandedCell.value}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    setExpandedCell({ ...expandedCell, value: newValue });
+                    handleCellChange(expandedCell.leadId, expandedCell.columnKey, newValue);
+                  }}
+                  className="w-full min-h-[200px] p-3 text-sm bg-background border border-border rounded-lg resize-y focus:outline-none focus:ring-2 focus:ring-primary"
+                  autoFocus
+                />
+                <div className="flex justify-end">
+                  <Button onClick={() => setExpandedCell(null)}>
+                    Done
+                  </Button>
+                </div>
               </div>
             )}
           </DialogContent>
