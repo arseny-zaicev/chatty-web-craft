@@ -1091,40 +1091,38 @@ const AdminPanel = () => {
                         <div className="flex items-center gap-3">
                           <p className="font-medium">{client.company_name || "Unnamed Client"}</p>
                           
-                          {/* Mini Stats Badge */}
-                          {stats && stats.totalLeads > 0 && (
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="bg-muted px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <Users className="h-3 w-3" />
-                                {stats.totalLeads}
+                          {/* Mini Stats Badge - always show */}
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="bg-muted px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {stats?.totalLeads ?? 0}
+                            </span>
+                            <span className="bg-green-500/20 text-green-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <PhoneCall className="h-3 w-3" />
+                              {stats?.answered ?? 0}
+                            </span>
+                            <span className="bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <PhoneOff className="h-3 w-3" />
+                              {stats?.notAnswered ?? 0}
+                            </span>
+                            <span className="bg-yellow-500/20 text-yellow-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <PhoneMissed className="h-3 w-3" />
+                              {stats?.callBack ?? 0}
+                            </span>
+                            {(stats?.notCalled ?? 0) > 0 && (
+                              <span className="bg-gray-500/20 text-gray-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {stats?.notCalled ?? 0}
                               </span>
-                              <span className="bg-green-500/20 text-green-600 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <PhoneCall className="h-3 w-3" />
-                                {stats.answered}
-                              </span>
-                              <span className="bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <PhoneOff className="h-3 w-3" />
-                                {stats.notAnswered}
-                              </span>
-                              <span className="bg-yellow-500/20 text-yellow-600 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <PhoneMissed className="h-3 w-3" />
-                                {stats.callBack}
-                              </span>
-                              {stats.notCalled > 0 && (
-                                <span className="bg-gray-500/20 text-gray-500 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {stats.notCalled}
-                                </span>
-                              )}
-                              <span className={`px-2 py-0.5 rounded-full font-medium ${
-                                callRate >= 70 ? "bg-green-500/20 text-green-600" : 
-                                callRate >= 40 ? "bg-yellow-500/20 text-yellow-600" : 
-                                "bg-red-500/20 text-red-500"
-                              }`}>
-                                {callRate}%
-                              </span>
-                            </div>
-                          )}
+                            )}
+                            <span className={`px-2 py-0.5 rounded-full font-medium ${
+                              callRate >= 70 ? "bg-green-500/20 text-green-600" : 
+                              callRate >= 40 ? "bg-yellow-500/20 text-yellow-600" : 
+                              "bg-red-500/20 text-red-500"
+                            }`}>
+                              {callRate}%
+                            </span>
+                          </div>
                         </div>
                         
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-muted-foreground mt-1">
@@ -1146,10 +1144,8 @@ const AdminPanel = () => {
                               </Button>
                             </span>
                           )}
-                          {/* Creation date shown when no email */}
-                          {!client.email && (
-                            <span className="text-xs italic">Created {new Date(client.created_at).toLocaleDateString()}</span>
-                          )}
+                          {/* Always show creation date */}
+                          <span className="text-xs">Created {new Date(client.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
