@@ -53,7 +53,8 @@ function validateCompanyName(name: string | undefined | null): boolean {
 }
 
 function validateGoogleSheetId(id: string): boolean {
-  // Google Sheet IDs are typically 44 characters of alphanumeric, hyphens, underscores
+  // Allow "not-used" placeholder or real Google Sheet IDs (typically 44 chars)
+  if (id === "not-used") return true;
   return /^[a-zA-Z0-9_-]{20,50}$/.test(id);
 }
 
