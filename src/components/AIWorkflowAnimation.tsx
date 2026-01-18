@@ -1,8 +1,8 @@
-import { Target, Code, Sparkles, Rocket } from "lucide-react";
+import { Target, Code, Sparkles, Rocket, MessageCircle } from "lucide-react";
 
 const stages = [
   { icon: Target, label: "Discovery", sublabel: "1-2 days" },
-  { icon: Code, label: "Development", sublabel: "~7 days" },
+  { icon: Code, label: "Development", sublabel: "~7 days", hasWhatsApp: true },
   { icon: Sparkles, label: "Fine-Tuning", sublabel: "2-3 weeks" },
   { icon: Rocket, label: "Scale", sublabel: "Ongoing" },
 ];
@@ -63,6 +63,12 @@ export const AIWorkflowAnimation = () => {
                 <p className="text-xs text-iskra-emerald font-medium">
                   {stage.sublabel}
                 </p>
+                {stage.hasWhatsApp && (
+                  <div className="flex items-center justify-center gap-1 mt-1 text-xs text-green-400">
+                    <MessageCircle className="w-3 h-3" />
+                    <span>WhatsApp + AI</span>
+                  </div>
+                )}
               </div>
 
               {/* Mobile connector arrow (only between items) */}
