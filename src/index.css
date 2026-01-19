@@ -129,15 +129,15 @@
     @apply bg-background text-foreground font-body antialiased;
   }
 
-  /* Premium selection + caret (fix unreadable “green selection” while editing inputs) */
+  /* Premium selection + caret (fix unreadable selection while editing inputs) */
   ::selection {
-    background-color: hsl(var(--primary) / 0.35);
-    color: hsl(var(--primary-foreground));
+    background-color: hsl(var(--primary) / 0.22);
+    color: hsl(var(--foreground));
   }
 
   ::-moz-selection {
-    background-color: hsl(var(--primary) / 0.35);
-    color: hsl(var(--primary-foreground));
+    background-color: hsl(var(--primary) / 0.22);
+    color: hsl(var(--foreground));
   }
 
   input,
@@ -147,14 +147,30 @@
 
   input::selection,
   textarea::selection {
-    background-color: hsl(var(--primary) / 0.35);
-    color: hsl(var(--primary-foreground));
+    background-color: hsl(var(--primary) / 0.22);
+    color: hsl(var(--foreground));
   }
 
   input::-moz-selection,
   textarea::-moz-selection {
-    background-color: hsl(var(--primary) / 0.35);
-    color: hsl(var(--primary-foreground));
+    background-color: hsl(var(--primary) / 0.22);
+    color: hsl(var(--foreground));
+  }
+
+  /* Chrome/Safari autofill can force a bright background (unreadable in dark UI) */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    box-shadow: 0 0 0 1000px hsl(var(--background)) inset;
+    transition: background-color 9999s ease-out 0s;
   }
 
   h1, h2, h3, h4, h5, h6 {

@@ -654,7 +654,7 @@ const AdminPanel = () => {
                                 value={value}
                                 onValueChange={(v) => handleCellChange(lead.id, col.key, v)}
                               >
-                                <SelectTrigger className={`border-0 rounded-none h-8 text-xs ${isEdited ? "ring-2 ring-primary ring-inset bg-primary/5" : ""}`}>
+                                <SelectTrigger className={`border-0 rounded-none h-8 text-xs ${isEdited ? "ring-2 ring-primary ring-inset bg-background" : ""}`}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-popover border shadow-lg">
@@ -671,7 +671,7 @@ const AdminPanel = () => {
 
                         if (col.type === "screenshot") {
                           return (
-                            <td key={col.key} className={`border border-border p-1 ${clientZoneClass} ${isEdited ? "ring-2 ring-inset ring-primary bg-primary/5" : ""}`}>
+                            <td key={col.key} className={`border border-border p-1 ${clientZoneClass} ${isEdited ? "ring-2 ring-inset ring-primary bg-background" : ""}`}>
                               {value ? (
                                 <div className="flex items-center gap-1">
                                   <img 
@@ -738,7 +738,7 @@ const AdminPanel = () => {
                               value={value}
                               onChange={(e) => handleCellChange(lead.id, col.key, e.target.value)}
                               onDoubleClick={() => setExpandedCell({ leadId: lead.id, columnKey: col.key, value })}
-                              className={`border-0 rounded-none h-8 text-xs focus-visible:ring-1 focus-visible:ring-inset cursor-pointer ${isEdited ? "ring-2 ring-inset ring-primary bg-primary/5 text-foreground" : ""}`}
+                              className={`border-0 rounded-none h-8 text-xs focus-visible:ring-1 focus-visible:ring-inset cursor-pointer ${isEdited ? "ring-2 ring-inset ring-primary bg-background text-foreground" : ""}`}
                               title="Double-click to expand"
                             />
                           </td>
