@@ -129,6 +129,34 @@
     @apply bg-background text-foreground font-body antialiased;
   }
 
+  /* Premium selection + caret (fix unreadable “green selection” while editing inputs) */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.35);
+    color: hsl(var(--primary-foreground));
+  }
+
+  ::-moz-selection {
+    background-color: hsl(var(--primary) / 0.35);
+    color: hsl(var(--primary-foreground));
+  }
+
+  input,
+  textarea {
+    caret-color: hsl(var(--primary));
+  }
+
+  input::selection,
+  textarea::selection {
+    background-color: hsl(var(--primary) / 0.35);
+    color: hsl(var(--primary-foreground));
+  }
+
+  input::-moz-selection,
+  textarea::-moz-selection {
+    background-color: hsl(var(--primary) / 0.35);
+    color: hsl(var(--primary-foreground));
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-headline;
   }
