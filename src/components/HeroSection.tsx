@@ -13,7 +13,7 @@ const HeroStat = ({ value, suffix, label }: { value: number; suffix: string; lab
   });
 
   return (
-    <div ref={elementRef} className="glass-card rounded-2xl p-5 lg:p-6 group hover:border-iskra-emerald/40 transition-all duration-300">
+    <div ref={elementRef} className="glass-card rounded-2xl p-5 lg:p-6 group hover-lift hover:border-iskra-emerald/40">
       <div className="text-3xl lg:text-4xl font-bold text-iskra-emerald mb-1 font-headline">
         {formattedValue}
       </div>
@@ -37,7 +37,7 @@ const LiveMessagesCounter = () => {
   const formattedCount = count.toLocaleString('en-US').replace(/,/g, ' ');
 
   return (
-    <div className="glass-card rounded-2xl p-6 group hover:border-iskra-emerald/40 transition-all duration-300">
+    <div className="glass-card rounded-2xl p-6 group hover-lift hover:border-iskra-emerald/40">
       <div className="flex items-center gap-2 text-foreground/60 text-sm mb-3">
         <span>Messages sent</span>
         <span className="text-iskra-emerald">· 98% delivery</span>
@@ -92,7 +92,7 @@ export const HeroSection = () => {
             <div className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
               <Button 
                 onClick={scrollToContact}
-                className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20"
+                className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20 btn-glow"
               >
                 Get Started
                 <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />

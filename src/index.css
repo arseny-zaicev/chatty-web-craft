@@ -221,6 +221,102 @@
   }
 }
 
+/* ===== LIGHTWEIGHT ANIMATION UTILITIES ===== */
+
+/* Hover lift effect for cards */
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.25s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -8px hsl(var(--iskra-emerald) / 0.15);
+}
+
+/* Subtle scale on hover */
+.hover-scale-subtle {
+  transition: transform 0.2s ease;
+}
+
+.hover-scale-subtle:hover {
+  transform: scale(1.02);
+}
+
+/* Button pulse glow */
+.btn-glow {
+  position: relative;
+}
+
+.btn-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  box-shadow: 0 0 20px 4px hsl(var(--iskra-emerald) / 0.4);
+  transition: opacity 0.3s ease;
+}
+
+.btn-glow:hover::after {
+  opacity: 1;
+}
+
+/* Icon rotate on hover */
+.icon-rotate-hover {
+  transition: transform 0.3s ease;
+}
+
+.icon-rotate-hover:hover {
+  transform: rotate(12deg) scale(1.1);
+}
+
+/* Smooth underline animation */
+.underline-animate {
+  position: relative;
+}
+
+.underline-animate::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: hsl(var(--iskra-emerald));
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+
+.underline-animate:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* Stagger children animation helper */
+.stagger-children > * {
+  opacity: 0;
+  animation: stagger-fade-in 0.5s ease forwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 80ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 160ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 320ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 400ms; }
+
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @layer utilities {
   .animate-fade-in {
     animation: fade-in 0.6s ease-out forwards;
