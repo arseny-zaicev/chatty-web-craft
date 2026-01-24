@@ -51,7 +51,7 @@ const COLUMNS = [
   { key: "Lead Name", width: "150px", zone: "admin" },
   { key: "Phone Number", width: "130px", zone: "admin" },
   { key: "Location", width: "200px", zone: "admin" },
-  { key: "Interest Type", width: "100px", type: "select", options: ["Seller", "Buyer", "Investor", "Tenant"], zone: "admin" },
+  { key: "Interest Type", width: "100px", type: "select", options: ["Seller", "Buyer", "Investor", "Tenant", "Other"], zone: "admin" },
   { key: "Source", width: "100px", type: "select", options: ["WhatsApp", "Call", "Website", "Referral", "Other"], zone: "admin" },
   { key: "Details", width: "250px", zone: "admin" },
   { key: "Conversation Screenshot", width: "150px", type: "screenshot", zone: "admin" },
