@@ -4,6 +4,7 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import workspaceAvatar from "@/assets/logo/iskra-workspace-avatar.png";
+import linkedinBanner from "@/assets/linkedin/iskra-linkedin-banner-v2.png";
 
 // ISKRA Logo SVG Component
 const IskraLogoSVG = ({ className = "", size = 64, color = "#ffffff" }: { className?: string; size?: number; color?: string }) => (
@@ -288,6 +289,31 @@ export default function BrandAssets() {
                 <p className="text-sm text-muted-foreground text-center mb-4">Для групп WhatsApp с клиентами</p>
                 <div className="flex justify-center">
                   <a href={workspaceAvatar} download="iskra-workspace-avatar.png">
+                    <Button variant="outline">
+                      <Download className="w-4 h-4 mr-2" />
+                      Скачать PNG
+                    </Button>
+                  </a>
+                </div>
+              </div>
+            </section>
+
+            {/* LinkedIn Banner */}
+            <section className="mb-16">
+              <h2 className="text-2xl font-display font-semibold mb-6">LinkedIn Баннер (1584×396)</h2>
+              <div className="rounded-xl border border-border p-6">
+                <div className="flex justify-center mb-4 overflow-hidden rounded-lg">
+                  <img 
+                    src={linkedinBanner} 
+                    alt="ISKRA LinkedIn Banner" 
+                    className="w-full max-w-[792px] h-auto rounded-lg"
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-4">
+                  Текст справа — место для аватарки слева свободно
+                </p>
+                <div className="flex justify-center">
+                  <a href={linkedinBanner} download="iskra-linkedin-banner.png">
                     <Button variant="outline">
                       <Download className="w-4 h-4 mr-2" />
                       Скачать PNG
