@@ -28,9 +28,9 @@ export const ClientLogos = () => {
       </div>
       
       {/* Marquee container */}
-      <div className="relative py-8 bg-background/50 backdrop-blur-sm rounded-2xl mx-4">
+      <div className="relative py-8 bg-background/50 backdrop-blur-sm rounded-2xl mx-4 overflow-hidden">
         <div className="flex animate-marquee items-center">
-          {[...clients, ...clients, ...clients, ...clients].map((client, idx) => (
+          {[...clients, ...clients, ...clients].map((client, idx) => (
             <a
               key={`${client.name}-${idx}`}
               href={client.url}
@@ -41,6 +41,8 @@ export const ClientLogos = () => {
               <img
                 src={client.logo}
                 alt={`${client.name} logo`}
+                loading={idx < clients.length ? "eager" : "lazy"}
+                decoding="async"
                 className="h-10 md:h-14 w-auto object-contain brightness-0 invert opacity-80 hover:opacity-100 transition-opacity"
               />
             </a>
