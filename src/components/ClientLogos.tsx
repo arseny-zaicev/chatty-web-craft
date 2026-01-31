@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import salesforgeLogo from "@/assets/clients/salesforge-logo.png";
 import pathosLogo from "@/assets/clients/pathos-new.png";
 import fbMarketingLogo from "@/assets/clients/fb-marketing-logo.png";
@@ -22,8 +22,42 @@ const clients = [
 export const ClientLogos = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const animationRef = useRef<number | null>(null);
+
+  // Auto-scroll animation
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    let scrollPosition = container.scrollLeft;
+    const speed = 0.5; // pixels per frame
+
+    const animate = () => {
+      if (!isPaused && !isDragging && container) {
+        scrollPosition += speed;
+        
+        // Reset to start when we've scrolled half (since we duplicate content)
+        const halfWidth = container.scrollWidth / 2;
+        if (scrollPosition >= halfWidth) {
+          scrollPosition = 0;
+        }
+        
+        container.scrollLeft = scrollPosition;
+      }
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [isPaused, isDragging]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!scrollRef.current) return;
@@ -58,6 +92,9 @@ export const ClientLogos = () => {
     scrollRef.current.scrollLeft = scrollLeft - walk;
   }, [isDragging, startX, scrollLeft]);
 
+  // Duplicate clients for seamless loop
+  const duplicatedClients = [...clients, ...clients];
+
   return (
     <section className="py-16 border-t border-border/30 overflow-hidden">
       <div className="container mx-auto px-4">
@@ -66,23 +103,24 @@ export const ClientLogos = () => {
         </p>
       </div>
       
-      {/* Scrollable container with drag support */}
+      {/* Scrollable container with auto-scroll + manual drag */}
       <div 
         ref={scrollRef}
         className={`relative py-8 bg-background/50 backdrop-blur-sm rounded-2xl mx-4 overflow-x-auto scrollbar-hide cursor-grab ${isDragging ? 'cursor-grabbing' : ''}`}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
         onMouseMove={handleMouseMove}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => { setIsPaused(false); setIsDragging(false); }}
         onTouchStart={handleTouchStart}
-        onTouchEnd={handleMouseUp}
+        onTouchEnd={() => { setIsDragging(false); setIsPaused(false); }}
         onTouchMove={handleTouchMove}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         <div className="flex items-center gap-12 px-8 min-w-max">
-          {clients.map((client) => (
+          {duplicatedClients.map((client, idx) => (
             <a
-              key={client.name}
+              key={`${client.name}-${idx}`}
               href={client.url}
               target="_blank"
               rel="noopener noreferrer"
