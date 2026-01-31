@@ -7,6 +7,7 @@ import propAiLogo from "@/assets/clients/prop-ai-logo.png";
 import moreConvosLogo from "@/assets/clients/more-convos-logo.png";
 import keyDigitalLogo from "@/assets/clients/key-digital-logo.png";
 import dxbRealtorLogo from "@/assets/clients/dxb-realtor-logo.png";
+import interiorsFitoutLogo from "@/assets/clients/interiors-fitout-logo.png";
 
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
@@ -17,6 +18,7 @@ const clients = [
   { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com/" },
   { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv/" },
   { name: "DXB Realtor", logo: dxbRealtorLogo, url: "https://www.dxbrealtor.ae/" },
+  { name: "Interiors Fit Out", logo: interiorsFitoutLogo, url: "https://interiorsfitout.com/" },
 ];
 
 export const ClientLogos = () => {
