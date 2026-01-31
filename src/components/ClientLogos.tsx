@@ -10,15 +10,15 @@ import dxbRealtorLogo from "@/assets/clients/dxb-realtor-logo.png";
 import interiorsFitoutLogo from "@/assets/clients/interiors-fitout-logo.png";
 
 const clients = [
-  { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
-  { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com/" },
-  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://www.instagram.com/f.b.marketing/" },
-  { name: "Enara Properties", logo: enaraLogo, url: "https://enaraproperties.ae/" },
-  { name: "Prop AI", logo: propAiLogo, url: "https://prop-ai.com/" },
-  { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com/" },
-  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv/" },
-  { name: "DXB Realtor", logo: dxbRealtorLogo, url: "https://www.dxbrealtor.ae/" },
-  { name: "Interiors Fit Out", logo: interiorsFitoutLogo, url: "https://interiorsfitout.com/" },
+  { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/", noInvert: false },
+  { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com/", noInvert: false },
+  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://www.instagram.com/f.b.marketing/", noInvert: false },
+  { name: "Enara Properties", logo: enaraLogo, url: "https://enaraproperties.ae/", noInvert: false },
+  { name: "Prop AI", logo: propAiLogo, url: "https://prop-ai.com/", noInvert: false },
+  { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com/", noInvert: false },
+  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv/", noInvert: false },
+  { name: "DXB Realtor", logo: dxbRealtorLogo, url: "https://www.dxbrealtor.ae/", noInvert: false },
+  { name: "Interiors Fit Out", logo: interiorsFitoutLogo, url: "https://interiorsfitout.com/", noInvert: true },
 ];
 
 export const ClientLogos = () => {
@@ -134,7 +134,7 @@ export const ClientLogos = () => {
                 alt={`${client.name} logo`}
                 loading="eager"
                 decoding="async"
-                className="h-10 md:h-14 w-auto object-contain brightness-0 invert opacity-80 hover:opacity-100 transition-opacity"
+                className={`h-10 md:h-14 w-auto object-contain ${client.noInvert ? '' : 'brightness-0 invert'} opacity-80 hover:opacity-100 transition-opacity`}
               />
             </a>
           ))}
