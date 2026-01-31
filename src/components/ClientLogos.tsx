@@ -108,7 +108,7 @@ export const ClientLogos = () => {
       {/* Scrollable container with auto-scroll + manual drag */}
       <div 
         ref={scrollRef}
-        className={`relative py-8 bg-background/50 backdrop-blur-sm rounded-2xl mx-4 overflow-x-auto scrollbar-hide cursor-grab ${isDragging ? 'cursor-grabbing' : ''}`}
+        className={`relative py-8 mx-4 overflow-x-auto scrollbar-hide cursor-grab ${isDragging ? 'cursor-grabbing' : ''}`}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onMouseMove={handleMouseMove}
