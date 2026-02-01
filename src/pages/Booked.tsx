@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { Sparkles, Mail, Play, Calendar, Quote } from "lucide-react";
+import { Sparkles, Mail, Play, Calendar, Quote, MessageCircle, Target, Users, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
+import founderPhoto from "@/assets/founder/arsenijs-new.png";
 
 const Booked = () => {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
@@ -103,6 +105,97 @@ const Booked = () => {
               </div>
             </div>
 
+            {/* What to Expect Section */}
+            <div className="mb-16">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl md:text-3xl font-bold text-background font-display mb-2">
+                  What to Expect on the Call
+                </h2>
+                <p className="text-background/50">
+                  Here's what we'll cover in our 30-minute session
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="text-center p-6 rounded-2xl bg-background/5 border border-background/10">
+                  <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/20 flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-7 h-7 text-iskra-emerald" />
+                  </div>
+                  <h3 className="text-background font-semibold text-lg mb-2">
+                    Your Ideal Projects
+                  </h3>
+                  <p className="text-background/50 text-sm">
+                    We'll define exactly what types of projects you're looking for
+                  </p>
+                </div>
+
+                <div className="text-center p-6 rounded-2xl bg-background/5 border border-background/10">
+                  <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/20 flex items-center justify-center mx-auto mb-4">
+                    <Users className="w-7 h-7 text-iskra-emerald" />
+                  </div>
+                  <h3 className="text-background font-semibold text-lg mb-2">
+                    Target Districts
+                  </h3>
+                  <p className="text-background/50 text-sm">
+                    Which areas in Dubai work best for your business
+                  </p>
+                </div>
+
+                <div className="text-center p-6 rounded-2xl bg-background/5 border border-background/10">
+                  <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/20 flex items-center justify-center mx-auto mb-4">
+                    <Zap className="w-7 h-7 text-iskra-emerald" />
+                  </div>
+                  <h3 className="text-background font-semibold text-lg mb-2">
+                    The System
+                  </h3>
+                  <p className="text-background/50 text-sm">
+                    How we find interested leads via WhatsApp outreach
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Founder Section */}
+            <div className="mb-16">
+              <div className="flex flex-col md:flex-row items-center gap-8 p-8 rounded-2xl bg-gradient-to-br from-iskra-emerald/10 to-iskra-emerald/5 border border-iskra-emerald/20">
+                <div className="flex-shrink-0">
+                  <div className="w-28 h-28 rounded-2xl overflow-hidden border-2 border-iskra-emerald/30 shadow-lg">
+                    <img 
+                      src={founderPhoto} 
+                      alt="Arsenijs - ISKRA Founder"
+                      className="w-full h-full object-cover object-top"
+                    />
+                  </div>
+                </div>
+                <div className="text-center md:text-left flex-1">
+                  <h3 className="text-background font-bold text-xl mb-1 font-display">
+                    You'll Be Speaking with Arsenijs
+                  </h3>
+                  <p className="text-iskra-emerald text-sm font-medium mb-3">
+                    Founder, ISKRA
+                  </p>
+                  <p className="text-background/60 text-sm leading-relaxed">
+                    Built 27+ AI agents for real estate. I'll personally walk you through how our WhatsApp system generates qualified seller leads — no fluff, just actionable insights.
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <a 
+                    href="https://wa.me/971568785008" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                  >
+                    <Button 
+                      size="lg" 
+                      className="bg-[#25D366] hover:bg-[#20BD5A] text-white gap-2"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      Message on WhatsApp
+                    </Button>
+                  </a>
+                </div>
+              </div>
+            </div>
+
             {/* Testimonial Section */}
             <div className="max-w-3xl mx-auto">
               <div className="text-center mb-8">
@@ -179,11 +272,6 @@ const Booked = () => {
                 </div>
               </div>
             </div>
-
-            {/* Footer note */}
-            <p className="text-background/40 text-center text-sm mt-12">
-              See you on the call! Questions? Drop me a message on WhatsApp.
-            </p>
           </div>
         </div>
 
