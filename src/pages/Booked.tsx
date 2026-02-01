@@ -42,9 +42,16 @@ const Booked = () => {
             {/* Success Badge */}
             <ScrollReveal>
               <div className="flex justify-center mb-6">
-                <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-iskra-emerald/10 border border-iskra-emerald/30">
-                  <CheckCircle2 className="w-5 h-5 text-iskra-emerald" />
-                  <span className="text-iskra-emerald font-semibold">Call Booked Successfully</span>
+                <div className="relative">
+                  {/* Outer glow */}
+                  <div className="absolute inset-0 rounded-full bg-iskra-emerald/20 blur-xl animate-pulse" />
+                  {/* Pulsing ring */}
+                  <div className="absolute -inset-2 rounded-full border-2 border-iskra-emerald/30 animate-ping" style={{ animationDuration: '2s' }} />
+                  {/* Badge */}
+                  <div className="relative inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-iskra-emerald/10 border border-iskra-emerald/30 shadow-lg shadow-iskra-emerald/10">
+                    <CheckCircle2 className="w-5 h-5 text-iskra-emerald" />
+                    <span className="text-iskra-emerald font-semibold">Call Booked Successfully</span>
+                  </div>
                 </div>
               </div>
 
@@ -62,36 +69,52 @@ const Booked = () => {
             <div className="grid md:grid-cols-2 gap-6 mb-12">
               {/* Step 1 */}
               <ScrollReveal delay={100}>
-                <div className="flex items-start gap-4 p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-                  <div className="w-14 h-14 rounded-xl bg-iskra-emerald/10 flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-6 h-6 text-iskra-emerald" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-iskra-emerald">Step 1</span>
-                    <h3 className="font-semibold text-lg mb-1 text-gray-900">
-                      Accept the Calendar Invite
-                    </h3>
-                    <p className="text-gray-600 text-sm">
-                      Check your inbox and accept the invite — so I know you'll be there
-                    </p>
+                <div className="group relative">
+                  {/* Glow effect on hover */}
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-iskra-emerald/40 to-iskra-emerald/20 rounded-2xl opacity-0 group-hover:opacity-100 blur transition-all duration-500" />
+                  
+                  <div className="relative flex items-start gap-4 p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-iskra-emerald/20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300" />
+                      <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-iskra-emerald to-iskra-emerald-dark flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <Mail className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-iskra-emerald bg-iskra-emerald/10 px-2 py-0.5 rounded-full">Step 1</span>
+                      <h3 className="font-semibold text-lg mb-1 text-gray-900 mt-2">
+                        Accept the Calendar Invite
+                      </h3>
+                      <p className="text-gray-600 text-sm">
+                        Check your inbox and accept the invite — so I know you'll be there
+                      </p>
+                    </div>
                   </div>
                 </div>
               </ScrollReveal>
 
               {/* Step 2 */}
               <ScrollReveal delay={200}>
-                <div className="flex items-start gap-4 p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-                  <div className="w-14 h-14 rounded-xl bg-iskra-emerald/10 flex items-center justify-center flex-shrink-0">
-                    <Play className="w-6 h-6 text-iskra-emerald" fill="currentColor" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-iskra-emerald">Step 2</span>
-                    <h3 className="font-semibold text-lg mb-1 text-gray-900">
-                      Watch the Short Video
-                    </h3>
-                    <p className="text-gray-600 text-sm">
-                      5 minutes to see how it works — so we can skip the basics on the call
-                    </p>
+                <div className="group relative">
+                  {/* Glow effect on hover */}
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-iskra-emerald/40 to-iskra-emerald/20 rounded-2xl opacity-0 group-hover:opacity-100 blur transition-all duration-500" />
+                  
+                  <div className="relative flex items-start gap-4 p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-iskra-emerald/20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300" />
+                      <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-iskra-emerald to-iskra-emerald-dark flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <Play className="w-6 h-6 text-white ml-0.5" fill="currentColor" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-iskra-emerald bg-iskra-emerald/10 px-2 py-0.5 rounded-full">Step 2</span>
+                      <h3 className="font-semibold text-lg mb-1 text-gray-900 mt-2">
+                        Watch the Short Video
+                      </h3>
+                      <p className="text-gray-600 text-sm">
+                        5 minutes to see how it works — so we can skip the basics on the call
+                      </p>
+                    </div>
                   </div>
                 </div>
               </ScrollReveal>
@@ -99,15 +122,20 @@ const Booked = () => {
 
             {/* Loom Video Embed */}
             <ScrollReveal delay={300}>
-              <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-xl mb-16">
-                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                  <iframe
-                    src="https://www.loom.com/embed/2658f8d61782474ab7623445c4a10924?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true"
-                    frameBorder="0"
-                    allowFullScreen
-                    className="absolute inset-0 w-full h-full"
-                    allow="autoplay; fullscreen"
-                  />
+              <div className="relative group mb-16">
+                {/* Outer glow */}
+                <div className="absolute -inset-1 bg-gradient-to-r from-iskra-emerald/20 via-iskra-emerald/10 to-iskra-emerald/20 rounded-2xl blur-lg opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
+                
+                <div className="relative rounded-2xl overflow-hidden border border-iskra-emerald/30 shadow-xl">
+                  <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                    <iframe
+                      src="https://www.loom.com/embed/2658f8d61782474ab7623445c4a10924?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true"
+                      frameBorder="0"
+                      allowFullScreen
+                      className="absolute inset-0 w-full h-full"
+                      allow="autoplay; fullscreen"
+                    />
+                  </div>
                 </div>
               </div>
             </ScrollReveal>
@@ -125,28 +153,46 @@ const Booked = () => {
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-6">
-                  <div className="text-center p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg group">
-                    <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                      <Target className="w-7 h-7 text-iskra-emerald" />
+                  <div className="group text-center p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative">
+                    <div className="absolute -inset-0.5 bg-iskra-emerald/20 rounded-2xl opacity-0 group-hover:opacity-100 blur transition-opacity duration-300" />
+                    <div className="relative">
+                      <div className="relative mx-auto mb-4 w-fit">
+                        <div className="absolute inset-0 bg-iskra-emerald/30 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="relative w-14 h-14 rounded-2xl bg-iskra-emerald/10 border border-iskra-emerald/20 flex items-center justify-center group-hover:scale-110 group-hover:bg-iskra-emerald/20 transition-all duration-300">
+                          <Target className="w-7 h-7 text-iskra-emerald" />
+                        </div>
+                      </div>
+                      <h3 className="font-semibold text-lg mb-2 text-gray-900">Your Ideal Projects</h3>
+                      <p className="text-gray-600 text-sm">We'll define exactly what types of projects you're looking for</p>
                     </div>
-                    <h3 className="font-semibold text-lg mb-2 text-gray-900">Your Ideal Projects</h3>
-                    <p className="text-gray-600 text-sm">We'll define exactly what types of projects you're looking for</p>
                   </div>
 
-                  <div className="text-center p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg group">
-                    <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                      <Users className="w-7 h-7 text-iskra-emerald" />
+                  <div className="group text-center p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative">
+                    <div className="absolute -inset-0.5 bg-iskra-emerald/20 rounded-2xl opacity-0 group-hover:opacity-100 blur transition-opacity duration-300" />
+                    <div className="relative">
+                      <div className="relative mx-auto mb-4 w-fit">
+                        <div className="absolute inset-0 bg-iskra-emerald/30 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="relative w-14 h-14 rounded-2xl bg-iskra-emerald/10 border border-iskra-emerald/20 flex items-center justify-center group-hover:scale-110 group-hover:bg-iskra-emerald/20 transition-all duration-300">
+                          <Users className="w-7 h-7 text-iskra-emerald" />
+                        </div>
+                      </div>
+                      <h3 className="font-semibold text-lg mb-2 text-gray-900">Target Districts</h3>
+                      <p className="text-gray-600 text-sm">Which areas in Dubai work best for your business</p>
                     </div>
-                    <h3 className="font-semibold text-lg mb-2 text-gray-900">Target Districts</h3>
-                    <p className="text-gray-600 text-sm">Which areas in Dubai work best for your business</p>
                   </div>
 
-                  <div className="text-center p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg group">
-                    <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                      <Zap className="w-7 h-7 text-iskra-emerald" />
+                  <div className="group text-center p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg relative">
+                    <div className="absolute -inset-0.5 bg-iskra-emerald/20 rounded-2xl opacity-0 group-hover:opacity-100 blur transition-opacity duration-300" />
+                    <div className="relative">
+                      <div className="relative mx-auto mb-4 w-fit">
+                        <div className="absolute inset-0 bg-iskra-emerald/30 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="relative w-14 h-14 rounded-2xl bg-iskra-emerald/10 border border-iskra-emerald/20 flex items-center justify-center group-hover:scale-110 group-hover:bg-iskra-emerald/20 transition-all duration-300">
+                          <Zap className="w-7 h-7 text-iskra-emerald" />
+                        </div>
+                      </div>
+                      <h3 className="font-semibold text-lg mb-2 text-gray-900">The System</h3>
+                      <p className="text-gray-600 text-sm">How we find interested leads via WhatsApp outreach</p>
                     </div>
-                    <h3 className="font-semibold text-lg mb-2 text-gray-900">The System</h3>
-                    <p className="text-gray-600 text-sm">How we find interested leads via WhatsApp outreach</p>
                   </div>
                 </div>
               </div>
@@ -155,49 +201,57 @@ const Booked = () => {
             {/* Founder Section */}
             <ScrollReveal delay={500}>
               <div className="mb-16">
-                <div className="flex flex-col md:flex-row items-center gap-8 p-8 rounded-2xl bg-gradient-to-br from-iskra-emerald/10 to-white border border-iskra-emerald/20 shadow-lg">
-                  <div className="flex-shrink-0">
-                    <div className="w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden border-2 border-iskra-emerald/30 shadow-lg hover:scale-105 transition-transform duration-300">
-                      <img 
-                        src={founderPhoto} 
-                        alt="Arsenijs - ISKRA Founder"
-                        className="w-full h-full object-cover object-top"
-                      />
-                    </div>
-                  </div>
-                  <div className="text-center md:text-left flex-1">
-                    <h3 className="font-bold text-xl mb-1 font-display text-gray-900">
-                      You'll Be Speaking with Arsenijs
-                    </h3>
-                    <p className="text-iskra-emerald text-sm font-medium mb-3">
-                      Founder, ISKRA
-                    </p>
-                    <p className="text-gray-600 text-sm leading-relaxed mb-4">
-                      Sent over 1M+ messages across different niches. Helped renovation companies generate over <span className="text-iskra-emerald font-semibold">3M+ AED</span> in revenue through WhatsApp outreach. No fluff — just actionable strategies.
-                    </p>
-                    <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                      <div className="px-3 py-1.5 rounded-full bg-gray-100 border border-gray-200 text-gray-700 text-xs font-medium">
-                        1M+ Messages Sent
-                      </div>
-                      <div className="px-3 py-1.5 rounded-full bg-iskra-emerald/10 border border-iskra-emerald/30 text-iskra-emerald text-xs font-medium">
-                        3M+ AED Generated
+                <div className="relative group">
+                  {/* Outer glow */}
+                  <div className="absolute -inset-1 bg-gradient-to-br from-iskra-emerald/20 to-transparent rounded-3xl blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
+                  
+                  <div className="relative flex flex-col md:flex-row items-center gap-8 p-8 rounded-2xl bg-gradient-to-br from-iskra-emerald/10 to-white border border-iskra-emerald/20 shadow-lg hover:border-iskra-emerald/40 transition-all duration-500">
+                    <div className="flex-shrink-0">
+                      <div className="relative group/photo">
+                        <div className="absolute -inset-2 bg-gradient-to-br from-iskra-emerald/40 to-iskra-emerald/10 rounded-2xl blur-lg opacity-50 group-hover/photo:opacity-100 transition-opacity duration-300" />
+                        <div className="relative w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden border-2 border-iskra-emerald/30 shadow-lg hover:scale-105 transition-transform duration-300">
+                          <img 
+                            src={founderPhoto} 
+                            alt="Arsenijs - ISKRA Founder"
+                            className="w-full h-full object-cover object-top"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <a 
-                      href="https://wa.me/971568785008" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                    >
-                      <Button 
-                        size="lg" 
-                        className="bg-[#25D366] hover:bg-[#20BD5A] text-white gap-2 hover:scale-105 transition-transform duration-300 shadow-lg"
+                    <div className="text-center md:text-left flex-1">
+                      <h3 className="font-bold text-xl mb-1 font-display text-gray-900">
+                        You'll Be Speaking with Arsenijs
+                      </h3>
+                      <p className="text-iskra-emerald text-sm font-medium mb-3">
+                        Founder, ISKRA
+                      </p>
+                      <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                        Sent over 1M+ messages across different niches. Helped renovation companies generate over <span className="text-iskra-emerald font-semibold">3M+ AED</span> in revenue through WhatsApp outreach. No fluff — just actionable strategies.
+                      </p>
+                      <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                        <div className="px-3 py-1.5 rounded-full bg-gray-100 border border-gray-200 text-gray-700 text-xs font-medium">
+                          1M+ Messages Sent
+                        </div>
+                        <div className="px-3 py-1.5 rounded-full bg-iskra-emerald/10 border border-iskra-emerald/30 text-iskra-emerald text-xs font-medium">
+                          3M+ AED Generated
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <a 
+                        href="https://wa.me/971568785008" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
                       >
-                        <MessageCircle className="w-5 h-5" />
-                        Message on WhatsApp
-                      </Button>
-                    </a>
+                        <Button 
+                          size="lg" 
+                          className="bg-[#25D366] hover:bg-[#20BD5A] text-white gap-2 hover:scale-105 transition-transform duration-300 shadow-lg"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                          Message on WhatsApp
+                        </Button>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
