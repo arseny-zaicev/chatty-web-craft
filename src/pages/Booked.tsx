@@ -50,11 +50,11 @@ const Booked = () => {
 
             {/* Heading */}
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-background text-center mb-4 leading-tight font-display">
-              Awesome, See You Soon!
+              Do This Before Our Call
             </h1>
             
             <p className="text-background/60 text-center text-lg mb-10 max-w-xl mx-auto">
-              Just 2 quick steps to prepare for our call
+              2 quick steps to make our meeting as productive as possible
             </p>
 
             {/* Steps */}
@@ -159,7 +159,7 @@ const Booked = () => {
             <div className="mb-16">
               <div className="flex flex-col md:flex-row items-center gap-8 p-8 rounded-2xl bg-gradient-to-br from-iskra-emerald/10 to-iskra-emerald/5 border border-iskra-emerald/20">
                 <div className="flex-shrink-0">
-                  <div className="w-28 h-28 rounded-2xl overflow-hidden border-2 border-iskra-emerald/30 shadow-lg">
+                  <div className="w-36 h-36 md:w-44 md:h-44 rounded-2xl overflow-hidden border-2 border-iskra-emerald/30 shadow-lg">
                     <img 
                       src={founderPhoto} 
                       alt="Arsenijs - ISKRA Founder"
