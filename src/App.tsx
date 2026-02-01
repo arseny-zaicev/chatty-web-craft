@@ -19,6 +19,7 @@ import AdminPanel from "./pages/AdminPanel";
 import Apply from "./pages/Apply";
 import SellerLeadsApply from "./pages/SellerLeadsApply";
 import WhatsAppApply from "./pages/WhatsAppApply";
+import Booked from "./pages/Booked";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/apply" element={<Apply />} />
             <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
             <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
+            <Route path="/booked" element={<Booked />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
