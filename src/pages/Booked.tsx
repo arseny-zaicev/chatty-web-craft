@@ -21,9 +21,9 @@ const Booked = () => {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
       
-      <main className="min-h-screen bg-background text-foreground flex flex-col">
+      <main className="min-h-screen bg-iskra-cream text-foreground flex flex-col">
         {/* Header */}
-        <header className="py-6 border-b border-border/50">
+        <header className="py-6 border-b border-foreground/10">
           <div className="container mx-auto px-4">
             <Link to="/" className="flex items-center gap-2 w-fit group">
               <div className="relative">
@@ -31,7 +31,7 @@ const Booked = () => {
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
               </div>
-              <span className="font-display text-xl font-bold tracking-tight">
+              <span className="font-display text-xl font-bold tracking-tight text-foreground">
                 ISKRA
               </span>
             </Link>
@@ -60,11 +60,11 @@ const Booked = () => {
                 </div>
 
                 {/* Heading */}
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-center mb-4 leading-tight font-display">
+                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground text-center mb-4 leading-tight font-display">
                   Do This <span className="text-iskra-emerald">Before</span> Our Call
                 </h1>
                 
-                <p className="text-muted-foreground text-center text-lg mb-2 max-w-xl mx-auto">
+                <p className="text-foreground/60 text-center text-lg mb-2 max-w-xl mx-auto">
                   2 quick steps to make our meeting as productive as possible
                 </p>
               </div>
@@ -78,7 +78,7 @@ const Booked = () => {
                   {/* Glow effect on hover */}
                   <div className="absolute -inset-0.5 bg-gradient-to-r from-iskra-emerald/50 to-iskra-emerald/30 rounded-2xl opacity-0 group-hover:opacity-100 blur transition-all duration-500" />
                   
-                  <div className="relative flex items-start gap-4 p-6 rounded-2xl bg-card border border-border hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative flex items-start gap-4 p-6 rounded-2xl bg-white border border-foreground/10 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-lg">
                     {/* Animated number */}
                     <div className="relative">
                       <div className="absolute inset-0 bg-iskra-emerald/20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300" />
@@ -86,14 +86,14 @@ const Booked = () => {
                         <Mail className="w-6 h-6 text-white" />
                       </div>
                     </div>
-                    <div className="flex-1">
+                      <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs font-bold uppercase tracking-wider text-iskra-emerald bg-iskra-emerald/10 px-2 py-0.5 rounded-full">Step 1</span>
                       </div>
-                      <h3 className="font-semibold text-lg mb-1">
+                      <h3 className="font-semibold text-lg mb-1 text-foreground">
                         Accept the Calendar Invite
                       </h3>
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-foreground/60 text-sm">
                         Check your inbox and accept the invite — so I know you'll be there
                       </p>
                     </div>
@@ -107,7 +107,7 @@ const Booked = () => {
                   {/* Glow effect on hover */}
                   <div className="absolute -inset-0.5 bg-gradient-to-r from-iskra-emerald/50 to-iskra-emerald/30 rounded-2xl opacity-0 group-hover:opacity-100 blur transition-all duration-500" />
                   
-                  <div className="relative flex items-start gap-4 p-6 rounded-2xl bg-card border border-border hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative flex items-start gap-4 p-6 rounded-2xl bg-white border border-foreground/10 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-lg">
                     {/* Animated number */}
                     <div className="relative">
                       <div className="absolute inset-0 bg-iskra-emerald/20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300" />
@@ -115,14 +115,14 @@ const Booked = () => {
                         <Play className="w-6 h-6 text-white ml-0.5" fill="currentColor" />
                       </div>
                     </div>
-                    <div className="flex-1">
+                      <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs font-bold uppercase tracking-wider text-iskra-emerald bg-iskra-emerald/10 px-2 py-0.5 rounded-full">Step 2</span>
                       </div>
-                      <h3 className="font-semibold text-lg mb-1">
+                      <h3 className="font-semibold text-lg mb-1 text-foreground">
                         Watch the Short Video
                       </h3>
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-foreground/60 text-sm">
                         5 minutes to see how it works — so we can skip the basics on the call
                       </p>
                     </div>
@@ -155,10 +155,10 @@ const Booked = () => {
             <ScrollReveal delay={400}>
               <div className="mb-16">
                 <div className="text-center mb-8">
-                  <h2 className="text-2xl md:text-3xl font-bold font-display mb-2">
+                  <h2 className="text-2xl md:text-3xl font-bold font-display mb-2 text-foreground">
                     What to Expect on the Call
                   </h2>
-                  <p className="text-muted-foreground">
+                  <p className="text-foreground/60">
                     Here's what we'll cover in our 30-minute session
                   </p>
                 </div>
@@ -169,15 +169,15 @@ const Booked = () => {
                     { icon: Users, title: "Target Districts", desc: "Which areas in Dubai work best for your business" },
                     { icon: Zap, title: "The System", desc: "How we find interested leads via WhatsApp outreach" }
                   ].map((item, index) => (
-                    <div key={index} className="group text-center p-6 rounded-2xl bg-card border border-border hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1">
+                    <div key={index} className="group text-center p-6 rounded-2xl bg-white border border-foreground/10 hover:border-iskra-emerald/50 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-lg">
                       <div className="relative mx-auto mb-4 w-fit">
                         <div className="absolute inset-0 bg-iskra-emerald/20 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                         <div className="relative w-14 h-14 rounded-2xl bg-iskra-emerald/10 border border-iskra-emerald/20 flex items-center justify-center group-hover:scale-110 group-hover:bg-iskra-emerald/20 transition-all duration-300">
                           <item.icon className="w-7 h-7 text-iskra-emerald" />
                         </div>
                       </div>
-                      <h3 className="font-semibold text-lg mb-2">{item.title}</h3>
-                      <p className="text-muted-foreground text-sm">{item.desc}</p>
+                      <h3 className="font-semibold text-lg mb-2 text-foreground">{item.title}</h3>
+                      <p className="text-foreground/60 text-sm">{item.desc}</p>
                     </div>
                   ))}
                 </div>
@@ -191,7 +191,7 @@ const Booked = () => {
                   {/* Outer glow */}
                   <div className="absolute -inset-1 bg-gradient-to-br from-iskra-emerald/20 to-transparent rounded-3xl blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
                   
-                  <div className="relative flex flex-col md:flex-row items-center gap-8 p-8 rounded-2xl bg-gradient-to-br from-iskra-emerald/10 to-card border border-iskra-emerald/20 hover:border-iskra-emerald/40 transition-all duration-500">
+                  <div className="relative flex flex-col md:flex-row items-center gap-8 p-8 rounded-2xl bg-gradient-to-br from-iskra-emerald/10 to-white border border-iskra-emerald/20 hover:border-iskra-emerald/40 transition-all duration-500 shadow-lg">
                     <div className="flex-shrink-0">
                       <div className="relative group/photo">
                         <div className="absolute -inset-2 bg-gradient-to-br from-iskra-emerald/40 to-iskra-emerald/10 rounded-2xl blur-lg opacity-50 group-hover/photo:opacity-100 transition-opacity duration-300" />
@@ -205,17 +205,17 @@ const Booked = () => {
                       </div>
                     </div>
                     <div className="text-center md:text-left flex-1">
-                      <h3 className="font-bold text-xl mb-1 font-display">
+                      <h3 className="font-bold text-xl mb-1 font-display text-foreground">
                         You'll Be Speaking with Arsenijs
                       </h3>
                       <p className="text-iskra-emerald text-sm font-medium mb-3">
                         Founder, ISKRA
                       </p>
-                      <p className="text-muted-foreground text-sm leading-relaxed mb-4">
+                      <p className="text-foreground/60 text-sm leading-relaxed mb-4">
                         Sent over 1M+ messages across different niches. Helped renovation companies generate over <span className="text-iskra-emerald font-semibold">3M+ AED</span> in revenue through WhatsApp outreach. No fluff — just actionable strategies.
                       </p>
                       <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                        <div className="px-3 py-1.5 rounded-full bg-secondary border border-border text-muted-foreground text-xs font-medium">
+                        <div className="px-3 py-1.5 rounded-full bg-foreground/5 border border-foreground/10 text-foreground/70 text-xs font-medium">
                           1M+ Messages Sent
                         </div>
                         <div className="px-3 py-1.5 rounded-full bg-iskra-emerald/20 border border-iskra-emerald/30 text-iskra-emerald text-xs font-medium">
@@ -247,14 +247,14 @@ const Booked = () => {
             <ScrollReveal delay={600}>
               <div className="max-w-3xl mx-auto">
                 <div className="text-center mb-8">
-                  <p className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
+                  <p className="text-foreground/40 text-sm uppercase tracking-wider font-medium">
                     What our clients say
                   </p>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6 items-center">
                   {/* Video Testimonial */}
-                  <div className="bg-card border border-border rounded-2xl p-4 overflow-hidden hover:border-iskra-emerald/30 transition-all duration-300 hover:-translate-y-1">
+                  <div className="bg-white border border-foreground/10 rounded-2xl p-4 overflow-hidden hover:border-iskra-emerald/30 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-lg">
                     <div className="aspect-video rounded-xl overflow-hidden relative mb-4">
                       {!isVideoPlaying ? (
                         <button 
@@ -295,8 +295,8 @@ const Booked = () => {
                         className="w-10 h-10 rounded-full object-cover object-top border-2 border-iskra-emerald/30"
                       />
                       <div>
-                        <p className="font-semibold text-sm">Kristaps</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="font-semibold text-sm text-foreground">Kristaps</p>
+                        <p className="text-xs text-foreground/50">
                           Founder, key-digital.lv
                         </p>
                       </div>
@@ -304,7 +304,7 @@ const Booked = () => {
                   </div>
 
                   {/* Quote */}
-                  <div className="bg-card border border-border rounded-2xl p-6 relative hover:border-iskra-emerald/30 transition-all duration-300 hover:-translate-y-1">
+                  <div className="bg-white border border-foreground/10 rounded-2xl p-6 relative hover:border-iskra-emerald/30 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-lg">
                     <Quote className="absolute top-4 left-4 w-6 h-6 text-iskra-emerald/30" />
                     <div className="pl-6 pt-2">
                       <p className="text-foreground/80 text-sm leading-relaxed mb-4">
@@ -312,7 +312,7 @@ const Booked = () => {
                       </p>
                       <div className="bg-iskra-emerald/10 rounded-lg p-3 border border-iskra-emerald/20">
                         <p className="text-xs font-medium text-iskra-emerald mb-0.5">Result:</p>
-                        <p className="font-display text-sm font-bold">
+                        <p className="font-display text-sm font-bold text-foreground">
                           500 messages → 8 meetings in 2 days
                         </p>
                       </div>
@@ -325,9 +325,9 @@ const Booked = () => {
         </div>
 
         {/* Footer */}
-        <footer className="py-6 border-t border-border/50">
+        <footer className="py-6 border-t border-foreground/10">
           <div className="container mx-auto px-4 text-center">
-            <p className="text-muted-foreground text-sm">
+            <p className="text-foreground/50 text-sm">
               © {new Date().getFullYear()} ISKRA. All rights reserved.
             </p>
           </div>
