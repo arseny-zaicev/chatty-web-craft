@@ -430,27 +430,64 @@ export default function BrandAssets() {
             {/* Logo 640x360 for social */}
             <section className="mb-16">
               <h2 className="text-2xl font-display font-semibold mb-6">Лого для соцсетей (640×360)</h2>
-              <div className="rounded-xl border border-border p-6">
-                <div className="flex justify-center mb-4">
-                  <div 
-                    className="w-full max-w-[640px] aspect-[640/360] bg-[#0a0a0a] flex flex-col items-center justify-center rounded-lg"
-                  >
-                    <IskraLogoSVG size={80} color="#ffffff" />
-                    <span className="font-display text-4xl font-bold text-white mt-4">ISKRA</span>
+              <div className="space-y-6">
+                {/* Premium emerald gradient with ИСКРА */}
+                <div className="rounded-xl border border-border p-6">
+                  <div className="flex justify-center mb-4">
+                    <div 
+                      className="w-full max-w-[640px] aspect-[640/360] flex flex-col items-center justify-center rounded-lg"
+                      style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 50%, #0d1f1a 100%)" }}
+                    >
+                      <IskraLogoSVG size={100} color="#ffffff" />
+                      <span className="font-display text-5xl font-bold text-white mt-6 tracking-wide">ИСКРА</span>
+                    </div>
                   </div>
+                  <p className="text-sm text-muted-foreground text-center mb-4">Премиум изумрудный градиент</p>
+                  <DownloadButtons
+                    svg={`<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="premiumGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1f1a"/>
+      <stop offset="50%" style="stop-color:#134e3a"/>
+      <stop offset="100%" style="stop-color:#0d1f1a"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#premiumGradient)"/>
+  <g transform="translate(245, 60)">
+    <path d="M75 0L88 52.5L140 75L88 97.5L75 150L62 97.5L10 75L62 52.5L75 0Z" fill="#ffffff"/>
+  </g>
+  <text x="320" y="280" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="4">ИСКРА</text>
+</svg>`}
+                    baseName="iskra-logo-premium-640x360"
+                    pngWidth={640}
+                    pngHeight={360}
+                  />
                 </div>
-                <DownloadButtons
-                  svg={`<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+                {/* Dark version */}
+                <div className="rounded-xl border border-border p-6">
+                  <div className="flex justify-center mb-4">
+                    <div 
+                      className="w-full max-w-[640px] aspect-[640/360] bg-[#0a0a0a] flex flex-col items-center justify-center rounded-lg"
+                    >
+                      <IskraLogoSVG size={80} color="#ffffff" />
+                      <span className="font-display text-4xl font-bold text-white mt-4">ISKRA</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center mb-4">Тёмный фон (English)</p>
+                  <DownloadButtons
+                    svg={`<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="640" height="360" fill="#0a0a0a"/>
   <g transform="translate(240, 80)">
     <path d="M80 0L92 56L148 80L92 104L80 160L68 104L12 80L68 56L80 0Z" fill="#ffffff"/>
   </g>
   <text x="320" y="290" font-family="Space Grotesk, sans-serif" font-size="64" font-weight="700" fill="#ffffff" text-anchor="middle">ISKRA</text>
 </svg>`}
-                  baseName="iskra-logo-640x360"
-                  pngWidth={640}
-                  pngHeight={360}
-                />
+                    baseName="iskra-logo-640x360"
+                    pngWidth={640}
+                    pngHeight={360}
+                  />
+                </div>
               </div>
             </section>
 
