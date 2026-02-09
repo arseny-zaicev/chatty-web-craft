@@ -275,6 +275,47 @@ export default function BrandAssets() {
               </div>
             </section>
 
+            {/* Telegram Avatar 512x512 */}
+            <section className="mb-16">
+              <h2 className="text-2xl font-display font-semibold mb-6">Telegram Аватар (512×512)</h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Premium gradient */}
+                <div className="rounded-xl border border-border p-6">
+                  <div className="flex justify-center mb-4">
+                    <div 
+                      className="w-[200px] h-[200px] rounded-lg flex items-center justify-center" 
+                      style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 100%)" }}
+                    >
+                      <IskraLogoSVG size={120} color="#ffffff" />
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center mb-4">Premium gradient</p>
+                  <DownloadButtons
+                    svg={avatarSVG(512, "#0d1f1a", true)}
+                    baseName="iskra-telegram-premium-512x512"
+                    pngWidth={512}
+                    pngHeight={512}
+                  />
+                </div>
+
+                {/* Dark solid */}
+                <div className="rounded-xl border border-border p-6">
+                  <div className="flex justify-center mb-4">
+                    <div className="w-[200px] h-[200px] bg-[#0a0a0a] rounded-lg flex items-center justify-center">
+                      <IskraLogoSVG size={120} color="#ffffff" />
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center mb-4">Dark solid</p>
+                  <DownloadButtons
+                    svg={avatarSVG(512, "#0a0a0a")}
+                    baseName="iskra-telegram-dark-512x512"
+                    pngWidth={512}
+                    pngHeight={512}
+                  />
+                </div>
+              </div>
+            </section>
+
             {/* WhatsApp Workspace Avatar */}
             <section className="mb-16">
               <h2 className="text-2xl font-display font-semibold mb-6">WhatsApp Workspace Аватар</h2>
@@ -439,7 +480,7 @@ export default function BrandAssets() {
                       style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 50%, #0d1f1a 100%)" }}
                     >
                       <IskraLogoSVG size={100} color="#ffffff" />
-                      <span className="font-display text-5xl font-bold text-white mt-6 tracking-[0.2em]">ISKRA</span>
+                      <span className="font-display text-5xl font-bold text-white mt-6">ISKRA</span>
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mb-4">Premium emerald gradient</p>
@@ -456,7 +497,7 @@ export default function BrandAssets() {
   <g transform="translate(245, 60)">
     <path d="M75 0L88 52.5L140 75L88 97.5L75 150L62 97.5L10 75L62 52.5L75 0Z" fill="#ffffff"/>
   </g>
-  <text x="320" y="280" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="8">ISKRA</text>
+  <text x="320" y="280" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle">ISKRA</text>
 </svg>`}
                     baseName="iskra-logo-premium-640x360"
                     pngWidth={640}
