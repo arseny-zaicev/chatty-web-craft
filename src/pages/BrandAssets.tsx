@@ -427,6 +427,33 @@ export default function BrandAssets() {
               </div>
             </section>
 
+            {/* Logo 640x360 for social */}
+            <section className="mb-16">
+              <h2 className="text-2xl font-display font-semibold mb-6">Лого для соцсетей (640×360)</h2>
+              <div className="rounded-xl border border-border p-6">
+                <div className="flex justify-center mb-4">
+                  <div 
+                    className="w-full max-w-[640px] aspect-[640/360] bg-[#0a0a0a] flex flex-col items-center justify-center rounded-lg"
+                  >
+                    <IskraLogoSVG size={80} color="#ffffff" />
+                    <span className="font-display text-4xl font-bold text-white mt-4">ISKRA</span>
+                  </div>
+                </div>
+                <DownloadButtons
+                  svg={`<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="360" fill="#0a0a0a"/>
+  <g transform="translate(240, 80)">
+    <path d="M80 0L92 56L148 80L92 104L80 160L68 104L12 80L68 56L80 0Z" fill="#ffffff"/>
+  </g>
+  <text x="320" y="290" font-family="Space Grotesk, sans-serif" font-size="64" font-weight="700" fill="#ffffff" text-anchor="middle">ISKRA</text>
+</svg>`}
+                  baseName="iskra-logo-640x360"
+                  pngWidth={640}
+                  pngHeight={360}
+                />
+              </div>
+            </section>
+
             {/* Full Logo Horizontal */}
             <section className="mb-16">
               <h2 className="text-2xl font-display font-semibold mb-6">Полный логотип (горизонтальный)</h2>
