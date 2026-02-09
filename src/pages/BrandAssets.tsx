@@ -439,10 +439,10 @@ export default function BrandAssets() {
                       style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 50%, #0d1f1a 100%)" }}
                     >
                       <IskraLogoSVG size={100} color="#ffffff" />
-                      <span className="font-display text-5xl font-bold text-white mt-6 tracking-wide">ИСКРА</span>
+                      <span className="font-display text-5xl font-bold text-white mt-6 tracking-[0.2em]">ISKRA</span>
                     </div>
                   </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Премиум изумрудный градиент</p>
+                  <p className="text-sm text-muted-foreground text-center mb-4">Premium emerald gradient</p>
                   <DownloadButtons
                     svg={`<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -456,7 +456,7 @@ export default function BrandAssets() {
   <g transform="translate(245, 60)">
     <path d="M75 0L88 52.5L140 75L88 97.5L75 150L62 97.5L10 75L62 52.5L75 0Z" fill="#ffffff"/>
   </g>
-  <text x="320" y="280" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="4">ИСКРА</text>
+  <text x="320" y="280" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="8">ISKRA</text>
 </svg>`}
                     baseName="iskra-logo-premium-640x360"
                     pngWidth={640}
