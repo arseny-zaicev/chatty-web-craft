@@ -7,16 +7,17 @@ const tiers = [
     icon: Rocket,
     name: "Pilot Launch",
     duration: "2 weeks",
-    price: "from €1,500",
-    description: "Validate the channel with real data before committing to scale.",
+    price: "from €2,500",
+    description: "Validate deliverability and find a winning approach before scaling.",
     features: [
-      "ICP research & segmentation",
-      "Copy library + A/B plan",
-      "Dedicated WhatsApp accounts",
-      "10,000 message test",
-      "Full funnel tracking",
-      "Winning sequence identified",
+      "ICP alignment + offer angle",
+      "Copy + follow-up sequence (A/B plan)",
+      "Dedicated WhatsApp accounts (exclusive to your company)",
+      "Tracking dashboard + daily reporting access",
+      "Positive reply alerts",
+      "End-of-pilot report + scaling plan",
     ],
+    smallNote: "Messaging usage billed separately (country-based). Final pricing depends on target country & volume.",
     cta: "Start Pilot",
     highlighted: false,
   },
@@ -24,16 +25,17 @@ const tiers = [
     icon: TrendingUp,
     name: "Growth Engine",
     duration: "Monthly",
-    price: "from €2,500",
-    description: "Scale the winning playbook — more volume, better cost per booked call.",
+    price: "Custom",
+    description: "Ongoing optimization and scaling once the pilot proves results.",
     features: [
-      "Everything in Pilot",
-      "Volume scaling plan",
-      "Weekly copy iterations",
-      "Segment & geo expansion",
-      "Advanced qualification",
+      "Daily monitoring (delivery, replies, account health)",
+      "Weekly optimization (copy, sequences, timing, segmentation)",
+      "Weekly strategy call + scaling roadmap",
+      "24/7 chat access (fast response for urgent issues)",
       "Dedicated account manager",
+      "Ongoing reporting + iteration",
     ],
+    smallNote: "Requires a proven pilot. Messaging usage billed separately.",
     cta: "Scale Up",
     highlighted: true,
   },
@@ -42,15 +44,15 @@ const tiers = [
     name: "Scale + AI",
     duration: "Monthly",
     price: "Custom",
-    description: "AI automation layer — your team focuses only on closing hot leads.",
+    description: "Automation layer after first results are proven.",
     features: [
-      "Everything in Growth",
-      "AI auto-replies",
-      "Smart qualification engine",
+      "AI auto-replies + smart qualification",
       "CRM auto-fill & routing",
       "Safe mode (human handoff)",
-      "Booking automation",
+      "Booking automation support",
+      "Multi-country scaling & infrastructure",
     ],
+    smallNote: "AI is introduced after the winning sequence is proven.",
     cta: "Learn More",
     highlighted: false,
   },
@@ -125,6 +127,12 @@ export const ProductTiers = () => {
                   {tier.cta}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Button>
+
+                {tier.smallNote && (
+                  <p className="text-[11px] text-muted-foreground/60 text-center mt-3 leading-snug">
+                    {tier.smallNote}
+                  </p>
+                )}
               </div>
             </ScrollReveal>
           ))}
