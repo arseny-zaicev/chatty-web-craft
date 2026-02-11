@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
+import { WhatsAppFloat } from "@/components/WhatsAppFloat";
 import { ClientLogos } from "@/components/ClientLogos";
 import { WhatsAppStages } from "@/components/whatsapp/WhatsAppStages";
 import { ROICalculator } from "@/components/whatsapp/ROICalculator";
@@ -47,6 +48,7 @@ const Index = () => {
       </Helmet>
       
       <main className="min-h-screen">
+        <WhatsAppFloat />
         <Navbar />
         <HeroSection />
         <ClientLogos />
