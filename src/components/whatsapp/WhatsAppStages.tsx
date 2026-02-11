@@ -90,7 +90,7 @@ export const WhatsAppStages = () => {
   const [expandedStage, setExpandedStage] = useState<number | null>(null);
 
   return (
-    <section className="py-24">
+    <section id="stages" className="py-24">
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <div className="text-center mb-16">

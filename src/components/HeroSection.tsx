@@ -55,7 +55,7 @@ const LiveMessagesCounter = () => {
 
 export const HeroSection = () => {
   const scrollToContact = () => {
-    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("fit-check")?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
