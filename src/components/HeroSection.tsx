@@ -5,49 +5,90 @@ import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { ArrowRight, Zap } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
 
-const HeroStat = ({ value, suffix, label }: { value: number; suffix: string; label: string }) => {
-  const { formattedValue, elementRef } = useCountUp({
-    end: value,
-    duration: 2000,
-    suffix,
-  });
-
-  return (
-    <div ref={elementRef} className="glass-card rounded-2xl p-5 lg:p-6 group hover-lift hover:border-iskra-emerald/40">
-      <div className="text-3xl lg:text-4xl font-bold text-iskra-emerald mb-1 font-headline">
-        {formattedValue}
-      </div>
-      <div className="text-sm text-foreground/70 font-medium">{label}</div>
-    </div>
-  );
-};
-
-const LiveMessagesCounter = () => {
+const LiveDashboard = () => {
   const [count, setCount] = useState(10405);
+  const [recentReplies, setRecentReplies] = useState(247);
   
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Add 1-3 messages every 3-5 seconds
+    const msgInterval = setInterval(() => {
       setCount(prev => prev + Math.floor(Math.random() * 3) + 1);
     }, 3000 + Math.random() * 2000);
     
-    return () => clearInterval(interval);
+    const replyInterval = setInterval(() => {
+      setRecentReplies(prev => prev + 1);
+    }, 8000 + Math.random() * 4000);
+    
+    return () => {
+      clearInterval(msgInterval);
+      clearInterval(replyInterval);
+    };
   }, []);
 
   const formattedCount = count.toLocaleString('en-US').replace(/,/g, ' ');
 
   return (
-    <div className="glass-card rounded-2xl p-6 group hover-lift hover:border-iskra-emerald/40">
-      <div className="flex items-center gap-2 text-foreground/60 text-sm mb-3">
-        <span>Messages sent</span>
-        <span className="text-iskra-emerald">· 98% delivery</span>
-      </div>
-      <div className="text-4xl lg:text-5xl font-bold text-foreground font-headline tracking-tight transition-all duration-500">
-        {formattedCount}
-      </div>
-      <div className="flex items-center gap-2 mt-3 text-foreground/50 text-sm">
-        <span className="w-2 h-2 bg-iskra-emerald rounded-full animate-pulse" />
-        Powered by ISKRA SYSTEM
+    <div className="relative animate-fade-in" style={{ animationDelay: "0.3s" }}>
+      {/* Ambient glow behind card */}
+      <div className="absolute -inset-4 bg-iskra-emerald/5 rounded-3xl blur-2xl" />
+      
+      <div className="relative rounded-2xl border border-border/60 bg-card/80 backdrop-blur-xl overflow-hidden">
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border/40">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-iskra-emerald opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-iskra-emerald" />
+            </span>
+            <span className="text-xs font-medium text-foreground/50 uppercase tracking-wider">ISKRA System · Live</span>
+          </div>
+          <div className="flex gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-foreground/10" />
+            <span className="w-2.5 h-2.5 rounded-full bg-foreground/10" />
+            <span className="w-2.5 h-2.5 rounded-full bg-foreground/10" />
+          </div>
+        </div>
+
+        {/* Metrics row */}
+        <div className="grid grid-cols-4 divide-x divide-border/30">
+          {[
+            { value: "4x", label: "ROI" },
+            { value: "2m", label: "Response" },
+            { value: "35%", label: "Reply Rate" },
+            { value: "98%", label: "Delivery" },
+          ].map((stat) => (
+            <div key={stat.label} className="px-4 py-4 text-center group">
+              <div className="text-lg lg:text-xl font-bold text-iskra-emerald font-headline transition-colors">
+                {stat.value}
+              </div>
+              <div className="text-[10px] lg:text-xs text-foreground/40 mt-0.5 uppercase tracking-wide">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-iskra-emerald/20 to-transparent" />
+
+        {/* Live counter section */}
+        <div className="px-5 py-5">
+          <div className="flex items-baseline justify-between mb-1">
+            <span className="text-xs text-foreground/40">Messages Sent</span>
+            <span className="text-[10px] text-iskra-emerald font-medium">98% delivered</span>
+          </div>
+          <div className="text-4xl lg:text-5xl font-bold text-foreground font-headline tracking-tight tabular-nums transition-all duration-500">
+            {formattedCount}
+          </div>
+        </div>
+
+        {/* Recent activity bar */}
+        <div className="px-5 py-3 bg-iskra-emerald/5 border-t border-border/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3 h-3 text-iskra-emerald" />
+            <span className="text-xs text-foreground/50">
+              <span className="text-iskra-emerald font-semibold">{recentReplies}</span> replies today
+            </span>
+          </div>
+          <span className="text-[10px] text-foreground/30">Powered by ISKRA</span>
+        </div>
       </div>
     </div>
   );
@@ -67,15 +108,13 @@ export const HeroSection = () => {
       <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-background/60 z-[1]" />
       
       <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 py-12 md:py-16 relative z-10">
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-center">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-center">
           {/* Left Content */}
           <div className="flex-1 max-w-2xl">
-            {/* Small subtitle */}
             <p className="text-foreground/60 text-sm md:text-base uppercase tracking-widest mb-4 animate-fade-in">
               WhatsApp Outreach Infrastructure
             </p>
             
-            {/* Main headline - compact like reference */}
             <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <span className="text-foreground">WhatsApp Booking</span>
               <br />
@@ -83,12 +122,10 @@ export const HeroSection = () => {
               <span className="text-iskra-emerald whitespace-nowrap">f*cking works.</span>
             </h1>
             
-            {/* Subheadline - compact */}
             <p className="text-base md:text-lg text-foreground/70 mb-8 max-w-lg leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
               Dedicated sending accounts. Proven copy sequences. Full funnel tracking. AI layer when you're ready.
             </p>
 
-            {/* Single CTA Button - like reference */}
             <div className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
               <Button 
                 onClick={scrollToContact}
@@ -100,20 +137,9 @@ export const HeroSection = () => {
             </div>
           </div>
 
-          {/* Right Content - Stats */}
-          <div className="w-full lg:w-auto lg:min-w-[360px]">
-            {/* Stats grid - more compact */}
-            <div className="grid grid-cols-2 gap-3 mb-3 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-              <HeroStat value={4} suffix="x" label="Avg Client ROI" />
-              <HeroStat value={2} suffix="min" label="Avg Response" />
-              <HeroStat value={35} suffix="%" label="Reply Rate" />
-              <HeroStat value={98} suffix="%" label="Delivery Rate" />
-            </div>
-            
-            {/* Live Counter Card */}
-            <div className="animate-fade-in" style={{ animationDelay: "0.4s" }}>
-              <LiveMessagesCounter />
-            </div>
+          {/* Right Content - Live Dashboard */}
+          <div className="w-full lg:w-auto lg:min-w-[380px] lg:max-w-[420px]">
+            <LiveDashboard />
           </div>
         </div>
       </div>
