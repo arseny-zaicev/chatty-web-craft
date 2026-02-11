@@ -52,7 +52,7 @@ export const ROICalculator = () => {
 
         <ScrollReveal delay={100}>
           <div className="max-w-5xl mx-auto">
-            <div className="grid lg:grid-cols-2 gap-8 relative">
+            <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 relative">
               {/* Inputs */}
               <div className="glass-card rounded-2xl p-8">
                 <div className="flex items-center gap-3 mb-8">
@@ -130,30 +130,33 @@ export const ROICalculator = () => {
                 </p>
               </div>
 
-              {/* Results */}
-              <div className="glass-card rounded-2xl p-8 border-iskra-emerald/30 relative">
-                {/* Shimmering horizontal curved arrow from metrics to results */}
-                <svg className="hidden lg:block absolute -left-12 top-1/2 -translate-y-1/2 -translate-x-full" width="80" height="120" viewBox="0 0 80 120" fill="none">
+              {/* Connecting arrow between cards */}
+              <div className="hidden lg:flex absolute -left-8 top-1/2 -translate-y-1/2 -translate-x-full items-center z-10">
+                <svg width="64" height="24" viewBox="0 0 64 24" fill="none">
                   <defs>
-                    <linearGradient id="arrow-shimmer-h" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.15">
-                        <animate attributeName="stopOpacity" values="0.15;0.6;0.15" dur="2.5s" repeatCount="indefinite" />
+                    <linearGradient id="arrow-flow" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.2">
+                        <animate attributeName="stopOpacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite" />
                       </stop>
-                      <stop offset="50%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.9">
-                        <animate attributeName="stopOpacity" values="0.9;1;0.9" dur="2.5s" repeatCount="indefinite" />
+                      <stop offset="50%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.8">
+                        <animate attributeName="offset" values="0.3;0.7;0.3" dur="2s" repeatCount="indefinite" />
                       </stop>
                       <stop offset="100%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.4">
-                        <animate attributeName="stopOpacity" values="0.4;0.8;0.4" dur="2.5s" repeatCount="indefinite" />
+                        <animate attributeName="stopOpacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite" />
                       </stop>
                     </linearGradient>
-                    <filter id="arrow-glow-h">
-                      <feGaussianBlur stdDeviation="2.5" result="blur" />
+                    <filter id="arrow-soft-glow">
+                      <feGaussianBlur stdDeviation="1.5" result="blur" />
                       <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
                     </filter>
                   </defs>
-                  <path d="M0 30 C30 30, 40 10, 50 40 C60 70, 30 90, 60 90" stroke="url(#arrow-shimmer-h)" strokeWidth="2.5" strokeLinecap="round" fill="none" filter="url(#arrow-glow-h)" />
-                  <path d="M52 82 L62 90 L52 98" stroke="url(#arrow-shimmer-h)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" filter="url(#arrow-glow-h)" />
+                  <path d="M0 12 C16 12, 32 4, 48 12 C52 14, 48 12, 64 12" stroke="url(#arrow-flow)" strokeWidth="2" strokeLinecap="round" fill="none" filter="url(#arrow-soft-glow)" />
+                  <path d="M54 6 L64 12 L54 18" stroke="url(#arrow-flow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" filter="url(#arrow-soft-glow)" />
                 </svg>
+              </div>
+
+              {/* Results */}
+              <div className="glass-card rounded-2xl p-8 border-iskra-emerald/30 relative">
                 <div className="flex items-center gap-3 mb-8">
                   <div className="w-10 h-10 rounded-xl bg-iskra-emerald/10 flex items-center justify-center">
                     <TrendingUp className="w-5 h-5 text-iskra-emerald" />
