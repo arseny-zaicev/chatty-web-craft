@@ -8,6 +8,7 @@ import { ROICalculator } from "@/components/whatsapp/ROICalculator";
 import { ClientDashboardPreview } from "@/components/whatsapp/ClientDashboardPreview";
 import { ProductTiers } from "@/components/whatsapp/ProductTiers";
 import { Testimonials } from "@/components/Testimonials";
+import { FounderSection } from "@/components/FounderSection";
 import { FAQ } from "@/components/FAQ";
 import { FitCheckForm } from "@/components/whatsapp/FitCheckForm";
 import { Footer } from "@/components/Footer";
@@ -57,6 +58,7 @@ const Index = () => {
         <ClientDashboardPreview />
         <ProductTiers />
         <Testimonials />
+        <FounderSection />
         <FAQ />
         <FitCheckForm />
         <Footer />
