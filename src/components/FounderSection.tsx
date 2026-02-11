@@ -48,11 +48,11 @@ export const FounderSection = () => {
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                We're a team with one clear mission: to help you with what you REALLY need — not just sell you something. That's why we only collect positive reviews and are always happy to learn how we can be useful to you, whatever the outcome.
+                We've been in the WhatsApp outreach space for <span className="text-iskra-emerald font-semibold">over 2 years</span>, sending <span className="text-iskra-emerald font-semibold">1M+ messages</span> across dozens of campaigns. During that time, we've tested every possible technical setup — from basic bulk senders to enterprise APIs.
               </p>
               
               <p className="text-muted-foreground leading-relaxed">
-                Our team has experience building <span className="text-iskra-emerald font-semibold">27+ AI agents</span> and knows all the ins and outs of WhatsApp outreach. We want to see your growth!
+                The result? A proprietary infrastructure built specifically to <span className="text-iskra-emerald font-semibold">eliminate bans and blocks</span> — warm-up sequences, account rotation, smart throttling, and compliance safeguards that keep your campaigns running without interruption.
               </p>
 
               {/* Video Preview */}
