@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import Index from "./pages/Index";
 import SellerLeads from "./pages/SellerLeads";
-import AIAgent from "./pages/AIAgent";
+import WhatsApp from "./pages/WhatsApp";
 import BrandAssets from "./pages/BrandAssets";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -35,7 +35,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/seller-leads" element={<SellerLeads />} />
-            <Route path="/ai-agent" element={<AIAgent />} />
+            <Route path="/whatsapp" element={<WhatsApp />} />
             <Route path="/brand" element={<BrandAssets />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />

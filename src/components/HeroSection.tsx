@@ -72,7 +72,7 @@ export const HeroSection = () => {
           <div className="flex-1 max-w-2xl">
             {/* Small subtitle */}
             <p className="text-foreground/60 text-sm md:text-base uppercase tracking-widest mb-4 animate-fade-in">
-              WhatsApp Outreach & AI Automation
+              WhatsApp Outreach Infrastructure
             </p>
             
             {/* Main headline - compact like reference */}
@@ -85,7 +85,7 @@ export const HeroSection = () => {
             
             {/* Subheadline - compact */}
             <p className="text-base md:text-lg text-foreground/70 mb-8 max-w-lg leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
-              Send from our warmed-up numbers. AI replies & books meetings for your setters.
+              Dedicated sending accounts. Proven copy sequences. Full funnel tracking. AI layer when you're ready.
             </p>
 
             {/* Single CTA Button - like reference */}

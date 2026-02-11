@@ -1,39 +1,39 @@
-import { Check, ArrowRight, Sparkles, Bot } from "lucide-react";
+import { Check, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 
 const plans = [
   {
-    name: "AI RAG Agent",
-    priceEur: "Custom",
-    priceAed: "",
-    period: "pricing",
-    description: "Tailored AI solution based on your needs",
+    name: "WhatsApp Outreach",
+    priceEur: "from €1,500",
+    priceAed: "~5,900 AED",
+    period: "/ pilot",
+    description: "Full WhatsApp booking engine — pilot to scale",
     features: [
-      "Unlimited conversations",
-      "Multi-language support",
-      "AI Pipeline analytics",
-      "CRM integrations",
-      "Meeting booking",
-      "And much more available",
+      "ICP research & segmentation",
+      "Copy library + A/B testing",
+      "Dedicated sending accounts",
+      "CRM handoff & tracking",
+      "10,000+ message pilot",
+      "98% delivery rate",
     ],
     highlighted: true,
     isMain: true,
   },
   {
-    name: "WhatsApp Outreach",
-    priceEur: "from €497",
-    priceAed: "~1,950 AED",
-    period: "/month",
-    description: "High-volume personalized messaging",
+    name: "AI Layer (Add-on)",
+    priceEur: "Custom",
+    priceAed: "",
+    period: "pricing",
+    description: "AI automation after proven results",
     features: [
-      "Custom message quantity",
-      "Aged accounts network",
-      "All conversations in one place",
-      "Contact validation",
-      "Copy optimization",
-      "98% delivery rate",
+      "Auto-replies to common questions",
+      "Smart lead qualification",
+      "CRM auto-fill & routing",
+      "Human handoff on edge cases",
+      "Booking automation",
+      "Works on top of WhatsApp engine",
     ],
     highlighted: false,
     isMain: false,
@@ -49,7 +49,7 @@ export const Pricing = () => {
 
   const handleGetStarted = (planName: string) => {
     if (planName === "WhatsApp Outreach") {
-      navigate("/whatsapp/apply");
+      navigate("/whatsapp");
     } else {
       scrollToContact();
     }
@@ -79,10 +79,10 @@ export const Pricing = () => {
                     : "border-border/50"
                 }`}
               >
-                {plan.highlighted && (
+              {plan.highlighted && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-iskra-emerald rounded-full text-sm font-semibold text-primary-foreground flex items-center gap-2">
-                    <Bot className="w-4 h-4" />
-                    Main Product
+                    <Sparkles className="w-4 h-4" />
+                    Core Product
                   </div>
                 )}
 

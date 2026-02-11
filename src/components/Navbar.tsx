@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 
 const navItems = [
-  { label: "AI Agent", href: "/#chatbot" },
-  { label: "AI Use Cases", href: "/ai-agent", isPage: true },
+  { label: "WhatsApp Engine", href: "/whatsapp", isPage: true },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Pricing", href: "/#pricing", sellerLeadsHref: "/seller-leads#pricing" },
   { label: "Contact", href: "/#contact" },
