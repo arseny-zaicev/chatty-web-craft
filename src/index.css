@@ -461,3 +461,17 @@
     transform: translate(-50%, -50%) translateY(-12px);
   }
 }
+
+/* Icon shimmer glow */
+@keyframes iconShimmer {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px hsl(155 80% 45% / 0.15), 0 0 20px 4px hsl(155 80% 45% / 0.05);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px hsl(155 80% 45% / 0.3), 0 0 30px 8px hsl(155 80% 45% / 0.1);
+  }
+}
+
+.icon-shimmer {
+  animation: iconShimmer 3s ease-in-out infinite;
+}
