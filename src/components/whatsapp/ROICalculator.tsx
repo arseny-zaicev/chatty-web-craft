@@ -130,31 +130,6 @@ export const ROICalculator = () => {
                 </p>
               </div>
 
-              {/* Connecting arrow between cards */}
-              <div className="hidden lg:flex absolute -left-8 top-1/2 -translate-y-1/2 -translate-x-full items-center z-10">
-                <svg width="64" height="24" viewBox="0 0 64 24" fill="none">
-                  <defs>
-                    <linearGradient id="arrow-flow" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.2">
-                        <animate attributeName="stopOpacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite" />
-                      </stop>
-                      <stop offset="50%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.8">
-                        <animate attributeName="offset" values="0.3;0.7;0.3" dur="2s" repeatCount="indefinite" />
-                      </stop>
-                      <stop offset="100%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.4">
-                        <animate attributeName="stopOpacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite" />
-                      </stop>
-                    </linearGradient>
-                    <filter id="arrow-soft-glow">
-                      <feGaussianBlur stdDeviation="1.5" result="blur" />
-                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                    </filter>
-                  </defs>
-                  <path d="M0 12 C16 12, 32 4, 48 12 C52 14, 48 12, 64 12" stroke="url(#arrow-flow)" strokeWidth="2" strokeLinecap="round" fill="none" filter="url(#arrow-soft-glow)" />
-                  <path d="M54 6 L64 12 L54 18" stroke="url(#arrow-flow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" filter="url(#arrow-soft-glow)" />
-                </svg>
-              </div>
-
               {/* Results */}
               <div className="glass-card rounded-2xl p-8 border-iskra-emerald/30 relative">
                 <div className="flex items-center gap-3 mb-8">
