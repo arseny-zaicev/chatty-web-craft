@@ -40,9 +40,9 @@ const PhoneMockup = () => {
   const notif = PHONE_NOTIFS[notifIndex];
 
   return (
-    <div className="absolute -right-28 -top-20 hidden xl:block z-[1]">
-      <div className="relative w-[220px] h-[440px]">
-        <div className="absolute inset-0 rounded-[36px] border-[3px] border-foreground/15 bg-background/95 backdrop-blur-sm shadow-2xl shadow-black/40 overflow-hidden">
+    <div className="absolute right-[-120px] top-[-60px] hidden xl:block" style={{ zIndex: 1 }}>
+      <div className="relative w-[240px] h-[480px]">
+        <div className="absolute inset-0 rounded-[40px] border-[3px] border-foreground/20 bg-background shadow-2xl shadow-black/50 overflow-hidden">
           <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-5 bg-black rounded-full z-20" />
           <div className="flex items-center justify-between px-6 pt-2 text-[8px] text-foreground/50 font-medium">
             <span>9:41</span>

@@ -115,17 +115,20 @@ export const WhatsAppStages = () => {
             return (
               <ScrollReveal key={stage.id} delay={index * 80}>
                 <div className="relative group/card">
-                  {/* Ambient glow on hover */}
-                  <div className={`absolute -inset-px rounded-2xl transition-opacity duration-500 pointer-events-none ${
+                  {/* Ambient glow */}
+                  <div className={`absolute -inset-[2px] rounded-2xl pointer-events-none transition-all duration-500 ${
                     isExpanded 
                       ? "opacity-100" 
                       : "opacity-0 group-hover/card:opacity-100"
-                  }`} style={{ boxShadow: "0 0 40px 4px hsl(155 80% 45% / 0.12), inset 0 0 0 1px hsl(155 80% 45% / 0.15)" }} />
+                  }`} style={{ 
+                    background: "linear-gradient(135deg, hsl(155 80% 45% / 0.25), hsl(150 75% 55% / 0.1), hsl(155 80% 45% / 0.25))",
+                    boxShadow: "0 0 50px 8px hsl(155 80% 45% / 0.08), 0 0 20px 2px hsl(155 80% 45% / 0.12)"
+                  }} />
                   
                   <button
                     onClick={() => setExpandedStage(isExpanded ? null : stage.id)}
-                    className={`relative w-full text-left glass-card rounded-2xl p-6 transition-all duration-300 hover:border-iskra-emerald/40 ${
-                      isExpanded ? "border-iskra-emerald/50" : ""
+                    className={`relative w-full text-left glass-card rounded-2xl p-6 transition-all duration-300 ${
+                      isExpanded ? "border-iskra-emerald/60" : "hover:border-iskra-emerald/30"
                     }`}
                   >
                   {/* Header row */}
