@@ -1,14 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/Sparkles";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
-import { ArrowRight, Zap } from "lucide-react";
+import { ArrowRight, Zap, Bell } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
+
+const NOTIFICATIONS = [
+  { type: "positive", text: '"Yes, I\'m interested. When can we talk?"' },
+  { type: "booked", text: "Meeting booked — Tomorrow 2:00 PM" },
+  { type: "positive", text: '"Send me more details please"' },
+  { type: "booked", text: "Meeting booked — Thursday 11:00 AM" },
+  { type: "positive", text: '"This is exactly what we need"' },
+  { type: "reply", text: '"Can you call me at 3pm?"' },
+  { type: "booked", text: "Meeting booked — Monday 10:30 AM" },
+  { type: "positive", text: '"Very interested, let\'s discuss"' },
+];
 
 const LiveDashboard = () => {
   const [count, setCount] = useState(10405);
   const [recentReplies, setRecentReplies] = useState(247);
-  
+  const [notifIndex, setNotifIndex] = useState(0);
+  const [notifVisible, setNotifVisible] = useState(true);
+
   useEffect(() => {
     const msgInterval = setInterval(() => {
       setCount(prev => prev + Math.floor(Math.random() * 3) + 1);
@@ -17,14 +30,24 @@ const LiveDashboard = () => {
     const replyInterval = setInterval(() => {
       setRecentReplies(prev => prev + 1);
     }, 8000 + Math.random() * 4000);
+
+    const notifInterval = setInterval(() => {
+      setNotifVisible(false);
+      setTimeout(() => {
+        setNotifIndex(prev => (prev + 1) % NOTIFICATIONS.length);
+        setNotifVisible(true);
+      }, 400);
+    }, 4000);
     
     return () => {
       clearInterval(msgInterval);
       clearInterval(replyInterval);
+      clearInterval(notifInterval);
     };
   }, []);
 
   const formattedCount = count.toLocaleString('en-US').replace(/,/g, ' ');
+  const currentNotif = NOTIFICATIONS[notifIndex];
 
   return (
     <div className="relative animate-fade-in" style={{ animationDelay: "0.3s" }}>
@@ -79,15 +102,24 @@ const LiveDashboard = () => {
           </div>
         </div>
 
-        {/* Recent activity bar */}
-        <div className="px-5 py-3 bg-iskra-emerald/5 border-t border-border/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Zap className="w-3 h-3 text-iskra-emerald" />
-            <span className="text-xs text-foreground/50">
-              <span className="text-iskra-emerald font-semibold">{recentReplies}</span> replies today
-            </span>
+        {/* Push notification */}
+        <div className="px-4 py-3 bg-iskra-emerald/5 border-t border-border/30 overflow-hidden min-h-[52px]">
+          <div
+            className="flex items-center gap-2.5 transition-all duration-400"
+            style={{
+              opacity: notifVisible ? 1 : 0,
+              transform: notifVisible ? "translateY(0)" : "translateY(12px)",
+            }}
+          >
+            <div className="flex-shrink-0 w-6 h-6 rounded-md bg-iskra-emerald/15 flex items-center justify-center">
+              <Bell className="w-3 h-3 text-iskra-emerald" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] text-iskra-emerald font-semibold uppercase tracking-wide">ISKRA Leads</div>
+              <div className="text-xs text-foreground/60 truncate">{currentNotif.text}</div>
+            </div>
+            <span className="text-[9px] text-foreground/25 flex-shrink-0 ml-auto">now</span>
           </div>
-          <span className="text-[10px] text-foreground/30">Powered by ISKRA</span>
         </div>
       </div>
     </div>
