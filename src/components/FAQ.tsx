@@ -5,6 +5,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
+import { MessageCircle } from "lucide-react";
 
 const faqData = [
   {
@@ -69,6 +70,20 @@ export const FAQ = () => {
                 </AccordionItem>
               ))}
             </Accordion>
+
+            {/* WhatsApp CTA */}
+            <div className="mt-10 flex flex-col items-center text-center">
+              <p className="text-muted-foreground text-sm mb-3">Still have a question?</p>
+              <a
+                href="https://wa.me/971568785008"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-iskra-emerald hover:text-iskra-emerald-light transition-colors font-semibold group"
+              >
+                <span>Chat with us on WhatsApp</span>
+                <MessageCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </a>
+            </div>
           </div>
         </ScrollReveal>
       </div>
