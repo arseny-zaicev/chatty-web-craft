@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { BarChart3, Bell, Send, MessageSquare, ThumbsUp, Phone } from "lucide-react";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 
@@ -8,6 +9,91 @@ const metrics = [
   { label: "Positive", value: "287", icon: ThumbsUp, color: "text-iskra-emerald-light" },
   { label: "Booked", value: "143", icon: Phone, color: "text-iskra-gold" },
 ];
+
+const PHONE_NOTIFS = [
+  { title: "ISKRA Leads", body: "New positive reply from Ahmed K." },
+  { title: "ISKRA Leads", body: "Meeting booked — Tomorrow 2:00 PM" },
+  { title: "ISKRA Leads", body: '"I\'m interested, send details"' },
+  { title: "ISKRA Leads", body: "3 new replies in last hour" },
+  { title: "ISKRA Leads", body: "Meeting booked — Thursday 11 AM" },
+];
+
+const PhoneMockup = () => {
+  const [notifIndex, setNotifIndex] = useState(0);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    // Initial delay before first notification
+    const initialTimer = setTimeout(() => setVisible(true), 1500);
+
+    const interval = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setNotifIndex(prev => (prev + 1) % PHONE_NOTIFS.length);
+        setVisible(true);
+      }, 500);
+    }, 5000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const notif = PHONE_NOTIFS[notifIndex];
+
+  return (
+    <div className="absolute -right-16 top-1/2 -translate-y-1/2 hidden xl:block z-10">
+      {/* iPhone frame */}
+      <div className="relative w-[200px] h-[400px]">
+        {/* Phone body */}
+        <div className="absolute inset-0 rounded-[36px] border-[3px] border-foreground/15 bg-background/90 backdrop-blur-sm shadow-2xl shadow-black/40 overflow-hidden">
+          {/* Dynamic Island */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-5 bg-black rounded-full z-20" />
+          
+          {/* Status bar */}
+          <div className="flex items-center justify-between px-6 pt-2 text-[8px] text-foreground/50 font-medium">
+            <span>9:41</span>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-1.5 border border-foreground/40 rounded-sm">
+                <div className="w-2 h-full bg-iskra-emerald rounded-sm" />
+              </div>
+            </div>
+          </div>
+
+          {/* Lock screen content */}
+          <div className="flex flex-col items-center pt-16 px-4">
+            <div className="text-3xl font-light text-foreground/80 mb-1">9:41</div>
+            <div className="text-[9px] text-foreground/40 mb-8">Tuesday, February 11</div>
+
+            {/* Push notification */}
+            <div
+              className="w-full transition-all duration-500 ease-out"
+              style={{
+                opacity: visible ? 1 : 0,
+                transform: visible ? "translateY(0) scale(1)" : "translateY(-8px) scale(0.95)",
+              }}
+            >
+              <div className="bg-foreground/10 backdrop-blur-xl rounded-2xl p-3 border border-foreground/5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-5 h-5 rounded-md bg-iskra-emerald/20 flex items-center justify-center flex-shrink-0">
+                    <Bell className="w-2.5 h-2.5 text-iskra-emerald" />
+                  </div>
+                  <span className="text-[9px] font-semibold text-foreground/70 uppercase tracking-wide">{notif.title}</span>
+                  <span className="text-[8px] text-foreground/30 ml-auto">now</span>
+                </div>
+                <p className="text-[10px] text-foreground/60 leading-snug pl-7">{notif.body}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Home indicator */}
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-16 h-1 bg-foreground/20 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const ClientDashboardPreview = () => {
   return (
@@ -28,9 +114,12 @@ export const ClientDashboardPreview = () => {
         </ScrollReveal>
 
         <ScrollReveal delay={100}>
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto relative">
+            {/* Phone mockup peeking from behind */}
+            <PhoneMockup />
+
             {/* Mock dashboard */}
-            <div className="glass-card rounded-2xl p-6 md:p-8 border-iskra-emerald/20">
+            <div className="glass-card rounded-2xl p-6 md:p-8 border-iskra-emerald/20 relative z-[5]">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
