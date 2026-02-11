@@ -9,15 +9,18 @@ export const Testimonials = () => {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
   return (
-    <section className="py-24 bg-iskra-cream">
+    <section className="py-16">
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <div className="text-center mb-16">
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-4 text-foreground">
+            <p className="text-iskra-emerald text-sm font-semibold uppercase tracking-widest mb-3">
+              Client Results
+            </p>
+            <h2 className="font-headline text-3xl md:text-4xl font-bold mb-4">
               What Our Clients Say
             </h2>
-            <p className="text-lg text-foreground/70 max-w-2xl mx-auto">
-              Real results from real businesses using our AI solutions.
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Real results from businesses using our WhatsApp engine.
             </p>
           </div>
         </ScrollReveal>
@@ -116,18 +119,9 @@ export const Testimonials = () => {
                 </div>
 
                 <div className="text-center">
-                  <p className="text-foreground/70 mb-4">
-                    Want to see more real examples?
+                  <p className="text-muted-foreground mb-4">
+                    More case studies coming soon.
                   </p>
-                  <Link to="/ai-agent">
-                    <Button 
-                      size="lg" 
-                      className="bg-iskra-emerald hover:bg-iskra-emerald-dark text-primary-foreground btn-glow"
-                    >
-                      View Real Use Cases
-                      <ArrowRight className="w-5 h-5 ml-2" />
-                    </Button>
-                  </Link>
                 </div>
               </div>
             </ScrollReveal>
