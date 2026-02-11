@@ -52,7 +52,7 @@ export const ROICalculator = () => {
 
         <ScrollReveal delay={100}>
           <div className="max-w-5xl mx-auto">
-            <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8">
+            <div className="grid lg:grid-cols-2 gap-8 relative">
               {/* Inputs */}
               <div className="glass-card rounded-2xl p-8">
                 <div className="flex items-center gap-3 mb-8">
@@ -72,14 +72,14 @@ export const ROICalculator = () => {
                     <input
                       type="range"
                       min={5}
-                      max={50}
+                      max={80}
                       value={closeRate}
                       onChange={(e) => setCloseRate(Number(e.target.value))}
                       className="w-full h-2 bg-border rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-iskra-emerald [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:cursor-pointer"
                     />
                     <div className="flex justify-between text-xs text-muted-foreground mt-1">
                       <span>5%</span>
-                      <span>50%</span>
+                      <span>80%</span>
                     </div>
                   </div>
 
@@ -130,53 +130,30 @@ export const ROICalculator = () => {
                 </p>
               </div>
 
-              {/* Shimmering curved arrow between cards */}
-              <div className="hidden lg:flex flex-col items-center justify-center py-8">
-                <svg width="48" height="180" viewBox="0 0 48 180" fill="none" className="overflow-visible">
+              {/* Results */}
+              <div className="glass-card rounded-2xl p-8 border-iskra-emerald/30 relative">
+                {/* Shimmering horizontal curved arrow from metrics to results */}
+                <svg className="hidden lg:block absolute -left-12 top-1/2 -translate-y-1/2 -translate-x-full" width="80" height="120" viewBox="0 0 80 120" fill="none">
                   <defs>
-                    <linearGradient id="arrow-shimmer" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.2">
-                        <animate attributeName="stopOpacity" values="0.2;0.8;0.2" dur="2.5s" repeatCount="indefinite" />
+                    <linearGradient id="arrow-shimmer-h" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.15">
+                        <animate attributeName="stopOpacity" values="0.15;0.6;0.15" dur="2.5s" repeatCount="indefinite" />
                       </stop>
                       <stop offset="50%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.9">
                         <animate attributeName="stopOpacity" values="0.9;1;0.9" dur="2.5s" repeatCount="indefinite" />
                       </stop>
-                      <stop offset="100%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.3">
-                        <animate attributeName="stopOpacity" values="0.3;0.7;0.3" dur="2.5s" repeatCount="indefinite" />
+                      <stop offset="100%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.4">
+                        <animate attributeName="stopOpacity" values="0.4;0.8;0.4" dur="2.5s" repeatCount="indefinite" />
                       </stop>
                     </linearGradient>
-                    <filter id="arrow-glow">
-                      <feGaussianBlur stdDeviation="3" result="blur" />
-                      <feMerge>
-                        <feMergeNode in="blur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
+                    <filter id="arrow-glow-h">
+                      <feGaussianBlur stdDeviation="2.5" result="blur" />
+                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
                     </filter>
                   </defs>
-                  {/* Curving S-path */}
-                  <path
-                    d="M24 0 C24 30, 44 40, 44 70 C44 100, 4 110, 4 140 C4 155, 24 160, 24 165"
-                    stroke="url(#arrow-shimmer)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    fill="none"
-                    filter="url(#arrow-glow)"
-                  />
-                  {/* Arrowhead */}
-                  <path
-                    d="M16 158 L24 172 L32 158"
-                    stroke="url(#arrow-shimmer)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                    filter="url(#arrow-glow)"
-                  />
+                  <path d="M0 30 C30 30, 40 10, 50 40 C60 70, 30 90, 60 90" stroke="url(#arrow-shimmer-h)" strokeWidth="2.5" strokeLinecap="round" fill="none" filter="url(#arrow-glow-h)" />
+                  <path d="M52 82 L62 90 L52 98" stroke="url(#arrow-shimmer-h)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" filter="url(#arrow-glow-h)" />
                 </svg>
-              </div>
-
-              {/* Results */}
-              <div className="glass-card rounded-2xl p-8 border-iskra-emerald/30">
                 <div className="flex items-center gap-3 mb-8">
                   <div className="w-10 h-10 rounded-xl bg-iskra-emerald/10 flex items-center justify-center">
                     <TrendingUp className="w-5 h-5 text-iskra-emerald" />
