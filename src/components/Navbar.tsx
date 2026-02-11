@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 
 const navItems = [
-  { label: "WhatsApp Engine", href: "/whatsapp", isPage: true },
+  { label: "How It Works", href: "/#stages" },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Pricing", href: "/#pricing", sellerLeadsHref: "/seller-leads#pricing" },
-  { label: "Contact", href: "/#contact" },
+  { label: "Contact", href: "/#fit-check" },
 ];
 
 // ISKRA Logo Component with spark icon
@@ -115,8 +115,8 @@ export const Navbar = () => {
               Client Login
             </Link>
             <a 
-              href="/#contact"
-              onClick={(e) => handleNavClick(e, { label: "Contact", href: "/#contact" })}
+              href="/#fit-check"
+              onClick={(e) => handleNavClick(e, { label: "Contact", href: "/#fit-check" })}
             >
               <Button variant="hero" size="default">
                 Get Started
@@ -173,9 +173,9 @@ export const Navbar = () => {
               </Link>
               
               <a 
-                href="/#contact" 
+                href="/#fit-check" 
                 onClick={(e) => {
-                  handleNavClick(e, { label: "Contact", href: "/#contact" });
+                  handleNavClick(e, { label: "Contact", href: "/#fit-check" });
                   setIsOpen(false);
                 }}
               >
