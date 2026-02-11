@@ -1,7 +1,7 @@
 import { Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
-import { FounderVideoPreview } from "./FounderVideoPreview";
+
 
 export const FounderSection = () => {
   return (
@@ -48,28 +48,13 @@ export const FounderSection = () => {
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                We've been in the WhatsApp outreach space for <span className="text-iskra-emerald font-semibold">over 2 years</span>, sending <span className="text-iskra-emerald font-semibold">1M+ messages</span> across dozens of campaigns. During that time, we've tested every possible technical setup — from basic bulk senders to enterprise APIs.
+                We've been in the WhatsApp outreach space for <span className="text-iskra-emerald font-semibold">over 2 years</span>, sending <span className="text-iskra-emerald font-semibold">1M+ messages</span> across dozens of campaigns. During that time, we've tested every possible technical setup to find the most reliable solution.
               </p>
               
               <p className="text-muted-foreground leading-relaxed">
-                The result? A proprietary infrastructure built specifically to <span className="text-iskra-emerald font-semibold">eliminate bans and blocks</span> — warm-up sequences, account rotation, smart throttling, and compliance safeguards that keep your campaigns running without interruption.
+                The result? A proprietary infrastructure built specifically to <span className="text-iskra-emerald font-semibold">eliminate blocks</span> — warm-up sequences, account rotation, smart throttling, and compliance safeguards that keep your campaigns running without interruption.
               </p>
 
-              {/* Video Preview */}
-              <div className="glass-card rounded-xl p-4 border border-border/50">
-                <div className="flex items-center gap-4">
-                  <FounderVideoPreview size="sm" showPlayButton={true} />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">Video Introduction</p>
-                    <p className="text-xs text-muted-foreground">
-                      Watch a personal message from our founder
-                    </p>
-                  </div>
-                  <span className="text-xs text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
-                    Coming Soon
-                  </span>
-                </div>
-              </div>
 
               {/* Social Links */}
               <div className="flex flex-wrap gap-4 pt-4">
