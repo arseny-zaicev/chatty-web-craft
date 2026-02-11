@@ -104,10 +104,10 @@ export const HeroSection = () => {
           <div className="w-full lg:w-auto lg:min-w-[360px]">
             {/* Stats grid - more compact */}
             <div className="grid grid-cols-2 gap-3 mb-3 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-              <HeroStat value={3} suffix="x" label="More Bookings" />
+              <HeroStat value={4} suffix="x" label="Avg Client ROI" />
               <HeroStat value={2} suffix="min" label="Avg Response" />
-              <HeroStat value={90} suffix="%" label="Lead Capture" />
-              <HeroStat value={0} suffix="$" label="Missed Revenue" />
+              <HeroStat value={35} suffix="%" label="Reply Rate" />
+              <HeroStat value={98} suffix="%" label="Delivery Rate" />
             </div>
             
             {/* Live Counter Card */}

@@ -130,13 +130,49 @@ export const ROICalculator = () => {
                 </p>
               </div>
 
-              {/* Animated arrow between cards */}
-              <div className="hidden lg:flex flex-col items-center justify-center">
-                <div className="relative flex flex-col items-center gap-1 animate-pulse">
-                  <div className="w-px h-16 bg-gradient-to-b from-transparent via-iskra-emerald to-iskra-emerald/40" />
-                  <ChevronDown className="w-6 h-6 text-iskra-emerald animate-bounce" style={{ animationDelay: '0.1s' }} />
-                  <ChevronDown className="w-5 h-5 text-iskra-emerald/60 -mt-3 animate-bounce" style={{ animationDelay: '0.3s' }} />
-                </div>
+              {/* Shimmering curved arrow between cards */}
+              <div className="hidden lg:flex flex-col items-center justify-center py-8">
+                <svg width="48" height="180" viewBox="0 0 48 180" fill="none" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="arrow-shimmer" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.2">
+                        <animate attributeName="stopOpacity" values="0.2;0.8;0.2" dur="2.5s" repeatCount="indefinite" />
+                      </stop>
+                      <stop offset="50%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.9">
+                        <animate attributeName="stopOpacity" values="0.9;1;0.9" dur="2.5s" repeatCount="indefinite" />
+                      </stop>
+                      <stop offset="100%" stopColor="hsl(var(--iskra-emerald))" stopOpacity="0.3">
+                        <animate attributeName="stopOpacity" values="0.3;0.7;0.3" dur="2.5s" repeatCount="indefinite" />
+                      </stop>
+                    </linearGradient>
+                    <filter id="arrow-glow">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  {/* Curving S-path */}
+                  <path
+                    d="M24 0 C24 30, 44 40, 44 70 C44 100, 4 110, 4 140 C4 155, 24 160, 24 165"
+                    stroke="url(#arrow-shimmer)"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    fill="none"
+                    filter="url(#arrow-glow)"
+                  />
+                  {/* Arrowhead */}
+                  <path
+                    d="M16 158 L24 172 L32 158"
+                    stroke="url(#arrow-shimmer)"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                    filter="url(#arrow-glow)"
+                  />
+                </svg>
               </div>
 
               {/* Results */}
