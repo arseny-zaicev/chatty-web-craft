@@ -320,7 +320,7 @@ export const AdminSubmissions = () => {
                     <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex items-center gap-3 flex-wrap">
                         <Badge variant={submission.form_type === "qualification" ? "default" : "secondary"}>
-                          {submission.form_type === "qualification" ? "AI Agent" : "Seller Leads"}
+                          {submission.form_type === "qualification" ? "WhatsApp Outreach" : "Seller Leads"}
                         </Badge>
                         <Badge
                           className={`${statusConfig[submission.status].color} text-white`}
