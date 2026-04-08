@@ -69,6 +69,7 @@ export default {
           "emerald-dark": "hsl(var(--iskra-emerald-dark))",
           gold: "hsl(var(--iskra-gold))",
           cream: "hsl(var(--iskra-cream))",
+          "green-glow": "hsl(var(--iskra-green-glow))",
         },
       },
       borderRadius: {
