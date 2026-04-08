@@ -4,71 +4,72 @@
 
 @layer base {
   :root {
-    /* ISKRA Design System - Premium Dark Theme with Rich Emerald */
-    --background: 160 25% 6%;
-    --foreground: 45 20% 95%;
+    /* ISKRA Design System — Warm Craft-Champagne Theme */
+    --background: 36 34% 87%;
+    --foreground: 28 22% 11%;
 
-    --card: 160 20% 10%;
-    --card-foreground: 45 20% 95%;
+    --card: 40 40% 98%;
+    --card-foreground: 28 22% 11%;
 
-    --popover: 160 20% 10%;
-    --popover-foreground: 45 20% 95%;
+    --popover: 40 40% 98%;
+    --popover-foreground: 28 22% 11%;
 
-    /* Vibrant Emerald primary */
-    --primary: 155 75% 40%;
-    --primary-foreground: 160 25% 6%;
+    /* Rich green primary */
+    --primary: 152 65% 35%;
+    --primary-foreground: 40 40% 98%;
 
-    /* Dark secondary */
-    --secondary: 160 20% 15%;
-    --secondary-foreground: 45 20% 95%;
+    /* Cream secondary */
+    --secondary: 38 32% 93%;
+    --secondary-foreground: 28 22% 11%;
 
-    --muted: 160 15% 18%;
-    --muted-foreground: 45 15% 60%;
+    --muted: 36 22% 80%;
+    --muted-foreground: 28 18% 40%;
 
-    /* Rich emerald accent */
-    --accent: 150 80% 45%;
-    --accent-foreground: 160 25% 6%;
+    /* Green accent */
+    --accent: 152 70% 42%;
+    --accent-foreground: 40 40% 98%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 40 40% 98%;
 
-    --border: 160 15% 20%;
-    --input: 160 15% 20%;
-    --ring: 155 75% 40%;
+    --border: 36 22% 80%;
+    --input: 36 22% 80%;
+    --ring: 152 65% 35%;
 
     --radius: 0.75rem;
 
-    /* Custom ISKRA colors - vibrant & rich */
-    --iskra-beige: 45 25% 90%;
-    --iskra-emerald: 155 80% 45%;
-    --iskra-emerald-light: 150 75% 55%;
-    --iskra-emerald-dark: 160 70% 30%;
-    --iskra-gold: 42 90% 55%;
-    --iskra-cream: 48 30% 95%;
+    /* Custom ISKRA colors */
+    --iskra-beige: 36 34% 87%;
+    --iskra-emerald: 152 65% 35%;
+    --iskra-emerald-light: 152 70% 42%;
+    --iskra-emerald-dark: 152 60% 25%;
+    --iskra-gold: 38 50% 42%;
+    --iskra-cream: 40 40% 98%;
+    --iskra-green-glow: 152 80% 55%;
 
-    /* Gradients - rich & saturated */
-    --gradient-hero: linear-gradient(135deg, hsl(160 25% 6%) 0%, hsl(160 30% 12%) 50%, hsl(155 40% 18%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(160 20% 12% / 0.9) 0%, hsl(155 25% 15% / 0.6) 100%);
-    --gradient-emerald: linear-gradient(135deg, hsl(150 80% 45%) 0%, hsl(155 75% 40%) 100%);
-    --gradient-button: linear-gradient(135deg, hsl(155 75% 40%) 0%, hsl(160 70% 30%) 100%);
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(36 34% 87%) 0%, hsl(38 32% 93%) 50%, hsl(40 40% 98%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(40 40% 98%) 0%, hsl(38 32% 93%) 100%);
+    --gradient-emerald: linear-gradient(135deg, hsl(152 70% 42%) 0%, hsl(152 65% 35%) 100%);
+    --gradient-button: linear-gradient(135deg, hsl(152 65% 35%) 0%, hsl(152 60% 25%) 100%);
 
-    /* Shadows - glow effect */
-    --shadow-soft: 0 4px 24px hsl(155 80% 45% / 0.1);
-    --shadow-glow: 0 0 60px hsl(155 80% 45% / 0.25);
-    --shadow-card: 0 8px 32px hsl(0 0% 0% / 0.3);
+    /* Shadows */
+    --shadow-soft: 0 4px 24px hsl(28 22% 11% / 0.06);
+    --shadow-glow: 0 0 40px hsl(152 80% 55% / 0.15);
+    --shadow-card: 0 8px 32px hsl(28 22% 11% / 0.08);
 
     /* Animations */
     --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bounce: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    --sidebar-background: 160 20% 8%;
-    --sidebar-foreground: 45 20% 95%;
-    --sidebar-primary: 155 75% 40%;
-    --sidebar-primary-foreground: 160 25% 6%;
-    --sidebar-accent: 160 20% 15%;
-    --sidebar-accent-foreground: 45 20% 95%;
-    --sidebar-border: 160 15% 20%;
-    --sidebar-ring: 155 75% 40%;
+    --sidebar-background: 36 34% 87%;
+    --sidebar-foreground: 28 22% 11%;
+    --sidebar-primary: 152 65% 35%;
+    --sidebar-primary-foreground: 40 40% 98%;
+    --sidebar-accent: 38 32% 93%;
+    --sidebar-accent-foreground: 28 22% 11%;
+    --sidebar-border: 36 22% 80%;
+    --sidebar-ring: 152 65% 35%;
   }
 
   .dark {
