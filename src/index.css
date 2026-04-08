@@ -232,7 +232,7 @@
 
 .hover-lift:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px -8px hsl(var(--iskra-emerald) / 0.15);
+  box-shadow: 0 12px 24px -8px hsl(var(--iskra-emerald) / 0.12);
 }
 
 /* Subtle scale on hover */
