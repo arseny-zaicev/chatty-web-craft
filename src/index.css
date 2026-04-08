@@ -467,10 +467,10 @@
 /* Icon shimmer glow */
 @keyframes iconShimmer {
   0%, 100% {
-    box-shadow: 0 0 8px 2px hsl(155 80% 45% / 0.15), 0 0 20px 4px hsl(155 80% 45% / 0.05);
+    box-shadow: 0 0 8px 2px hsl(152 65% 35% / 0.15), 0 0 20px 4px hsl(152 65% 35% / 0.05);
   }
   50% {
-    box-shadow: 0 0 16px 4px hsl(155 80% 45% / 0.3), 0 0 30px 8px hsl(155 80% 45% / 0.1);
+    box-shadow: 0 0 16px 4px hsl(152 65% 35% / 0.25), 0 0 30px 8px hsl(152 65% 35% / 0.08);
   }
 }
 
