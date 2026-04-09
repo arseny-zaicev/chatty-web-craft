@@ -156,7 +156,7 @@ const AIAgent = () => {
             <Button 
               size="lg" 
               className="bg-iskra-emerald hover:bg-iskra-emerald-dark text-primary-foreground"
-              onClick={() => window.location.href = "/#contact"}
+              onClick={() => window.location.href = "/demo"}
             >
               Get Your AI Agent
               <ArrowRight className="w-5 h-5 ml-2" />
