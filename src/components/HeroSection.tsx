@@ -181,7 +181,7 @@ export const HeroSection = () => {
             <h1 className="font-headline text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <span className="text-foreground">Scale WhatsApp outreach</span>
               <br />
-              <span className="inline-block">
+              <span className="inline-block overflow-hidden">
                 <span className="text-iskra-emerald">without burning accounts.</span>
                 <span style={{ display: 'block', marginTop: '-4px' }}>
                   <SketchUnderline color="hsl(152 50% 36%)" delay={0.5} />
@@ -207,7 +207,7 @@ export const HeroSection = () => {
           </div>
 
           {/* Right — WhatsApp Mockup */}
-          <div className="w-full lg:w-auto lg:flex-1 lg:max-w-[400px]">
+          <div className="w-full lg:w-auto lg:flex-1 lg:max-w-[400px] lg:translate-x-4 xl:translate-x-8">
             <WhatsAppMockup />
           </div>
         </div>
