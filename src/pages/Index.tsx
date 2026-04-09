@@ -49,7 +49,8 @@ const Index = () => {
         </script>
       </Helmet>
       
-      <main className="min-h-screen">
+      <div className="shimmer-layer-2" />
+      <main className="min-h-screen relative z-[1]">
         <WhatsAppFloat />
         <Navbar />
         <HeroSection />
