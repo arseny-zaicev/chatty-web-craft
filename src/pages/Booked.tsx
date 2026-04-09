@@ -111,13 +111,13 @@ const Booked = () => {
         {/* Video Placeholder */}
         <section className="pb-16 px-4">
           <div className="container mx-auto max-w-3xl">
-            <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-xl bg-white">
-              <div className="relative w-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200" style={{ paddingBottom: "56.25%" }}>
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+            <div className="rounded-2xl overflow-hidden border border-border shadow-xl bg-card">
+              <div className="relative w-full flex items-center justify-center bg-muted" style={{ paddingBottom: "56.25%" }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
                   <div className="w-20 h-20 rounded-full bg-iskra-emerald/10 border-2 border-dashed border-iskra-emerald/30 flex items-center justify-center mb-4">
                     <Play className="w-8 h-8 text-iskra-emerald/50 ml-1" />
                   </div>
-                  <p className="text-sm font-medium text-gray-500">Video coming soon</p>
+                  <p className="text-sm font-medium text-muted-foreground">Video coming soon</p>
                 </div>
               </div>
             </div>
@@ -171,7 +171,7 @@ const Booked = () => {
               <div className="grid md:grid-cols-5 gap-0">
                 {/* Left: Video + Photo */}
                 <div className="md:col-span-2 p-6">
-                  <div className="rounded-xl overflow-hidden border border-gray-200 aspect-video relative">
+                  <div className="rounded-xl overflow-hidden border border-border aspect-video relative">
                     {!isTestimonialPlaying ? (
                       <button
                         onClick={() => setIsTestimonialPlaying(true)}
