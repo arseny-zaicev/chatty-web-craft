@@ -54,6 +54,7 @@ const Index = () => {
         <Navbar />
         <HeroSection />
         <ClientLogos />
+        <CampaignTypes />
         <WhatsAppStages />
         <ROICalculator />
         <ClientDashboardPreview />
