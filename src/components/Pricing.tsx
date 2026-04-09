@@ -11,7 +11,7 @@ export const Pricing = () => {
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <div className="max-w-3xl mx-auto">
-            <div className="card-light rounded-2xl p-10 md:p-14 text-center relative overflow-hidden">
+            <div className="card-light rounded-2xl p-6 md:p-14 text-center relative overflow-hidden">
               {/* Subtle green accent line at top */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 rounded-b-full bg-iskra-emerald" />
               
