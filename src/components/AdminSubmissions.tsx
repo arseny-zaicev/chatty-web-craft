@@ -493,14 +493,36 @@ export const AdminSubmissions = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium">Form Responses</p>
                 <div className="bg-muted p-4 rounded-lg space-y-2">
-                  {typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Object.entries(selectedSubmission.data as Record<string, unknown>).map(([key, value]) => (
-                    <div key={key} className="flex gap-2 text-sm">
-                      <span className="text-muted-foreground capitalize shrink-0 w-32">{key}:</span>
-                      <span className="font-medium">
-                        {Array.isArray(value) ? value.join(", ") : String(value)}
-                      </span>
-                    </div>
-                  ))}
+                  {typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Object.entries(selectedSubmission.data as Record<string, unknown>).map(([key, value]) => {
+                    if (value === null || value === undefined) return null;
+                    const labels: Record<string, string> = {
+                      campaign_type: "Campaign Type",
+                      crm: "CRM",
+                      business_url: "Website",
+                      team_size: "Team Size",
+                      leads_per_day: "Leads / Day",
+                      traffic_source: "Traffic Source",
+                      base_size: "Database Size",
+                      base_age: "Data Age",
+                      base_source: "Data Origin",
+                      has_mobile_numbers: "Has Mobile Numbers",
+                      target_audience: "Target Audience",
+                    };
+                    const campaignLabels: Record<string, string> = {
+                      warm: "🟢 Warm Traffic",
+                      reactivation: "🔄 Base Reactivation",
+                      cold: "❄️ Cold Outreach",
+                    };
+                    const displayValue = key === "campaign_type" 
+                      ? campaignLabels[String(value)] || String(value)
+                      : Array.isArray(value) ? value.join(", ") : String(value);
+                    return (
+                      <div key={key} className="flex gap-2 text-sm">
+                        <span className="text-muted-foreground shrink-0 w-36">{labels[key] || key}:</span>
+                        <span className="font-medium">{displayValue}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
