@@ -25,7 +25,7 @@ const track = [...clients, ...clients];
 export const ClientLogos = () => (
   <section
     className="relative overflow-hidden"
-    style={{ padding: "1.4rem 0 1.6rem", background: "hsl(0 0% 95%)" }}
+    style={{ padding: "1.4rem 0 1.6rem" }}
   >
     {/* Top rule */}
     <div
@@ -56,11 +56,11 @@ export const ClientLogos = () => (
       {/* Fade edges */}
       <div
         className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to right, hsl(0 0% 95%), transparent)" }}
+        style={{ background: "linear-gradient(to right, hsl(var(--background)), transparent)" }}
       />
       <div
         className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to left, hsl(0 0% 95%), transparent)" }}
+        style={{ background: "linear-gradient(to left, hsl(var(--background)), transparent)" }}
       />
 
       <div className="marquee-inner" style={{ willChange: "transform" }}>
@@ -80,19 +80,15 @@ export const ClientLogos = () => (
                 width: "auto",
                 maxWidth: "120px",
                 objectFit: "contain",
-                filter: "grayscale(1) brightness(0.45) contrast(1.2)",
-                opacity: 0.5,
-                transition: "opacity 0.3s, filter 0.3s",
+                filter: "brightness(0) invert(1)",
+                opacity: 0.4,
+                transition: "opacity 0.3s",
               }}
               onMouseEnter={(e) => {
-                const img = e.currentTarget;
-                img.style.opacity = "0.85";
-                img.style.filter = "grayscale(0.2) brightness(0.75) contrast(1.1)";
+                e.currentTarget.style.opacity = "0.7";
               }}
               onMouseLeave={(e) => {
-                const img = e.currentTarget;
-                img.style.opacity = "0.5";
-                img.style.filter = "grayscale(1) brightness(0.45) contrast(1.2)";
+                e.currentTarget.style.opacity = "0.4";
               }}
             />
           </div>
