@@ -62,7 +62,7 @@ export const WhatsAppHero = () => {
             "Dedicated sending accounts",
             "CRM handoff & KPI tracking",
           ].map((item) => (
-            <div key={item} className="glass-card rounded-xl p-4 flex items-start gap-3">
+            <div key={item} className="card-light rounded-xl p-4 flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-iskra-emerald shrink-0 mt-0.5" />
               <span className="text-sm text-foreground/80 font-medium">{item}</span>
             </div>

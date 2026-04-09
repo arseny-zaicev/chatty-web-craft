@@ -90,8 +90,8 @@ export const ProductTiers = () => {
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-16">
           {tiers.map((tier, index) => (
             <ScrollReveal key={tier.name} delay={index * 100}>
-              <div className={`relative glass-card rounded-2xl p-7 h-full flex flex-col hover-lift ${
-                tier.highlighted ? "border-iskra-emerald/50 shadow-glow" : ""
+              <div className={`relative rounded-2xl p-7 h-full flex flex-col hover-lift ${
+                tier.highlighted ? "card-green-outline shadow-glow" : "card-light"
               }`}>
                 {tier.highlighted && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-iskra-emerald rounded-full text-xs font-semibold text-primary-foreground">
@@ -146,7 +146,7 @@ export const ProductTiers = () => {
             </h3>
             <div className="grid sm:grid-cols-3 gap-4">
               {addOns.map((addon) => (
-                <div key={addon.name} className="glass-card rounded-xl p-5 text-center hover-lift">
+                <div key={addon.name} className="card-champagne rounded-xl p-5 text-center hover-lift">
                   <addon.icon className="w-6 h-6 text-iskra-emerald mx-auto mb-3" />
                   <h4 className="font-semibold text-sm mb-1">{addon.name}</h4>
                   <p className="text-xs text-muted-foreground">{addon.description}</p>

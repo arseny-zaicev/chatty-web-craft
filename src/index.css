@@ -274,6 +274,39 @@
     box-shadow: var(--shadow-card);
   }
 
+  /* Card variants from LP design system */
+  .card-cream {
+    @apply rounded-2xl p-8;
+    background: hsl(40 35% 93%);
+    border: 1px solid hsl(38 25% 83%);
+  }
+
+  .card-champagne {
+    @apply rounded-2xl p-8 border;
+    background: hsl(42 40% 97%);
+    border-color: hsl(38 30% 80%);
+    box-shadow: 0 2px 16px hsl(38 30% 70% / 0.15);
+  }
+
+  .card-green-outline {
+    @apply rounded-2xl p-8 border-2;
+    border-color: hsl(var(--iskra-emerald) / 0.25);
+    background: hsl(var(--iskra-emerald) / 0.03);
+  }
+
+  .card-dark {
+    @apply rounded-2xl p-8;
+    background: hsl(30 18% 12%);
+    color: hsl(42 30% 92%);
+  }
+
+  /* Tags */
+  .tag-dark {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase;
+    background: hsl(var(--foreground) / 0.08);
+    color: hsl(var(--foreground));
+  }
+
   .text-gradient {
     background: linear-gradient(135deg, hsl(152 65% 35%) 0%, hsl(152 80% 55%) 100%);
     -webkit-background-clip: text;
