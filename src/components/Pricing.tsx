@@ -7,20 +7,20 @@ export const Pricing = () => {
   const navigate = useNavigate();
 
   return (
-    <section id="pricing" className="py-24 bg-foreground">
+    <section id="pricing" className="py-24">
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <div className="max-w-3xl mx-auto text-center">
             <span className="text-iskra-emerald text-sm font-semibold uppercase tracking-widest mb-4 inline-block">
               Pricing
             </span>
-            <h2 className="font-display text-3xl md:text-5xl font-bold mb-6 text-background">
+            <h2 className="font-display text-3xl md:text-5xl font-bold mb-6">
               Based on What You Need
             </h2>
-            <p className="text-lg text-background/60 max-w-2xl mx-auto mb-3">
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-3">
               Every campaign is custom-built around your volume, market, and goals.
             </p>
-            <p className="text-background/40 mb-10">
+            <p className="text-muted-foreground/60 mb-10">
               Book a demo to get a clear, no-obligation quote.
             </p>
 
