@@ -84,24 +84,24 @@ const Booked = () => {
         <section className="pb-12 px-4">
           <div className="container mx-auto max-w-3xl">
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="flex items-start gap-4 p-5 rounded-2xl bg-white border border-gray-200">
+              <div className="flex items-start gap-4 p-5 rounded-2xl card-light">
                 <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center flex-shrink-0">
                   <Mail className="w-5 h-5 text-iskra-emerald" />
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-iskra-emerald mb-1">Step 1</p>
-                  <p className="font-semibold text-gray-900 text-sm">Accept the Calendar Invite</p>
-                  <p className="text-gray-500 text-xs mt-0.5">Check your inbox and confirm</p>
+                  <p className="font-semibold text-foreground text-sm">Accept the Calendar Invite</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">Check your inbox and confirm</p>
                 </div>
               </div>
-              <div className="flex items-start gap-4 p-5 rounded-2xl bg-white border border-gray-200">
+              <div className="flex items-start gap-4 p-5 rounded-2xl card-light">
                 <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center flex-shrink-0">
                   <Play className="w-5 h-5 text-iskra-emerald ml-0.5" fill="currentColor" />
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-iskra-emerald mb-1">Step 2</p>
-                  <p className="font-semibold text-gray-900 text-sm">Watch the Video Below</p>
-                  <p className="text-gray-500 text-xs mt-0.5">So we skip the basics on the call</p>
+                  <p className="font-semibold text-foreground text-sm">Watch the Video Below</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">So we skip the basics on the call</p>
                 </div>
               </div>
             </div>
