@@ -163,7 +163,7 @@ export const HeroSection = () => {
     window.location.href = "/demo";
   };
 
-  return (
+   return (
     <section className="relative min-h-[90vh] flex items-center pt-24 overflow-hidden">
       <AnimatedBackground />
       <Sparkles count={15} />
@@ -171,26 +171,25 @@ export const HeroSection = () => {
       <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-background/60 z-[1]" />
 
       <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 py-12 md:py-16 relative z-10">
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-center">
+        <div className="flex flex-col lg:flex-row gap-12 lg:gap-12 items-center">
           {/* Left */}
-          <div className="flex-1 max-w-2xl">
+          <div className="flex-1 max-w-xl lg:max-w-[540px]">
             <p className="text-foreground/50 text-xs md:text-sm uppercase tracking-[0.2em] mb-5 animate-fade-in font-medium">
               WhatsApp Outreach Infrastructure
             </p>
 
-            <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.08] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <span className="text-foreground">Scale WhatsApp</span>
+            <h1 className="font-headline text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+              <span className="text-foreground">Scale WhatsApp outreach</span>
               <br />
-              <span className="text-foreground">outreach </span>
               <span className="inline-block">
-                <span className="text-iskra-emerald whitespace-nowrap">without burning accounts.</span>
+                <span className="text-iskra-emerald">without burning accounts.</span>
                 <span style={{ display: 'block', marginTop: '-4px' }}>
                   <SketchUnderline color="hsl(152 50% 36%)" delay={0.5} />
                 </span>
               </span>
             </h1>
 
-            <p className="text-base md:text-lg text-foreground/65 mb-8 max-w-lg leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
+            <p className="text-base md:text-lg text-foreground/65 mb-8 max-w-md leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
               Send cold campaigns, follow up warm leads, and reactivate old CRM lists with dedicated sending accounts, proven sequences, and full funnel tracking.
             </p>
 
@@ -208,7 +207,7 @@ export const HeroSection = () => {
           </div>
 
           {/* Right — WhatsApp Mockup */}
-          <div className="w-full lg:w-auto lg:min-w-[380px] lg:max-w-[420px]">
+          <div className="w-full lg:w-auto lg:flex-1 lg:max-w-[400px]">
             <WhatsAppMockup />
           </div>
         </div>
