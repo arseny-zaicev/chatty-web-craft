@@ -41,7 +41,14 @@ export const HowItWorks = () => {
           <div className="text-center mb-12">
             <span className="tag-green mb-4 inline-block">Our process</span>
             <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              How We Build Your <span className="text-gradient">Outreach Engine</span>
+              How We Build Your{' '}
+              <span className="inline-block">
+                <span className="text-gradient">Outreach Engine</span>
+                <span style={{ display: 'block', marginTop: '-4px' }}>
+                  <SketchUnderline color="hsl(152 50% 36%)" delay={0.4} />
+                </span>
+              </span>
+            </h2>
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               From strategy to scale — a proven process that delivers results in weeks, not months.
