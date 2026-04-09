@@ -31,6 +31,8 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <CustomCursor />
+        <ScrollProgress />
         <BrowserRouter>
           <ScrollToTop />
           <Routes>
