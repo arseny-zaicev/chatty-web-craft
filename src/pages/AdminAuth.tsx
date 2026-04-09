@@ -103,6 +103,25 @@ const AdminAuth = () => {
                 "Sign In"
               )}
             </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-sm text-muted-foreground"
+              disabled={isLoading}
+              onClick={async () => {
+                if (!email || email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+                  toast.error("Enter admin email first");
+                  return;
+                }
+                const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+                  redirectTo: `${window.location.origin}/admin-auth`,
+                });
+                if (error) toast.error(error.message);
+                else toast.success("Password reset link sent to your email!");
+              }}
+            >
+              Forgot password?
+            </Button>
           </form>
         </CardContent>
       </Card>
