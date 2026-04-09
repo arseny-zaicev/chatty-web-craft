@@ -40,7 +40,7 @@ export const HowItWorks = () => {
         <ScrollReveal>
           <div className="text-center mb-12">
             <span className="tag-green mb-4 inline-block">Our process</span>
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
+            <h2 className="font-display text-3xl md:text-5xl font-bold mb-5">
               How We Build Your{' '}
               <span className="inline-block">
                 <span className="text-gradient">Outreach Engine</span>
@@ -49,7 +49,7 @@ export const HowItWorks = () => {
                 </span>
               </span>
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               From strategy to scale — a proven process that delivers results in weeks, not months.
             </p>
           </div>
@@ -70,10 +70,10 @@ export const HowItWorks = () => {
                     {step.duration}
                   </span>
                 </div>
-                <h3 className="font-display text-lg font-semibold mb-2">
+                <h3 className="font-display text-xl font-semibold mb-2">
                   {step.title}
                 </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
                   {step.description}
                 </p>
               </div>
