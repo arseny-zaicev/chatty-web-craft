@@ -35,11 +35,11 @@ const campaigns = [
       { icon: Users, title: "Qualify replies", desc: "Filter interested → pass to sales" },
     ],
     caseStudy: {
-      metric: "12",
-      metricLabel: "deals closed",
-      before: "3,200 dormant leads sitting in CRM",
-      after: "340 replies → 47 qualified → 12 deals in 3 weeks",
-      industry: "B2B SaaS, Europe",
+      metric: "25%",
+      metricLabel: "positive reply rate",
+      before: "Thousands of dormant leads sitting untouched in CRM",
+      after: "25% positive reply rate → 4% booking rate + best practices to increase show-up",
+      industry: "Across multiple industries",
     },
   },
   {
