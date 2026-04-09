@@ -18,8 +18,7 @@ export const Pricing = () => {
               Based on What You Need
             </h2>
             <p className="text-lg text-background/60 max-w-2xl mx-auto mb-3">
-              Pilots start from <span className="text-iskra-emerald font-semibold">€2,500</span> for a 2-week campaign.
-              Ongoing plans are custom-built around your volume and goals.
+              Every campaign is custom-built around your volume, market, and goals.
             </p>
             <p className="text-background/40 mb-10">
               Book a demo to get a clear, no-obligation quote.
