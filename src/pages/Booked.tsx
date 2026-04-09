@@ -32,7 +32,7 @@ const expectations = [
 ];
 
 const Booked = () => {
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isTestimonialPlaying, setIsTestimonialPlaying] = useState(false);
 
   return (
     <>
@@ -100,18 +100,17 @@ const Booked = () => {
           </div>
         </section>
 
-        {/* Loom Video */}
+        {/* Video Placeholder */}
         <section className="pb-16 px-4">
           <div className="container mx-auto max-w-3xl">
             <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-xl bg-white">
-              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                <iframe
-                  src="https://www.loom.com/embed/2658f8d61782474ab7623445c4a10924?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true"
-                  frameBorder="0"
-                  allowFullScreen
-                  className="absolute inset-0 w-full h-full"
-                  allow="autoplay; fullscreen"
-                />
+              <div className="relative w-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200" style={{ paddingBottom: "56.25%" }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                  <div className="w-20 h-20 rounded-full bg-iskra-emerald/10 border-2 border-dashed border-iskra-emerald/30 flex items-center justify-center mb-4">
+                    <Play className="w-8 h-8 text-iskra-emerald/50 ml-1" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-500">Video coming soon</p>
+                </div>
               </div>
             </div>
           </div>
@@ -152,63 +151,85 @@ const Booked = () => {
           </div>
         </section>
 
-        {/* Testimonial */}
+        {/* Case Study */}
         <section className="py-16 px-4 bg-white">
           <div className="container mx-auto max-w-4xl">
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              {/* Video */}
-              <div className="rounded-2xl overflow-hidden border border-gray-200">
-                <div className="aspect-video relative">
-                  {!isVideoPlaying ? (
-                    <button
-                      onClick={() => setIsVideoPlaying(true)}
-                      className="absolute inset-0 w-full h-full group cursor-pointer"
-                    >
-                      <img
-                        src={kristapsPhoto}
-                        alt="Kristaps - Founder of key-digital.lv"
-                        className="w-full h-full object-cover object-top"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-16 h-16 rounded-full bg-iskra-emerald flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                          <Play className="w-6 h-6 text-white ml-1" fill="currentColor" />
-                        </div>
-                      </div>
-                    </button>
-                  ) : (
-                    <iframe
-                      src="https://drive.google.com/file/d/1NNQ8gBN-64xXEvRVxQdbBiqGqRkIQz8L/preview"
-                      className="w-full h-full absolute inset-0"
-                      allow="autoplay"
-                      allowFullScreen
-                    />
-                  )}
-                </div>
-              </div>
+            <div className="text-center mb-10">
+              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Case Study</p>
+              <h2 className="text-2xl md:text-3xl font-bold font-display text-gray-900">Real Client, Real Results</h2>
+            </div>
 
-              {/* Quote */}
-              <div>
-                <Quote className="w-10 h-10 text-iskra-emerald/30 mb-4" />
-                <blockquote className="text-xl md:text-2xl font-semibold text-gray-900 leading-snug mb-6">
-                  "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
-                </blockquote>
-                <div className="flex items-center gap-3">
-                  <img src={kristapsPhoto} alt="Kristaps" className="w-12 h-12 rounded-full object-cover" />
-                  <div>
-                    <p className="font-semibold text-gray-900">Kristaps</p>
-                    <p className="text-gray-500 text-sm">
-                      Founder,{" "}
-                      <a href="https://key-digital.lv" target="_blank" rel="noopener noreferrer" className="text-iskra-emerald hover:underline">
-                        key-digital.lv
-                      </a>
-                    </p>
+            <div className="bg-[#f5f3ef] rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="grid md:grid-cols-5 gap-0">
+                {/* Left: Video + Photo */}
+                <div className="md:col-span-2 p-6">
+                  <div className="rounded-xl overflow-hidden border border-gray-200 aspect-video relative">
+                    {!isTestimonialPlaying ? (
+                      <button
+                        onClick={() => setIsTestimonialPlaying(true)}
+                        className="absolute inset-0 w-full h-full group cursor-pointer"
+                      >
+                        <img
+                          src={kristapsPhoto}
+                          alt="Kristaps - Founder of key-digital.lv"
+                          className="w-full h-full object-cover object-top"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-14 h-14 rounded-full bg-iskra-emerald flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <Play className="w-5 h-5 text-white ml-0.5" fill="currentColor" />
+                          </div>
+                        </div>
+                        <div className="absolute bottom-3 left-3">
+                          <span className="text-white text-xs font-medium bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">Watch testimonial</span>
+                        </div>
+                      </button>
+                    ) : (
+                      <iframe
+                        src="https://drive.google.com/file/d/1NNQ8gBN-64xXEvRVxQdbBiqGqRkIQz8L/preview"
+                        className="w-full h-full absolute inset-0"
+                        allow="autoplay"
+                        allowFullScreen
+                      />
+                    )}
                   </div>
                 </div>
-                <div className="mt-4 px-4 py-3 rounded-xl bg-iskra-emerald/10 border border-iskra-emerald/20">
-                  <p className="text-sm text-gray-700">
-                    <span className="text-iskra-emerald font-semibold">Result:</span> 500 messages → 8 meetings booked in 2 days
-                  </p>
+
+                {/* Right: Content */}
+                <div className="md:col-span-3 p-6 md:pl-2 flex flex-col justify-center">
+                  <Quote className="w-8 h-8 text-iskra-emerald/20 mb-3" />
+                  <blockquote className="text-lg md:text-xl font-semibold text-gray-900 leading-snug mb-5">
+                    "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
+                  </blockquote>
+
+                  <div className="flex items-center gap-3 mb-5">
+                    <img src={kristapsPhoto} alt="Kristaps" className="w-10 h-10 rounded-full object-cover object-top border-2 border-iskra-emerald/20" />
+                    <div>
+                      <p className="font-semibold text-gray-900 text-sm">Kristaps</p>
+                      <p className="text-gray-500 text-xs">
+                        Founder,{" "}
+                        <a href="https://key-digital.lv" target="_blank" rel="noopener noreferrer" className="text-iskra-emerald hover:underline">
+                          key-digital.lv
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Result metrics */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white rounded-xl p-3 border border-gray-200 text-center">
+                      <p className="text-xl font-bold text-iskra-emerald font-display">500</p>
+                      <p className="text-gray-500 text-[10px] uppercase tracking-wider font-medium mt-0.5">Messages</p>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-gray-200 text-center">
+                      <p className="text-xl font-bold text-iskra-emerald font-display">8</p>
+                      <p className="text-gray-500 text-[10px] uppercase tracking-wider font-medium mt-0.5">Meetings</p>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-gray-200 text-center">
+                      <p className="text-xl font-bold text-iskra-emerald font-display">2d</p>
+                      <p className="text-gray-500 text-[10px] uppercase tracking-wider font-medium mt-0.5">Timeline</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
