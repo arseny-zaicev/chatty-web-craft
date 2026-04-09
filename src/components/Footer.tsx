@@ -3,11 +3,11 @@ import { Mail, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 const footerLinks = [
-  { label: "AI Agent", href: "/#chatbot" },
-  { label: "AI Use Cases", href: "/ai-agent", isPage: true },
+  { label: "How It Works", href: "/#how-it-works" },
+  { label: "Campaigns", href: "/#campaigns" },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Pricing", href: "/#pricing" },
-  { label: "Contact", href: "/#contact" },
+  { label: "Request a Demo", href: "/demo", isPage: true },
   { label: "Client Login", href: "/client-auth", isPage: true },
 ];
 
@@ -69,7 +69,7 @@ export const Footer = () => {
               <IskraLogo />
             </a>
             <p className="text-sm text-muted-foreground mb-4">
-              AI-powered sales automation and lead generation for B2B companies.
+              WhatsApp outreach infrastructure that delivers qualified replies and booked calls.
             </p>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MapPin className="w-4 h-4 text-iskra-emerald" />
