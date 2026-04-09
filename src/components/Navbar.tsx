@@ -86,7 +86,7 @@ export const Navbar = () => {
             </Link>
             <Link to="/demo">
               <Button variant="hero" size="default">
-                Get Started
+                Book a Demo
               </Button>
             </Link>
           </div>
