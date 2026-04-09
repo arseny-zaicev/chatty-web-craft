@@ -5,12 +5,11 @@ import { Menu, X } from "lucide-react";
 
 const navItems = [
   { label: "How It Works", href: "/#how-it-works" },
-  { label: "Seller Leads", href: "/seller-leads", isPage: true },
-  { label: "Pricing", href: "/#pricing", sellerLeadsHref: "/seller-leads#pricing" },
-  { label: "Contact", href: "/#fit-check" },
+  { label: "Results", href: "/#testimonials" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "Request a Demo", href: "/demo", isPage: true },
 ];
 
-// ISKRA Logo Component with spark icon
 const IskraLogo = () => (
   <div className="flex items-center gap-2.5">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-foreground">
@@ -25,33 +24,12 @@ export const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isSellerLeadsPage = location.pathname === "/seller-leads";
-
-  const getHref = (item: typeof navItems[0]) => {
-    // If on Seller Leads page and item has a special href for that page, use it
-    if (isSellerLeadsPage && item.sellerLeadsHref) {
-      return item.sellerLeadsHref;
-    }
-    return item.href;
-  };
-
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, item: typeof navItems[0]) => {
     e.preventDefault();
-    const href = getHref(item);
-    
-    if (href.startsWith("/seller-leads#")) {
-      const sectionId = href.split("#")[1];
-      if (location.pathname === "/seller-leads") {
-        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
-      } else {
-        navigate("/seller-leads");
-        setTimeout(() => {
-          document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
-      }
-    } else if (href.startsWith("/#")) {
+    const href = item.href;
+
+    if (href.startsWith("/#")) {
       const sectionId = href.substring(2);
-      
       if (location.pathname !== "/") {
         navigate("/");
         setTimeout(() => {
@@ -67,14 +45,11 @@ export const Navbar = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border/50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo */}
-          <a 
+          <a
             href="/"
             onClick={(e) => {
               e.preventDefault();
-              if (location.pathname !== "/") {
-                navigate("/");
-              }
+              if (location.pathname !== "/") navigate("/");
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             className="hover:opacity-80 transition-opacity cursor-pointer"
@@ -82,9 +57,8 @@ export const Navbar = () => {
             <IskraLogo />
           </a>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
-            {navItems.map((item) => (
+            {navItems.map((item) =>
               item.isPage ? (
                 <Link
                   key={item.label}
@@ -96,17 +70,16 @@ export const Navbar = () => {
               ) : (
                 <a
                   key={item.label}
-                  href={getHref(item)}
+                  href={item.href}
                   onClick={(e) => handleNavClick(e, item)}
                   className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
                 >
                   {item.label}
                 </a>
               )
-            ))}
+            )}
           </div>
 
-          {/* CTA Button + Client Login */}
           <div className="hidden md:flex items-center gap-4">
             <Link
               to="/client-auth"
@@ -114,17 +87,13 @@ export const Navbar = () => {
             >
               Client Login
             </Link>
-            <a 
-              href="/#fit-check"
-              onClick={(e) => handleNavClick(e, { label: "Contact", href: "/#fit-check" })}
-            >
+            <Link to="/demo">
               <Button variant="hero" size="default">
                 Get Started
               </Button>
-            </a>
+            </Link>
           </div>
 
-          {/* Mobile Menu Button */}
           <button
             className="md:hidden p-2 text-foreground"
             onClick={() => setIsOpen(!isOpen)}
@@ -134,11 +103,10 @@ export const Navbar = () => {
           </button>
         </div>
 
-        {/* Mobile Navigation */}
         {isOpen && (
           <div className="md:hidden py-4 border-t border-border/50 animate-fade-in">
             <div className="flex flex-col gap-4">
-              {navItems.map((item) => (
+              {navItems.map((item) =>
                 item.isPage ? (
                   <Link
                     key={item.label}
@@ -151,7 +119,7 @@ export const Navbar = () => {
                 ) : (
                   <a
                     key={item.label}
-                    href={getHref(item)}
+                    href={item.href}
                     className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 py-2"
                     onClick={(e) => {
                       handleNavClick(e, item);
@@ -161,9 +129,7 @@ export const Navbar = () => {
                     {item.label}
                   </a>
                 )
-              ))}
-              
-              {/* Client Login for mobile */}
+              )}
               <Link
                 to="/client-auth"
                 className="text-sm font-medium text-muted-foreground/70 hover:text-foreground transition-colors duration-200 py-2 border-t border-border/30 pt-4"
@@ -171,18 +137,11 @@ export const Navbar = () => {
               >
                 Client Login
               </Link>
-              
-              <a 
-                href="/#fit-check" 
-                onClick={(e) => {
-                  handleNavClick(e, { label: "Contact", href: "/#fit-check" });
-                  setIsOpen(false);
-                }}
-              >
+              <Link to="/demo" onClick={() => setIsOpen(false)}>
                 <Button variant="hero" size="default" className="mt-2 w-full">
                   Get Started
                 </Button>
-              </a>
+              </Link>
             </div>
           </div>
         )}

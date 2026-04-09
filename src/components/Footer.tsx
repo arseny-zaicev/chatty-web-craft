@@ -4,8 +4,7 @@ import { toast } from "sonner";
 
 const footerLinks = [
   { label: "How It Works", href: "/#how-it-works" },
-  { label: "Campaigns", href: "/#campaigns" },
-  { label: "Seller Leads", href: "/seller-leads", isPage: true },
+  { label: "Results", href: "/#testimonials" },
   { label: "Pricing", href: "/#pricing" },
   { label: "Request a Demo", href: "/demo", isPage: true },
   { label: "Client Login", href: "/client-auth", isPage: true },

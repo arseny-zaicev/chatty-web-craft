@@ -7,20 +7,22 @@ export const Pricing = () => {
   const navigate = useNavigate();
 
   return (
-    <section id="pricing" className="py-24">
+    <section id="pricing" className="py-24 bg-foreground">
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <div className="max-w-3xl mx-auto text-center">
-            <span className="tag-green mb-4 inline-block">Pricing</span>
-            <h2 className="font-display text-3xl md:text-5xl font-bold mb-6">
-              Based on What <span className="text-gradient">You Need</span>
+            <span className="text-iskra-emerald text-sm font-semibold uppercase tracking-widest mb-4 inline-block">
+              Pricing
+            </span>
+            <h2 className="font-display text-3xl md:text-5xl font-bold mb-6 text-background">
+              Based on What You Need
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-4">
-              Every campaign is built around your goals, audience size, and channel mix. 
-              No fixed packages — just a plan that fits.
+            <p className="text-lg text-background/60 max-w-2xl mx-auto mb-3">
+              Pilots start from <span className="text-iskra-emerald font-semibold">€2,500</span> for a 2-week campaign.
+              Ongoing plans are custom-built around your volume and goals.
             </p>
-            <p className="text-muted-foreground mb-10">
-              Tell us what you're looking for and we'll put together a custom quote on a quick call.
+            <p className="text-background/40 mb-10">
+              Book a demo to get a clear, no-obligation quote.
             </p>
 
             <Button
