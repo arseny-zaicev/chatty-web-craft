@@ -1,4 +1,5 @@
 import { Send, CheckCheck, MessageSquare, ThumbsUp, Phone, BarChart3, Bell } from "lucide-react";
+import reactivationProof from "@/assets/reactivation-proof.png";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useRef } from "react";
 
@@ -69,13 +70,23 @@ export const DashboardDemo = () => {
       </div>
 
       {/* Live notification */}
-      <div className="mx-5 mb-4 rounded-xl bg-iskra-emerald/10 border border-iskra-emerald/20 px-4 py-3 flex items-center gap-3">
+      <div className="mx-5 mb-3 rounded-xl bg-iskra-emerald/10 border border-iskra-emerald/20 px-4 py-3 flex items-center gap-3">
         <div className="w-2.5 h-2.5 rounded-full bg-iskra-emerald animate-pulse shrink-0" />
         <p className="text-sm text-foreground">
           <span className="font-semibold text-iskra-emerald">New positive reply</span>
           {' — "Yes, I\'m interested. When can we talk?" — '}
           <span className="text-muted-foreground">2 min ago</span>
         </p>
+      </div>
+
+      {/* Client proof screenshot */}
+      <div className="mx-5 mb-4 rounded-xl overflow-hidden border border-border/30 shadow-sm">
+        <img
+          src={reactivationProof}
+          alt="Client result: 3 sales after reactivation message, 10k+ full pays"
+          className="w-full h-auto"
+          loading="eager"
+        />
       </div>
     </div>
   );
