@@ -1,15 +1,24 @@
-import { Helmet } from "react-helmet-async";
+import { ArrowRight } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import workspaceAvatar from "@/assets/logo/iskra-workspace-avatar.png";
 import linkedinBanner from "@/assets/linkedin/iskra-linkedin-banner-v2.png";
 
-// ISKRA Logo SVG Component
+// New ISKRA Logo SVG — sun/spark with rays
 const IskraLogoSVG = ({ className = "", size = 64, color = "#ffffff" }: { className?: string; size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    <path d="M12 2L14 9L21 12L14 15L12 22L10 15L3 12L10 9L12 2Z" fill={color}/>
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <circle cx="32" cy="32" r="4.5" fill={color}/>
+    <line x1="32" y1="8" x2="32" y2="22" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+    <line x1="32" y1="42" x2="32" y2="56" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+    <line x1="8" y1="32" x2="22" y2="32" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+    <line x1="42" y1="32" x2="56" y2="32" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+    <line x1="15" y1="15" x2="24" y2="24" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+    <line x1="40" y1="40" x2="49" y2="49" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+    <line x1="49" y1="15" x2="40" y2="24" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+    <line x1="24" y1="40" x2="15" y2="49" stroke={color} strokeWidth="3" strokeLinecap="round"/>
   </svg>
 );
 
@@ -20,9 +29,7 @@ const FullLogo = ({ size = "md", bgColor = "transparent", textColor = "#ffffff" 
     md: { icon: 40, text: "text-3xl", gap: "gap-3", padding: "p-6" },
     lg: { icon: 64, text: "text-5xl", gap: "gap-4", padding: "p-8" },
   };
-  
   const s = sizes[size];
-  
   return (
     <div className={`flex items-center ${s.gap} ${s.padding}`} style={{ backgroundColor: bgColor }}>
       <IskraLogoSVG size={s.icon} color={textColor} />
@@ -31,7 +38,7 @@ const FullLogo = ({ size = "md", bgColor = "transparent", textColor = "#ffffff" 
   );
 };
 
-// Download helper functions
+// Download helpers
 const downloadSVG = (svgContent: string, filename: string) => {
   const blob = new Blob([svgContent], { type: "image/svg+xml" });
   const url = URL.createObjectURL(blob);
@@ -47,545 +54,191 @@ const downloadSVG = (svgContent: string, filename: string) => {
 const downloadPNGFromSVG = async (svgContent: string, filename: string, width: number, height: number) => {
   const svgBlob = new Blob([svgContent], { type: "image/svg+xml" });
   const svgUrl = URL.createObjectURL(svgBlob);
-
-  try {
-    const img = new Image();
-    img.decoding = "async";
-
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("Failed to render SVG"));
-      img.src = svgUrl;
-    });
-
+  const img = new Image();
+  img.onload = () => {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas 2D context not available");
-
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(img, 0, 0, width, height);
-
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => {
-        if (!b) return reject(new Error("Failed to export PNG"));
-        resolve(b);
+    if (ctx) {
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
       }, "image/png");
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } finally {
+    }
     URL.revokeObjectURL(svgUrl);
-  }
+  };
+  img.src = svgUrl;
 };
 
-const DownloadButtons = ({
-  svg,
-  baseName,
-  pngWidth,
-  pngHeight,
-}: {
-  svg: string;
-  baseName: string;
-  pngWidth: number;
-  pngHeight: number;
-}) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-    <Button variant="outline" className="w-full" onClick={() => downloadSVG(svg, `${baseName}.svg`)}>
-      <Download className="w-4 h-4 mr-2" />
-      Скачать SVG
-    </Button>
-    <Button variant="outline" className="w-full" onClick={() => void downloadPNGFromSVG(svg, `${baseName}.png`, pngWidth, pngHeight)}>
-      <Download className="w-4 h-4 mr-2" />
-      Скачать PNG
-    </Button>
-  </div>
-);
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <circle cx="32" cy="32" r="4.5" fill="white"/>
+  <line x1="32" y1="8" x2="32" y2="22" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="32" y1="42" x2="32" y2="56" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="8" y1="32" x2="22" y2="32" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="42" y1="32" x2="56" y2="32" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="15" y1="15" x2="24" y2="24" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="40" y1="40" x2="49" y2="49" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="49" y1="15" x2="40" y2="24" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="24" y1="40" x2="15" y2="49" stroke="white" stroke-width="3" stroke-linecap="round"/>
+</svg>`;
 
-// SVG templates for download
-
-const fullLogoSVG = (bgColor: string, textColor: string) => `<svg width="400" height="120" viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="400" height="120" fill="${bgColor}"/>
-  <g transform="translate(40, 24)">
-    <path d="M36 0L42 21L63 36L42 51L36 72L30 51L9 36L30 21L36 0Z" fill="${textColor}"/>
+const FULL_LOGO_SVG = (bg: string, fg: string, w: number, h: number) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <rect width="${w}" height="${h}" fill="${bg}"/>
+  <g transform="translate(${w/2 - 32}, ${h/2 - 50})">
+    <circle cx="32" cy="32" r="4.5" fill="${fg}"/>
+    <line x1="32" y1="8" x2="32" y2="22" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
+    <line x1="32" y1="42" x2="32" y2="56" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
+    <line x1="8" y1="32" x2="22" y2="32" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
+    <line x1="42" y1="32" x2="56" y2="32" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
+    <line x1="15" y1="15" x2="24" y2="24" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
+    <line x1="40" y1="40" x2="49" y2="49" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
+    <line x1="49" y1="15" x2="40" y2="24" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
+    <line x1="24" y1="40" x2="15" y2="49" stroke="${fg}" stroke-width="3" stroke-linecap="round"/>
   </g>
-  <text x="130" y="75" font-family="Space Grotesk, sans-serif" font-size="48" font-weight="700" fill="${textColor}">ISKRA</text>
+  <text x="${w/2}" y="${h/2 + 30}" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="36" fill="${fg}">ISKRA</text>
 </svg>`;
 
-const bannerSVG = (withGradient: boolean) => {
-  if (withGradient) {
-    return `<svg width="820" height="312" viewBox="0 0 820 312" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0a0a0a"/>
-      <stop offset="50%" style="stop-color:#0d1f1a"/>
-      <stop offset="100%" style="stop-color:#0a0a0a"/>
-    </linearGradient>
-    <radialGradient id="glowGradient" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" style="stop-color:#22c55e;stop-opacity:0.3"/>
-      <stop offset="100%" style="stop-color:#22c55e;stop-opacity:0"/>
-    </radialGradient>
-  </defs>
-  <rect width="820" height="312" fill="url(#bgGradient)"/>
-  <ellipse cx="410" cy="156" rx="300" ry="150" fill="url(#glowGradient)"/>
-  <g transform="translate(320, 100)">
-    <path d="M36 0L42 21L63 36L42 51L36 72L30 51L9 36L30 21L36 0Z" fill="#ffffff"/>
-  </g>
-  <text x="410" y="220" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle">ISKRA</text>
-  <text x="410" y="260" font-family="Space Grotesk, sans-serif" font-size="18" fill="#a1a1aa" text-anchor="middle">AI-Powered Business Automation</text>
-</svg>`;
-  }
-  return `<svg width="820" height="312" viewBox="0 0 820 312" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="820" height="312" fill="#0a0a0a"/>
-  <g transform="translate(320, 100)">
-    <path d="M36 0L42 21L63 36L42 51L36 72L30 51L9 36L30 21L36 0Z" fill="#ffffff"/>
-  </g>
-  <text x="410" y="220" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle">ISKRA</text>
-  <text x="410" y="260" font-family="Space Grotesk, sans-serif" font-size="18" fill="#a1a1aa" text-anchor="middle">AI-Powered Business Automation</text>
-</svg>`;
-};
-
-const avatarSVG = (size: number, bgColor: string, withGradient = false) => {
-  // Звезда занимает 70% от размера, центрирована
-  const starSize = size * 0.7;
-  const offset = (size - starSize) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = starSize / 2;
-  
-  // Точки 4-конечной звезды
-  const top = `${cx} ${offset}`;
-  const right = `${size - offset} ${cy}`;
-  const bottom = `${cx} ${size - offset}`;
-  const left = `${offset} ${cy}`;
-  const innerOffset = r * 0.35;
-  const tr = `${cx + innerOffset} ${cy - innerOffset}`;
-  const br = `${cx + innerOffset} ${cy + innerOffset}`;
-  const bl = `${cx - innerOffset} ${cy + innerOffset}`;
-  const tl = `${cx - innerOffset} ${cy - innerOffset}`;
-  
-  const starPath = `M${top}L${tr}L${right}L${br}L${bottom}L${bl}L${left}L${tl}Z`;
-  
-  if (withGradient) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-<defs>
-<linearGradient id="avatarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-<stop offset="0%" stop-color="#0d1f1a"/>
-<stop offset="100%" stop-color="#134e3a"/>
-</linearGradient>
-</defs>
-<rect width="${size}" height="${size}" fill="url(#avatarGradient)"/>
-<path d="${starPath}" fill="#ffffff"/>
-</svg>`;
-  }
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-<rect width="${size}" height="${size}" fill="${bgColor}"/>
-<path d="${starPath}" fill="#ffffff"/>
-</svg>`;
-};
-
-const iconOnlyTransparentSVG = (color: string) => {
-  // Звезда на прозрачном фоне, 512x512
-  const size = 512;
-  const starSize = size * 0.8;
-  const offset = (size - starSize) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = starSize / 2;
-  
-  const top = `${cx} ${offset}`;
-  const right = `${size - offset} ${cy}`;
-  const bottom = `${cx} ${size - offset}`;
-  const left = `${offset} ${cy}`;
-  const innerOffset = r * 0.35;
-  const tr = `${cx + innerOffset} ${cy - innerOffset}`;
-  const br = `${cx + innerOffset} ${cy + innerOffset}`;
-  const bl = `${cx - innerOffset} ${cy + innerOffset}`;
-  const tl = `${cx - innerOffset} ${cy - innerOffset}`;
-  
-  const starPath = `M${top}L${tr}L${right}L${br}L${bottom}L${bl}L${left}L${tl}Z`;
-  
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-<path d="${starPath}" fill="${color}"/>
-</svg>`;
-};
-
-export default function BrandAssets() {
+const BrandAssets = () => {
   return (
     <>
       <Helmet>
-        <title>Brand Assets - ISKRA</title>
-        <meta name="description" content="Download ISKRA brand assets including logos, banners, and social media graphics." />
+        <title>Brand Assets | ISKRA</title>
+        <meta name="robots" content="noindex" />
       </Helmet>
-
       <Navbar />
-      
       <main className="min-h-screen pt-24 pb-16">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-display font-bold mb-4">Brand Assets</h1>
-            <p className="text-muted-foreground text-lg mb-12">
-              Скачайте логотипы ISKRA для Facebook, соцсетей и маркетинговых материалов
+        <div className="container mx-auto px-4 max-w-5xl">
+          <div className="text-center mb-16">
+            <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">Brand Assets</h1>
+            <p className="text-muted-foreground max-w-lg mx-auto">
+              Official ISKRA brand resources. Download logos, icons, and brand materials.
             </p>
-
-            {/* Facebook Avatar 180x180 */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">Facebook Аватар (180×180)</h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Dark background */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-[180px] h-[180px] bg-[#0a0a0a] rounded-lg flex items-center justify-center">
-                      <IskraLogoSVG size={90} color="#ffffff" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Тёмный фон</p>
-                  <DownloadButtons
-                    svg={avatarSVG(180, "#0a0a0a")}
-                    baseName="iskra-avatar-dark-180x180"
-                    pngWidth={180}
-                    pngHeight={180}
-                  />
-                </div>
-
-                {/* Green/teal background */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-[180px] h-[180px] rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 100%)" }}>
-                      <IskraLogoSVG size={90} color="#ffffff" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Зеленоватый градиент</p>
-                  <DownloadButtons
-                    svg={avatarSVG(180, "#0d1f1a", true)}
-                    baseName="iskra-avatar-green-180x180"
-                    pngWidth={180}
-                    pngHeight={180}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Telegram Avatar 512x512 */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">Telegram Аватар (512×512)</h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Premium gradient */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div 
-                      className="w-[200px] h-[200px] rounded-lg flex items-center justify-center" 
-                      style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 100%)" }}
-                    >
-                      <IskraLogoSVG size={120} color="#ffffff" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Premium gradient</p>
-                  <DownloadButtons
-                    svg={avatarSVG(512, "#0d1f1a", true)}
-                    baseName="iskra-telegram-premium-512x512"
-                    pngWidth={512}
-                    pngHeight={512}
-                  />
-                </div>
-
-                {/* Dark solid */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-[200px] h-[200px] bg-[#0a0a0a] rounded-lg flex items-center justify-center">
-                      <IskraLogoSVG size={120} color="#ffffff" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Dark solid</p>
-                  <DownloadButtons
-                    svg={avatarSVG(512, "#0a0a0a")}
-                    baseName="iskra-telegram-dark-512x512"
-                    pngWidth={512}
-                    pngHeight={512}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* WhatsApp Workspace Avatar */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">WhatsApp Workspace Аватар</h2>
-              <div className="rounded-xl border border-border p-6">
-                <div className="flex justify-center mb-4">
-                  <img 
-                    src={workspaceAvatar} 
-                    alt="ISKRA Workspace Avatar" 
-                    className="w-[256px] h-[256px] rounded-lg object-cover"
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground text-center mb-4">Для групп WhatsApp с клиентами</p>
-                <div className="flex justify-center">
-                  <a href={workspaceAvatar} download="iskra-workspace-avatar.png">
-                    <Button variant="outline">
-                      <Download className="w-4 h-4 mr-2" />
-                      Скачать PNG
-                    </Button>
-                  </a>
-                </div>
-              </div>
-            </section>
-
-            {/* LinkedIn Banner */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">LinkedIn Баннер (1584×396)</h2>
-              <div className="rounded-xl border border-border p-6">
-                <div className="flex justify-center mb-4 overflow-hidden rounded-lg">
-                  <img 
-                    src={linkedinBanner} 
-                    alt="ISKRA LinkedIn Banner" 
-                    className="w-full max-w-[792px] h-auto rounded-lg"
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground text-center mb-4">
-                  Текст справа — место для аватарки слева свободно
-                </p>
-                <div className="flex justify-center">
-                  <a href={linkedinBanner} download="iskra-linkedin-banner.png">
-                    <Button variant="outline">
-                      <Download className="w-4 h-4 mr-2" />
-                      Скачать PNG
-                    </Button>
-                  </a>
-                </div>
-              </div>
-            </section>
-
-            {/* Facebook Banner 820x312 */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">Facebook Баннер (820×312)</h2>
-              <div className="space-y-6">
-                {/* With gradient */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4 overflow-hidden rounded-lg">
-                    <div 
-                      className="w-full max-w-[820px] aspect-[820/312] flex flex-col items-center justify-center"
-                      style={{ background: "linear-gradient(135deg, #0a0a0a 0%, #0d1f1a 50%, #0a0a0a 100%)" }}
-                    >
-                      <div className="relative">
-                        <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
-                        <IskraLogoSVG size={72} color="#ffffff" className="relative z-10" />
-                      </div>
-                      <span className="font-display text-4xl md:text-5xl font-bold text-white mt-4">ISKRA</span>
-                      <span className="text-muted-foreground text-sm mt-2">AI-Powered Business Automation</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">С градиентным эффектом</p>
-                  <DownloadButtons
-                    svg={bannerSVG(true)}
-                    baseName="iskra-facebook-banner-gradient-820x312"
-                    pngWidth={820}
-                    pngHeight={312}
-                  />
-                </div>
-
-                {/* Simple dark */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4 overflow-hidden rounded-lg">
-                    <div 
-                      className="w-full max-w-[820px] aspect-[820/312] bg-[#0a0a0a] flex flex-col items-center justify-center"
-                    >
-                      <IskraLogoSVG size={72} color="#ffffff" />
-                      <span className="font-display text-4xl md:text-5xl font-bold text-white mt-4">ISKRA</span>
-                      <span className="text-muted-foreground text-sm mt-2">AI-Powered Business Automation</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Простой тёмный фон</p>
-                  <DownloadButtons
-                    svg={bannerSVG(false)}
-                    baseName="iskra-facebook-banner-dark-820x312"
-                    pngWidth={820}
-                    pngHeight={312}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Logo Only - Icon */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">Иконка логотипа</h2>
-              <div className="grid md:grid-cols-3 gap-6">
-                {/* White on transparent */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-32 h-32 bg-[#1a1a1a] rounded-lg flex items-center justify-center" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"20\" height=\"20\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cdefs%3E%3Cpattern id=\"grid\" width=\"20\" height=\"20\" patternUnits=\"userSpaceOnUse\"%3E%3Cpath d=\"M 20 0 L 0 0 0 20\" fill=\"none\" stroke=\"%23333\" stroke-width=\"1\"/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\"100%25\" height=\"100%25\" fill=\"url(%23grid)\"/%3E%3C/svg%3E')" }}>
-                      <IskraLogoSVG size={64} color="#ffffff" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Белый (прозрачный фон)</p>
-                  <DownloadButtons
-                    svg={iconOnlyTransparentSVG("#ffffff")}
-                    baseName="iskra-icon-white"
-                    pngWidth={512}
-                    pngHeight={512}
-                  />
-                </div>
-
-                {/* Black on transparent */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-32 h-32 bg-white rounded-lg flex items-center justify-center">
-                      <IskraLogoSVG size={64} color="#0a0a0a" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Чёрный (прозрачный фон)</p>
-                  <DownloadButtons
-                    svg={iconOnlyTransparentSVG("#0a0a0a")}
-                    baseName="iskra-icon-black"
-                    pngWidth={512}
-                    pngHeight={512}
-                  />
-                </div>
-
-                {/* Primary color */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-32 h-32 bg-[#1a1a1a] rounded-lg flex items-center justify-center">
-                      <IskraLogoSVG size={64} color="#22c55e" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Зелёный (прозрачный фон)</p>
-                  <DownloadButtons
-                    svg={iconOnlyTransparentSVG("#22c55e")}
-                    baseName="iskra-icon-green"
-                    pngWidth={512}
-                    pngHeight={512}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Logo 640x360 for social */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">Лого для соцсетей (640×360)</h2>
-              <div className="space-y-6">
-                {/* Premium emerald gradient with ИСКРА */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div 
-                      className="w-full max-w-[640px] aspect-[640/360] flex flex-col items-center justify-center rounded-lg"
-                      style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 50%, #0d1f1a 100%)" }}
-                    >
-                      <IskraLogoSVG size={100} color="#ffffff" />
-                      <span className="font-display text-5xl font-bold text-white mt-6">ISKRA</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Premium emerald gradient</p>
-                  <DownloadButtons
-                    svg={`<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="premiumGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0d1f1a"/>
-      <stop offset="50%" style="stop-color:#134e3a"/>
-      <stop offset="100%" style="stop-color:#0d1f1a"/>
-    </linearGradient>
-  </defs>
-  <rect width="640" height="360" fill="url(#premiumGradient)"/>
-  <g transform="translate(245, 60)">
-    <path d="M75 0L88 52.5L140 75L88 97.5L75 150L62 97.5L10 75L62 52.5L75 0Z" fill="#ffffff"/>
-  </g>
-  <text x="320" y="280" font-family="Space Grotesk, sans-serif" font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle">ISKRA</text>
-</svg>`}
-                    baseName="iskra-logo-premium-640x360"
-                    pngWidth={640}
-                    pngHeight={360}
-                  />
-                </div>
-
-                {/* Dark version */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div 
-                      className="w-full max-w-[640px] aspect-[640/360] bg-[#0a0a0a] flex flex-col items-center justify-center rounded-lg"
-                    >
-                      <IskraLogoSVG size={80} color="#ffffff" />
-                      <span className="font-display text-4xl font-bold text-white mt-4">ISKRA</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Тёмный фон (English)</p>
-                  <DownloadButtons
-                    svg={`<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="640" height="360" fill="#0a0a0a"/>
-  <g transform="translate(240, 80)">
-    <path d="M80 0L92 56L148 80L92 104L80 160L68 104L12 80L68 56L80 0Z" fill="#ffffff"/>
-  </g>
-  <text x="320" y="290" font-family="Space Grotesk, sans-serif" font-size="64" font-weight="700" fill="#ffffff" text-anchor="middle">ISKRA</text>
-</svg>`}
-                    baseName="iskra-logo-640x360"
-                    pngWidth={640}
-                    pngHeight={360}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Full Logo Horizontal */}
-            <section className="mb-16">
-              <h2 className="text-2xl font-display font-semibold mb-6">Полный логотип (горизонтальный)</h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* White on dark */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="bg-[#0a0a0a] rounded-lg">
-                      <FullLogo size="md" textColor="#ffffff" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Белый на тёмном</p>
-                  <DownloadButtons
-                    svg={fullLogoSVG("#0a0a0a", "#ffffff")}
-                    baseName="iskra-logo-white-on-dark"
-                    pngWidth={400}
-                    pngHeight={120}
-                  />
-                </div>
-
-                {/* Black on white */}
-                <div className="rounded-xl border border-border p-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="bg-white rounded-lg">
-                      <FullLogo size="md" textColor="#0a0a0a" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground text-center mb-4">Чёрный на белом</p>
-                  <DownloadButtons
-                    svg={fullLogoSVG("#ffffff", "#0a0a0a")}
-                    baseName="iskra-logo-black-on-white"
-                    pngWidth={400}
-                    pngHeight={120}
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* Usage guidelines */}
-            <section className="rounded-xl border border-border p-8 bg-card">
-              <h2 className="text-2xl font-display font-semibold mb-4">Рекомендации по использованию</h2>
-              <ul className="space-y-3 text-muted-foreground">
-                <li>• Скачивайте PNG — они сразу готовы для загрузки в Facebook</li>
-                <li>• SVG оставил для векторной печати/дизайна (без потери качества)</li>
-                <li>• Для Facebook аватара используйте 180×180 пикселей</li>
-                <li>• Для Facebook баннера используйте 820×312 пикселей</li>
-                <li>• Не искажайте пропорции логотипа</li>
-              </ul>
-            </section>
           </div>
+
+          {/* Logo Mark */}
+          <section className="mb-16">
+            <h2 className="font-display text-2xl font-bold mb-6 border-b border-border pb-3">Logo Mark</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-[180px] h-[180px] bg-[#0a0a0a] rounded-lg flex items-center justify-center">
+                    <IskraLogoSVG size={90} color="#ffffff" />
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-3">Dark background</p>
+                <div className="flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" onClick={() => downloadSVG(LOGO_SVG, "iskra-logo-white.svg")}>
+                    <Download className="w-3 h-3 mr-1" /> SVG
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(LOGO_SVG.replace('width="64" height="64"', 'width="512" height="512"'), "iskra-logo-white.png", 512, 512)}>
+                    <Download className="w-3 h-3 mr-1" /> PNG
+                  </Button>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <div className="w-[180px] h-[180px] rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, #0d1f1a 0%, #134e3a 100%)" }}>
+                    <IskraLogoSVG size={90} color="#ffffff" />
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-3">Emerald gradient</p>
+                <div className="flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" onClick={() => downloadSVG(LOGO_SVG, "iskra-logo-emerald.svg")}>
+                    <Download className="w-3 h-3 mr-1" /> SVG
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Full Logo */}
+          <section className="mb-16">
+            <h2 className="font-display text-2xl font-bold mb-6 border-b border-border pb-3">Full Logo</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <FullLogo size="lg" bgColor="#0a0a0a" textColor="#ffffff" />
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-3">Dark</p>
+                <div className="flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(FULL_LOGO_SVG("#0a0a0a", "#ffffff", 640, 200), "iskra-full-dark.png", 640, 200)}>
+                    <Download className="w-3 h-3 mr-1" /> PNG
+                  </Button>
+                </div>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <FullLogo size="lg" bgColor="#f5f3ef" textColor="#0a0a0a" />
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-3">Light</p>
+                <div className="flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(FULL_LOGO_SVG("#f5f3ef", "#0a0a0a", 640, 200), "iskra-full-light.png", 640, 200)}>
+                    <Download className="w-3 h-3 mr-1" /> PNG
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Social Assets */}
+          <section className="mb-16">
+            <h2 className="font-display text-2xl font-bold mb-6 border-b border-border pb-3">Social Media</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Workspace Avatar */}
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <img src={workspaceAvatar} alt="ISKRA Workspace Avatar" className="w-[180px] h-[180px] rounded-lg object-cover" />
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-1">Workspace Avatar</p>
+                <p className="text-xs text-muted-foreground/60 text-center mb-3">For WhatsApp, Slack, etc.</p>
+              </div>
+
+              {/* LinkedIn Banner */}
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <img src={linkedinBanner} alt="ISKRA LinkedIn Banner" className="w-full max-w-[400px] rounded-lg object-cover" />
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-1">LinkedIn Banner</p>
+                <p className="text-xs text-muted-foreground/60 text-center mb-3">1584 × 396</p>
+              </div>
+            </div>
+          </section>
+
+          {/* Colors */}
+          <section className="mb-16">
+            <h2 className="font-display text-2xl font-bold mb-6 border-b border-border pb-3">Brand Colors</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { name: "Emerald", hex: "#2d9d74", desc: "Primary" },
+                { name: "Emerald Light", hex: "#34d399", desc: "Accent" },
+                { name: "Dark", hex: "#0a0a0a", desc: "Background" },
+                { name: "Warm", hex: "#f5f3ef", desc: "Light bg" },
+              ].map(c => (
+                <div key={c.hex} className="bg-card border border-border rounded-xl p-4">
+                  <div className="w-full aspect-square rounded-lg mb-3" style={{ background: c.hex }} />
+                  <p className="font-semibold text-sm">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">{c.hex}</p>
+                  <p className="text-xs text-muted-foreground/60">{c.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       </main>
-
       <Footer />
     </>
   );
-}
+};
+
+export default BrandAssets;
