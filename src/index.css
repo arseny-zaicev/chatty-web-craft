@@ -177,10 +177,19 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground font-body antialiased;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+    overflow-x: hidden;
   }
 
   /* Premium selection + caret (fix unreadable selection while editing inputs) */
