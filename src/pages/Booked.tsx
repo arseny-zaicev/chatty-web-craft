@@ -147,7 +147,7 @@ const Booked = () => {
             </div>
             <div className="grid md:grid-cols-3 gap-6">
               {expectations.map(({ icon: Icon, title, description }) => (
-                <div key={title} className="text-center p-6 rounded-2xl bg-white border border-gray-200 hover:border-iskra-emerald/40 transition-colors">
+                <div key={title} className="text-center p-6 card-light hover:border-iskra-emerald/40 transition-colors">
                   <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/10 flex items-center justify-center mx-auto mb-4">
                     <Icon className="w-7 h-7 text-iskra-emerald" />
                   </div>
@@ -167,7 +167,7 @@ const Booked = () => {
               <h2 className="text-2xl md:text-3xl font-bold font-display text-gray-900">Real Client, Real Results</h2>
             </div>
 
-            <div className="bg-[#f5f3ef] rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="card-champagne rounded-2xl overflow-hidden">
               <div className="grid md:grid-cols-5 gap-0">
                 {/* Left: Video + Photo */}
                 <div className="md:col-span-2 p-6">
@@ -247,7 +247,7 @@ const Booked = () => {
         {/* Founder Card */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-3xl">
-            <div className="flex flex-col md:flex-row items-center gap-8 p-8 rounded-2xl bg-white border border-gray-200">
+            <div className="flex flex-col md:flex-row items-center gap-8 p-8 card-light">
               <div className="flex-shrink-0">
                 <div className="w-36 h-36 md:w-44 md:h-44 rounded-2xl overflow-hidden border-2 border-iskra-emerald/20">
                   <img src={founderPhoto} alt="Arsenijs - ISKRA Founder" className="w-full h-full object-cover object-top" />
