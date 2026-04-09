@@ -56,11 +56,11 @@ export const ClientLogos = () => (
       {/* Fade edges */}
       <div
         className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to right, hsl(0 0% 95%), transparent)" }}
+        style={{ background: "linear-gradient(to right, hsl(var(--background)), transparent)" }}
       />
       <div
         className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to left, hsl(0 0% 95%), transparent)" }}
+        style={{ background: "linear-gradient(to left, hsl(var(--background)), transparent)" }}
       />
 
       <div className="marquee-inner" style={{ willChange: "transform" }}>
