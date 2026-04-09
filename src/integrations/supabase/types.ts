@@ -198,7 +198,7 @@ export type Database = {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      form_type: "qualification" | "seller_leads"
+      form_type: "qualification" | "seller_leads" | "demo_request"
       submission_status: "new" | "contacted" | "converted" | "rejected"
     }
     CompositeTypes: {
@@ -327,7 +327,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      form_type: ["qualification", "seller_leads"],
+      form_type: ["qualification", "seller_leads", "demo_request"],
       submission_status: ["new", "contacted", "converted", "rejected"],
     },
   },
