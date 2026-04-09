@@ -148,11 +148,11 @@ export const HeroSection = () => {
             </p>
 
             <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <span className="text-foreground">We turn WhatsApp</span>
+              <span className="text-foreground">10,000+ WhatsApp</span>
               <br />
-              <span className="text-foreground">into your </span>
+              <span className="text-foreground">messages. </span>
               <span className="inline-block">
-                <span className="text-iskra-emerald">top sales channel.</span>
+                <span className="text-iskra-emerald">Zero bans.</span>
                 <span style={{ display: 'block', marginTop: '-4px' }}>
                   <SketchUnderline color="hsl(152 50% 36%)" delay={0.5} />
                 </span>
