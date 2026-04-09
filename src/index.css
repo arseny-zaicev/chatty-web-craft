@@ -422,6 +422,35 @@
   opacity: 1;
 }
 
+/* ─── Animated gradient border on CTA button ─── */
+@keyframes gradient-border-spin {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.btn-primary-glow {
+  position: relative;
+  z-index: 0;
+}
+.btn-primary-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(0.75rem + 2px);
+  background: linear-gradient(
+    135deg,
+    hsl(152 80% 58%),
+    hsl(38 60% 68%),
+    hsl(152 65% 38%),
+    hsl(38 55% 62%),
+    hsl(152 80% 58%)
+  );
+  background-size: 300% 300%;
+  animation: gradient-border-spin 3.5s ease infinite;
+  z-index: -1;
+}
+
 /* Icon rotate on hover */
 .icon-rotate-hover {
   transition: transform 0.3s ease;
