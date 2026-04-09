@@ -277,6 +277,7 @@ export const AdminSubmissions = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="demo_request">Demo Request</SelectItem>
                 <SelectItem value="qualification">Qualification</SelectItem>
                 <SelectItem value="seller_leads">Seller Leads</SelectItem>
               </SelectContent>
@@ -319,8 +320,12 @@ export const AdminSubmissions = () => {
                   >
                     <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <Badge variant={submission.form_type === "qualification" ? "default" : "secondary"}>
-                          {submission.form_type === "qualification" ? "WhatsApp Outreach" : "Seller Leads"}
+                        <Badge variant={
+                          submission.form_type === "demo_request" ? "default" :
+                          submission.form_type === "qualification" ? "secondary" : "outline"
+                        }>
+                          {submission.form_type === "demo_request" ? "Demo Request" :
+                           submission.form_type === "qualification" ? "WhatsApp Outreach" : "Seller Leads"}
                         </Badge>
                         <Badge
                           className={`${statusConfig[submission.status].color} text-white`}
