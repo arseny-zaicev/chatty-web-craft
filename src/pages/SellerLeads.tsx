@@ -361,41 +361,6 @@ const SellerLeads = () => {
           </div>
         </section>
 
-        {/* Testimonials Placeholder */}
-        <section className="py-24 border-t border-border/30">
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-16">
-              <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
-                What Agents <span className="text-gradient">Say About Us</span>
-              </h2>
-              <p className="text-xl text-foreground/70 max-w-2xl mx-auto">
-                Join 50+ Dubai real estate agents who are closing more deals with our leads
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="glass-card rounded-2xl p-8 border-iskra-emerald/10">
-                  <div className="flex gap-1 mb-4">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star key={star} className="w-5 h-5 fill-iskra-gold text-iskra-gold" />
-                    ))}
-                  </div>
-                  <div className="h-24 rounded-lg bg-foreground/5 border border-dashed border-foreground/20 flex items-center justify-center mb-6">
-                    <span className="text-sm text-foreground/40">Testimonial {i}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-foreground/10 border border-dashed border-foreground/20" />
-                    <div>
-                      <div className="h-4 w-24 bg-foreground/10 rounded mb-2" />
-                      <div className="h-3 w-32 bg-foreground/5 rounded" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* Urgency Banner */}
         <UrgencyBanner type="seller-leads" />
