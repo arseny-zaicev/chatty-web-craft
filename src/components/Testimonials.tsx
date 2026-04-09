@@ -14,10 +14,10 @@ export const Testimonials = () => {
             <p className="text-iskra-emerald text-sm font-semibold uppercase tracking-widest mb-3">
               Client Results
             </p>
-            <h2 className="font-headline text-3xl md:text-4xl font-bold mb-4">
+            <h2 className="font-headline text-3xl md:text-5xl font-bold mb-5">
               What Our Clients Say
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               Real results from businesses using our WhatsApp engine.
             </p>
           </div>

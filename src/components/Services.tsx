@@ -10,10 +10,10 @@ export const Services = () => {
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <div className="text-center mb-16">
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
+            <h2 className="font-display text-3xl md:text-5xl font-bold mb-5">
               What We Build For You
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               A complete WhatsApp outreach engine — from infrastructure to booked calls.
             </p>
           </div>
