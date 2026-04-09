@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { ArrowRight } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
 import { WhatsAppFloat } from "@/components/WhatsAppFloat";
@@ -11,7 +12,7 @@ import { ProductTiers } from "@/components/whatsapp/ProductTiers";
 import { Testimonials } from "@/components/Testimonials";
 import { FounderSection } from "@/components/FounderSection";
 import { FAQ } from "@/components/FAQ";
-import { FitCheckForm } from "@/components/whatsapp/FitCheckForm";
+
 import { Footer } from "@/components/Footer";
 
 const Index = () => {
@@ -63,7 +64,23 @@ const Index = () => {
         <Testimonials />
         <FounderSection />
         <FAQ />
-        <FitCheckForm />
+        {/* CTA to Demo */}
+        <section className="py-24 bg-foreground">
+          <div className="container mx-auto px-4 text-center">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-background mb-4">
+              Ready to Launch Your Campaign?
+            </h2>
+            <p className="text-background/60 max-w-xl mx-auto mb-8">
+              Tell us about your goals and we'll build a custom outreach plan for you.
+            </p>
+            <a href="/demo">
+              <button className="group relative inline-flex items-center gap-2 px-8 py-4 rounded-full bg-iskra-emerald text-background font-semibold text-lg shadow-[0_0_20px_rgba(0,224,150,0.3)] hover:shadow-[0_0_30px_rgba(0,224,150,0.5)] transition-all duration-300">
+                Book a Demo
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </a>
+          </div>
+        </section>
         <Footer />
       </main>
     </>
