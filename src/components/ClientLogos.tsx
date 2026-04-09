@@ -25,7 +25,7 @@ const track = [...clients, ...clients];
 export const ClientLogos = () => (
   <section
     className="relative overflow-hidden"
-    style={{ padding: "1.4rem 0 1.6rem", background: "hsl(0 0% 95%)" }}
+    style={{ padding: "1.4rem 0 1.6rem" }}
   >
     {/* Top rule */}
     <div
