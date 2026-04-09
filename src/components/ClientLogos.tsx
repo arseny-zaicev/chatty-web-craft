@@ -80,19 +80,15 @@ export const ClientLogos = () => (
                 width: "auto",
                 maxWidth: "120px",
                 objectFit: "contain",
-                filter: "grayscale(1) brightness(0.45) contrast(1.2)",
-                opacity: 0.5,
-                transition: "opacity 0.3s, filter 0.3s",
+                filter: "brightness(0) invert(1)",
+                opacity: 0.4,
+                transition: "opacity 0.3s",
               }}
               onMouseEnter={(e) => {
-                const img = e.currentTarget;
-                img.style.opacity = "0.85";
-                img.style.filter = "grayscale(0.2) brightness(0.75) contrast(1.1)";
+                e.currentTarget.style.opacity = "0.7";
               }}
               onMouseLeave={(e) => {
-                const img = e.currentTarget;
-                img.style.opacity = "0.5";
-                img.style.filter = "grayscale(1) brightness(0.45) contrast(1.2)";
+                e.currentTarget.style.opacity = "0.4";
               }}
             />
           </div>
