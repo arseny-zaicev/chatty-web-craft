@@ -1,80 +1,67 @@
-import { Target, Code, Sparkles, Rocket, MessageCircle } from "lucide-react";
-import { AIWorkflowAnimation } from "./AIWorkflowAnimation";
+import { useNavigate } from "react-router-dom";
+import { Target, MessageSquare, BarChart3, Rocket, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 
 const steps = [
   {
     icon: Target,
-    title: "Discovery & ROI Planning",
-    description: "We deeply understand your needs and calculate exactly how our solution will generate revenue for your business. Clear goals, measurable outcomes.",
+    title: "Discovery & Strategy",
+    description: "We align on your ICP, craft the right offer angle, and plan the campaign structure — warm, reactivation, or cold.",
     duration: "1-2 days",
   },
   {
-    icon: Code,
-    title: "Development & Warmup",
-    description: "We build your custom solution — AI agent, WhatsApp numbers warming up, automation workflows. Everything gets prepared in parallel for maximum speed.",
-    duration: "~7 days",
-    badge: "WhatsApp + AI",
+    icon: MessageSquare,
+    title: "Infrastructure Setup",
+    description: "Dedicated WhatsApp accounts, number warmup, anti-block systems, and copy sequences — all prepared before launch.",
+    duration: "~5 days",
   },
   {
-    icon: Sparkles,
-    title: "Fine-Tuning",
-    description: "Minor adjustments based on real conversations. We optimize AI responses, refine targeting, and polish until everything performs perfectly.",
-    duration: "2-3 weeks",
+    icon: BarChart3,
+    title: "Launch & Optimize",
+    description: "Campaigns go live. We A/B test angles, monitor replies, and fine-tune follow-up sequences for maximum positive reply rate.",
+    duration: "Week 1-2",
   },
   {
     icon: Rocket,
-    title: "Scale & Support",
-    description: "Ongoing monitoring and optimization as your business grows. We're always here to help you maximize results from your WhatsApp outreach and AI.",
+    title: "Scale & Report",
+    description: "Qualified replies flow to your CRM. Weekly reports, strategy calls, and scaling when results are proven.",
     duration: "Ongoing",
   },
 ];
 
 export const HowItWorks = () => {
+  const navigate = useNavigate();
+
   return (
     <section id="how-it-works" className="py-24 bg-secondary/30">
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <div className="text-center mb-12">
+            <span className="tag-green mb-4 inline-block">Our process</span>
             <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              How It Works
+              How We Build Your <span className="text-gradient">Outreach Engine</span>
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              <span className="text-iskra-emerald font-semibold">Fast. Reliable. Results-Driven.</span>
-              <br />
-              The real process behind every WhatsApp campaign & AI agent we build.
+              From strategy to scale — a proven process that delivers results in weeks, not months.
             </p>
           </div>
         </ScrollReveal>
 
-        {/* Animated Workflow Visualization */}
-        <div className="mb-16">
-          <AIWorkflowAnimation />
-        </div>
-
-        {/* Detailed Steps Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto mb-12">
           {steps.map((step, index) => (
             <ScrollReveal key={step.title} delay={index * 100}>
-              <div
-                className="glass-card rounded-2xl p-6 hover-lift hover:shadow-glow group h-full"
-              >
-                <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-4 group-hover:bg-iskra-emerald/20 icon-rotate-hover">
-                  <step.icon className="w-6 h-6 text-iskra-emerald" />
+              <div className="card-light rounded-2xl p-6 hover-lift h-full">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 icon-shimmer">
+                  <step.icon className="w-6 h-6 text-primary" />
                 </div>
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className="text-xs text-iskra-emerald font-semibold">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs text-primary font-semibold">
                     Step {index + 1}
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-iskra-emerald/10 text-iskra-emerald font-medium">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                     {step.duration}
                   </span>
-                  {step.badge && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium flex items-center gap-1">
-                      <MessageCircle className="w-3 h-3" />
-                      {step.badge}
-                    </span>
-                  )}
                 </div>
                 <h3 className="font-display text-lg font-semibold mb-2">
                   {step.title}
@@ -86,6 +73,20 @@ export const HowItWorks = () => {
             </ScrollReveal>
           ))}
         </div>
+
+        <ScrollReveal>
+          <div className="text-center">
+            <Button
+              variant="cta"
+              size="lg"
+              className="group"
+              onClick={() => navigate("/demo")}
+            >
+              Book a Demo
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Button>
+          </div>
+        </ScrollReveal>
       </div>
     </section>
   );
