@@ -122,13 +122,74 @@
   }
 }
 
+/* ─── Subtle champagne shimmer — gentle, never obscures content ─── */
+@keyframes champagne-drift {
+  0%   { transform: translate(0%, 0%); }
+  33%  { transform: translate(12%, -8%); }
+  66%  { transform: translate(-8%, 10%); }
+  100% { transform: translate(0%, 0%); }
+}
+@keyframes champagne-drift-2 {
+  0%   { transform: translate(0%, 0%); }
+  50%  { transform: translate(-10%, 8%); }
+  100% { transform: translate(0%, 0%); }
+}
+
+#root::before {
+  content: '';
+  position: fixed;
+  inset: -15%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 40% 35% at 15% 20%, hsl(36 40% 82% / 0.35) 0%, transparent 70%),
+    radial-gradient(ellipse 35% 30% at 85% 75%, hsl(34 35% 80% / 0.3) 0%, transparent 65%);
+  animation: champagne-drift 14s ease-in-out infinite;
+  contain: strict;
+  transform: translateZ(0);
+}
+
+.shimmer-layer-2 {
+  position: fixed;
+  inset: -15%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 30% 25% at 70% 30%, hsl(38 38% 84% / 0.25) 0%, transparent 60%);
+  animation: champagne-drift-2 20s ease-in-out infinite;
+  contain: strict;
+  transform: translateZ(0);
+}
+
+/* ─── Kraft vignette + grain overlay ─── */
+#root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.09'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 110% 80% at 50% 40%, transparent 35%, hsl(28 38% 52% / 0.38) 100%);
+  background-size: 256px 256px, cover;
+}
+
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground font-body antialiased;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+    overflow-x: hidden;
   }
 
   /* Premium selection + caret (fix unreadable selection while editing inputs) */
@@ -177,6 +238,20 @@
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-headline;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    font-size: clamp(2.8rem, 6vw, 5rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+
+  h2 {
+    font-size: clamp(2rem, 4vw, 3.25rem);
+    font-weight: 700;
   }
 }
 
@@ -220,6 +295,90 @@
 
   .counter-animate {
     animation: counter-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ─── LP-style marquee ─── */
+  @keyframes marquee-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .marquee-track {
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .marquee-inner {
+    display: flex;
+    width: max-content;
+    animation: marquee-scroll 30s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  .marquee-inner:hover {
+    animation-play-state: paused;
+  }
+
+  .marquee-logo-item {
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+    padding: 0 3rem;
+    height: 52px;
+    flex-shrink: 0;
+  }
+
+  .marquee-logo-divider {
+    width: 1px;
+    height: 28px;
+    background: hsl(38 20% 30%);
+    flex-shrink: 0;
+  }
+
+  .marquee-logo-img {
+    height: 22px;
+    width: auto;
+    max-width: 110px;
+    object-fit: contain;
+    opacity: 0.45;
+    transition: opacity 0.25s;
+  }
+
+  .marquee-logo-item:hover .marquee-logo-img {
+    opacity: 0.75;
+  }
+
+  /* ─── Section helpers ─── */
+  .section-dark {
+    background-color: hsl(28 18% 9%);
+    color: hsl(42 30% 92%);
+  }
+  .section-dark h1,
+  .section-dark h2,
+  .section-dark h3,
+  .section-dark h4 {
+    color: hsl(0 0% 98%);
+  }
+
+  /* ─── Cards LP style ─── */
+  .card-light {
+    @apply rounded-2xl p-8 border;
+    background: hsl(40 40% 98%);
+    border-color: hsl(38 25% 83%);
+    box-shadow: 0 2px 16px hsl(38 30% 70% / 0.18), 0 1px 3px hsl(38 30% 60% / 0.12);
+  }
+  .card-light:hover {
+    box-shadow: 0 6px 28px hsl(38 30% 65% / 0.25), 0 2px 6px hsl(38 30% 60% / 0.15);
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+  }
+
+  /* ─── Tags ─── */
+  .tag-green {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase;
+    background: hsl(152 65% 35% / 0.1);
+    color: hsl(152 65% 35%);
   }
 }
 

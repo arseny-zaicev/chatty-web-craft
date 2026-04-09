@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import CustomCursor from "@/components/CustomCursor";
+import ScrollProgress from "@/components/ScrollProgress";
 import Index from "./pages/Index";
 import SellerLeads from "./pages/SellerLeads";
 import BrandAssets from "./pages/BrandAssets";
@@ -29,6 +31,8 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <CustomCursor />
+        <ScrollProgress />
         <BrowserRouter>
           <ScrollToTop />
           <Routes>

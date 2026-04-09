@@ -1,0 +1,116 @@
+import { useEffect, useRef } from 'react';
+
+const CustomCursor = () => {
+  const dotRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia('(pointer: fine)').matches) return;
+
+    let mouseX = 0;
+    let mouseY = 0;
+    let visible = false;
+    let rafId = 0;
+    let running = true;
+    let dirty = false;
+
+    const tick = () => {
+      if (!running) return;
+      if (dirty) {
+        const el = dotRef.current;
+        if (el) {
+          el.style.transform = `translate(${mouseX}px,${mouseY}px) translate(-50%,-50%)`;
+        }
+        dirty = false;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const onMove = (e: PointerEvent | MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      dirty = true;
+      if (!visible && dotRef.current) {
+        dotRef.current.style.opacity = '1';
+        visible = true;
+      }
+    };
+
+    const onLeave = () => {
+      if (dotRef.current) dotRef.current.style.opacity = '0';
+      visible = false;
+    };
+
+    const onEnter = () => {
+      if (dotRef.current) dotRef.current.style.opacity = '1';
+      visible = true;
+    };
+
+    const hovered = new WeakSet<Element>();
+    const addHover = () => dotRef.current?.classList.add('is-hovered');
+    const removeHover = () => dotRef.current?.classList.remove('is-hovered');
+
+    const attachHover = () => {
+      document.querySelectorAll<Element>('a, button').forEach(el => {
+        if (hovered.has(el)) return;
+        hovered.add(el);
+        el.addEventListener('mouseenter', addHover, { passive: true });
+        el.addEventListener('mouseleave', removeHover, { passive: true });
+      });
+    };
+
+    rafId = requestAnimationFrame(tick);
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('mousemove', onMove, { passive: true });
+    document.addEventListener('mouseleave', onLeave, { passive: true });
+    document.addEventListener('mouseenter', onEnter, { passive: true });
+    attachHover();
+
+    let mutationTimeout = 0;
+    const observer = new MutationObserver(() => {
+      clearTimeout(mutationTimeout);
+      mutationTimeout = window.setTimeout(() => attachHover(), 200);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(rafId);
+      clearTimeout(mutationTimeout);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseleave', onLeave);
+      document.removeEventListener('mouseenter', onEnter);
+      observer.disconnect();
+    };
+  }, []);
+
+  return (
+    <>
+      <style>{`
+        @media (pointer: fine) {
+          *, *::before, *::after { cursor: none !important; }
+        }
+        .cursor-dot {
+          position: fixed; top: 0; left: 0;
+          width: 8px; height: 8px;
+          border-radius: 50%;
+          background: hsl(152 70% 48%);
+          pointer-events: none;
+          z-index: 99999;
+          opacity: 0;
+          will-change: transform;
+          transition: width 0.12s ease, height 0.12s ease, background 0.12s ease, border 0.12s ease, opacity 0.15s ease;
+          contain: layout style;
+        }
+        .cursor-dot.is-hovered {
+          width: 36px; height: 36px;
+          background: hsl(152 65% 45% / 0.08);
+          border: 1.5px solid hsl(152 60% 42%);
+        }
+      `}</style>
+      <div ref={dotRef} className="cursor-dot" />
+    </>
+  );
+};
+
+export default CustomCursor;
