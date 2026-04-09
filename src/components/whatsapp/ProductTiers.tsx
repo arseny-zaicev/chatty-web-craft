@@ -91,7 +91,7 @@ export const ProductTiers = () => {
           {tiers.map((tier, index) => (
             <ScrollReveal key={tier.name} delay={index * 100}>
               <div className={`relative rounded-2xl p-7 h-full flex flex-col hover-lift ${
-                tier.highlighted ? "card-green-outline shadow-glow" : "card-light"
+                tier.highlighted ? "pricing-popular" : "card-light"
               }`}>
                 {tier.highlighted && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-iskra-emerald rounded-full text-xs font-semibold text-primary-foreground">
