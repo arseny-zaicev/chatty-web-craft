@@ -86,7 +86,7 @@ export const Navbar = () => {
             </Link>
             <Link to="/demo">
               <Button variant="hero" size="default">
-                Get Started
+                Book a Demo
               </Button>
             </Link>
           </div>
@@ -125,7 +125,7 @@ export const Navbar = () => {
               </Link>
               <Link to="/demo" onClick={() => setIsOpen(false)}>
                 <Button variant="hero" size="default" className="mt-2 w-full">
-                  Get Started
+                  Book a Demo
                 </Button>
               </Link>
             </div>
