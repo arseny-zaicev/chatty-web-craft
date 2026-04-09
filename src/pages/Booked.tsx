@@ -47,9 +47,17 @@ const Booked = () => {
         <header className="py-6 border-b border-black/5">
           <div className="container mx-auto px-4">
             <Link to="/" className="flex items-center gap-2 w-fit">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-iskra-emerald to-iskra-emerald/70 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
+              <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="32" cy="32" r="4.5" fill="#1a1a1a"/>
+                <line x1="32" y1="8" x2="32" y2="22" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="32" y1="42" x2="32" y2="56" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="8" y1="32" x2="22" y2="32" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="42" y1="32" x2="56" y2="32" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="15" y1="15" x2="24" y2="24" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="40" y1="40" x2="49" y2="49" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="49" y1="15" x2="40" y2="24" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="24" y1="40" x2="15" y2="49" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+              </svg>
               <span className="font-display text-xl font-bold tracking-tight text-gray-900">ISKRA</span>
             </Link>
           </div>
