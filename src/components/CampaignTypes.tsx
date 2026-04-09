@@ -54,11 +54,11 @@ const campaigns = [
       { icon: CheckCircle2, title: "Qualified replies", desc: "Only positive replies forwarded to you" },
     ],
     caseStudy: {
-      metric: "38",
-      metricLabel: "demos booked",
-      before: "15,000 messages sent over 4 weeks",
-      after: "4.2% positive reply rate → 38 demos booked",
-      industry: "SaaS Platform, Multi-country",
+      metric: "13%",
+      metricLabel: "positive reply rate",
+      before: "Cold outreach to new audiences matching your ICP",
+      after: "13% positive reply rate → 1% booking rate across different industries",
+      industry: "Across different industries",
     },
   },
 ];
