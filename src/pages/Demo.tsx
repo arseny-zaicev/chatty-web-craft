@@ -43,8 +43,10 @@ const CAMPAIGN_TYPES = [
 ];
 
 const LEADS_PER_DAY = ["0 - 5", "6 - 50", "51 - 250", "251+"];
+const TRAFFIC_SOURCES = ["Facebook/Meta Ads", "Google Ads", "SEO / Organic", "Social Media", "Referrals", "Marketplace / Portal", "Multiple channels", "Other"];
 const BASE_SIZES = ["Under 1,000", "1,000 - 5,000", "5,000 - 20,000", "20,000+"];
 const BASE_AGES = ["Less than 6 months", "6 - 12 months", "1 - 2 years", "2+ years"];
+const BASE_SOURCES = ["CRM export", "Google Sheets / Excel", "Old ad campaigns", "Website signups", "Event attendees", "Mixed / multiple sources"];
 const TEAM_SIZES = ["Just me", "1 - 5", "6 - 20", "21+"];
 
 export default function Demo() {
