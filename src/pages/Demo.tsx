@@ -10,16 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
-const CRM_OPTIONS = [
-  "Pipedrive",
-  "GoHighLevel",
-  "HubSpot",
-  "Close CRM",
-  "Salesforce",
-  "Follow Up Boss",
-  "Other",
-  "No CRM",
-];
 
 const CAMPAIGN_TYPES = [
   {
@@ -61,8 +51,6 @@ export default function Demo() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [businessUrl, setBusinessUrl] = useState("");
-  const [crm, setCrm] = useState("");
-  const [crmOther, setCrmOther] = useState("");
   const [leadsPerDay, setLeadsPerDay] = useState("");
   const [trafficSource, setTrafficSource] = useState("");
   const [baseSize, setBaseSize] = useState("");
@@ -78,14 +66,12 @@ export default function Demo() {
   const canProceedStep2 =
     firstName.trim() !== "" &&
     email.trim() !== "" &&
-    phone.trim() !== "" &&
-    crm !== "" &&
-    (crm !== "Other" || crmOther.trim() !== "");
+    phone.trim() !== "";
 
   const canProceedStep3 = (() => {
-    if (campaignType === "warm") return leadsPerDay !== "" && trafficSource !== "" && teamSize !== "";
-    if (campaignType === "reactivation") return baseSize !== "" && baseAge !== "" && baseSource !== "" && teamSize !== "";
-    if (campaignType === "cold") return hasMobileNumbers !== "" && teamSize !== "";
+    if (campaignType === "warm") return leadsPerDay !== "" && trafficSource !== "";
+    if (campaignType === "reactivation") return baseSize !== "" && baseAge !== "" && baseSource !== "";
+    if (campaignType === "cold") return hasMobileNumbers !== "";
     return false;
   })();
 
@@ -94,9 +80,7 @@ export default function Demo() {
     try {
       const formData = {
         campaign_type: campaignType,
-        crm: crm === "Other" ? crmOther : crm,
         business_url: businessUrl,
-        team_size: teamSize,
         ...(campaignType === "warm" && { leads_per_day: leadsPerDay, traffic_source: trafficSource }),
         ...(campaignType === "reactivation" && { base_size: baseSize, base_age: baseAge, base_source: baseSource }),
         ...(campaignType === "cold" && { has_mobile_numbers: hasMobileNumbers, target_audience: targetAudience || null }),
@@ -273,25 +257,6 @@ export default function Demo() {
                   <Input value={businessUrl} onChange={(e) => setBusinessUrl(e.target.value)} placeholder="https://yourcompany.com" className="mt-1" />
                 </div>
 
-                <div>
-                  <Label className="text-foreground">What CRM do you use? *</Label>
-                  <RadioGroup value={crm} onValueChange={setCrm} className="mt-2 space-y-2">
-                    {CRM_OPTIONS.map((option) => (
-                      <div key={option} className="flex items-center gap-2">
-                        <RadioGroupItem value={option} id={`crm-${option}`} />
-                        <Label htmlFor={`crm-${option}`} className="text-foreground cursor-pointer">{option}</Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                  {crm === "Other" && (
-                    <Input
-                      value={crmOther}
-                      onChange={(e) => setCrmOther(e.target.value)}
-                      placeholder="Your CRM name"
-                      className="mt-2"
-                    />
-                  )}
-                </div>
 
                 <div className="flex gap-3">
                   <Button variant="outline" size="lg" onClick={() => setStep(1)} className="flex-1">
