@@ -318,17 +318,30 @@ export default function Demo() {
 
                 {/* Warm-specific */}
                 {campaignType === "warm" && (
-                  <div>
-                    <Label className="text-foreground">How many new leads do you get per day? *</Label>
-                    <RadioGroup value={leadsPerDay} onValueChange={setLeadsPerDay} className="mt-2 space-y-2">
-                      {LEADS_PER_DAY.map((opt) => (
-                        <div key={opt} className="flex items-center gap-2">
-                          <RadioGroupItem value={opt} id={`leads-${opt}`} />
-                          <Label htmlFor={`leads-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
+                  <>
+                    <div>
+                      <Label className="text-foreground">How many new leads do you get per day? *</Label>
+                      <RadioGroup value={leadsPerDay} onValueChange={setLeadsPerDay} className="mt-2 space-y-2">
+                        {LEADS_PER_DAY.map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`leads-${opt}`} />
+                            <Label htmlFor={`leads-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                    <div>
+                      <Label className="text-foreground">Where does your traffic come from? *</Label>
+                      <RadioGroup value={trafficSource} onValueChange={setTrafficSource} className="mt-2 space-y-2">
+                        {TRAFFIC_SOURCES.map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`traffic-${opt}`} />
+                            <Label htmlFor={`traffic-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  </>
                 )}
 
                 {/* Reactivation-specific */}
@@ -341,6 +354,17 @@ export default function Demo() {
                           <div key={opt} className="flex items-center gap-2">
                             <RadioGroupItem value={opt} id={`base-${opt}`} />
                             <Label htmlFor={`base-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                    <div>
+                      <Label className="text-foreground">Where did you generate this data? *</Label>
+                      <RadioGroup value={baseSource} onValueChange={setBaseSource} className="mt-2 space-y-2">
+                        {BASE_SOURCES.map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`source-${opt}`} />
+                            <Label htmlFor={`source-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
                           </div>
                         ))}
                       </RadioGroup>
@@ -361,17 +385,28 @@ export default function Demo() {
 
                 {/* Cold-specific */}
                 {campaignType === "cold" && (
-                  <div>
-                    <Label className="text-foreground">Do you have mobile numbers of your target audience? *</Label>
-                    <RadioGroup value={hasMobileNumbers} onValueChange={setHasMobileNumbers} className="mt-2 space-y-2">
-                      {["Yes, I have a list", "No, I need you to source them", "Partially"].map((opt) => (
-                        <div key={opt} className="flex items-center gap-2">
-                          <RadioGroupItem value={opt} id={`mobile-${opt}`} />
-                          <Label htmlFor={`mobile-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
+                  <>
+                    <div>
+                      <Label className="text-foreground">Do you have mobile numbers of your target audience? *</Label>
+                      <RadioGroup value={hasMobileNumbers} onValueChange={setHasMobileNumbers} className="mt-2 space-y-2">
+                        {["Yes, I have a list", "No, I need you to source them", "Partially"].map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`mobile-${opt}`} />
+                            <Label htmlFor={`mobile-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                    <div>
+                      <Label className="text-foreground">Describe your target audience (optional)</Label>
+                      <Input
+                        value={targetAudience}
+                        onChange={(e) => setTargetAudience(e.target.value)}
+                        placeholder="e.g. SaaS founders in UAE with 10-50 employees"
+                        className="mt-1"
+                      />
+                    </div>
+                  </>
                 )}
 
                 {/* Team size — all types */}
