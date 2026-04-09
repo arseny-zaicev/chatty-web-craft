@@ -65,16 +65,7 @@ export const Navbar = () => {
           </a>
 
           <div className="hidden md:flex items-center gap-8">
-            {navItems.map((item) =>
-              item.isPage ? (
-                <Link
-                  key={item.label}
-                  to={item.href}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
-                >
-                  {item.label}
-                </Link>
-              ) : (
+            {navItems.map((item) => (
                 <a
                   key={item.label}
                   href={item.href}
@@ -83,8 +74,7 @@ export const Navbar = () => {
                 >
                   {item.label}
                 </a>
-              )
-            )}
+            ))}
           </div>
 
           <div className="hidden md:flex items-center gap-4">
