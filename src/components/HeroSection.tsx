@@ -128,7 +128,37 @@ const WhatsAppMockup = () => (
   </div>
 );
 
-export const HeroSection = () => {
+const HERO_BULLETS = ["Cold outreach at scale", "Warm lead follow-up", "CRM reactivation"];
+
+const HeroBullets = () => {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActive((prev) => (prev + 1) % HERO_BULLETS.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex flex-wrap gap-3 animate-fade-in" style={{ animationDelay: "0.45s" }}>
+      {HERO_BULLETS.map((text, i) => (
+        <span
+          key={text}
+          className={`text-xs md:text-sm px-3 py-1.5 rounded-full border transition-all duration-500 ${
+            i === active
+              ? "border-iskra-emerald/50 bg-iskra-emerald/10 text-iskra-emerald"
+              : "border-border/50 bg-transparent text-foreground/40"
+          }`}
+        >
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+
   const scrollToDemo = () => {
     window.location.href = "/demo";
   };
