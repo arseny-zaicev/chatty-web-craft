@@ -15,7 +15,7 @@ export const WhatsAppFloat = () => {
   return (
     <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 flex flex-col items-end gap-3 animate-fade-in">
       {/* Tooltip */}
-      <div className="relative glass-card rounded-xl px-4 py-3 max-w-[200px] border-iskra-emerald/20 shadow-xl">
+      <div className="relative glass-card rounded-xl px-4 py-3 max-w-[200px] border-iskra-emerald/20 shadow-xl hidden md:block">
         <button
           onClick={() => setDismissed(true)}
           className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
