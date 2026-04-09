@@ -16,11 +16,11 @@ const campaigns = [
       { icon: BarChart3, title: "CRM handoff", desc: "Qualified data synced to your CRM" },
     ],
     caseStudy: {
-      metric: "67%",
-      metricLabel: "response rate",
-      before: "12% response rate with manual follow-ups",
-      after: "67% after automated WhatsApp first-touch",
-      industry: "Real Estate Agency, Dubai",
+      metric: "10 min",
+      metricLabel: "first touch",
+      before: "Leads go cold while your team manually follows up — many get lost or blocked",
+      after: "Automated WhatsApp reply within 10 minutes, no blocks, no lost leads",
+      industry: "Works across all industries",
     },
   },
   {
