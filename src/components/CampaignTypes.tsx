@@ -1,116 +1,176 @@
-import { Flame, RefreshCw, Send, ArrowRight, Clock, Users, BarChart3, MessageCircle, Database, Target } from "lucide-react";
+import { useState } from "react";
+import { MessageSquare, RefreshCw, Send, ArrowRight, Clock, Users, BarChart3, Target, Database, Zap, CheckCircle2, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const campaigns = [
   {
-    icon: Flame,
-    tag: "Hot Leads",
-    title: "Warm Traffic Processing",
-    description: "Your inbound leads get a WhatsApp message within 10 minutes — automatically. We design follow-up sequences, loop in your team, and push all lead data into your CRM.",
-    features: [
-      { icon: Clock, text: "Auto-message within 10 min" },
-      { icon: MessageCircle, text: "Smart follow-up sequences" },
-      { icon: Users, text: "Team notifications & handoff" },
-      { icon: BarChart3, text: "Full CRM data sync" },
+    id: "warm",
+    label: "Warm Traffic",
+    icon: MessageSquare,
+    tagline: "Process inbound leads before they go cold",
+    steps: [
+      { icon: Zap, title: "Lead comes in", desc: "From ads, website, or any source" },
+      { icon: Clock, title: "10-min WhatsApp reply", desc: "Automated first touch while lead is hot" },
+      { icon: MessageSquare, title: "Follow-up sequence", desc: "Custom cadence until reply or booking" },
+      { icon: BarChart3, title: "CRM handoff", desc: "Qualified data synced to your CRM" },
     ],
+    caseStudy: {
+      metric: "67%",
+      metricLabel: "response rate",
+      before: "12% response rate with manual follow-ups",
+      after: "67% after automated WhatsApp first-touch",
+      industry: "Real Estate Agency, Dubai",
+    },
   },
   {
+    id: "reactivation",
+    label: "Base Reactivation",
     icon: RefreshCw,
-    tag: "Database",
-    title: "Base Reactivation",
-    description: "Got old leads that went cold? We warm them back up through WhatsApp — new angle, new offer, back into your pipeline.",
-    features: [
-      { icon: Database, text: "Import your existing base" },
-      { icon: MessageCircle, text: "Re-engagement sequences" },
-      { icon: Target, text: "Fresh offer positioning" },
-      { icon: BarChart3, text: "Track reactivated leads" },
+    tagline: "Turn dead leads into live pipeline",
+    steps: [
+      { icon: Database, title: "Upload your base", desc: "Old leads, lost deals, inactive contacts" },
+      { icon: Target, title: "Segment & repackage", desc: "Fresh offer angle for each segment" },
+      { icon: Send, title: "WhatsApp outreach", desc: "Warm re-engagement + follow-ups" },
+      { icon: Users, title: "Qualify replies", desc: "Filter interested → pass to sales" },
     ],
+    caseStudy: {
+      metric: "12",
+      metricLabel: "deals closed",
+      before: "3,200 dormant leads sitting in CRM",
+      after: "340 replies → 47 qualified → 12 deals in 3 weeks",
+      industry: "B2B SaaS, Europe",
+    },
   },
   {
+    id: "cold",
+    label: "Cold Outreach",
     icon: Send,
-    tag: "Outbound",
-    title: "Cold Outreach",
-    description: "Full-cycle cold WhatsApp campaigns — we build ICP-targeted lists, craft the copy, send at scale, and qualify every reply.",
-    features: [
-      { icon: Target, text: "ICP-targeted list building" },
-      { icon: MessageCircle, text: "Proven copy & A/B testing" },
-      { icon: Users, text: "Reply qualification" },
-      { icon: BarChart3, text: "Pipeline reporting" },
+    tagline: "Full-cycle outreach to your ICP",
+    steps: [
+      { icon: Target, title: "ICP list building", desc: "We source contacts matching your ideal client" },
+      { icon: Bot, title: "Number warmup", desc: "Dedicated accounts, anti-block infrastructure" },
+      { icon: Send, title: "A/B campaigns", desc: "Test angles, copy, and sequences" },
+      { icon: CheckCircle2, title: "Qualified replies", desc: "Only positive replies forwarded to you" },
     ],
+    caseStudy: {
+      metric: "38",
+      metricLabel: "demos booked",
+      before: "15,000 messages sent over 4 weeks",
+      after: "4.2% positive reply rate → 38 demos booked",
+      industry: "SaaS Platform, Multi-country",
+    },
   },
 ];
 
 export const CampaignTypes = () => {
+  const [active, setActive] = useState(0);
+  const campaign = campaigns[active];
+
   return (
-    <section className="py-20 md:py-28">
+    <section id="campaigns" className="py-20 md:py-28">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <div className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
-            Campaign Types
-          </div>
-          <h2 className="font-display text-3xl md:text-5xl font-bold mb-4 tracking-tight">
-            WhatsApp Campaigns<br />Built Around Your Needs
+        {/* Header */}
+        <div className="text-center mb-12">
+          <span className="tag-green mb-4 inline-block">Our campaigns</span>
+          <h2 className="font-display font-bold mb-4">
+            Choose Your <span className="text-gradient">Outreach Type</span>
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Whether you need to process hot inbound leads, reactivate an old database, or launch cold outreach — we build the engine.
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+            Every business has different needs. Pick the campaign type that fits yours.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto mb-12">
-          {campaigns.map((campaign, index) => (
-            <div
-              key={index}
-              className="group relative bg-card border border-border rounded-2xl p-7 hover:border-primary/40 transition-all duration-500 hover:shadow-lg hover:shadow-primary/5"
+        {/* Tabs */}
+        <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 mb-12 max-w-2xl mx-auto">
+          {campaigns.map((c, i) => (
+            <button
+              key={c.id}
+              onClick={() => setActive(i)}
+              className={`
+                flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200
+                ${active === i
+                  ? "bg-primary text-primary-foreground shadow-glow"
+                  : "bg-card border border-border text-foreground/70 hover:border-primary/30 hover:text-foreground"
+                }
+              `}
             >
-              {/* Glow on hover */}
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              
-              <div className="relative z-10">
-                {/* Icon + Tag */}
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                    <campaign.icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-primary/70">
-                    {campaign.tag}
-                  </span>
-                </div>
-
-                {/* Title & Description */}
-                <h3 className="font-display text-xl font-bold mb-3 tracking-tight">
-                  {campaign.title}
-                </h3>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-                  {campaign.description}
-                </p>
-
-                {/* Features */}
-                <div className="space-y-3">
-                  {campaign.features.map((feature, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <feature.icon className="w-4 h-4 text-primary/60 flex-shrink-0" />
-                      <span className="text-sm text-foreground/80">{feature.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+              <c.icon className="w-4 h-4" />
+              {c.label}
+            </button>
           ))}
         </div>
 
-        {/* Demo CTA */}
-        <div className="text-center">
-          <Button
-            size="lg"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground px-8"
-            onClick={() => window.open("https://wa.me/971568785008?text=Hi!%20I%20want%20to%20see%20a%20demo", "_blank")}
-          >
-            Book a Demo
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </Button>
-          <p className="text-sm text-muted-foreground mt-3">
-            Free walkthrough — see how it works for your business
-          </p>
+        {/* Content */}
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 max-w-5xl mx-auto">
+          {/* Left — Process */}
+          <div className="card-light">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">How it works</p>
+            <h3 className="font-display text-xl font-bold mb-6 text-foreground">{campaign.tagline}</h3>
+
+            <div className="space-y-5">
+              {campaign.steps.map((step, i) => (
+                <div key={i} className="flex items-start gap-4">
+                  <div className="relative flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <step.icon className="w-5 h-5 text-primary" />
+                    </div>
+                    {i < campaign.steps.length - 1 && (
+                      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-px h-5 bg-border" />
+                    )}
+                  </div>
+                  <div className="pt-1">
+                    <p className="font-semibold text-foreground text-sm">{step.title}</p>
+                    <p className="text-muted-foreground text-sm">{step.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right — Case Study */}
+          <div className="card-light flex flex-col">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Real result</p>
+            <p className="text-sm text-muted-foreground mb-6">{campaign.caseStudy.industry}</p>
+
+            {/* Big metric */}
+            <div className="flex items-baseline gap-3 mb-8">
+              <span className="text-5xl md:text-6xl font-display font-extrabold text-primary leading-none">
+                {campaign.caseStudy.metric}
+              </span>
+              <span className="text-lg text-foreground/70 font-medium">
+                {campaign.caseStudy.metricLabel}
+              </span>
+            </div>
+
+            {/* Before / After */}
+            <div className="space-y-3 mb-8 flex-1">
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-muted-foreground/40 mt-2 flex-shrink-0" />
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Before</p>
+                  <p className="text-foreground/80 text-sm">{campaign.caseStudy.before}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-primary font-semibold">After</p>
+                  <p className="text-foreground/80 text-sm">{campaign.caseStudy.after}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <Button
+              variant="cta"
+              size="lg"
+              className="w-full group"
+              onClick={() => window.open("https://wa.me/971568785008?text=Hi!%20I'm%20interested%20in%20" + campaign.label, "_blank")}
+            >
+              Book a Demo
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Button>
+          </div>
         </div>
       </div>
     </section>
