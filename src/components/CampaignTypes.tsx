@@ -72,12 +72,12 @@ export const CampaignTypes = () => {
     <section id="campaigns" className="py-20 md:py-28">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-14">
           <span className="tag-green mb-4 inline-block">Our campaigns</span>
-          <h2 className="font-display font-bold mb-4">
+          <h2 className="font-display text-3xl md:text-5xl font-bold mb-5">
             Choose Your <span className="text-gradient">Outreach Type</span>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
             Every business has different needs. Pick the campaign type that fits yours.
           </p>
         </div>
@@ -106,23 +106,23 @@ export const CampaignTypes = () => {
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 max-w-5xl mx-auto">
           {/* Left — Process */}
           <div className="card-light">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">How it works</p>
-            <h3 className="font-display text-xl font-bold mb-6 text-foreground">{campaign.tagline}</h3>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">How it works</p>
+            <h3 className="font-display text-2xl font-bold mb-8 text-foreground">{campaign.tagline}</h3>
 
-            <div className="space-y-5">
+            <div className="space-y-6">
               {campaign.steps.map((step, i) => (
                 <div key={i} className="flex items-start gap-4">
                   <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <step.icon className="w-5 h-5 text-primary" />
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <step.icon className="w-6 h-6 text-primary" />
                     </div>
                     {i < campaign.steps.length - 1 && (
-                      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-px h-5 bg-border" />
+                      <div className="absolute top-12 left-1/2 -translate-x-1/2 w-px h-6 bg-border" />
                     )}
                   </div>
-                  <div className="pt-1">
-                    <p className="font-semibold text-foreground text-sm">{step.title}</p>
-                    <p className="text-muted-foreground text-sm">{step.desc}</p>
+                  <div className="pt-1.5">
+                    <p className="font-semibold text-foreground text-base">{step.title}</p>
+                    <p className="text-muted-foreground text-sm mt-0.5">{step.desc}</p>
                   </div>
                 </div>
               ))}
@@ -131,33 +131,33 @@ export const CampaignTypes = () => {
 
           {/* Right — Case Study */}
           <div className="card-light flex flex-col">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Real result</p>
-            <p className="text-sm text-muted-foreground mb-6">{campaign.caseStudy.industry}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Real result</p>
+            <p className="text-base text-muted-foreground mb-8">{campaign.caseStudy.industry}</p>
 
             {/* Big metric */}
-            <div className="flex items-baseline gap-3 mb-8">
-              <span className="text-5xl md:text-6xl font-display font-extrabold text-primary leading-none">
+            <div className="flex items-baseline gap-4 mb-10">
+              <span className="text-6xl md:text-7xl font-display font-extrabold text-primary leading-none">
                 {campaign.caseStudy.metric}
               </span>
-              <span className="text-lg text-foreground/70 font-medium">
+              <span className="text-xl text-foreground/70 font-medium">
                 {campaign.caseStudy.metricLabel}
               </span>
             </div>
 
             {/* Before / After */}
-            <div className="space-y-3 mb-8 flex-1">
+            <div className="space-y-4 mb-10 flex-1">
               <div className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-muted-foreground/40 mt-2 flex-shrink-0" />
+                <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/40 mt-2 flex-shrink-0" />
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Before</p>
-                  <p className="text-foreground/80 text-sm">{campaign.caseStudy.before}</p>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Before</p>
+                  <p className="text-foreground/80 text-base leading-relaxed">{campaign.caseStudy.before}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                <div className="w-2.5 h-2.5 rounded-full bg-primary mt-2 flex-shrink-0" />
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-primary font-semibold">After</p>
-                  <p className="text-foreground/80 text-sm">{campaign.caseStudy.after}</p>
+                  <p className="text-xs uppercase tracking-wider text-primary font-semibold mb-1">After</p>
+                  <p className="text-foreground/80 text-base leading-relaxed">{campaign.caseStudy.after}</p>
                 </div>
               </div>
             </div>
