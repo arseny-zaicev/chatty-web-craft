@@ -40,7 +40,7 @@ export const ClientLogos = () => {
               href={client.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 px-8 flex items-center h-[52px]"
+              className="flex-shrink-0 px-10 flex items-center h-[60px]"
             >
               <img
                 src={client.logo}

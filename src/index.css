@@ -337,11 +337,11 @@
   }
 
   .marquee-logo-img {
-    height: 22px;
+    height: 40px;
     width: auto;
-    max-width: 110px;
+    max-width: 160px;
     object-fit: contain;
-    opacity: 0.45;
+    opacity: 0.55;
     transition: opacity 0.25s;
   }
 
