@@ -665,3 +665,18 @@
 .icon-shimmer {
   animation: iconShimmer 3s ease-in-out infinite;
 }
+
+/* Typing dots */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30%            { transform: translateY(-4px); opacity: 1; }
+}
+.typing-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: hsl(0 0% 35%);
+  animation: typing-bounce 1.2s ease-in-out infinite;
+  animation-delay: var(--d, 0ms);
+  will-change: transform;
+}
