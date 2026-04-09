@@ -83,8 +83,8 @@ export default function Demo() {
     (crm !== "Other" || crmOther.trim() !== "");
 
   const canProceedStep3 = (() => {
-    if (campaignType === "warm") return leadsPerDay !== "" && teamSize !== "";
-    if (campaignType === "reactivation") return baseSize !== "" && baseAge !== "" && teamSize !== "";
+    if (campaignType === "warm") return leadsPerDay !== "" && trafficSource !== "" && teamSize !== "";
+    if (campaignType === "reactivation") return baseSize !== "" && baseAge !== "" && baseSource !== "" && teamSize !== "";
     if (campaignType === "cold") return hasMobileNumbers !== "" && teamSize !== "";
     return false;
   })();
@@ -97,9 +97,9 @@ export default function Demo() {
         crm: crm === "Other" ? crmOther : crm,
         business_url: businessUrl,
         team_size: teamSize,
-        ...(campaignType === "warm" && { leads_per_day: leadsPerDay }),
-        ...(campaignType === "reactivation" && { base_size: baseSize, base_age: baseAge }),
-        ...(campaignType === "cold" && { has_mobile_numbers: hasMobileNumbers }),
+        ...(campaignType === "warm" && { leads_per_day: leadsPerDay, traffic_source: trafficSource }),
+        ...(campaignType === "reactivation" && { base_size: baseSize, base_age: baseAge, base_source: baseSource }),
+        ...(campaignType === "cold" && { has_mobile_numbers: hasMobileNumbers, target_audience: targetAudience || null }),
       };
 
       const { error } = await supabase.functions.invoke("submit-form", {
