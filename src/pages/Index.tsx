@@ -4,15 +4,14 @@ import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
 import { WhatsAppFloat } from "@/components/WhatsAppFloat";
 import { ClientLogos } from "@/components/ClientLogos";
-import { WhatsAppStages } from "@/components/whatsapp/WhatsAppStages";
 import { CampaignTypes } from "@/components/CampaignTypes";
+import { HowItWorks } from "@/components/HowItWorks";
 import { ROICalculator } from "@/components/whatsapp/ROICalculator";
 import { ClientDashboardPreview } from "@/components/whatsapp/ClientDashboardPreview";
-import { ProductTiers } from "@/components/whatsapp/ProductTiers";
+import { Pricing } from "@/components/Pricing";
 import { Testimonials } from "@/components/Testimonials";
 import { FounderSection } from "@/components/FounderSection";
 import { FAQ } from "@/components/FAQ";
-
 import { Footer } from "@/components/Footer";
 
 const Index = () => {
@@ -57,10 +56,10 @@ const Index = () => {
         <HeroSection />
         <ClientLogos />
         <CampaignTypes />
-        <WhatsAppStages />
+        <HowItWorks />
         <ROICalculator />
         <ClientDashboardPreview />
-        <ProductTiers />
+        <Pricing />
         <Testimonials />
         <FounderSection />
         <FAQ />
