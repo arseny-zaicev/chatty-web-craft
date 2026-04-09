@@ -7,7 +7,6 @@ const navItems = [
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Results", href: "/#testimonials" },
   { label: "Pricing", href: "/#pricing" },
-  { label: "Request a Demo", href: "/demo", isPage: true },
 ];
 
 const IskraLogo = () => (
