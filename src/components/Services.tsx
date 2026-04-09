@@ -2,6 +2,7 @@ import { MessageSquare, ArrowRight, Send, BarChart3, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
+import { SketchUnderline } from "@/components/SketchElements";
 
 export const Services = () => {
   return (
@@ -32,7 +33,12 @@ export const Services = () => {
                   </div>
                   
                   <h3 className="font-display text-3xl md:text-4xl font-bold mb-4">
-                    WhatsApp Booking Engine
+                    <span className="inline-block">
+                      WhatsApp Booking Engine
+                      <span style={{ display: 'block', marginTop: '-4px' }}>
+                        <SketchUnderline color="hsl(0 0% 100% / 0.6)" delay={0.4} />
+                      </span>
+                    </span>
                   </h3>
                   
                   <p className="text-primary-foreground/80 text-lg mb-8 leading-relaxed">

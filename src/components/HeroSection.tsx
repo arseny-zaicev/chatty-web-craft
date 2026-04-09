@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/Sparkles";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { ArrowRight } from "lucide-react";
+import { SketchUnderline } from "@/components/SketchElements";
 import mariaAvatar from "@/assets/maria-avatar.avif";
 
 const WhatsAppMockup = () => (
@@ -147,10 +148,15 @@ export const HeroSection = () => {
             </p>
 
             <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <span className="text-foreground">WhatsApp Booking</span>
+              <span className="text-foreground">We turn WhatsApp</span>
               <br />
-              <span className="text-foreground">Engine that </span>
-              <span className="text-iskra-emerald whitespace-nowrap">f*cking works.</span>
+              <span className="text-foreground">into your </span>
+              <span className="inline-block">
+                <span className="text-iskra-emerald">top sales channel.</span>
+                <span style={{ display: 'block', marginTop: '-4px' }}>
+                  <SketchUnderline color="hsl(152 50% 36%)" delay={0.5} />
+                </span>
+              </span>
             </h1>
 
             <p className="text-base md:text-lg text-foreground/70 mb-8 max-w-lg leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
@@ -160,10 +166,10 @@ export const HeroSection = () => {
             <div className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
               <Button
                 onClick={scrollToDemo}
-                className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20 btn-glow"
+                className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20 btn-shimmer"
               >
                 Get Started
-                <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform relative z-10" />
               </Button>
             </div>
           </div>
