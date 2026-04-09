@@ -64,9 +64,12 @@ export default function Demo() {
   const [crm, setCrm] = useState("");
   const [crmOther, setCrmOther] = useState("");
   const [leadsPerDay, setLeadsPerDay] = useState("");
+  const [trafficSource, setTrafficSource] = useState("");
   const [baseSize, setBaseSize] = useState("");
   const [baseAge, setBaseAge] = useState("");
+  const [baseSource, setBaseSource] = useState("");
   const [hasMobileNumbers, setHasMobileNumbers] = useState("");
+  const [targetAudience, setTargetAudience] = useState("");
   const [teamSize, setTeamSize] = useState("");
 
   const totalSteps = 3;
