@@ -99,7 +99,7 @@ function validateAnalyticsMetadata(metadata: unknown): boolean {
   }
 }
 
-const VALID_FORM_TYPES = ["qualification", "seller_leads", "whatsapp_outreach"];
+const VALID_FORM_TYPES = ["qualification", "seller_leads", "whatsapp_outreach", "demo_request"];
 
 Deno.serve(async (req) => {
   // Handle CORS preflight

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MessageSquare, RefreshCw, Send, ArrowRight, Clock, Users, BarChart3, Target, Database, Zap, CheckCircle2, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -64,6 +65,7 @@ const campaigns = [
 
 export const CampaignTypes = () => {
   const [active, setActive] = useState(0);
+  const navigate = useNavigate();
   const campaign = campaigns[active];
 
   return (
@@ -165,7 +167,7 @@ export const CampaignTypes = () => {
               variant="cta"
               size="lg"
               className="w-full group"
-              onClick={() => window.open("https://wa.me/971568785008?text=Hi!%20I'm%20interested%20in%20" + campaign.label, "_blank")}
+              onClick={() => navigate("/demo")}
             >
               Book a Demo
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
