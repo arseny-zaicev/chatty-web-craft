@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/Sparkles";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
@@ -127,6 +128,36 @@ const WhatsAppMockup = () => (
   </div>
 );
 
+const HERO_BULLETS = ["Cold outreach at scale", "Warm lead follow-up", "CRM reactivation"];
+
+const HeroBullets = () => {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActive((prev) => (prev + 1) % HERO_BULLETS.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex flex-wrap gap-3 animate-fade-in" style={{ animationDelay: "0.45s" }}>
+      {HERO_BULLETS.map((text, i) => (
+        <span
+          key={text}
+          className={`text-xs md:text-sm px-3 py-1.5 rounded-full border transition-all duration-500 ${
+            i === active
+              ? "border-iskra-emerald/50 bg-iskra-emerald/10 text-iskra-emerald"
+              : "border-border/50 bg-transparent text-foreground/40"
+          }`}
+        >
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+};
+
 export const HeroSection = () => {
   const scrollToDemo = () => {
     window.location.href = "/demo";
@@ -143,27 +174,27 @@ export const HeroSection = () => {
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 items-center">
           {/* Left */}
           <div className="flex-1 max-w-2xl">
-            <p className="text-foreground/60 text-sm md:text-base uppercase tracking-widest mb-4 animate-fade-in">
+            <p className="text-foreground/50 text-xs md:text-sm uppercase tracking-[0.2em] mb-5 animate-fade-in font-medium">
               WhatsApp Outreach Infrastructure
             </p>
 
-            <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <span className="text-foreground">10,000+ WhatsApp</span>
+            <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.08] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+              <span className="text-foreground">Scale WhatsApp</span>
               <br />
-              <span className="text-foreground">messages. </span>
+              <span className="text-foreground">outreach </span>
               <span className="inline-block">
-                <span className="text-iskra-emerald">Zero bans.</span>
+                <span className="text-iskra-emerald whitespace-nowrap">without burning accounts.</span>
                 <span style={{ display: 'block', marginTop: '-4px' }}>
                   <SketchUnderline color="hsl(152 50% 36%)" delay={0.5} />
                 </span>
               </span>
             </h1>
 
-            <p className="text-base md:text-lg text-foreground/70 mb-8 max-w-lg leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
-              Dedicated sending accounts. Proven copy sequences. Full funnel tracking. AI layer when you're ready.
+            <p className="text-base md:text-lg text-foreground/65 mb-8 max-w-lg leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
+              Send cold campaigns, follow up warm leads, and reactivate old CRM lists with dedicated sending accounts, proven sequences, and full funnel tracking.
             </p>
 
-            <div className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
+            <div className="animate-fade-in mb-8" style={{ animationDelay: "0.3s" }}>
               <Button
                 onClick={scrollToDemo}
                 className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20 btn-shimmer"
@@ -172,6 +203,8 @@ export const HeroSection = () => {
                 <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform relative z-10" />
               </Button>
             </div>
+
+            <HeroBullets />
           </div>
 
           {/* Right — WhatsApp Mockup */}
