@@ -40,7 +40,7 @@ export const ClientLogos = () => {
               href={client.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="marquee-logo-item"
+              className="flex-shrink-0 px-8 flex items-center h-[52px]"
             >
               <img
                 src={client.logo}
@@ -49,7 +49,6 @@ export const ClientLogos = () => {
                 decoding="async"
                 className="marquee-logo-img"
               />
-              {idx < allLogos.length - 1 && <span className="marquee-logo-divider" />}
             </a>
           ))}
         </div>
