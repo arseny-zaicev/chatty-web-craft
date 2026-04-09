@@ -158,7 +158,7 @@ const HeroBullets = () => {
   );
 };
 
-
+export const HeroSection = () => {
   const scrollToDemo = () => {
     window.location.href = "/demo";
   };
