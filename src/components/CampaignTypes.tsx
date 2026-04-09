@@ -20,7 +20,7 @@ const campaigns = [
       metricLabel: "first touch",
       before: "Leads go cold while your team manually follows up — many get lost or blocked",
       after: "Automated WhatsApp reply within 10 minutes, no blocks, no lost leads",
-      industry: "Works across all industries",
+      industry: "Coaching, SaaS, Real Estate & more",
     },
   },
   {
