@@ -3,20 +3,24 @@ import { ArrowRight } from "lucide-react";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 import { useNavigate } from "react-router-dom";
 
+const BOOKING_OPTIONS = [1, 2, 3, 4];
+
 export const ROICalculator = () => {
   const navigate = useNavigate();
-  const [closeRate, setCloseRate] = useState(15);
+  const [bookingRate, setBookingRate] = useState(2);
+  const [closeRate, setCloseRate] = useState(30);
+  const [showUpRate, setShowUpRate] = useState(70);
   const [dealSize, setDealSize] = useState(5000);
 
   const results = useMemo(() => {
     const messagesPerMonth = 10000;
-    const bookingRate = 0.013;
-    const booked = Math.round(messagesPerMonth * bookingRate);
-    const closed = Math.floor(booked * (closeRate / 100));
+    const booked = Math.round(messagesPerMonth * (bookingRate / 100));
+    const showed = Math.round(booked * (showUpRate / 100));
+    const closed = Math.floor(showed * (closeRate / 100));
     const revenue = closed * dealSize;
 
-    return { booked, closed, revenue };
-  }, [closeRate, dealSize]);
+    return { booked, showed, closed, revenue };
+  }, [bookingRate, closeRate, showUpRate, dealSize]);
 
   const sliderClass =
     "w-full h-1.5 bg-border rounded-full appearance-none cursor-pointer " +
@@ -40,8 +44,43 @@ export const ROICalculator = () => {
               </p>
             </div>
 
+            {/* Booking Rate Selector */}
+            <div className="mb-8">
+              <p className="text-sm text-foreground/70 mb-3">Booking rate from messages</p>
+              <div className="flex gap-3">
+                {BOOKING_OPTIONS.map((rate) => (
+                  <button
+                    key={rate}
+                    onClick={() => setBookingRate(rate)}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                      bookingRate === rate
+                        ? "bg-iskra-emerald text-background shadow-md"
+                        : "bg-muted/50 text-foreground/60 hover:bg-muted"
+                    }`}
+                  >
+                    {rate}%
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Sliders */}
             <div className="space-y-8 mb-12">
+              <div>
+                <div className="flex justify-between mb-3">
+                  <span className="text-sm text-foreground/70">Show-up rate</span>
+                  <span className="text-sm font-semibold text-iskra-emerald">{showUpRate}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={30}
+                  max={95}
+                  value={showUpRate}
+                  onChange={(e) => setShowUpRate(Number(e.target.value))}
+                  className={sliderClass}
+                />
+              </div>
+
               <div>
                 <div className="flex justify-between mb-3">
                   <span className="text-sm text-foreground/70">Close rate</span>
@@ -74,23 +113,26 @@ export const ROICalculator = () => {
               </div>
             </div>
 
-            {/* Results — 3 numbers */}
-            <div className="grid grid-cols-3 gap-6 mb-10">
+            {/* Results */}
+            <div className="grid grid-cols-4 gap-4 mb-8">
               {[
                 { label: "Booked calls", value: results.booked },
+                { label: "Showed up", value: results.showed },
                 { label: "Closed deals", value: results.closed },
                 { label: "Revenue", value: `€${results.revenue.toLocaleString()}` },
               ].map(({ label, value }) => (
                 <div key={label} className="text-center">
-                  <p className="text-3xl md:text-4xl font-bold font-display text-foreground">{value}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{label}</p>
+                  <p className="text-2xl md:text-3xl font-bold font-display text-foreground">{value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{label}</p>
                 </div>
               ))}
             </div>
 
-            <p className="text-xs text-muted-foreground text-center mb-8">
-              Projections based on real client benchmarks: ~1.3% booking rate from messages sent.
-            </p>
+            <div className="bg-muted/30 border border-border/50 rounded-xl p-4 mb-8">
+              <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                ⚠️ Results vary by industry, contact quality, and campaign type. These projections are based on aggregate client benchmarks and are not a guarantee of specific outcomes.
+              </p>
+            </div>
 
             <div className="text-center">
               <button
