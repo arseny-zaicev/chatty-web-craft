@@ -227,15 +227,15 @@ const Booked = () => {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-card rounded-xl p-3 border border-border text-center">
                       <p className="text-xl font-bold text-iskra-emerald font-display">500</p>
-                      <p className="text-gray-500 text-[10px] uppercase tracking-wider font-medium mt-0.5">Messages</p>
+                      <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Messages</p>
                     </div>
-                    <div className="bg-white rounded-xl p-3 border border-gray-200 text-center">
+                    <div className="bg-card rounded-xl p-3 border border-border text-center">
                       <p className="text-xl font-bold text-iskra-emerald font-display">8</p>
-                      <p className="text-gray-500 text-[10px] uppercase tracking-wider font-medium mt-0.5">Meetings</p>
+                      <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Meetings</p>
                     </div>
-                    <div className="bg-white rounded-xl p-3 border border-gray-200 text-center">
+                    <div className="bg-card rounded-xl p-3 border border-border text-center">
                       <p className="text-xl font-bold text-iskra-emerald font-display">2d</p>
-                      <p className="text-gray-500 text-[10px] uppercase tracking-wider font-medium mt-0.5">Timeline</p>
+                      <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Timeline</p>
                     </div>
                   </div>
                 </div>
@@ -254,15 +254,15 @@ const Booked = () => {
                 </div>
               </div>
               <div className="text-center md:text-left flex-1">
-                <h3 className="font-bold text-xl font-display text-gray-900 mb-1">You'll Be Speaking with Arsenijs</h3>
+                <h3 className="font-bold text-xl font-display text-foreground mb-1">You'll Be Speaking with Arsenijs</h3>
                 <p className="text-iskra-emerald text-sm font-medium mb-3">Founder, ISKRA</p>
-                <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
                   Sent over 1M+ WhatsApp messages across B2B, SaaS, coaching, real estate and more. Built outreach systems that generated <span className="text-iskra-emerald font-semibold">3M+ AED</span> in pipeline. No fluff — just proven strategies.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                  <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">1M+ Messages</span>
+                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">1M+ Messages</span>
                   <span className="px-3 py-1.5 rounded-full bg-iskra-emerald/10 text-iskra-emerald text-xs font-medium">3M+ AED Pipeline</span>
-                  <span className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">10+ Industries</span>
+                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">10+ Industries</span>
                 </div>
               </div>
             </div>
@@ -270,13 +270,13 @@ const Booked = () => {
         </section>
 
         {/* WhatsApp CTA */}
-        <section className="py-16 px-4 bg-gray-900">
+        <section className="py-16 px-4 bg-foreground">
           <div className="container mx-auto max-w-2xl text-center">
             <Zap className="w-10 h-10 text-iskra-emerald mx-auto mb-4" />
-            <h2 className="text-2xl md:text-3xl font-bold text-white font-display mb-3">
+            <h2 className="text-2xl md:text-3xl font-bold text-background font-display mb-3">
               Have a Question Before the Call?
             </h2>
-            <p className="text-gray-400 mb-8">
+            <p className="text-muted-foreground mb-8">
               Message me directly — I usually reply within minutes.
             </p>
             <a href="https://wa.me/971568785008" target="_blank" rel="noopener noreferrer">
@@ -289,9 +289,9 @@ const Booked = () => {
         </section>
 
         {/* Footer */}
-        <footer className="py-6 border-t border-black/5">
+        <footer className="py-6 border-t border-border/50">
           <div className="container mx-auto px-4 text-center">
-            <p className="text-gray-400 text-sm">© {new Date().getFullYear()} ISKRA. All rights reserved.</p>
+            <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} ISKRA. All rights reserved.</p>
           </div>
         </footer>
       </main>
