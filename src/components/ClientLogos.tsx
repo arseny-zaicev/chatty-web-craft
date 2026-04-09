@@ -23,18 +23,31 @@ const clients = [
 const track = [...clients, ...clients];
 
 export const ClientLogos = () => (
-  <section className="relative py-5 overflow-hidden">
+  <section
+    className="relative overflow-hidden"
+    style={{ padding: "1.4rem 0 1.6rem", background: "hsl(0 0% 95%)" }}
+  >
     {/* Top rule */}
     <div
       className="absolute top-0 left-0 right-0 h-px"
       style={{
         background:
-          "linear-gradient(90deg, transparent 5%, hsl(var(--iskra-emerald) / 0.3) 40%, hsl(var(--iskra-emerald) / 0.3) 60%, transparent 95%)",
+          "linear-gradient(90deg, transparent 5%, hsl(0 0% 75% / 0.55) 40%, hsl(0 0% 75% / 0.55) 60%, transparent 95%)",
       }}
     />
 
     {/* Label */}
-    <p className="text-center text-[0.6rem] uppercase tracking-[0.2em] font-semibold text-muted-foreground/60 mb-4">
+    <p
+      style={{
+        fontSize: "0.52rem",
+        letterSpacing: "0.2em",
+        textTransform: "uppercase",
+        color: "hsl(0 0% 45%)",
+        fontWeight: 600,
+        textAlign: "center",
+        marginBottom: "1.1rem",
+      }}
+    >
       Clients we've worked with
     </p>
 
@@ -43,40 +56,43 @@ export const ClientLogos = () => (
       {/* Fade edges */}
       <div
         className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{
-          background: "linear-gradient(to right, hsl(var(--background)), transparent)",
-        }}
+        style={{ background: "linear-gradient(to right, hsl(0 0% 95%), transparent)" }}
       />
       <div
         className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{
-          background: "linear-gradient(to left, hsl(var(--background)), transparent)",
-        }}
+        style={{ background: "linear-gradient(to left, hsl(0 0% 95%), transparent)" }}
       />
 
       <div className="marquee-inner" style={{ willChange: "transform" }}>
         {track.map((client, i) => (
           <div
             key={i}
-            className="flex items-center justify-center flex-shrink-0 px-10 h-[44px]"
+            className="flex items-center justify-center flex-shrink-0 h-[44px]"
+            style={{ padding: "0 2.8rem" }}
           >
             <img
               src={client.logo}
               alt={`${client.name} logo`}
               loading="eager"
               decoding="async"
-              className="h-[28px] w-auto max-w-[120px] object-contain transition-all duration-300"
               style={{
-                filter: "brightness(0) invert(1) opacity(1)",
-                opacity: 0.35,
+                height: "26px",
+                width: "auto",
+                maxWidth: "120px",
+                objectFit: "contain",
+                filter: "grayscale(1) brightness(0.45) contrast(1.2)",
+                opacity: 0.5,
+                transition: "opacity 0.3s, filter 0.3s",
               }}
               onMouseEnter={(e) => {
                 const img = e.currentTarget;
-                img.style.opacity = "0.7";
+                img.style.opacity = "0.85";
+                img.style.filter = "grayscale(0.2) brightness(0.75) contrast(1.1)";
               }}
               onMouseLeave={(e) => {
                 const img = e.currentTarget;
-                img.style.opacity = "0.35";
+                img.style.opacity = "0.5";
+                img.style.filter = "grayscale(1) brightness(0.45) contrast(1.2)";
               }}
             />
           </div>
@@ -89,7 +105,7 @@ export const ClientLogos = () => (
       className="absolute bottom-0 left-0 right-0 h-px"
       style={{
         background:
-          "linear-gradient(90deg, transparent 10%, hsl(var(--iskra-emerald) / 0.2) 50%, transparent 90%)",
+          "linear-gradient(90deg, transparent 10%, hsl(0 0% 70% / 0.4) 50%, transparent 90%)",
       }}
     />
   </section>
