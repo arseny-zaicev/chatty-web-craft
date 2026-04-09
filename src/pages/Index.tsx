@@ -10,6 +10,7 @@ import { Testimonials } from "@/components/Testimonials";
 import { ROICalculator } from "@/components/whatsapp/ROICalculator";
 import { Pricing } from "@/components/Pricing";
 import { FAQ } from "@/components/FAQ";
+import { FounderSection } from "@/components/FounderSection";
 import { Footer } from "@/components/Footer";
 
 const Index = () => {
@@ -21,8 +22,9 @@ const Index = () => {
           name="description" 
           content="WhatsApp outreach engine that delivers predictable interested replies and booked calls. Dedicated infrastructure, proven copy, full funnel tracking. Dubai." 
         />
-        <meta name="keywords" content="WhatsApp outreach Dubai, WhatsApp booking engine, lead generation UAE, B2B outreach, appointment setting, WhatsApp automation" />
+        <meta name="keywords" content="WhatsApp outreach Dubai, WhatsApp booking engine, lead generation UAE, B2B outreach, appointment setting, WhatsApp automation, WhatsApp marketing agency Dubai" />
         <link rel="canonical" href="https://iskra.ae/" />
+        <meta name="language" content="en" />
         
         <script type="application/ld+json">
           {JSON.stringify({
@@ -60,6 +62,7 @@ const Index = () => {
         <ROICalculator />
         <Pricing />
         <FAQ />
+        <FounderSection />
         <Footer />
       </main>
     </>
