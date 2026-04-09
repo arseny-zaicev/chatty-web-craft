@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { ArrowRight } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
 import { WhatsAppFloat } from "@/components/WhatsAppFloat";
