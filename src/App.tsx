@@ -21,6 +21,7 @@ import Apply from "./pages/Apply";
 import SellerLeadsApply from "./pages/SellerLeadsApply";
 import WhatsAppApply from "./pages/WhatsAppApply";
 import Booked from "./pages/Booked";
+import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
             <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
             <Route path="/booked" element={<Booked />} />
+            <Route path="/demo" element={<Demo />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
