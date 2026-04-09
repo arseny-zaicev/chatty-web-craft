@@ -141,7 +141,7 @@ const SellerLeads = () => {
                     onClick={scrollToForm} 
                     className="group text-lg px-8 py-6 shadow-xl shadow-iskra-emerald/20"
                   >
-                    Get Started
+                    Book a Demo
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                   <Button 

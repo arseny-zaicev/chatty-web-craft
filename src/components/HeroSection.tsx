@@ -168,7 +168,7 @@ export const HeroSection = () => {
                 onClick={scrollToDemo}
                 className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20 btn-shimmer"
               >
-                Get Started
+                Book a Demo
                 <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform relative z-10" />
               </Button>
             </div>
