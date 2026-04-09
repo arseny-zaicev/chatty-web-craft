@@ -24,51 +24,70 @@ const track = [...clients, ...clients];
 
 export const ClientLogos = () => (
   <section
-    className="relative overflow-hidden"
-    style={{ padding: "1.4rem 0 1.6rem" }}
+    style={{
+      background: 'linear-gradient(135deg, hsl(38 28% 84%) 0%, hsl(36 22% 90%) 35%, hsl(40 30% 86%) 60%, hsl(35 25% 88%) 100%)',
+      borderTop: '1px solid hsl(38 30% 80%)',
+      borderBottom: '1px solid hsl(34 22% 78%)',
+      padding: '3rem 0 2.75rem',
+      position: 'relative',
+      overflow: 'hidden',
+    }}
   >
-    {/* Top rule */}
+    {/* Shimmer sweep overlay */}
     <div
-      className="absolute top-0 left-0 right-0 h-px"
       style={{
-        background:
-          "linear-gradient(90deg, transparent 5%, hsl(0 0% 75% / 0.55) 40%, hsl(0 0% 75% / 0.55) 60%, transparent 95%)",
+        position: 'absolute',
+        inset: 0,
+        background: 'linear-gradient(105deg, transparent 30%, hsl(42 60% 96% / 0.45) 50%, transparent 70%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer-sweep 5s ease-in-out infinite',
+        pointerEvents: 'none',
       }}
     />
 
     {/* Label */}
     <p
       style={{
-        fontSize: "0.52rem",
-        letterSpacing: "0.2em",
-        textTransform: "uppercase",
-        color: "hsl(0 0% 45%)",
+        fontSize: '0.6rem',
+        letterSpacing: '0.22em',
+        textTransform: 'uppercase',
+        color: 'hsl(38 22% 48%)',
         fontWeight: 600,
-        textAlign: "center",
-        marginBottom: "1.1rem",
+        textAlign: 'center',
+        marginBottom: '2rem',
+        position: 'relative',
+        zIndex: 1,
       }}
     >
       Clients we've worked with
     </p>
 
-    {/* Marquee */}
-    <div className="relative w-full overflow-hidden">
+    {/* Full-width marquee */}
+    <div style={{ overflow: 'hidden', position: 'relative', width: '100%', zIndex: 1 }}>
       {/* Fade edges */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to right, hsl(var(--background)), transparent)" }}
-      />
-      <div
-        className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
-        style={{ background: "linear-gradient(to left, hsl(var(--background)), transparent)" }}
-      />
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: '100px',
+        background: 'linear-gradient(to right, hsl(38 28% 84%), transparent)',
+        zIndex: 2, pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0, width: '100px',
+        background: 'linear-gradient(to left, hsl(35 25% 88%), transparent)',
+        zIndex: 2, pointerEvents: 'none',
+      }} />
 
-      <div className="marquee-inner" style={{ willChange: "transform" }}>
+      <div className="marquee-inner" style={{ willChange: 'transform' }}>
         {track.map((client, i) => (
           <div
             key={i}
-            className="flex items-center justify-center flex-shrink-0 h-[44px]"
-            style={{ padding: "0 2.8rem" }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0 3.5rem',
+              height: '60px',
+              flexShrink: 0,
+            }}
           >
             <img
               src={client.logo}
@@ -76,33 +95,26 @@ export const ClientLogos = () => (
               loading="eager"
               decoding="async"
               style={{
-                height: "26px",
-                width: "auto",
-                maxWidth: "120px",
-                objectFit: "contain",
-                filter: "brightness(0) invert(1)",
-                opacity: 0.4,
-                transition: "opacity 0.3s",
+                height: '32px',
+                width: 'auto',
+                maxWidth: '130px',
+                objectFit: 'contain',
+                filter: 'grayscale(1) brightness(0.42)',
+                opacity: 0.65,
+                transition: 'opacity 0.3s, filter 0.3s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = "0.7";
+                e.currentTarget.style.opacity = '0.95';
+                e.currentTarget.style.filter = 'grayscale(0) brightness(1)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = "0.4";
+                e.currentTarget.style.opacity = '0.65';
+                e.currentTarget.style.filter = 'grayscale(1) brightness(0.42)';
               }}
             />
           </div>
         ))}
       </div>
     </div>
-
-    {/* Bottom rule */}
-    <div
-      className="absolute bottom-0 left-0 right-0 h-px"
-      style={{
-        background:
-          "linear-gradient(90deg, transparent 10%, hsl(0 0% 70% / 0.4) 50%, transparent 90%)",
-      }}
-    />
   </section>
 );
