@@ -5,11 +5,17 @@
       <stop offset="100%" stop-color="#1a7a5a"/>
     </linearGradient>
   </defs>
-  <!-- Rounded square background with gradient -->
   <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bgGrad)"/>
-  <!-- 4-pointed star sparkle - large and centered -->
-  <path d="M256 96 L276 220 L256 240 L236 220 Z" fill="white"/>
-  <path d="M256 416 L236 292 L256 272 L276 292 Z" fill="white"/>
-  <path d="M96 256 L220 236 L240 256 L220 276 Z" fill="white"/>
-  <path d="M416 256 L292 276 L272 256 L292 236 Z" fill="white"/>
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="28" fill="white"/>
+  <!-- Rays -->
+  <line x1="256" y1="100" x2="256" y2="190" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <line x1="256" y1="322" x2="256" y2="412" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <line x1="100" y1="256" x2="190" y2="256" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <line x1="322" y1="256" x2="412" y2="256" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <!-- Diagonal rays -->
+  <line x1="146" y1="146" x2="210" y2="210" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <line x1="302" y1="302" x2="366" y2="366" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <line x1="366" y1="146" x2="302" y2="210" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <line x1="210" y1="302" x2="146" y2="366" stroke="white" stroke-width="22" stroke-linecap="round"/>
 </svg>
