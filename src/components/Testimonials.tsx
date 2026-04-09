@@ -37,9 +37,10 @@ export const Testimonials = () => {
                       <img
                         src={kristapsPhoto}
                         alt="Kristaps - Founder of key-digital.lv"
-                        className="w-full h-full object-cover object-top"
+                        className="w-full h-full object-cover"
+                        style={{ objectPosition: "center 20%" }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
+                      <div className="absolute inset-0 bg-black/30" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-20 h-20 rounded-full bg-iskra-emerald flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                           <Play className="w-8 h-8 text-primary-foreground ml-1" fill="currentColor" />
