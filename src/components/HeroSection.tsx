@@ -181,9 +181,9 @@ export const HeroSection = () => {
             <h1 className="font-headline text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <span className="text-foreground">Scale WhatsApp outreach</span>
               <br />
-              <span className="inline-block overflow-hidden">
-                <span className="text-iskra-emerald">without burning accounts.</span>
-                <span style={{ display: 'block', marginTop: '-4px' }}>
+              <span className="text-iskra-emerald" style={{ display: 'inline-block', position: 'relative' }}>
+                without burning accounts.
+                <span style={{ position: 'absolute', bottom: '-6px', left: 0, right: 0 }}>
                   <SketchUnderline color="hsl(152 50% 36%)" delay={0.5} />
                 </span>
               </span>
