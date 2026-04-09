@@ -43,8 +43,10 @@ const CAMPAIGN_TYPES = [
 ];
 
 const LEADS_PER_DAY = ["0 - 5", "6 - 50", "51 - 250", "251+"];
+const TRAFFIC_SOURCES = ["Facebook/Meta Ads", "Google Ads", "SEO / Organic", "Social Media", "Referrals", "Marketplace / Portal", "Multiple channels", "Other"];
 const BASE_SIZES = ["Under 1,000", "1,000 - 5,000", "5,000 - 20,000", "20,000+"];
 const BASE_AGES = ["Less than 6 months", "6 - 12 months", "1 - 2 years", "2+ years"];
+const BASE_SOURCES = ["CRM export", "Google Sheets / Excel", "Old ad campaigns", "Website signups", "Event attendees", "Mixed / multiple sources"];
 const TEAM_SIZES = ["Just me", "1 - 5", "6 - 20", "21+"];
 
 export default function Demo() {
@@ -62,9 +64,12 @@ export default function Demo() {
   const [crm, setCrm] = useState("");
   const [crmOther, setCrmOther] = useState("");
   const [leadsPerDay, setLeadsPerDay] = useState("");
+  const [trafficSource, setTrafficSource] = useState("");
   const [baseSize, setBaseSize] = useState("");
   const [baseAge, setBaseAge] = useState("");
+  const [baseSource, setBaseSource] = useState("");
   const [hasMobileNumbers, setHasMobileNumbers] = useState("");
+  const [targetAudience, setTargetAudience] = useState("");
   const [teamSize, setTeamSize] = useState("");
 
   const totalSteps = 3;
@@ -78,8 +83,8 @@ export default function Demo() {
     (crm !== "Other" || crmOther.trim() !== "");
 
   const canProceedStep3 = (() => {
-    if (campaignType === "warm") return leadsPerDay !== "" && teamSize !== "";
-    if (campaignType === "reactivation") return baseSize !== "" && baseAge !== "" && teamSize !== "";
+    if (campaignType === "warm") return leadsPerDay !== "" && trafficSource !== "" && teamSize !== "";
+    if (campaignType === "reactivation") return baseSize !== "" && baseAge !== "" && baseSource !== "" && teamSize !== "";
     if (campaignType === "cold") return hasMobileNumbers !== "" && teamSize !== "";
     return false;
   })();
@@ -92,9 +97,9 @@ export default function Demo() {
         crm: crm === "Other" ? crmOther : crm,
         business_url: businessUrl,
         team_size: teamSize,
-        ...(campaignType === "warm" && { leads_per_day: leadsPerDay }),
-        ...(campaignType === "reactivation" && { base_size: baseSize, base_age: baseAge }),
-        ...(campaignType === "cold" && { has_mobile_numbers: hasMobileNumbers }),
+        ...(campaignType === "warm" && { leads_per_day: leadsPerDay, traffic_source: trafficSource }),
+        ...(campaignType === "reactivation" && { base_size: baseSize, base_age: baseAge, base_source: baseSource }),
+        ...(campaignType === "cold" && { has_mobile_numbers: hasMobileNumbers, target_audience: targetAudience || null }),
       };
 
       const { error } = await supabase.functions.invoke("submit-form", {
@@ -313,17 +318,30 @@ export default function Demo() {
 
                 {/* Warm-specific */}
                 {campaignType === "warm" && (
-                  <div>
-                    <Label className="text-foreground">How many new leads do you get per day? *</Label>
-                    <RadioGroup value={leadsPerDay} onValueChange={setLeadsPerDay} className="mt-2 space-y-2">
-                      {LEADS_PER_DAY.map((opt) => (
-                        <div key={opt} className="flex items-center gap-2">
-                          <RadioGroupItem value={opt} id={`leads-${opt}`} />
-                          <Label htmlFor={`leads-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
+                  <>
+                    <div>
+                      <Label className="text-foreground">How many new leads do you get per day? *</Label>
+                      <RadioGroup value={leadsPerDay} onValueChange={setLeadsPerDay} className="mt-2 space-y-2">
+                        {LEADS_PER_DAY.map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`leads-${opt}`} />
+                            <Label htmlFor={`leads-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                    <div>
+                      <Label className="text-foreground">Where does your traffic come from? *</Label>
+                      <RadioGroup value={trafficSource} onValueChange={setTrafficSource} className="mt-2 space-y-2">
+                        {TRAFFIC_SOURCES.map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`traffic-${opt}`} />
+                            <Label htmlFor={`traffic-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                  </>
                 )}
 
                 {/* Reactivation-specific */}
@@ -336,6 +354,17 @@ export default function Demo() {
                           <div key={opt} className="flex items-center gap-2">
                             <RadioGroupItem value={opt} id={`base-${opt}`} />
                             <Label htmlFor={`base-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                    <div>
+                      <Label className="text-foreground">Where did you generate this data? *</Label>
+                      <RadioGroup value={baseSource} onValueChange={setBaseSource} className="mt-2 space-y-2">
+                        {BASE_SOURCES.map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`source-${opt}`} />
+                            <Label htmlFor={`source-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
                           </div>
                         ))}
                       </RadioGroup>
@@ -356,17 +385,28 @@ export default function Demo() {
 
                 {/* Cold-specific */}
                 {campaignType === "cold" && (
-                  <div>
-                    <Label className="text-foreground">Do you have mobile numbers of your target audience? *</Label>
-                    <RadioGroup value={hasMobileNumbers} onValueChange={setHasMobileNumbers} className="mt-2 space-y-2">
-                      {["Yes, I have a list", "No, I need you to source them", "Partially"].map((opt) => (
-                        <div key={opt} className="flex items-center gap-2">
-                          <RadioGroupItem value={opt} id={`mobile-${opt}`} />
-                          <Label htmlFor={`mobile-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
+                  <>
+                    <div>
+                      <Label className="text-foreground">Do you have mobile numbers of your target audience? *</Label>
+                      <RadioGroup value={hasMobileNumbers} onValueChange={setHasMobileNumbers} className="mt-2 space-y-2">
+                        {["Yes, I have a list", "No, I need you to source them", "Partially"].map((opt) => (
+                          <div key={opt} className="flex items-center gap-2">
+                            <RadioGroupItem value={opt} id={`mobile-${opt}`} />
+                            <Label htmlFor={`mobile-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </div>
+                    <div>
+                      <Label className="text-foreground">Describe your target audience (optional)</Label>
+                      <Input
+                        value={targetAudience}
+                        onChange={(e) => setTargetAudience(e.target.value)}
+                        placeholder="e.g. SaaS founders in UAE with 10-50 employees"
+                        className="mt-1"
+                      />
+                    </div>
+                  </>
                 )}
 
                 {/* Team size — all types */}

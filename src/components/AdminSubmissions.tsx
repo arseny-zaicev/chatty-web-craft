@@ -277,6 +277,7 @@ export const AdminSubmissions = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="demo_request">Demo Request</SelectItem>
                 <SelectItem value="qualification">Qualification</SelectItem>
                 <SelectItem value="seller_leads">Seller Leads</SelectItem>
               </SelectContent>
@@ -319,8 +320,12 @@ export const AdminSubmissions = () => {
                   >
                     <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <Badge variant={submission.form_type === "qualification" ? "default" : "secondary"}>
-                          {submission.form_type === "qualification" ? "WhatsApp Outreach" : "Seller Leads"}
+                        <Badge variant={
+                          submission.form_type === "demo_request" ? "default" :
+                          submission.form_type === "qualification" ? "secondary" : "outline"
+                        }>
+                          {submission.form_type === "demo_request" ? "Demo Request" :
+                           submission.form_type === "qualification" ? "WhatsApp Outreach" : "Seller Leads"}
                         </Badge>
                         <Badge
                           className={`${statusConfig[submission.status].color} text-white`}
@@ -328,6 +333,13 @@ export const AdminSubmissions = () => {
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {statusConfig[submission.status].label}
                         </Badge>
+                        {/* Campaign type indicator for demo requests */}
+                        {submission.form_type === "demo_request" && typeof submission.data === 'object' && submission.data !== null && (submission.data as Record<string, unknown>).campaign_type && (
+                          <Badge variant="outline" className="text-xs">
+                            {(submission.data as Record<string, unknown>).campaign_type === "warm" ? "🟢 Warm" :
+                             (submission.data as Record<string, unknown>).campaign_type === "reactivation" ? "🔄 Reactivation" : "❄️ Cold"}
+                          </Badge>
+                        )}
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {new Date(submission.created_at).toLocaleString()}
@@ -488,14 +500,36 @@ export const AdminSubmissions = () => {
               <div className="space-y-2">
                 <p className="text-sm font-medium">Form Responses</p>
                 <div className="bg-muted p-4 rounded-lg space-y-2">
-                  {typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Object.entries(selectedSubmission.data as Record<string, unknown>).map(([key, value]) => (
-                    <div key={key} className="flex gap-2 text-sm">
-                      <span className="text-muted-foreground capitalize shrink-0 w-32">{key}:</span>
-                      <span className="font-medium">
-                        {Array.isArray(value) ? value.join(", ") : String(value)}
-                      </span>
-                    </div>
-                  ))}
+                  {typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Object.entries(selectedSubmission.data as Record<string, unknown>).map(([key, value]) => {
+                    if (value === null || value === undefined) return null;
+                    const labels: Record<string, string> = {
+                      campaign_type: "Campaign Type",
+                      crm: "CRM",
+                      business_url: "Website",
+                      team_size: "Team Size",
+                      leads_per_day: "Leads / Day",
+                      traffic_source: "Traffic Source",
+                      base_size: "Database Size",
+                      base_age: "Data Age",
+                      base_source: "Data Origin",
+                      has_mobile_numbers: "Has Mobile Numbers",
+                      target_audience: "Target Audience",
+                    };
+                    const campaignLabels: Record<string, string> = {
+                      warm: "🟢 Warm Traffic",
+                      reactivation: "🔄 Base Reactivation",
+                      cold: "❄️ Cold Outreach",
+                    };
+                    const displayValue = key === "campaign_type" 
+                      ? campaignLabels[String(value)] || String(value)
+                      : Array.isArray(value) ? value.join(", ") : String(value);
+                    return (
+                      <div key={key} className="flex gap-2 text-sm">
+                        <span className="text-muted-foreground shrink-0 w-36">{labels[key] || key}:</span>
+                        <span className="font-medium">{displayValue}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
