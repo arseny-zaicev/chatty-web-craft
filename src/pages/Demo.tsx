@@ -58,7 +58,7 @@ export default function Demo() {
   const [baseSource, setBaseSource] = useState("");
   const [hasMobileNumbers, setHasMobileNumbers] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
-  const [teamSize, setTeamSize] = useState("");
+  
 
   const totalSteps = 3;
 
@@ -374,18 +374,6 @@ export default function Demo() {
                   </>
                 )}
 
-                {/* Team size — all types */}
-                <div>
-                  <Label className="text-foreground">What is the size of your sales team? *</Label>
-                  <RadioGroup value={teamSize} onValueChange={setTeamSize} className="mt-2 space-y-2">
-                    {TEAM_SIZES.map((opt) => (
-                      <div key={opt} className="flex items-center gap-2">
-                        <RadioGroupItem value={opt} id={`team-${opt}`} />
-                        <Label htmlFor={`team-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
 
                 <p className="text-xs text-muted-foreground">
                   By submitting, you consent to your data being processed in accordance with our{" "}
