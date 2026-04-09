@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { ChevronDown, MessageCircle } from "lucide-react";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 
@@ -34,7 +35,22 @@ export const FAQ = () => {
 
   return (
     <section id="faq" className="py-24">
-      <div className="container mx-auto px-4">
+      <Helmet>
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": faqs.map(faq => ({
+              "@type": "Question",
+              "name": faq.question,
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": faq.answer,
+              },
+            })),
+          })}
+        </script>
+      </Helmet>
         <ScrollReveal>
           <div className="text-center mb-12">
             <span className="tag-green mb-4 inline-block">FAQ</span>
