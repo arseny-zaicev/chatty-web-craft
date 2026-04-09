@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Target, MessageSquare, BarChart3, Rocket, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
+import { SketchUnderline } from "@/components/SketchElements";
 
 const steps = [
   {

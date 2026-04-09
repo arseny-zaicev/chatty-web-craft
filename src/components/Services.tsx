@@ -2,6 +2,7 @@ import { MessageSquare, ArrowRight, Send, BarChart3, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
+import { SketchUnderline } from "@/components/SketchElements";
 
 export const Services = () => {
   return (
