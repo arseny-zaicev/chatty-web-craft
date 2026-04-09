@@ -47,7 +47,7 @@ const StatCard = ({ icon: Icon, value, suffix, label, displayValue }: StatItem) 
   return (
     <div
       ref={elementRef}
-      className="glass-card rounded-2xl p-6 md:p-8 text-center group hover:border-iskra-emerald/30 transition-all duration-300"
+      className="card-light rounded-2xl p-6 md:p-8 text-center group hover:border-iskra-emerald/30 transition-all duration-300"
     >
       <div className="w-12 h-12 mx-auto rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-4 group-hover:bg-iskra-emerald/20 group-hover:scale-110 transition-all duration-300">
         <Icon className="w-6 h-6 text-iskra-emerald" />
