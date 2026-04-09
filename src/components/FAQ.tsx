@@ -51,7 +51,7 @@ export const FAQ = () => {
           })}
         </script>
       </Helmet>
-        <ScrollReveal>
+      <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <span className="tag-green mb-4 inline-block">FAQ</span>
             <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
