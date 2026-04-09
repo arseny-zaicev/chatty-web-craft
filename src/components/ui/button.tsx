@@ -19,7 +19,7 @@ const buttonVariants = cva(
         hero: "bg-foreground text-background hover:bg-foreground/90 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]",
         emerald: "bg-iskra-emerald text-primary-foreground hover:bg-iskra-emerald-light shadow-soft hover:shadow-glow",
         glass: "backdrop-blur-md bg-card/50 border border-border/30 text-foreground hover:bg-card/70 shadow-card",
-        cta: "bg-gradient-to-br from-iskra-emerald to-iskra-emerald-dark text-primary-foreground hover:opacity-90 shadow-glow hover:scale-[1.02] active:scale-[0.98]",
+        cta: "btn-primary-glow bg-gradient-to-br from-iskra-emerald to-iskra-emerald-dark text-primary-foreground hover:opacity-90 shadow-glow hover:scale-[1.02] active:scale-[0.98]",
       },
       size: {
         default: "h-11 px-6 py-2",
