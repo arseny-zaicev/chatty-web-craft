@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MessageSquare, RefreshCw, Send, ArrowRight, Clock, Users, BarChart3, Target, Database, Zap, CheckCircle2, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
