@@ -333,6 +333,13 @@ export const AdminSubmissions = () => {
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {statusConfig[submission.status].label}
                         </Badge>
+                        {/* Campaign type indicator for demo requests */}
+                        {submission.form_type === "demo_request" && typeof submission.data === 'object' && submission.data !== null && (submission.data as Record<string, unknown>).campaign_type && (
+                          <Badge variant="outline" className="text-xs">
+                            {(submission.data as Record<string, unknown>).campaign_type === "warm" ? "🟢 Warm" :
+                             (submission.data as Record<string, unknown>).campaign_type === "reactivation" ? "🔄 Reactivation" : "❄️ Cold"}
+                          </Badge>
+                        )}
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {new Date(submission.created_at).toLocaleString()}
