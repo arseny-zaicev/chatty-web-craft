@@ -3,18 +3,18 @@ import { BarChart3, Bell, Send, MessageSquare, ThumbsUp, Phone } from "lucide-re
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 
 const metrics = [
-  { label: "Sent", value: "10,247", icon: Send, color: "text-foreground" },
-  { label: "Delivered", value: "10,042", icon: Send, color: "text-iskra-emerald" },
-  { label: "Replies", value: "823", icon: MessageSquare, color: "text-iskra-emerald" },
-  { label: "Positive", value: "287", icon: ThumbsUp, color: "text-iskra-emerald-light" },
-  { label: "Booked", value: "143", icon: Phone, color: "text-iskra-gold" },
+  { label: "Sent", value: "10,000", icon: Send, color: "text-foreground" },
+  { label: "Delivered", value: "9,800", icon: Send, color: "text-iskra-emerald" },
+  { label: "Replies", value: "4,500", icon: MessageSquare, color: "text-iskra-emerald" },
+  { label: "Positive", value: "2,500", icon: ThumbsUp, color: "text-iskra-emerald-light" },
+  { label: "Booked", value: "400", icon: Phone, color: "text-iskra-gold" },
 ];
 
 const PHONE_NOTIFS = [
-  { title: "ISKRA Leads", body: "New positive reply from Ahmed K." },
-  { title: "ISKRA Leads", body: "Meeting booked — Tomorrow 2:00 PM" },
-  { title: "ISKRA Leads", body: '"I\'m interested, send details"' },
-  { title: "ISKRA Leads", body: "3 new replies in last hour" },
+  { title: "ISKRA Leads", body: "Reactivated lead replied — 'I'm interested.'" },
+  { title: "ISKRA Leads", body: "Booked call from old CRM contact" },
+  { title: "ISKRA Leads", body: 'Positive reply from dormant lead' },
+  { title: "ISKRA Leads", body: "45% reply rate reached this batch" },
   { title: "ISKRA Leads", body: "Meeting booked — Thursday 11 AM" },
 ];
 
@@ -27,7 +27,7 @@ const PhoneMockup = () => {
     const interval = setInterval(() => {
       setVisible(false);
       setTimeout(() => {
-        setNotifIndex(prev => (prev + 1) % PHONE_NOTIFS.length);
+        setNotifIndex((prev) => (prev + 1) % PHONE_NOTIFS.length);
         setVisible(true);
       }, 500);
     }, 5000);
@@ -43,10 +43,8 @@ const PhoneMockup = () => {
     <div className="hidden xl:flex flex-col items-center flex-shrink-0">
       <div className="relative w-[200px] h-[420px]">
         <div className="absolute inset-0 rounded-[36px] border-[3px] border-foreground/20 bg-background shadow-2xl shadow-black/50">
-          {/* Dynamic Island */}
           <div className="absolute top-3 left-1/2 -translate-x-1/2 w-16 h-4 bg-black rounded-full z-20" />
-          
-          {/* Status bar */}
+
           <div className="flex items-center justify-between px-5 pt-2 text-[8px] text-foreground/50 font-medium">
             <span>9:41</span>
             <div className="w-3 h-1.5 border border-foreground/40 rounded-sm">
@@ -54,12 +52,10 @@ const PhoneMockup = () => {
             </div>
           </div>
 
-          {/* Lock screen */}
           <div className="flex flex-col items-center pt-12 px-3">
             <div className="text-2xl font-light text-foreground/80 mb-0.5">9:41</div>
             <div className="text-[8px] text-foreground/40 mb-6">Tuesday, February 11</div>
 
-            {/* Push notification - slides in */}
             <div
               className="w-full transition-all duration-500 ease-out"
               style={{
@@ -80,7 +76,6 @@ const PhoneMockup = () => {
             </div>
           </div>
 
-          {/* Home indicator */}
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-14 h-1 bg-foreground/20 rounded-full" />
         </div>
       </div>
@@ -101,19 +96,18 @@ export const ClientDashboardPreview = () => {
               Full Transparency, Real-Time
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Daily stats on every metric. Instant notifications when a lead responds positively — so your sales team acts while the lead is hot.
+              Reactivation campaigns tracked live — from delivery and replies to positive intent and booked calls from your old CRM base.
             </p>
           </div>
         </ScrollReveal>
 
         <ScrollReveal delay={100}>
           <div className="max-w-5xl mx-auto flex items-center gap-8">
-            {/* Dashboard card */}
             <div className="flex-1 glass-card rounded-2xl p-6 md:p-8 border-iskra-emerald/20">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <BarChart3 className="w-5 h-5 text-iskra-emerald" />
-                  <span className="font-headline font-bold">Campaign Overview</span>
+                  <span className="font-headline font-bold">Reactivation Campaign Overview</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Bell className="w-4 h-4 text-iskra-emerald" />
@@ -147,19 +141,19 @@ export const ClientDashboardPreview = () => {
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground w-16">Replies</span>
                   <div className="flex-1 h-3 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-iskra-emerald rounded-full" style={{ width: "8%" }} />
+                    <div className="h-full bg-iskra-emerald rounded-full" style={{ width: "45%" }} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground w-16">Positive</span>
                   <div className="flex-1 h-3 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-iskra-emerald-light rounded-full" style={{ width: "2.8%" }} />
+                    <div className="h-full bg-iskra-emerald-light rounded-full" style={{ width: "25%" }} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground w-16">Booked</span>
                   <div className="flex-1 h-3 bg-border rounded-full overflow-hidden">
-                    <div className="h-full bg-iskra-gold rounded-full" style={{ width: "1.4%" }} />
+                    <div className="h-full bg-iskra-gold rounded-full" style={{ width: "4%" }} />
                   </div>
                 </div>
               </div>
@@ -167,7 +161,7 @@ export const ClientDashboardPreview = () => {
               <div className="mt-6 bg-iskra-emerald/10 border border-iskra-emerald/20 rounded-xl p-4 flex items-center gap-3">
                 <div className="w-2 h-2 bg-iskra-emerald rounded-full animate-pulse" />
                 <p className="text-sm">
-                  <span className="font-semibold text-iskra-emerald">New positive reply</span>
+                  <span className="font-semibold text-iskra-emerald">New reactivated lead</span>
                   <span className="text-muted-foreground"> — "Yes, I'm interested. When can we talk?" — </span>
                   <span className="text-foreground/70 text-xs">2 min ago</span>
                 </p>
