@@ -9,50 +9,88 @@ import hffInteriorsLogo from "@/assets/logos/hff_interiors.png";
 import achintLogo from "@/assets/logos/achint.png";
 
 const clients = [
-  { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai/" },
-  { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com/" },
-  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://www.instagram.com/f.b.marketing/" },
-  { name: "Enara Properties", logo: enaraLogo, url: "https://enaraproperties.ae/" },
-  { name: "Prop AI", logo: propAiLogo, url: "https://prop-ai.com/" },
-  { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com/" },
-  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv/" },
-  { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://interiorsfitout.com/" },
-  { name: "Achint", logo: achintLogo, url: "#" },
+  { name: "Salesforge", logo: salesforgeLogo },
+  { name: "Pathos", logo: pathosLogo },
+  { name: "FB Marketing", logo: fbMarketingLogo },
+  { name: "Enara Properties", logo: enaraLogo },
+  { name: "Prop AI", logo: propAiLogo },
+  { name: "More Convos", logo: moreConvosLogo },
+  { name: "Key Digital", logo: keyDigitalLogo },
+  { name: "HFF Interiors", logo: hffInteriorsLogo },
+  { name: "Achint", logo: achintLogo },
 ];
 
-export const ClientLogos = () => {
-  // Duplicate for seamless loop
-  const allLogos = [...clients, ...clients];
+const track = [...clients, ...clients];
 
-  return (
-    <section className="py-16 border-t border-border/30 overflow-hidden">
-      <div className="container mx-auto px-4">
-        <p className="text-center text-sm text-muted-foreground mb-10 uppercase tracking-widest font-body">
-          Trusted by industry leaders
-        </p>
-      </div>
+export const ClientLogos = () => (
+  <section className="relative py-5 overflow-hidden">
+    {/* Top rule */}
+    <div
+      className="absolute top-0 left-0 right-0 h-px"
+      style={{
+        background:
+          "linear-gradient(90deg, transparent 5%, hsl(var(--iskra-emerald) / 0.3) 40%, hsl(var(--iskra-emerald) / 0.3) 60%, transparent 95%)",
+      }}
+    />
 
-      <div className="marquee-track">
-        <div className="marquee-inner">
-          {allLogos.map((client, idx) => (
-            <a
-              key={`${client.name}-${idx}`}
-              href={client.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-shrink-0 px-10 flex items-center h-[60px]"
-            >
-              <img
-                src={client.logo}
-                alt={`${client.name} logo`}
-                loading="eager"
-                decoding="async"
-                className="marquee-logo-img"
-              />
-            </a>
-          ))}
-        </div>
+    {/* Label */}
+    <p className="text-center text-[0.6rem] uppercase tracking-[0.2em] font-semibold text-muted-foreground/60 mb-4">
+      Clients we've worked with
+    </p>
+
+    {/* Marquee */}
+    <div className="relative w-full overflow-hidden">
+      {/* Fade edges */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
+        style={{
+          background: "linear-gradient(to right, hsl(var(--background)), transparent)",
+        }}
+      />
+      <div
+        className="absolute right-0 top-0 bottom-0 w-24 z-10 pointer-events-none"
+        style={{
+          background: "linear-gradient(to left, hsl(var(--background)), transparent)",
+        }}
+      />
+
+      <div className="marquee-inner" style={{ willChange: "transform" }}>
+        {track.map((client, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-center flex-shrink-0 px-10 h-[44px]"
+          >
+            <img
+              src={client.logo}
+              alt={`${client.name} logo`}
+              loading="eager"
+              decoding="async"
+              className="h-[28px] w-auto max-w-[120px] object-contain transition-all duration-300"
+              style={{
+                filter: "brightness(0) invert(1) opacity(1)",
+                opacity: 0.35,
+              }}
+              onMouseEnter={(e) => {
+                const img = e.currentTarget;
+                img.style.opacity = "0.7";
+              }}
+              onMouseLeave={(e) => {
+                const img = e.currentTarget;
+                img.style.opacity = "0.35";
+              }}
+            />
+          </div>
+        ))}
       </div>
-    </section>
-  );
-};
+    </div>
+
+    {/* Bottom rule */}
+    <div
+      className="absolute bottom-0 left-0 right-0 h-px"
+      style={{
+        background:
+          "linear-gradient(90deg, transparent 10%, hsl(var(--iskra-emerald) / 0.2) 50%, transparent 90%)",
+      }}
+    />
+  </section>
+);
