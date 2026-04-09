@@ -49,7 +49,6 @@ export const HowItWorks = () => {
                 </span>
               </span>
             </h2>
-            </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               From strategy to scale — a proven process that delivers results in weeks, not months.
             </p>
