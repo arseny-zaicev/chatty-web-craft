@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 
 const navItems = [
-  { label: "How It Works", href: "/#stages" },
+  { label: "How It Works", href: "/#how-it-works" },
   { label: "Seller Leads", href: "/seller-leads", isPage: true },
   { label: "Pricing", href: "/#pricing", sellerLeadsHref: "/seller-leads#pricing" },
   { label: "Contact", href: "/#fit-check" },
