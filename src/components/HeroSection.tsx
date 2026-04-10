@@ -173,7 +173,7 @@ export const HeroSection = () => {
       <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 relative z-10">
         <div className="grid lg:grid-cols-[1fr_420px] gap-16 lg:gap-12 items-center">
           {/* Left — copy block */}
-          <div className="max-w-2xl pt-4 lg:pt-12">
+          <div className="max-w-2xl">
             <p className="text-foreground/50 text-xs md:text-sm uppercase tracking-[0.2em] mb-8 animate-fade-in font-medium">
               WhatsApp Outreach Infrastructure
             </p>
