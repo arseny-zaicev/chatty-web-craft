@@ -517,7 +517,7 @@ export const AdminSubmissions = () => {
                     };
                     const campaignLabels: Record<string, string> = {
                       warm: "🟢 Warm Traffic",
-                      reactivation: "🔄 Base Reactivation",
+                      reactivation: "🔄 Database Reactivation",
                       cold: "❄️ Cold Outreach",
                     };
                     const displayValue = key === "campaign_type" 

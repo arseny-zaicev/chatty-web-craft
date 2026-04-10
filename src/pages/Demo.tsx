@@ -20,7 +20,7 @@ const CAMPAIGN_TYPES = [
   },
   {
     id: "reactivation",
-    label: "Base Reactivation",
+    label: "Database Reactivation",
     desc: "Re-engage old leads and dormant contacts",
     icon: RefreshCw,
   },
