@@ -164,14 +164,14 @@ export const HeroSection = () => {
   };
 
    return (
-    <section className="relative min-h-screen flex items-center pt-24 pb-16 overflow-hidden">
+    <section className="relative min-h-screen flex items-center pt-20 overflow-hidden">
       <AnimatedBackground />
       <Sparkles count={15} />
 
       <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background/80 z-[1]" />
 
-      <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 py-12 md:py-20 relative z-10">
-        <div className="grid lg:grid-cols-[1fr_420px] gap-16 lg:gap-12 items-start">
+      <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 relative z-10">
+        <div className="grid lg:grid-cols-[1fr_420px] gap-16 lg:gap-12 items-center">
           {/* Left — copy block */}
           <div className="max-w-2xl pt-4 lg:pt-12">
             <p className="text-foreground/50 text-xs md:text-sm uppercase tracking-[0.2em] mb-8 animate-fade-in font-medium">
