@@ -178,15 +178,10 @@ export const HeroSection = () => {
               WhatsApp Outreach Infrastructure
             </p>
 
-            <h1 className="font-headline text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-bold leading-[1.1] mb-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            <h1 className="font-headline text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-bold leading-[1.1] mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <span className="text-foreground">Scale WhatsApp outreach</span>
               <br />
-              <span className="text-iskra-emerald" style={{ display: 'inline-block', position: 'relative' }}>
-                without burning accounts.
-                <span style={{ position: 'absolute', bottom: '-6px', left: 0, right: 0 }}>
-                  <SketchUnderline color="hsl(152 50% 36%)" delay={0.5} />
-                </span>
-              </span>
+              <span className="text-iskra-emerald">without burning accounts.</span>
             </h1>
 
             <p className="text-base md:text-lg text-foreground/65 mb-8 max-w-md leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
