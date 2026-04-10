@@ -25,7 +25,7 @@ const campaigns = [
   },
   {
     id: "reactivation",
-    label: "Base Reactivation",
+    label: "Database Reactivation",
     icon: RefreshCw,
     tagline: "Turn dead leads into live pipeline",
     steps: [
