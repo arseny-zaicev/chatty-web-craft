@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/Sparkles";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { ArrowRight } from "lucide-react";
-import { SketchUnderline } from "@/components/SketchElements";
+
 import mariaAvatar from "@/assets/maria-avatar.avif";
 
 const WhatsAppMockup = () => (
