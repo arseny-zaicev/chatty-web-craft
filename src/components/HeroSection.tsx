@@ -184,17 +184,18 @@ export const HeroSection = () => {
               <span className="text-iskra-emerald">without burning accounts.</span>
             </h1>
 
-            <p className="text-base md:text-lg text-foreground/65 mb-8 max-w-md leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
+            <p className="text-base md:text-lg text-foreground/65 mb-10 max-w-md leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
               Send cold campaigns, follow up warm leads, and reactivate old CRM lists with dedicated sending accounts, proven sequences, and full funnel tracking.
             </p>
 
-            <div className="animate-fade-in mb-8" style={{ animationDelay: "0.3s" }}>
+            <div className="animate-fade-in mb-10" style={{ animationDelay: "0.3s" }}>
               <Button
                 onClick={scrollToDemo}
-                className="group text-base px-8 py-6 bg-iskra-emerald hover:bg-iskra-emerald/90 text-background rounded-xl font-semibold shadow-xl shadow-iskra-emerald/20 btn-shimmer"
+                variant="outline"
+                className="group text-sm px-7 py-3.5 h-auto rounded-xl font-semibold tracking-wide border-border hover:border-iskra-emerald hover:text-iskra-emerald hover:bg-iskra-emerald/[0.04] transition-all duration-200"
               >
                 Book a Demo
-                <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform relative z-10" />
+                <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
 
