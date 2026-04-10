@@ -164,28 +164,31 @@ export const HeroSection = () => {
   };
 
    return (
-    <section className="relative min-h-[90vh] flex items-center pt-24 overflow-hidden">
+    <section className="relative min-h-screen flex items-center pt-24 pb-16 overflow-hidden">
       <AnimatedBackground />
       <Sparkles count={15} />
 
-      <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-background/60 z-[1]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background/80 z-[1]" />
 
-      <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 py-12 md:py-16 relative z-10">
-        <div className="flex flex-col lg:flex-row gap-12 lg:gap-12 items-center">
-          {/* Left */}
-          <div className="flex-1 max-w-xl lg:max-w-[540px]">
-            <p className="text-foreground/50 text-xs md:text-sm uppercase tracking-[0.2em] mb-5 animate-fade-in font-medium">
+      <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 py-12 md:py-20 relative z-10">
+        <div className="grid lg:grid-cols-[1fr_420px] gap-16 lg:gap-12 items-start">
+          {/* Left — copy block */}
+          <div className="max-w-2xl pt-4 lg:pt-12">
+            <p className="text-foreground/50 text-xs md:text-sm uppercase tracking-[0.2em] mb-8 animate-fade-in font-medium">
               WhatsApp Outreach Infrastructure
             </p>
 
-            <h1 className="font-headline text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-bold leading-[1.1] mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+            <h1 className="font-headline text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-[4rem] font-bold leading-[1.08] mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
               <span className="text-foreground">Scale WhatsApp outreach</span>
               <br />
               <span className="text-iskra-emerald">without burning accounts.</span>
             </h1>
 
-            <p className="text-base md:text-lg text-foreground/65 mb-10 max-w-md leading-relaxed animate-fade-in" style={{ animationDelay: "0.2s" }}>
-              Send cold campaigns, follow up warm leads, and reactivate old CRM lists with dedicated sending accounts, proven sequences, and full funnel tracking.
+            {/* Divider like LP */}
+            <div className="w-16 h-px bg-border mb-8 animate-fade-in" style={{ animationDelay: "0.15s" }} />
+
+            <p className="text-base md:text-lg lg:text-xl text-foreground/60 mb-12 max-w-lg leading-relaxed font-light animate-fade-in" style={{ animationDelay: "0.2s" }}>
+              Send cold campaigns, follow up warm leads, and reactivate old CRM lists — with dedicated sending accounts, proven sequences, and full funnel tracking.
             </p>
 
             <div className="animate-fade-in mb-10" style={{ animationDelay: "0.3s" }}>
@@ -202,10 +205,15 @@ export const HeroSection = () => {
             <HeroBullets />
           </div>
 
-          {/* Right — WhatsApp Mockup */}
-          <div className="w-full lg:w-auto lg:flex-1 lg:max-w-[400px] lg:translate-x-4 xl:translate-x-8">
+          {/* Right — WhatsApp Mockup, aligned to the right edge */}
+          <div className="hidden lg:block">
             <WhatsAppMockup />
           </div>
+        </div>
+
+        {/* Mobile mockup — shown below on small screens */}
+        <div className="lg:hidden mt-12 max-w-sm mx-auto">
+          <WhatsAppMockup />
         </div>
       </div>
     </section>
