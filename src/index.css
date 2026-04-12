@@ -421,6 +421,26 @@
     transition: all 0.2s ease;
   }
 
+  /* Green gradient text */
+  .text-green-gradient {
+    background: linear-gradient(135deg, hsl(var(--iskra-emerald)) 0%, hsl(var(--iskra-green-glow)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Ghost / outline button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-7 py-3.5 text-sm font-semibold tracking-wide rounded-xl border transition-all duration-200;
+    border-color: hsl(var(--border));
+    color: hsl(var(--foreground));
+  }
+  .btn-ghost:hover {
+    border-color: hsl(var(--iskra-emerald));
+    color: hsl(var(--iskra-emerald));
+    background: hsl(var(--iskra-emerald) / 0.04);
+  }
+
   /* ─── Tags ─── */
   .tag-green {
     @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase;
