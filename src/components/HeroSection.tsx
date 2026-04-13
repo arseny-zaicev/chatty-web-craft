@@ -238,7 +238,7 @@ export const HeroSection = () => {
             <motion.div className="flex flex-wrap gap-3 mb-8 mt-8" {...fadeUp(0.5)}>
               <a
                 onClick={scrollToDemo}
-                className="btn-ghost cursor-pointer inline-flex items-center gap-2 group"
+                className="btn-primary-glow cursor-pointer inline-flex items-center gap-2 group rounded-xl px-8 py-4 text-base font-semibold bg-gradient-to-r from-iskra-emerald/90 via-iskra-gold/60 to-iskra-emerald/80 text-white shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-transform"
               >
                 Book a Demo
                 <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
