@@ -5,7 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import workspaceAvatar from "@/assets/logo/iskra-workspace-avatar.png";
-import linkedinBanner from "@/assets/linkedin/iskra-linkedin-banner-v2.png";
+import linkedinBanner from "@/assets/linkedin/iskra-linkedin-banner-v3.png";
 
 // New ISKRA Logo SVG — sun/spark with rays
 const IskraLogoSVG = ({ className = "", size = 64, color = "#ffffff" }: { className?: string; size?: number; color?: string }) => (
