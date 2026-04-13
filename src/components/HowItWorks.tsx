@@ -8,13 +8,13 @@ const steps = [
   {
     icon: Target,
     title: "Discovery & Strategy",
-    description: "We align on your ICP, craft the right offer angle, and plan the campaign structure — warm, reactivation, or cold.",
+    description: "We align on your ICP, craft the right offer angle, and plan the campaign structure - warm, reactivation, or cold.",
     duration: "1-2 days",
   },
   {
     icon: MessageSquare,
     title: "Infrastructure Setup",
-    description: "Dedicated WhatsApp accounts, number warmup, anti-block systems, and copy sequences — all prepared before launch.",
+    description: "Dedicated WhatsApp accounts, number warmup, anti-block systems, and copy sequences - all prepared before launch.",
     duration: "~5 days",
   },
   {
@@ -50,7 +50,7 @@ export const HowItWorks = () => {
               </span>
             </h2>
             <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              From strategy to scale — a proven process that delivers results in weeks, not months.
+              From strategy to scale - a proven process that delivers results in weeks, not months.
             </p>
           </div>
         </ScrollReveal>

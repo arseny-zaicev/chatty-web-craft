@@ -449,11 +449,11 @@ export const AdminSubmissions = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Name</p>
-                  <p className="font-medium">{selectedSubmission.contact_name || "—"}</p>
+                  <p className="font-medium">{selectedSubmission.contact_name || "-"}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Company</p>
-                  <p className="font-medium">{selectedSubmission.contact_company || "—"}</p>
+                  <p className="font-medium">{selectedSubmission.contact_company || "-"}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Phone</p>
@@ -465,7 +465,7 @@ export const AdminSubmissions = () => {
                       {selectedSubmission.contact_phone}
                     </button>
                   ) : (
-                    <p>—</p>
+                    <p>-</p>
                   )}
                 </div>
                 <div className="space-y-1">
@@ -478,7 +478,7 @@ export const AdminSubmissions = () => {
                       {selectedSubmission.contact_email}
                     </button>
                   ) : (
-                    <p>—</p>
+                    <p>-</p>
                   )}
                 </div>
                 {selectedSubmission.contact_website && (

@@ -74,7 +74,7 @@ export const DashboardDemo = () => {
         <div className="w-2.5 h-2.5 rounded-full bg-iskra-emerald animate-pulse shrink-0" />
         <p className="text-sm text-foreground">
           <span className="font-semibold text-iskra-emerald">New positive reply</span>
-          {' — "Yes, I\'m interested. When can we talk?" — '}
+          {' - "Yes, I\'m interested. When can we talk?" - '}
           <span className="text-muted-foreground">2 min ago</span>
         </p>
       </div>

@@ -14,7 +14,7 @@ export const Services = () => {
               What We Build For You
             </h2>
             <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              A complete WhatsApp outreach engine — from infrastructure to booked calls.
+              A complete WhatsApp outreach engine - from infrastructure to booked calls.
             </p>
           </div>
         </ScrollReveal>

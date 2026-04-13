@@ -24,7 +24,7 @@ export const WhatsAppHero = () => {
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-            We build and run your WhatsApp outreach engine — from ICP research and copy 
+            We build and run your WhatsApp outreach engine - from ICP research and copy 
             to dedicated sending infrastructure and CRM handoff. You get interested replies 
             and booked calls.
           </p>

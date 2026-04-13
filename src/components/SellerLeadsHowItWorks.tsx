@@ -4,7 +4,7 @@ const steps = [
   {
     icon: Search,
     title: "Choose Your Target",
-    description: "Select any Dubai district, community, or specific building. From Palm Jumeirah penthouses to Downtown apartments — you decide.",
+    description: "Select any Dubai district, community, or specific building. From Palm Jumeirah penthouses to Downtown apartments - you decide.",
   },
   {
     icon: Filter,
@@ -14,7 +14,7 @@ const steps = [
   {
     icon: Phone,
     title: "Contact & Close",
-    description: "Reach out directly to motivated sellers before they list. No competition, no bidding wars — just exclusive access.",
+    description: "Reach out directly to motivated sellers before they list. No competition, no bidding wars - just exclusive access.",
   },
 ];
 

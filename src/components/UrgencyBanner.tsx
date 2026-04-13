@@ -11,7 +11,7 @@ const urgencyContent = {
   "ai-agent": {
     icon: Users,
     title: "Limited Development Slots",
-    description: "We're a small team focused on quality — only a few AI agent projects per month.",
+    description: "We're a small team focused on quality - only a few AI agent projects per month.",
     spots: "2 spots left for January",
     cta: "Claim Your Spot",
   },
@@ -64,7 +64,7 @@ export const UrgencyBanner = ({ type = "general" }: UrgencyBannerProps) => {
               </p>
               <p className="text-sm text-foreground/70">
                 <span className="text-iskra-gold font-bold">{content.spots}</span>
-                {" — "}
+                {" - "}
                 {content.description}
               </p>
             </div>

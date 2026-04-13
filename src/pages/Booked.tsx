@@ -22,12 +22,12 @@ const expectations = [
   {
     icon: Users,
     title: "Campaign Strategy",
-    description: "Which campaign type fits — warm traffic, reactivation, or cold outreach — and how to structure it.",
+    description: "Which campaign type fits - warm traffic, reactivation, or cold outreach - and how to structure it.",
   },
   {
     icon: Shield,
     title: "Infrastructure & Timeline",
-    description: "How we set up dedicated accounts, warmup, and anti-block systems — and when you can expect results.",
+    description: "How we set up dedicated accounts, warmup, and anti-block systems - and when you can expect results.",
   },
 ];
 
@@ -257,7 +257,7 @@ const Booked = () => {
                 <h3 className="font-bold text-xl font-display text-foreground mb-1">You'll Be Speaking with Arsenijs</h3>
                 <p className="text-iskra-emerald text-sm font-medium mb-3">Founder, ISKRA</p>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Sent over 1M+ WhatsApp messages across B2B, SaaS, coaching, real estate and more. Built outreach systems that generated <span className="text-iskra-emerald font-semibold">3M+ AED</span> in pipeline. No fluff — just proven strategies.
+                  Sent over 1M+ WhatsApp messages across B2B, SaaS, coaching, real estate and more. Built outreach systems that generated <span className="text-iskra-emerald font-semibold">3M+ AED</span> in pipeline. No fluff - just proven strategies.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                   <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">1M+ Messages</span>
@@ -277,7 +277,7 @@ const Booked = () => {
               Have a Question Before the Call?
             </h2>
             <p className="text-muted-foreground mb-8">
-              Message me directly — I usually reply within minutes.
+              Message me directly - I usually reply within minutes.
             </p>
             <a href="https://wa.me/971568785008" target="_blank" rel="noopener noreferrer">
               <Button size="lg" className="bg-[#25D366] hover:bg-[#20BD5A] text-white gap-2 text-lg px-8 py-6 shadow-lg">

@@ -98,7 +98,7 @@ export const VideoThumbnail = ({ videoSrc, onPlay }: VideoThumbnailProps) => {
                   <span className="text-iskra-emerald">Before They List</span>
                 </h2>
                 <p className="text-white/60 text-xs leading-relaxed mb-4 max-w-xs">
-                  Access Dubai's most comprehensive owner database. Choose any district and building — find property owners ready to sell or rent.
+                  Access Dubai's most comprehensive owner database. Choose any district and building - find property owners ready to sell or rent.
                 </p>
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1.5 bg-white text-black text-[10px] rounded-lg font-medium flex items-center gap-1">

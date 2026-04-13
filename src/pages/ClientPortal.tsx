@@ -741,15 +741,15 @@ const ClientPortal = () => {
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
                   <Badge className="bg-green-500 text-white text-xs">Answered</Badge>
-                  <span>— if the lead answered</span>
+                  <span>- if the lead answered</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Badge className="bg-red-500 text-white text-xs">Not Answered</Badge>
-                  <span>— if no answer</span>
+                  <span>- if no answer</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Badge className="bg-yellow-500 text-white text-xs">Call Back</Badge>
-                  <span>— if they asked to call later</span>
+                  <span>- if they asked to call later</span>
                 </li>
               </ul>
               <p className="text-xs text-muted-foreground">

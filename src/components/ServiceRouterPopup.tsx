@@ -106,7 +106,7 @@ export const ServiceRouterPopup = () => {
             What are you looking for?
           </h2>
           <p className="text-muted-foreground text-sm sm:text-base">
-            Select what fits your needs — we'll guide you.
+            Select what fits your needs - we'll guide you.
           </p>
         </div>
 

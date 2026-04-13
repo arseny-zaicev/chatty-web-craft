@@ -12,8 +12,8 @@ const stages = [
     summary: "We verify the channel makes sense for your business before committing.",
     details: [
       "LTV / margin / close rate analysis",
-      "Capacity check — how many calls/week can your team handle",
-      "SLA definition — who handles interest and how fast",
+      "Capacity check - how many calls/week can your team handle",
+      "SLA definition - who handles interest and how fast",
       "ICP confirmation & exclusion rules",
     ],
     outcome: "Go / No-Go decision + pilot plan + KPIs",
@@ -58,7 +58,7 @@ const stages = [
     label: "Stage 3",
     title: "Growth",
     duration: "Monthly",
-    summary: "Scale what works — more volume, more segments, better cost per booked.",
+    summary: "Scale what works - more volume, more segments, better cost per booked.",
     details: [
       "Increase volume according to plan",
       "Expand segments & geographies",
@@ -74,7 +74,7 @@ const stages = [
     label: "Stage 4",
     title: "Scale + AI",
     duration: "Add-on",
-    summary: "AI layer automates replies, qualification, and booking — your team only handles hot leads.",
+    summary: "AI layer automates replies, qualification, and booking - your team only handles hot leads.",
     details: [
       "Auto-reply to common questions",
       "Rule-based lead qualification",
@@ -101,7 +101,7 @@ export const WhatsAppStages = () => {
               How We Build Your Engine
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              From validation to scale — a clear path with measurable outcomes at every stage.
+              From validation to scale - a clear path with measurable outcomes at every stage.
             </p>
           </div>
         </ScrollReveal>
