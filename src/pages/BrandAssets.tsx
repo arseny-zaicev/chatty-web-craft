@@ -7,7 +7,7 @@ import { Download } from "lucide-react";
 import workspaceAvatar from "@/assets/logo/iskra-workspace-avatar.png";
 import linkedinBanner from "@/assets/linkedin/iskra-linkedin-banner-v3.png";
 
-// New ISKRA Logo SVG — sun/spark with rays
+// New ISKRA Logo SVG - sun/spark with rays
 const IskraLogoSVG = ({ className = "", size = 64, color = "#ffffff" }: { className?: string; size?: number; color?: string }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
     <circle cx="32" cy="32" r="4.5" fill={color}/>

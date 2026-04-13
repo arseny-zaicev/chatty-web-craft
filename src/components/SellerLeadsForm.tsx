@@ -53,7 +53,7 @@ const durationOptions = [
 ];
 
 const satisfactionOptions = [
-  { key: "A", label: "Very happy — getting enough quality leads" },
+  { key: "A", label: "Very happy - getting enough quality leads" },
   { key: "B", label: "It works, but could be better" },
   { key: "C", label: "Struggling to find motivated sellers" },
   { key: "D", label: "Need a completely new approach" },

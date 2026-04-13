@@ -31,7 +31,7 @@ const features = [
   {
     icon: MapPin,
     title: "Choose Any Area",
-    description: "Select from any Dubai district — Palm Jumeirah, Downtown, Marina, JBR, and more",
+    description: "Select from any Dubai district - Palm Jumeirah, Downtown, Marina, JBR, and more",
   },
   {
     icon: Building2,
@@ -52,10 +52,10 @@ const features = [
 
 const benefits = [
   "Search by district, building, or unit type",
-  "Off-market owners — no public listings required",
+  "Off-market owners - no public listings required",
   "WhatsApp-verified owner phone numbers",
   "Updated daily with fresh data",
-  "Exclusive access — not shared with competitors",
+  "Exclusive access - not shared with competitors",
   "Full property details & ownership history",
 ];
 
@@ -131,7 +131,7 @@ const SellerLeads = () => {
                 </h1>
 
                 <p className="text-xl md:text-2xl text-foreground/80 mb-10 max-w-xl leading-relaxed">
-                  Access Dubai's most comprehensive owner database. Find property owners ready to <span className="text-iskra-emerald font-semibold">sell</span>, <span className="text-iskra-emerald font-semibold">rent</span>, or <span className="text-iskra-emerald font-semibold">buy</span> — even off-market.
+                  Access Dubai's most comprehensive owner database. Find property owners ready to <span className="text-iskra-emerald font-semibold">sell</span>, <span className="text-iskra-emerald font-semibold">rent</span>, or <span className="text-iskra-emerald font-semibold">buy</span> - even off-market.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 mb-12">
@@ -238,7 +238,7 @@ const SellerLeads = () => {
                 Why Our <span className="text-gradient">Leads Convert</span>
               </h2>
               <p className="text-xl text-foreground/70 max-w-2xl mx-auto">
-                We don't just find leads — we find motivated sellers who are ready to act
+                We don't just find leads - we find motivated sellers who are ready to act
               </p>
             </div>
 
@@ -271,10 +271,10 @@ const SellerLeads = () => {
                   <span className="text-gradient">Close More Deals</span>
                 </h2>
                 <p className="text-xl text-foreground/70 mb-4">
-                  Our leads come with comprehensive data so you can focus on what matters — closing deals.
+                  Our leads come with comprehensive data so you can focus on what matters - closing deals.
                 </p>
                 <p className="text-lg text-iskra-emerald font-medium mb-10">
-                  Let your agents work with leads who are already interested — no more wasting hours on cold outreach.
+                  Let your agents work with leads who are already interested - no more wasting hours on cold outreach.
                 </p>
 
                 <div className="space-y-4">

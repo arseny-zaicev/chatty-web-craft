@@ -14,11 +14,11 @@ const faqs = [
   },
   {
     question: "How much does it cost?",
-    answer: "Pricing depends on your target countries, total message volume, and additional work required to achieve results. We'll give you a clear custom quote on the demo call — no hidden fees.",
+    answer: "Pricing depends on your target countries, total message volume, and additional work required to achieve results. We'll give you a clear custom quote on the demo call - no hidden fees.",
   },
   {
     question: "Will my number get blocked?",
-    answer: "We use dedicated sending accounts with proper warmup and anti-block infrastructure — your personal or business number is never at risk. We manage all the technical side.",
+    answer: "We use dedicated sending accounts with proper warmup and anti-block infrastructure - your personal or business number is never at risk. We manage all the technical side.",
   },
   {
     question: "What industries does this work for?",
@@ -26,7 +26,7 @@ const faqs = [
   },
   {
     question: "Do I need to provide contacts?",
-    answer: "For reactivation — yes, your existing database. For cold outreach — we can work with your list or help source contacts. For warm traffic — leads come from your existing funnel (ads, website, etc.).",
+    answer: "For reactivation - yes, your existing database. For cold outreach - we can work with your list or help source contacts. For warm traffic - leads come from your existing funnel (ads, website, etc.).",
   },
 ];
 

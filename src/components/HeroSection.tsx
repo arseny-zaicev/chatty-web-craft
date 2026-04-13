@@ -211,7 +211,7 @@ export const HeroSection = () => {
       <div className="container mx-auto px-6 md:px-12 lg:px-16 xl:px-24 relative z-10">
         <div className="grid lg:grid-cols-[1fr_480px] gap-12 items-center">
 
-          {/* Left — copy */}
+          {/* Left - copy */}
           <div>
             <motion.div {...fadeUp(0)}>
               <span className="tag-green mb-5 inline-flex">WhatsApp Outreach Infrastructure</span>
@@ -248,7 +248,7 @@ export const HeroSection = () => {
             <HeroBullets />
           </div>
 
-          {/* Right — WhatsApp mockup */}
+          {/* Right - WhatsApp mockup */}
           <div className="hidden lg:block">
             <WhatsAppMockup />
           </div>

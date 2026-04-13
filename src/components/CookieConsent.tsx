@@ -92,7 +92,7 @@ const CookieConsent = () => {
                   </button>
                   <div>
                     <span className="text-xs font-semibold" style={{ color: 'hsl(0 0% 10%)' }}>{cat.label}</span>
-                    <span className="text-xs ml-1.5" style={{ color: accent.muted }}> — {cat.desc}</span>
+                    <span className="text-xs ml-1.5" style={{ color: accent.muted }}> - {cat.desc}</span>
                   </div>
                 </label>
               ))}

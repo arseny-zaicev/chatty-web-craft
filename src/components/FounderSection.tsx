@@ -52,7 +52,7 @@ export const FounderSection = () => {
               </p>
               
               <p className="text-muted-foreground leading-relaxed">
-                The result? A proprietary infrastructure built specifically to <span className="text-iskra-emerald font-semibold">eliminate blocks</span> — warm-up sequences, account rotation, smart throttling, and compliance safeguards that keep your campaigns running without interruption.
+                The result? A proprietary infrastructure built specifically to <span className="text-iskra-emerald font-semibold">eliminate blocks</span> - warm-up sequences, account rotation, smart throttling, and compliance safeguards that keep your campaigns running without interruption.
               </p>
 
 

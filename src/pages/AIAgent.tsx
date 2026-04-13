@@ -14,7 +14,7 @@ const caseStudies = [
     industry: "Real Estate",
     icon: Building,
     title: "Property Seller Lead Qualification",
-    description: "Coming soon — full workflow breakdown of how AI handles real estate seller inquiries.",
+    description: "Coming soon - full workflow breakdown of how AI handles real estate seller inquiries.",
     result: "",
     workflowImages: [], // Will add real images later
   },
@@ -23,7 +23,7 @@ const caseStudies = [
     industry: "E-commerce",
     icon: ShoppingCart,
     title: "Product Inquiry & Order Support",
-    description: "Coming soon — see how AI manages customer questions and drives conversions.",
+    description: "Coming soon - see how AI manages customer questions and drives conversions.",
     result: "",
     workflowImages: [],
   },
@@ -32,7 +32,7 @@ const caseStudies = [
     industry: "B2B Services",
     icon: Briefcase,
     title: "Lead Nurturing & Meeting Booking",
-    description: "Coming soon — end-to-end B2B sales automation case study.",
+    description: "Coming soon - end-to-end B2B sales automation case study.",
     result: "",
     workflowImages: [],
   },
@@ -41,7 +41,7 @@ const caseStudies = [
     industry: "Healthcare",
     icon: Heart,
     title: "Patient Appointment Scheduling",
-    description: "Coming soon — AI-powered clinic booking and FAQ handling.",
+    description: "Coming soon - AI-powered clinic booking and FAQ handling.",
     result: "",
     workflowImages: [],
   },
@@ -54,7 +54,7 @@ const AIAgent = () => {
     {
       icon: Database,
       title: "1. Connect Your Data",
-      description: "Upload your business info, FAQ, services, pricing — the AI learns your business inside out.",
+      description: "Upload your business info, FAQ, services, pricing - the AI learns your business inside out.",
     },
     {
       icon: Globe,
@@ -64,7 +64,7 @@ const AIAgent = () => {
     {
       icon: MessageCircle,
       title: "3. Lead Receives WhatsApp",
-      description: "New lead? They get a personalized WhatsApp message instantly — no delays.",
+      description: "New lead? They get a personalized WhatsApp message instantly - no delays.",
     },
     {
       icon: Bot,
@@ -74,7 +74,7 @@ const AIAgent = () => {
     {
       icon: Calendar,
       title: "5. Meeting Booked via Dialogue",
-      description: "No clunky links — the AI negotiates time and books directly through chat.",
+      description: "No clunky links - the AI negotiates time and books directly through chat.",
     },
     {
       icon: Settings,
@@ -130,7 +130,7 @@ const AIAgent = () => {
               AI RAG Agent in Action
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-              See exactly how our AI handles WhatsApp conversations, qualifies leads, and books meetings — with real examples.
+              See exactly how our AI handles WhatsApp conversations, qualifies leads, and books meetings - with real examples.
             </p>
             
             {/* Key Benefits */}
@@ -286,7 +286,7 @@ const AIAgent = () => {
                 How It Works: Step by Step
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                From setup to closed deals — the complete AI RAG Agent workflow.
+                From setup to closed deals - the complete AI RAG Agent workflow.
               </p>
             </div>
 
@@ -320,15 +320,15 @@ const AIAgent = () => {
               {[
                 {
                   title: "RAG Technology",
-                  description: "Uses YOUR real business data to answer — not generic AI responses. Accurate, relevant, trustworthy.",
+                  description: "Uses YOUR real business data to answer - not generic AI responses. Accurate, relevant, trustworthy.",
                 },
                 {
                   title: "Human-Like Dialogue",
-                  description: "Natural conversation flow, handles objections, asks clarifying questions — leads think they're talking to a person.",
+                  description: "Natural conversation flow, handles objections, asks clarifying questions - leads think they're talking to a person.",
                 },
                 {
                   title: "No Link Booking",
-                  description: "Books meetings through conversation: 'How about Tuesday 3pm?' — no Calendly links that kill conversions.",
+                  description: "Books meetings through conversation: 'How about Tuesday 3pm?' - no Calendly links that kill conversions.",
                 },
                 {
                   title: "Full CRM Integration",

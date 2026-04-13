@@ -11,11 +11,11 @@ const metrics = [
 ];
 
 const PHONE_NOTIFS = [
-  { title: "ISKRA Leads", body: "Reactivated lead replied — 'I'm interested.'" },
+  { title: "ISKRA Leads", body: "Reactivated lead replied - 'I'm interested.'" },
   { title: "ISKRA Leads", body: "Booked call from old CRM contact" },
   { title: "ISKRA Leads", body: 'Positive reply from dormant lead' },
   { title: "ISKRA Leads", body: "45% reply rate reached this batch" },
-  { title: "ISKRA Leads", body: "Meeting booked — Thursday 11 AM" },
+  { title: "ISKRA Leads", body: "Meeting booked - Thursday 11 AM" },
 ];
 
 const PhoneMockup = () => {
@@ -96,7 +96,7 @@ export const ClientDashboardPreview = () => {
               Full Transparency, Real-Time
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Reactivation campaigns tracked live — from delivery and replies to positive intent and booked calls from your old CRM base.
+              Reactivation campaigns tracked live - from delivery and replies to positive intent and booked calls from your old CRM base.
             </p>
           </div>
         </ScrollReveal>
@@ -162,7 +162,7 @@ export const ClientDashboardPreview = () => {
                 <div className="w-2 h-2 bg-iskra-emerald rounded-full animate-pulse" />
                 <p className="text-sm">
                   <span className="font-semibold text-iskra-emerald">New reactivated lead</span>
-                  <span className="text-muted-foreground"> — "Yes, I'm interested. When can we talk?" — </span>
+                  <span className="text-muted-foreground"> - "Yes, I'm interested. When can we talk?" - </span>
                   <span className="text-foreground/70 text-xs">2 min ago</span>
                 </p>
               </div>

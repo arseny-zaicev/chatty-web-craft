@@ -18,7 +18,7 @@ const campaigns = [
     caseStudy: {
       metric: "10 min",
       metricLabel: "first touch",
-      before: "Leads go cold while your team manually follows up — many get lost or blocked",
+      before: "Leads go cold while your team manually follows up - many get lost or blocked",
       after: "Automated WhatsApp reply within 10 minutes, no blocks, no lost leads",
       industry: "Coaching, SaaS, Real Estate & more",
     },
@@ -104,7 +104,7 @@ export const CampaignTypes = () => {
 
         {/* Content */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 max-w-5xl mx-auto">
-          {/* Left — Process */}
+          {/* Left - Process */}
           <div className="card-light">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">How it works</p>
             <h3 className="font-display text-2xl font-bold mb-8 text-foreground">{campaign.tagline}</h3>
@@ -129,7 +129,7 @@ export const CampaignTypes = () => {
             </div>
           </div>
 
-          {/* Right — Case Study */}
+          {/* Right - Case Study */}
           <div className="card-light flex flex-col">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Real result</p>
             <p className="text-base text-muted-foreground mb-8">{campaign.caseStudy.industry}</p>

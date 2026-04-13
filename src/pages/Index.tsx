@@ -31,7 +31,7 @@ const Index = () => {
             "@context": "https://schema.org",
             "@type": "ProfessionalService",
             "name": "ISKRA",
-            "description": "WhatsApp Booking Engine — predictable pipeline from WhatsApp outreach",
+            "description": "WhatsApp Booking Engine - predictable pipeline from WhatsApp outreach",
             "url": "https://iskra.ae",
             "telephone": "+971-56-878-5008",
             "address": {
