@@ -14,7 +14,7 @@ const faqs = [
   },
   {
     question: "How much does it cost?",
-    answer: "Campaigns start from €2,500 for a 2-week pilot. Ongoing campaigns are priced based on volume, target market, and campaign type. We'll give you a clear quote on the demo call — no hidden fees.",
+    answer: "Pricing depends on your target countries, total message volume, and additional work required to achieve results. We'll give you a clear custom quote on the demo call — no hidden fees.",
   },
   {
     question: "Will my number get blocked?",
