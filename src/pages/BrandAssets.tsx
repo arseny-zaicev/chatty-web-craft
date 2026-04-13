@@ -211,6 +211,13 @@ const BrandAssets = () => {
                 </div>
                 <p className="text-sm text-muted-foreground text-center mb-1">LinkedIn Banner</p>
                 <p className="text-xs text-muted-foreground/60 text-center mb-3">1584 × 396</p>
+                <div className="flex justify-center">
+                  <a href={linkedinBanner} download="iskra-linkedin-banner.png">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Download className="w-4 h-4" /> Download PNG
+                    </Button>
+                  </a>
+                </div>
               </div>
             </div>
           </section>
