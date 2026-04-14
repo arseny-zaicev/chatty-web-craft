@@ -1,44 +1,77 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link } from "react-router-dom";
-import { Sparkles, Mail, Play, CheckCircle2, MessageCircle, Quote, TrendingUp, Users, Shield, Zap } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Play, CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
 
 const stats = [
   { value: "1M+", label: "Messages Sent" },
-  { value: "35%", label: "Avg Reply Rate" },
+  { value: "35%", label: "Reply Rate" },
   { value: "98%", label: "Delivery Rate" },
-  { value: "10+", label: "Industries Served" },
+  { value: "0%", label: "Block Rate" },
 ];
 
-const expectations = [
+const services = [
   {
-    icon: TrendingUp,
-    title: "Your Growth Goals",
-    description: "We'll understand your pipeline targets, deal size, and what success looks like for you.",
+    icon: Flame,
+    title: "Warm Traffic",
+    description: "Конвертируем ваших лидов в звонки через WhatsApp follow-up после рекламы или ивентов.",
   },
   {
-    icon: Users,
-    title: "Campaign Strategy",
-    description: "Which campaign type fits - warm traffic, reactivation, or cold outreach - and how to structure it.",
+    icon: RefreshCw,
+    title: "Реактивация баз",
+    description: "Оживляем старые базы клиентов - CRM, списки, контакты которые уже забыли о вас.",
   },
   {
-    icon: Shield,
-    title: "Infrastructure & Timeline",
-    description: "How we set up dedicated accounts, warmup, and anti-block systems - and when you can expect results.",
+    icon: Send,
+    title: "Cold Outreach",
+    description: "Холодные рассылки по целевой аудитории с персонализированными сообщениями.",
+  },
+  {
+    icon: Ban,
+    title: "Без блокировок",
+    description: "Собственная инфраструктура, прогрев номеров и anti-block система. Ваш номер в безопасности.",
   },
 ];
+
+const CALENDLY_URL = "https://calendly.com/arseny-iskra/iskra-ae-whatsapp-outreach";
 
 const Booked = () => {
   const [isTestimonialPlaying, setIsTestimonialPlaying] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  // Track UTM parameters
+  useEffect(() => {
+    const utmParams: Record<string, string> = {};
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"].forEach((key) => {
+      const val = searchParams.get(key);
+      if (val) utmParams[key] = val;
+    });
+
+    if (Object.keys(utmParams).length > 0) {
+      // Store UTMs in sessionStorage for potential later use
+      sessionStorage.setItem("iskra_utm", JSON.stringify(utmParams));
+    }
+  }, [searchParams]);
+
+  // Build Calendly URL with UTM passthrough
+  const getCalendlyUrl = () => {
+    const params = new URLSearchParams();
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"].forEach((key) => {
+      const val = searchParams.get(key);
+      if (val) params.set(key, val);
+    });
+    const qs = params.toString();
+    return qs ? `${CALENDLY_URL}?${qs}` : CALENDLY_URL;
+  };
 
   return (
     <>
       <Helmet>
-        <title>Call Confirmed | ISKRA</title>
-        <meta name="description" content="Your call with ISKRA is confirmed. Prepare for our meeting." />
+        <title>Book a Call - WhatsApp Outreach | ISKRA</title>
+        <meta name="description" content="Book a free strategy call to learn how WhatsApp outreach can fill your pipeline with qualified meetings." />
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
@@ -67,109 +100,73 @@ const Booked = () => {
         <section className="pt-16 pb-12 px-4">
           <div className="container mx-auto max-w-3xl text-center">
             <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-iskra-emerald/10 border border-iskra-emerald/30 mb-8">
-              <CheckCircle2 className="w-5 h-5 text-iskra-emerald" />
-              <span className="text-iskra-emerald font-semibold text-sm">Call Booked Successfully</span>
+              <Zap className="w-4 h-4 text-iskra-emerald" />
+              <span className="text-iskra-emerald font-semibold text-sm">Free Strategy Call</span>
             </div>
 
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight font-display mb-4">
-              While You Wait
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[1.05] font-display mb-5">
+              WhatsApp рассылки<br />
+              <span className="text-iskra-emerald">без блокировок</span>
             </h1>
-            <p className="text-muted-foreground text-lg max-w-lg mx-auto">
-              Watch how other businesses are generating pipeline with WhatsApp outreach.
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-8">
+              Заполняем pipeline встречами через WhatsApp. Теплый трафик, реактивация баз, холодный outreach - выберите время и обсудим вашу стратегию.
             </p>
-          </div>
-        </section>
 
-        {/* Quick Steps */}
-        <section className="pb-12 px-4">
-          <div className="container mx-auto max-w-3xl">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="flex items-start gap-4 p-5 rounded-2xl card-light">
-                <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center flex-shrink-0">
-                  <Mail className="w-5 h-5 text-iskra-emerald" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-iskra-emerald mb-1">Step 1</p>
-                  <p className="font-semibold text-foreground text-sm">Accept the Calendar Invite</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">Check your inbox and confirm</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4 p-5 rounded-2xl card-light">
-                <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center flex-shrink-0">
-                  <Play className="w-5 h-5 text-iskra-emerald ml-0.5" fill="currentColor" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-iskra-emerald mb-1">Step 2</p>
-                  <p className="font-semibold text-foreground text-sm">Watch the Video Below</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">So we skip the basics on the call</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Video Placeholder */}
-        <section className="pb-16 px-4">
-          <div className="container mx-auto max-w-3xl">
-            <div className="rounded-2xl overflow-hidden border border-border shadow-xl bg-card">
-              <div className="relative w-full flex items-center justify-center bg-muted" style={{ paddingBottom: "56.25%" }}>
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
-                  <div className="w-20 h-20 rounded-full bg-iskra-emerald/10 border-2 border-dashed border-iskra-emerald/30 flex items-center justify-center mb-4">
-                    <Play className="w-8 h-8 text-iskra-emerald/50 ml-1" />
-                  </div>
-                  <p className="text-sm font-medium text-muted-foreground">Video coming soon</p>
-                </div>
-              </div>
-            </div>
+            <a href="#calendly">
+              <Button variant="cta" size="xl" className="gap-2">
+                Выбрать время встречи
+                <CheckCircle2 className="w-5 h-5" />
+              </Button>
+            </a>
           </div>
         </section>
 
         {/* Stats Bar */}
-        <section className="py-12 px-4 bg-foreground">
+        <section className="py-10 px-4 bg-foreground">
           <div className="container mx-auto max-w-4xl">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {stats.map(({ value, label }) => (
                 <div key={label} className="text-center">
                   <p className="text-3xl md:text-4xl font-bold text-iskra-emerald font-display">{value}</p>
-                  <p className="text-muted-foreground/70 text-sm mt-1">{label}</p>
+                  <p className="text-background/60 text-sm mt-1">{label}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* What to Expect */}
+        {/* What We Do */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-4xl">
             <div className="text-center mb-10">
-              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">What We'll Cover on the Call</h2>
-              <p className="text-muted-foreground mt-2">30 minutes. No fluff. Actionable plan.</p>
+              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Что мы делаем</p>
+              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Три типа кампаний, одна система</h2>
             </div>
-            <div className="grid md:grid-cols-3 gap-6">
-              {expectations.map(({ icon: Icon, title, description }) => (
-                <div key={title} className="text-center p-6 card-light hover:border-iskra-emerald/40 transition-colors">
-                  <div className="w-14 h-14 rounded-2xl bg-iskra-emerald/10 flex items-center justify-center mx-auto mb-4">
-                    <Icon className="w-7 h-7 text-iskra-emerald" />
+            <div className="grid sm:grid-cols-2 gap-5">
+              {services.map(({ icon: Icon, title, description }) => (
+                <div key={title} className="p-6 card-light hover:border-iskra-emerald/40 transition-colors rounded-2xl">
+                  <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-4">
+                    <Icon className="w-6 h-6 text-iskra-emerald" />
                   </div>
                   <h3 className="font-semibold text-lg mb-2 text-foreground">{title}</h3>
-                  <p className="text-muted-foreground text-sm">{description}</p>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Case Study */}
+        {/* Case Study / Testimonial */}
         <section className="py-16 px-4 bg-card">
           <div className="container mx-auto max-w-4xl">
             <div className="text-center mb-10">
-              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Case Study</p>
-              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Real Client, Real Results</h2>
+              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Кейс</p>
+              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Реальный клиент, реальный результат</h2>
             </div>
 
             <div className="card-champagne rounded-2xl overflow-hidden">
               <div className="grid md:grid-cols-5 gap-0">
-                {/* Left: Video + Photo */}
+                {/* Video */}
                 <div className="md:col-span-2 p-6">
                   <div className="rounded-xl overflow-hidden border border-border aspect-video relative">
                     {!isTestimonialPlaying ? (
@@ -185,11 +182,11 @@ const Booked = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
                         <div className="absolute inset-0 flex items-center justify-center">
                           <div className="w-14 h-14 rounded-full bg-iskra-emerald flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                            <Play className="w-5 h-5 text-white ml-0.5" fill="currentColor" />
+                            <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
                           </div>
                         </div>
                         <div className="absolute bottom-3 left-3">
-                          <span className="text-white text-xs font-medium bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">Watch testimonial</span>
+                          <span className="text-primary-foreground text-xs font-medium bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">Смотреть отзыв</span>
                         </div>
                       </button>
                     ) : (
@@ -198,12 +195,13 @@ const Booked = () => {
                         className="w-full h-full absolute inset-0"
                         allow="autoplay"
                         allowFullScreen
+                        title="Kristaps testimonial"
                       />
                     )}
                   </div>
                 </div>
 
-                {/* Right: Content */}
+                {/* Quote + Metrics */}
                 <div className="md:col-span-3 p-6 md:pl-2 flex flex-col justify-center">
                   <Quote className="w-8 h-8 text-iskra-emerald/20 mb-3" />
                   <blockquote className="text-lg md:text-xl font-semibold text-foreground leading-snug mb-5">
@@ -212,7 +210,7 @@ const Booked = () => {
 
                   <div className="flex items-center gap-3 mb-5">
                     <img src={kristapsPhoto} alt="Kristaps" className="w-10 h-10 rounded-full object-cover object-top border-2 border-iskra-emerald/20" />
-                     <div>
+                    <div>
                       <p className="font-semibold text-foreground text-sm">Kristaps</p>
                       <p className="text-muted-foreground text-xs">
                         Founder,{" "}
@@ -223,7 +221,6 @@ const Booked = () => {
                     </div>
                   </div>
 
-                  {/* Result metrics */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-card rounded-xl p-3 border border-border text-center">
                       <p className="text-xl font-bold text-iskra-emerald font-display">500</p>
@@ -244,45 +241,69 @@ const Booked = () => {
           </div>
         </section>
 
-        {/* Founder Card */}
+        {/* Founder */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-3xl">
-            <div className="flex flex-col md:flex-row items-center gap-8 p-8 card-light">
+            <div className="flex flex-col md:flex-row items-center gap-8 p-8 card-light rounded-2xl">
               <div className="flex-shrink-0">
                 <div className="w-36 h-36 md:w-44 md:h-44 rounded-2xl overflow-hidden border-2 border-iskra-emerald/20">
                   <img src={founderPhoto} alt="Arsenijs - ISKRA Founder" className="w-full h-full object-cover object-top" />
                 </div>
               </div>
               <div className="text-center md:text-left flex-1">
-                <h3 className="font-bold text-xl font-display text-foreground mb-1">You'll Be Speaking with Arsenijs</h3>
+                <h3 className="font-bold text-xl font-display text-foreground mb-1">Вы будете говорить с Арсением</h3>
                 <p className="text-iskra-emerald text-sm font-medium mb-3">Founder, ISKRA</p>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Sent over 1M+ WhatsApp messages across B2B, SaaS, coaching, real estate and more. Built outreach systems that generated <span className="text-iskra-emerald font-semibold">3M+ AED</span> in pipeline. No fluff - just proven strategies.
+                  1M+ WhatsApp сообщений по B2B, SaaS, коучинг, недвижимость и другие ниши. Построил outreach систему которая сгенерировала <span className="text-iskra-emerald font-semibold">3M+ AED</span> в pipeline. Без воды - только проверенные стратегии.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                   <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">1M+ Messages</span>
                   <span className="px-3 py-1.5 rounded-full bg-iskra-emerald/10 text-iskra-emerald text-xs font-medium">3M+ AED Pipeline</span>
-                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">10+ Industries</span>
+                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">0% Block Rate</span>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
+        {/* Calendly Embed */}
+        <section id="calendly" className="py-16 px-4 bg-foreground">
+          <div className="container mx-auto max-w-3xl">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl md:text-3xl font-bold text-background font-display mb-3">
+                Выберите удобное время
+              </h2>
+              <p className="text-background/60 text-sm">
+                30 минут. Разберем вашу ситуацию и составим план запуска.
+              </p>
+            </div>
+            <div className="rounded-2xl overflow-hidden bg-background shadow-xl">
+              <iframe
+                src={getCalendlyUrl()}
+                width="100%"
+                height="700"
+                frameBorder="0"
+                title="Schedule a call with ISKRA"
+                className="w-full"
+              />
+            </div>
+          </div>
+        </section>
+
         {/* WhatsApp CTA */}
-        <section className="py-16 px-4 bg-foreground">
+        <section className="py-12 px-4">
           <div className="container mx-auto max-w-2xl text-center">
-            <Zap className="w-10 h-10 text-iskra-emerald mx-auto mb-4" />
-            <h2 className="text-2xl md:text-3xl font-bold text-background font-display mb-3">
-              Have a Question Before the Call?
+            <Shield className="w-10 h-10 text-iskra-emerald mx-auto mb-4" />
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground font-display mb-3">
+              Есть вопросы?
             </h2>
-            <p className="text-muted-foreground mb-8">
-              Message me directly - I usually reply within minutes.
+            <p className="text-muted-foreground mb-6 text-sm">
+              Напишите напрямую - отвечаю в течение нескольких минут.
             </p>
             <a href="https://wa.me/971568785008" target="_blank" rel="noopener noreferrer">
-              <Button size="lg" className="bg-[#25D366] hover:bg-[#20BD5A] text-white gap-2 text-lg px-8 py-6 shadow-lg">
+              <Button size="lg" className="bg-[#25D366] hover:bg-[#20BD5A] text-primary-foreground gap-2 text-lg px-8 py-6 shadow-lg">
                 <MessageCircle className="w-5 h-5" />
-                Message on WhatsApp
+                Написать в WhatsApp
               </Button>
             </a>
           </div>
