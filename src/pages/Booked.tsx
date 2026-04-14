@@ -10,29 +10,29 @@ const stats = [
   { value: "1M+", label: "Messages Sent" },
   { value: "35%", label: "Reply Rate" },
   { value: "98%", label: "Delivery Rate" },
-  { value: "0%", label: "Block Rate" },
+  { value: "1%", label: "Booking on Cold" },
 ];
 
 const services = [
   {
     icon: Flame,
     title: "Warm Traffic",
-    description: "Конвертируем ваших лидов в звонки через WhatsApp follow-up после рекламы или ивентов.",
+    description: "Turn your inbound leads into booked calls with WhatsApp follow-ups after ads or events.",
   },
   {
     icon: RefreshCw,
-    title: "Реактивация баз",
-    description: "Оживляем старые базы клиентов - CRM, списки, контакты которые уже забыли о вас.",
+    title: "Database Reactivation",
+    description: "Bring old contacts back to life - CRM lists, past clients, leads that went cold months ago.",
   },
   {
     icon: Send,
     title: "Cold Outreach",
-    description: "Холодные рассылки по целевой аудитории с персонализированными сообщениями.",
+    description: "Reach new prospects at scale with personalized messages that actually get replies.",
   },
   {
     icon: Ban,
-    title: "Без блокировок",
-    description: "Собственная инфраструктура, прогрев номеров и anti-block система. Ваш номер в безопасности.",
+    title: "Zero Blocks",
+    description: "Dedicated infrastructure, number warmup, and anti-block systems. Your number stays safe.",
   },
 ];
 
@@ -42,21 +42,17 @@ const Booked = () => {
   const [isTestimonialPlaying, setIsTestimonialPlaying] = useState(false);
   const [searchParams] = useSearchParams();
 
-  // Track UTM parameters
   useEffect(() => {
     const utmParams: Record<string, string> = {};
     ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"].forEach((key) => {
       const val = searchParams.get(key);
       if (val) utmParams[key] = val;
     });
-
     if (Object.keys(utmParams).length > 0) {
-      // Store UTMs in sessionStorage for potential later use
       sessionStorage.setItem("iskra_utm", JSON.stringify(utmParams));
     }
   }, [searchParams]);
 
-  // Build Calendly URL with UTM passthrough
   const getCalendlyUrl = () => {
     const params = new URLSearchParams();
     ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"].forEach((key) => {
@@ -105,16 +101,16 @@ const Booked = () => {
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[1.05] font-display mb-5">
-              WhatsApp рассылки<br />
-              <span className="text-iskra-emerald">без блокировок</span>
+              WhatsApp outreach<br />
+              <span className="text-iskra-emerald">that actually books meetings</span>
             </h1>
             <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-8">
-              Заполняем pipeline встречами через WhatsApp. Теплый трафик, реактивация баз, холодный outreach - выберите время и обсудим вашу стратегию.
+              We fill your calendar with qualified prospects through WhatsApp. Warm follow-ups, database reactivation, cold outreach - pick a time and let's map out your strategy.
             </p>
 
             <a href="#calendly">
               <Button variant="cta" size="xl" className="gap-2">
-                Выбрать время встречи
+                Pick a Time
                 <CheckCircle2 className="w-5 h-5" />
               </Button>
             </a>
@@ -139,8 +135,8 @@ const Booked = () => {
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-4xl">
             <div className="text-center mb-10">
-              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Что мы делаем</p>
-              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Три типа кампаний, одна система</h2>
+              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">What We Do</p>
+              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Three campaign types, one system</h2>
             </div>
             <div className="grid sm:grid-cols-2 gap-5">
               {services.map(({ icon: Icon, title, description }) => (
@@ -156,17 +152,16 @@ const Booked = () => {
           </div>
         </section>
 
-        {/* Case Study / Testimonial */}
+        {/* Case Study */}
         <section className="py-16 px-4 bg-card">
           <div className="container mx-auto max-w-4xl">
             <div className="text-center mb-10">
-              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Кейс</p>
-              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Реальный клиент, реальный результат</h2>
+              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Case Study</p>
+              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Real client, real numbers</h2>
             </div>
 
             <div className="card-champagne rounded-2xl overflow-hidden">
               <div className="grid md:grid-cols-5 gap-0">
-                {/* Video */}
                 <div className="md:col-span-2 p-6">
                   <div className="rounded-xl overflow-hidden border border-border aspect-video relative">
                     {!isTestimonialPlaying ? (
@@ -186,7 +181,7 @@ const Booked = () => {
                           </div>
                         </div>
                         <div className="absolute bottom-3 left-3">
-                          <span className="text-primary-foreground text-xs font-medium bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">Смотреть отзыв</span>
+                          <span className="text-primary-foreground text-xs font-medium bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">Watch testimonial</span>
                         </div>
                       </button>
                     ) : (
@@ -201,7 +196,6 @@ const Booked = () => {
                   </div>
                 </div>
 
-                {/* Quote + Metrics */}
                 <div className="md:col-span-3 p-6 md:pl-2 flex flex-col justify-center">
                   <Quote className="w-8 h-8 text-iskra-emerald/20 mb-3" />
                   <blockquote className="text-lg md:text-xl font-semibold text-foreground leading-snug mb-5">
@@ -251,15 +245,15 @@ const Booked = () => {
                 </div>
               </div>
               <div className="text-center md:text-left flex-1">
-                <h3 className="font-bold text-xl font-display text-foreground mb-1">Вы будете говорить с Арсением</h3>
+                <h3 className="font-bold text-xl font-display text-foreground mb-1">You'll be speaking with Arsenijs</h3>
                 <p className="text-iskra-emerald text-sm font-medium mb-3">Founder, ISKRA</p>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  1M+ WhatsApp сообщений по B2B, SaaS, коучинг, недвижимость и другие ниши. Построил outreach систему которая сгенерировала <span className="text-iskra-emerald font-semibold">3M+ AED</span> в pipeline. Без воды - только проверенные стратегии.
+                  Sent over 1M+ WhatsApp messages across B2B, SaaS, coaching, real estate and more. Built outreach systems that generated <span className="text-iskra-emerald font-semibold">3M+ AED</span> in pipeline. No fluff - just strategies that work.
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                   <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">1M+ Messages</span>
                   <span className="px-3 py-1.5 rounded-full bg-iskra-emerald/10 text-iskra-emerald text-xs font-medium">3M+ AED Pipeline</span>
-                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">0% Block Rate</span>
+                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">10+ Industries</span>
                 </div>
               </div>
             </div>
@@ -271,10 +265,10 @@ const Booked = () => {
           <div className="container mx-auto max-w-3xl">
             <div className="text-center mb-8">
               <h2 className="text-2xl md:text-3xl font-bold text-background font-display mb-3">
-                Выберите удобное время
+                Pick a time that works
               </h2>
               <p className="text-background/60 text-sm">
-                30 минут. Разберем вашу ситуацию и составим план запуска.
+                30 minutes. We'll break down your situation and map out a launch plan.
               </p>
             </div>
             <div className="rounded-2xl overflow-hidden bg-background shadow-xl">
@@ -295,15 +289,15 @@ const Booked = () => {
           <div className="container mx-auto max-w-2xl text-center">
             <Shield className="w-10 h-10 text-iskra-emerald mx-auto mb-4" />
             <h2 className="text-2xl md:text-3xl font-bold text-foreground font-display mb-3">
-              Есть вопросы?
+              Got questions?
             </h2>
             <p className="text-muted-foreground mb-6 text-sm">
-              Напишите напрямую - отвечаю в течение нескольких минут.
+              Drop me a message - I usually reply within minutes.
             </p>
             <a href="https://wa.me/971568785008" target="_blank" rel="noopener noreferrer">
               <Button size="lg" className="bg-[#25D366] hover:bg-[#20BD5A] text-primary-foreground gap-2 text-lg px-8 py-6 shadow-lg">
                 <MessageCircle className="w-5 h-5" />
-                Написать в WhatsApp
+                Message on WhatsApp
               </Button>
             </a>
           </div>
