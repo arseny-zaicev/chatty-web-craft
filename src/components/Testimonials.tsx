@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Quote, Play } from "lucide-react";
+import { Quote } from "lucide-react";
 import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 

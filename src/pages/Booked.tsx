@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { Helmet } from "react-helmet-async";
+import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Play, CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
