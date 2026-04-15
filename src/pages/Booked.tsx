@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
 import { Play, CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,6 @@ const services = [
 const CALENDLY_URL = "https://calendly.com/arseny-iskra/iskra-ae-whatsapp-outreach";
 
 const Booked = () => {
-  const [isTestimonialPlaying, setIsTestimonialPlaying] = useState(false);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {

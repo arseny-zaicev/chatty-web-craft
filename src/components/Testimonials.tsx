@@ -3,8 +3,6 @@ import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 
 export const Testimonials = () => {
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-
   return (
     <section id="testimonials" className="py-16">
       <div className="container mx-auto px-4">
