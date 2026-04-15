@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
-import { Play, CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
+import { CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
