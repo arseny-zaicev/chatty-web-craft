@@ -159,53 +159,53 @@ const Booked = () => {
               <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Real client, real numbers</h2>
             </div>
 
-            <div className="card-champagne rounded-2xl overflow-hidden">
-              <div className="grid md:grid-cols-5 gap-0">
-                <div className="md:col-span-2 p-6">
-                  <div className="rounded-xl overflow-hidden border border-border aspect-video relative">
-                    <video
-                      src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
-                      poster={kristapsPhoto}
-                      controls
-                      playsInline
-                      preload="metadata"
-                      className="w-full h-full object-cover absolute inset-0"
-                    />
+            <div className="card-champagne rounded-2xl overflow-hidden p-6 md:p-8">
+              {/* Video - large, portrait-friendly */}
+              <div className="max-w-md mx-auto mb-8">
+                <div className="rounded-xl overflow-hidden border border-border aspect-[9/16] sm:aspect-[3/4] relative bg-black">
+                  <video
+                    src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
+                    poster={kristapsPhoto}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full h-full object-contain absolute inset-0"
+                  />
+                </div>
+              </div>
+
+              {/* Quote + stats */}
+              <div className="max-w-2xl mx-auto text-center">
+                <Quote className="w-8 h-8 text-iskra-emerald/20 mx-auto mb-3" />
+                <blockquote className="text-lg md:text-xl font-semibold text-foreground leading-snug mb-5">
+                  "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
+                </blockquote>
+
+                <div className="flex items-center gap-3 justify-center mb-6">
+                  <img src={kristapsPhoto} alt="Kristaps" className="w-10 h-10 rounded-full object-cover object-top border-2 border-iskra-emerald/20" />
+                  <div className="text-left">
+                    <p className="font-semibold text-foreground text-sm">Kristaps</p>
+                    <p className="text-muted-foreground text-xs">
+                      Founder,{" "}
+                      <a href="https://key-digital.lv" target="_blank" rel="noopener noreferrer" className="text-iskra-emerald hover:underline">
+                        key-digital.lv
+                      </a>
+                    </p>
                   </div>
                 </div>
 
-                <div className="md:col-span-3 p-6 md:pl-2 flex flex-col justify-center">
-                  <Quote className="w-8 h-8 text-iskra-emerald/20 mb-3" />
-                  <blockquote className="text-lg md:text-xl font-semibold text-foreground leading-snug mb-5">
-                    "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
-                  </blockquote>
-
-                  <div className="flex items-center gap-3 mb-5">
-                    <img src={kristapsPhoto} alt="Kristaps" className="w-10 h-10 rounded-full object-cover object-top border-2 border-iskra-emerald/20" />
-                    <div>
-                      <p className="font-semibold text-foreground text-sm">Kristaps</p>
-                      <p className="text-muted-foreground text-xs">
-                        Founder,{" "}
-                        <a href="https://key-digital.lv" target="_blank" rel="noopener noreferrer" className="text-iskra-emerald hover:underline">
-                          key-digital.lv
-                        </a>
-                      </p>
-                    </div>
+                <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
+                  <div className="bg-card rounded-xl p-3 border border-border text-center">
+                    <p className="text-xl font-bold text-iskra-emerald font-display">500</p>
+                    <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Messages</p>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-card rounded-xl p-3 border border-border text-center">
-                      <p className="text-xl font-bold text-iskra-emerald font-display">500</p>
-                      <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Messages</p>
-                    </div>
-                    <div className="bg-card rounded-xl p-3 border border-border text-center">
-                      <p className="text-xl font-bold text-iskra-emerald font-display">8</p>
-                      <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Meetings</p>
-                    </div>
-                    <div className="bg-card rounded-xl p-3 border border-border text-center">
-                      <p className="text-xl font-bold text-iskra-emerald font-display">2d</p>
-                      <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Timeline</p>
-                    </div>
+                  <div className="bg-card rounded-xl p-3 border border-border text-center">
+                    <p className="text-xl font-bold text-iskra-emerald font-display">8</p>
+                    <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Meetings</p>
+                  </div>
+                  <div className="bg-card rounded-xl p-3 border border-border text-center">
+                    <p className="text-xl font-bold text-iskra-emerald font-display">2d</p>
+                    <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Timeline</p>
                   </div>
                 </div>
               </div>
