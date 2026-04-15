@@ -1,11 +1,8 @@
-import { useState } from "react";
-import { Quote, Play } from "lucide-react";
+import { Quote } from "lucide-react";
 import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
 
 export const Testimonials = () => {
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-
   return (
     <section id="testimonials" className="py-16">
       <div className="container mx-auto px-4">
@@ -29,33 +26,14 @@ export const Testimonials = () => {
             <ScrollReveal delay={100}>
               <div className="bg-card border border-iskra-emerald/30 rounded-2xl p-6 shadow-lg hover-lift">
                 <div className="aspect-video bg-gradient-to-br from-iskra-emerald/20 to-iskra-emerald/5 rounded-xl mb-6 overflow-hidden relative">
-                  {!isVideoPlaying ? (
-                    <button
-                      onClick={() => setIsVideoPlaying(true)}
-                      className="absolute inset-0 w-full h-full group cursor-pointer"
-                    >
-                      <img
-                        src={kristapsPhoto}
-                        alt="Kristaps - Founder of key-digital.lv"
-                        className="w-full h-full object-cover"
-                        style={{ objectPosition: "center 20%" }}
-                      />
-                      <div className="absolute inset-0 bg-black/30" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-20 h-20 rounded-full bg-iskra-emerald flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                          <Play className="w-8 h-8 text-primary-foreground ml-1" fill="currentColor" />
-                        </div>
-                      </div>
-                    </button>
-                  ) : (
-                    <iframe
-                      src="https://drive.google.com/file/d/1NNQ8gBN-64xXEvRVxQdbBiqGqRkIQz8L/preview"
-                      className="w-full h-full relative z-10"
-                      allow="autoplay"
-                      allowFullScreen
-                      title="Kristaps testimonial video"
-                    />
-                  )}
+                  <video
+                    src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
+                    poster={kristapsPhoto}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full h-full object-cover relative z-10"
+                  />
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">

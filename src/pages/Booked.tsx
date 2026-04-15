@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
-import { Play, CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
+import { CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
@@ -39,7 +39,6 @@ const services = [
 const CALENDLY_URL = "https://calendly.com/arseny-iskra/iskra-ae-whatsapp-outreach";
 
 const Booked = () => {
-  const [isTestimonialPlaying, setIsTestimonialPlaying] = useState(false);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -164,35 +163,14 @@ const Booked = () => {
               <div className="grid md:grid-cols-5 gap-0">
                 <div className="md:col-span-2 p-6">
                   <div className="rounded-xl overflow-hidden border border-border aspect-video relative">
-                    {!isTestimonialPlaying ? (
-                      <button
-                        onClick={() => setIsTestimonialPlaying(true)}
-                        className="absolute inset-0 w-full h-full group cursor-pointer"
-                      >
-                        <img
-                          src={kristapsPhoto}
-                          alt="Kristaps - Founder of key-digital.lv"
-                          className="w-full h-full object-cover object-top"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-14 h-14 rounded-full bg-iskra-emerald flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                            <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
-                          </div>
-                        </div>
-                        <div className="absolute bottom-3 left-3">
-                          <span className="text-primary-foreground text-xs font-medium bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">Watch testimonial</span>
-                        </div>
-                      </button>
-                    ) : (
-                      <iframe
-                        src="https://drive.google.com/file/d/1NNQ8gBN-64xXEvRVxQdbBiqGqRkIQz8L/preview"
-                        className="w-full h-full absolute inset-0"
-                        allow="autoplay"
-                        allowFullScreen
-                        title="Kristaps testimonial"
-                      />
-                    )}
+                    <video
+                      src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
+                      poster={kristapsPhoto}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-cover absolute inset-0"
+                    />
                   </div>
                 </div>
 
