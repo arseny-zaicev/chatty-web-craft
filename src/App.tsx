@@ -21,6 +21,7 @@ import AdminPanel from "./pages/AdminPanel";
 import Apply from "./pages/Apply";
 import SellerLeadsApply from "./pages/SellerLeadsApply";
 import WhatsAppApply from "./pages/WhatsAppApply";
+import Book from "./pages/Book";
 import Booked from "./pages/Booked";
 import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
