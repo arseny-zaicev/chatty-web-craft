@@ -38,7 +38,7 @@ const services = [
 
 const CALENDLY_URL = "https://calendly.com/arseny-iskra/iskra-ae-whatsapp-outreach";
 
-const Booked = () => {
+const Book = () => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
