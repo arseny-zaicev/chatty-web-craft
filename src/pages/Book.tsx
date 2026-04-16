@@ -292,4 +292,4 @@ const Book = () => {
   );
 };
 
-export default Booked;
+export default Book;
