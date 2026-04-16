@@ -1,72 +1,21 @@
-import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link, useSearchParams } from "react-router-dom";
-import { CheckCircle2, MessageCircle, Quote, Shield, Zap, Send, RefreshCw, Flame, Ban } from "lucide-react";
+import { Link } from "react-router-dom";
+import { CheckCircle2, MessageCircle, Clock, FileText, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
 
-const stats = [
-  { value: "1M+", label: "Messages Sent" },
-  { value: "35%", label: "Reply Rate" },
-  { value: "98%", label: "Delivery Rate" },
-  { value: "1%", label: "Booking on Cold" },
+const checklist = [
+  { icon: Target, text: "Think about your ideal client profile and target market" },
+  { icon: FileText, text: "Have your current outreach numbers ready (if any)" },
+  { icon: Clock, text: "Block 30 minutes - we'll cover strategy, not just pitch" },
 ];
-
-const services = [
-  {
-    icon: Flame,
-    title: "Warm Traffic",
-    description: "Turn your inbound leads into booked calls with WhatsApp follow-ups after ads or events.",
-  },
-  {
-    icon: RefreshCw,
-    title: "Database Reactivation",
-    description: "Bring old contacts back to life - CRM lists, past clients, leads that went cold months ago.",
-  },
-  {
-    icon: Send,
-    title: "Cold Outreach",
-    description: "Reach new prospects at scale with personalized messages that actually get replies.",
-  },
-  {
-    icon: Ban,
-    title: "Zero Blocks",
-    description: "Dedicated infrastructure, number warmup, and anti-block systems. Your number stays safe.",
-  },
-];
-
-const CALENDLY_URL = "https://calendly.com/arseny-iskra/iskra-ae-whatsapp-outreach";
 
 const Booked = () => {
-  const [searchParams] = useSearchParams();
-
-  useEffect(() => {
-    const utmParams: Record<string, string> = {};
-    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"].forEach((key) => {
-      const val = searchParams.get(key);
-      if (val) utmParams[key] = val;
-    });
-    if (Object.keys(utmParams).length > 0) {
-      sessionStorage.setItem("iskra_utm", JSON.stringify(utmParams));
-    }
-  }, [searchParams]);
-
-  const getCalendlyUrl = () => {
-    const params = new URLSearchParams();
-    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"].forEach((key) => {
-      const val = searchParams.get(key);
-      if (val) params.set(key, val);
-    });
-    const qs = params.toString();
-    return qs ? `${CALENDLY_URL}?${qs}` : CALENDLY_URL;
-  };
-
   return (
     <>
       <Helmet>
-        <title>Book a Call - WhatsApp Outreach | ISKRA</title>
-        <meta name="description" content="Book a free strategy call to learn how WhatsApp outreach can fill your pipeline with qualified meetings." />
+        <title>You're Booked - See You Soon | ISKRA</title>
+        <meta name="description" content="Your strategy call is confirmed. Watch this quick video to get the most out of our session." />
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
@@ -91,193 +40,79 @@ const Booked = () => {
           </div>
         </header>
 
-        {/* Hero */}
+        {/* Confirmation Hero */}
         <section className="pt-16 pb-12 px-4">
           <div className="container mx-auto max-w-3xl text-center">
-            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-iskra-emerald/10 border border-iskra-emerald/30 mb-8">
-              <Zap className="w-4 h-4 text-iskra-emerald" />
-              <span className="text-iskra-emerald font-semibold text-sm">Free Strategy Call</span>
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-iskra-emerald/10 mb-6">
+              <CheckCircle2 className="w-8 h-8 text-iskra-emerald" />
             </div>
-
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[1.05] font-display mb-5">
-              WhatsApp outreach<br />
-              <span className="text-iskra-emerald">that actually books meetings</span>
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground leading-[1.05] font-display mb-4">
+              You're booked!
             </h1>
-            <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-8">
-              We fill your calendar with qualified prospects through WhatsApp. Warm follow-ups, database reactivation, cold outreach - pick a time and let's map out your strategy.
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+              Check your email for the calendar invite. In the meantime, watch this quick video so we can hit the ground running.
             </p>
-
-            <a href="#calendly">
-              <Button variant="cta" size="xl" className="gap-2">
-                Pick a Time
-                <CheckCircle2 className="w-5 h-5" />
-              </Button>
-            </a>
           </div>
         </section>
 
-        {/* Stats Bar */}
-        <section className="py-10 px-4 bg-foreground">
-          <div className="container mx-auto max-w-4xl">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {stats.map(({ value, label }) => (
-                <div key={label} className="text-center">
-                  <p className="text-3xl md:text-4xl font-bold text-iskra-emerald font-display">{value}</p>
-                  <p className="text-background/60 text-sm mt-1">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* What We Do */}
-        <section className="py-16 px-4">
-          <div className="container mx-auto max-w-4xl">
-            <div className="text-center mb-10">
-              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">What We Do</p>
-              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Three campaign types, one system</h2>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-5">
-              {services.map(({ icon: Icon, title, description }) => (
-                <div key={title} className="p-6 card-light hover:border-iskra-emerald/40 transition-colors rounded-2xl">
-                  <div className="w-12 h-12 rounded-xl bg-iskra-emerald/10 flex items-center justify-center mb-4">
-                    <Icon className="w-6 h-6 text-iskra-emerald" />
-                  </div>
-                  <h3 className="font-semibold text-lg mb-2 text-foreground">{title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Case Study */}
-        <section className="py-16 px-4 bg-card">
-          <div className="container mx-auto max-w-4xl">
-            <div className="text-center mb-10">
-              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-2">Case Study</p>
-              <h2 className="text-2xl md:text-3xl font-bold font-display text-foreground">Real client, real numbers</h2>
-            </div>
-
-            <div className="card-champagne rounded-2xl overflow-hidden p-6 md:p-8">
-              {/* Video - large, portrait-friendly */}
-              <div className="max-w-md mx-auto mb-8">
-                <div className="rounded-xl overflow-hidden border border-border aspect-[9/16] sm:aspect-[3/4] relative bg-black">
-                  <video
-                    src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
-                    poster={kristapsPhoto}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="w-full h-full object-contain absolute inset-0"
-                  />
-                </div>
-              </div>
-
-              {/* Quote + stats */}
-              <div className="max-w-2xl mx-auto text-center">
-                <Quote className="w-8 h-8 text-iskra-emerald/20 mx-auto mb-3" />
-                <blockquote className="text-lg md:text-xl font-semibold text-foreground leading-snug mb-5">
-                  "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
-                </blockquote>
-
-                <div className="flex items-center gap-3 justify-center mb-6">
-                  <img src={kristapsPhoto} alt="Kristaps" className="w-10 h-10 rounded-full object-cover object-top border-2 border-iskra-emerald/20" />
-                  <div className="text-left">
-                    <p className="font-semibold text-foreground text-sm">Kristaps</p>
-                    <p className="text-muted-foreground text-xs">
-                      Founder,{" "}
-                      <a href="https://key-digital.lv" target="_blank" rel="noopener noreferrer" className="text-iskra-emerald hover:underline">
-                        key-digital.lv
-                      </a>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
-                  <div className="bg-card rounded-xl p-3 border border-border text-center">
-                    <p className="text-xl font-bold text-iskra-emerald font-display">500</p>
-                    <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Messages</p>
-                  </div>
-                  <div className="bg-card rounded-xl p-3 border border-border text-center">
-                    <p className="text-xl font-bold text-iskra-emerald font-display">8</p>
-                    <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Meetings</p>
-                  </div>
-                  <div className="bg-card rounded-xl p-3 border border-border text-center">
-                    <p className="text-xl font-bold text-iskra-emerald font-display">2d</p>
-                    <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium mt-0.5">Timeline</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Founder */}
-        <section className="py-16 px-4">
+        {/* Loom Video */}
+        <section className="pb-16 px-4">
           <div className="container mx-auto max-w-3xl">
-            <div className="flex flex-col md:flex-row items-center gap-8 p-8 card-light rounded-2xl">
-              <div className="flex-shrink-0">
-                <div className="w-36 h-36 md:w-44 md:h-44 rounded-2xl overflow-hidden border-2 border-iskra-emerald/20">
-                  <img src={founderPhoto} alt="Arsenijs - ISKRA Founder" className="w-full h-full object-cover object-top" />
-                </div>
-              </div>
-              <div className="text-center md:text-left flex-1">
-                <h3 className="font-bold text-xl font-display text-foreground mb-1">You'll be speaking with Arsenijs</h3>
-                <p className="text-iskra-emerald text-sm font-medium mb-3">Founder, ISKRA</p>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Sent over 1M+ WhatsApp messages across B2B, SaaS, coaching, real estate and more. Built outreach systems that generated <span className="text-iskra-emerald font-semibold">3M+ AED</span> in pipeline. No fluff - just strategies that work.
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">1M+ Messages</span>
-                  <span className="px-3 py-1.5 rounded-full bg-iskra-emerald/10 text-iskra-emerald text-xs font-medium">3M+ AED Pipeline</span>
-                  <span className="px-3 py-1.5 rounded-full bg-muted text-foreground/70 text-xs font-medium">10+ Industries</span>
-                </div>
+            <div className="rounded-2xl overflow-hidden shadow-xl border border-border">
+              <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+                <iframe
+                  src="https://www.loom.com/embed/7141dff6f84c48b6b5158651b861fa91?sid=autoplay"
+                  frameBorder="0"
+                  allowFullScreen
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                  title="What to expect on our call"
+                />
               </div>
             </div>
           </div>
         </section>
 
-        {/* Calendly Embed */}
-        <section id="calendly" className="py-16 px-4 bg-foreground">
-          <div className="container mx-auto max-w-3xl">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl md:text-3xl font-bold text-background font-display mb-3">
-                Pick a time that works
-              </h2>
-              <p className="text-background/60 text-sm">
-                30 minutes. We'll break down your situation and map out a launch plan.
-              </p>
-            </div>
-            <div className="rounded-2xl overflow-hidden bg-background shadow-xl">
-              <iframe
-                src={getCalendlyUrl()}
-                width="100%"
-                height="700"
-                frameBorder="0"
-                title="Schedule a call with ISKRA"
-                className="w-full"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* WhatsApp CTA */}
-        <section className="py-12 px-4">
-          <div className="container mx-auto max-w-2xl text-center">
-            <Shield className="w-10 h-10 text-iskra-emerald mx-auto mb-4" />
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground font-display mb-3">
-              Got questions?
+        {/* Checklist */}
+        <section className="pb-16 px-4">
+          <div className="container mx-auto max-w-2xl">
+            <h2 className="text-xl md:text-2xl font-bold text-foreground font-display mb-6 text-center">
+              Before our call
             </h2>
-            <p className="text-muted-foreground mb-6 text-sm">
-              Drop me a message - I usually reply within minutes.
-            </p>
-            <a href="https://wa.me/971568785008" target="_blank" rel="noopener noreferrer">
-              <Button size="lg" className="bg-[#25D366] hover:bg-[#20BD5A] text-primary-foreground gap-2 text-lg px-8 py-6 shadow-lg">
-                <MessageCircle className="w-5 h-5" />
-                Message on WhatsApp
-              </Button>
-            </a>
+            <div className="space-y-4">
+              {checklist.map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-start gap-4 p-4 card-light rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-iskra-emerald/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Icon className="w-5 h-5 text-iskra-emerald" />
+                  </div>
+                  <p className="text-foreground text-sm leading-relaxed pt-2">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Founder + WhatsApp */}
+        <section className="pb-16 px-4">
+          <div className="container mx-auto max-w-2xl">
+            <div className="card-champagne rounded-2xl p-6 md:p-8 text-center">
+              <img
+                src={founderPhoto}
+                alt="Arsenijs - ISKRA Founder"
+                className="w-20 h-20 rounded-full object-cover object-top border-2 border-iskra-emerald/20 mx-auto mb-4"
+              />
+              <h3 className="font-bold text-lg font-display text-foreground mb-2">
+                Got questions before the call?
+              </h3>
+              <p className="text-muted-foreground text-sm mb-5">
+                Message me directly - I usually reply within minutes.
+              </p>
+              <a href="https://wa.me/971568785008" target="_blank" rel="noopener noreferrer">
+                <Button size="lg" className="bg-[#25D366] hover:bg-[#20BD5A] text-primary-foreground gap-2 text-base px-6 py-5 shadow-lg">
+                  <MessageCircle className="w-5 h-5" />
+                  Message on WhatsApp
+                </Button>
+              </a>
+            </div>
           </div>
         </section>
 

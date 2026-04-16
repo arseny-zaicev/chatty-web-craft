@@ -21,6 +21,7 @@ import AdminPanel from "./pages/AdminPanel";
 import Apply from "./pages/Apply";
 import SellerLeadsApply from "./pages/SellerLeadsApply";
 import WhatsAppApply from "./pages/WhatsAppApply";
+import Book from "./pages/Book";
 import Booked from "./pages/Booked";
 import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="/apply" element={<Apply />} />
             <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
             <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
+            <Route path="/book" element={<Book />} />
             <Route path="/booked" element={<Booked />} />
             <Route path="/demo" element={<Demo />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
