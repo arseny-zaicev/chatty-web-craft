@@ -24,6 +24,7 @@ import WhatsAppApply from "./pages/WhatsAppApply";
 import Book from "./pages/Book";
 import Booked from "./pages/Booked";
 import Demo from "./pages/Demo";
+import BMAccess from "./pages/BMAccess";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/book" element={<Book />} />
             <Route path="/booked" element={<Booked />} />
             <Route path="/demo" element={<Demo />} />
+            <Route path="/bm-access" element={<BMAccess />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
