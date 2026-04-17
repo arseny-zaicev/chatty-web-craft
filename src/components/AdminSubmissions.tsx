@@ -42,7 +42,7 @@ interface Submission {
   id: string;
   created_at: string;
   updated_at: string;
-  form_type: "qualification" | "seller_leads" | "demo_request";
+  form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access";
   status: "new" | "contacted" | "converted" | "rejected";
   data: unknown;
   contact_name: string | null;
@@ -63,7 +63,7 @@ const statusConfig = {
 export const AdminSubmissions = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterType, setFilterType] = useState<"all" | "qualification" | "seller_leads" | "demo_request">("all");
+  const [filterType, setFilterType] = useState<"all" | "qualification" | "seller_leads" | "demo_request" | "bm_access">("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "new" | "contacted" | "converted" | "rejected">("all");
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [editNotes, setEditNotes] = useState("");
@@ -280,6 +280,7 @@ export const AdminSubmissions = () => {
                 <SelectItem value="demo_request">Demo Request</SelectItem>
                 <SelectItem value="qualification">Qualification</SelectItem>
                 <SelectItem value="seller_leads">Seller Leads</SelectItem>
+                <SelectItem value="bm_access">BM Access</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
@@ -322,10 +323,12 @@ export const AdminSubmissions = () => {
                       <div className="flex items-center gap-3 flex-wrap">
                         <Badge variant={
                           submission.form_type === "demo_request" ? "default" :
-                          submission.form_type === "qualification" ? "secondary" : "outline"
+                          submission.form_type === "qualification" ? "secondary" :
+                          submission.form_type === "bm_access" ? "destructive" : "outline"
                         }>
                           {submission.form_type === "demo_request" ? "Demo Request" :
-                           submission.form_type === "qualification" ? "WhatsApp Outreach" : "Seller Leads"}
+                           submission.form_type === "qualification" ? "WhatsApp Outreach" :
+                           submission.form_type === "bm_access" ? "BM Access" : "Seller Leads"}
                         </Badge>
                         <Badge
                           className={`${statusConfig[submission.status].color} text-white`}
