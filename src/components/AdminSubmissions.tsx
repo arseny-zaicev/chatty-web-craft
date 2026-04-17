@@ -42,7 +42,7 @@ interface Submission {
   id: string;
   created_at: string;
   updated_at: string;
-  form_type: "qualification" | "seller_leads" | "demo_request";
+  form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access";
   status: "new" | "contacted" | "converted" | "rejected";
   data: unknown;
   contact_name: string | null;
@@ -63,7 +63,7 @@ const statusConfig = {
 export const AdminSubmissions = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterType, setFilterType] = useState<"all" | "qualification" | "seller_leads" | "demo_request">("all");
+  const [filterType, setFilterType] = useState<"all" | "qualification" | "seller_leads" | "demo_request" | "bm_access">("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "new" | "contacted" | "converted" | "rejected">("all");
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [editNotes, setEditNotes] = useState("");
