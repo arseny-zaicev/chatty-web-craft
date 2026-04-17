@@ -280,6 +280,7 @@ export const AdminSubmissions = () => {
                 <SelectItem value="demo_request">Demo Request</SelectItem>
                 <SelectItem value="qualification">Qualification</SelectItem>
                 <SelectItem value="seller_leads">Seller Leads</SelectItem>
+                <SelectItem value="bm_access">BM Access</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
@@ -322,10 +323,12 @@ export const AdminSubmissions = () => {
                       <div className="flex items-center gap-3 flex-wrap">
                         <Badge variant={
                           submission.form_type === "demo_request" ? "default" :
-                          submission.form_type === "qualification" ? "secondary" : "outline"
+                          submission.form_type === "qualification" ? "secondary" :
+                          submission.form_type === "bm_access" ? "destructive" : "outline"
                         }>
                           {submission.form_type === "demo_request" ? "Demo Request" :
-                           submission.form_type === "qualification" ? "WhatsApp Outreach" : "Seller Leads"}
+                           submission.form_type === "qualification" ? "WhatsApp Outreach" :
+                           submission.form_type === "bm_access" ? "BM Access" : "Seller Leads"}
                         </Badge>
                         <Badge
                           className={`${statusConfig[submission.status].color} text-white`}
