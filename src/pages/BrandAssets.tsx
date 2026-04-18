@@ -254,14 +254,14 @@ const BrandAssets = () => {
                   <div key={s.size} className="bg-card border border-border rounded-lg p-3 text-center">
                     <p className="font-semibold text-sm">{s.size} × {s.size}</p>
                     <p className="text-xs text-muted-foreground mb-2">{s.usage}</p>
-                    <div className="flex gap-1 justify-center">
-                      <Button size="xs" variant="ghost" className="h-7 text-xs" onClick={() => downloadPNGFromSVG(LOGO_SVG_WHITE.replace('width="512" height="512"', `width="${s.size}" height="${s.size}"`), `iskra-logo-white-${s.size}.png`, s.size, s.size)}>
-                        White
-                      </Button>
-                      <Button size="xs" variant="ghost" className="h-7 text-xs" onClick={() => downloadPNGFromSVG(LOGO_SVG_BLACK.replace('width="512" height="512"', `width="${s.size}" height="${s.size}"`), `iskra-logo-black-${s.size}.png`, s.size, s.size)}>
-                        Black
-                      </Button>
-                    </div>
+                <div className="flex gap-1 justify-center">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => downloadPNGFromSVG(LOGO_SVG_WHITE.replace('width="512" height="512"', `width="${s.size}" height="${s.size}"`), `iskra-logo-white-${s.size}.png`, s.size, s.size)}>
+                    White
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => downloadPNGFromSVG(LOGO_SVG_BLACK.replace('width="512" height="512"', `width="${s.size}" height="${s.size}"`), `iskra-logo-black-${s.size}.png`, s.size, s.size)}>
+                    Black
+                  </Button>
+                </div>
                   </div>
                 ))}
               </div>
