@@ -25,14 +25,14 @@ export const Testimonials = () => {
             {/* Video Testimonial */}
             <ScrollReveal delay={100}>
               <div className="bg-card border border-iskra-emerald/30 rounded-2xl p-6 shadow-lg hover-lift">
-                <div className="aspect-video bg-gradient-to-br from-iskra-emerald/20 to-iskra-emerald/5 rounded-xl mb-6 overflow-hidden relative">
+                <div className="aspect-[9/16] max-h-[600px] mx-auto bg-black rounded-xl mb-6 overflow-hidden relative">
                   <video
                     src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
                     poster={kristapsPhoto}
                     controls
                     playsInline
                     preload="metadata"
-                    className="w-full h-full object-cover relative z-10"
+                    className="w-full h-full object-contain relative z-10"
                   />
                 </div>
                 <div className="space-y-3">
