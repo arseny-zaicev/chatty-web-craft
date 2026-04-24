@@ -42,13 +42,36 @@ export const AnimatedBackground = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    // Skip heavy animation on small screens or reduced motion
+    const isSmallScreen = window.matchMedia("(max-width: 768px)").matches;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (isSmallScreen || reducedMotion) {
+      // Render a static gradient only
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const draw = () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        g.addColorStop(0, "hsl(45, 35%, 95%)");
+        g.addColorStop(0.5, "hsl(140, 35%, 70%)");
+        g.addColorStop(1, "hsl(155, 55%, 30%)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      };
+      draw();
+      window.addEventListener("resize", draw);
+      return () => window.removeEventListener("resize", draw);
+    }
+
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     // Globe settings
     let globeCenterX = 0;
     let globeCenterY = 0;
     let globeRadius = 0;
+    let isVisible = true;
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
@@ -82,7 +105,7 @@ export const AnimatedBackground = () => {
 
     const initNetworkNodes = () => {
       nodesRef.current = [];
-      const nodeCount = 80;
+      const nodeCount = 40;
       
       // Create nodes distributed on sphere surface
       for (let i = 0; i < nodeCount; i++) {
@@ -252,19 +275,31 @@ export const AnimatedBackground = () => {
       };
     };
 
+    // FPS cap (30fps) + visibility gating
+    const FRAME_INTERVAL = 1000 / 30;
+    let lastFrame = 0;
+
     const animate = (time: number) => {
-      // Gradient background - more vibrant green
+      animationRef.current = requestAnimationFrame(animate);
+      if (!isVisible) return;
+      if (time - lastFrame < FRAME_INTERVAL) return;
+      lastFrame = time;
+
+      // Cache trig once per frame
+      const sinR = Math.sin(rotationRef.current);
+      const cosR = Math.cos(rotationRef.current);
+
+      // Gradient background
       const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       bgGradient.addColorStop(0, "hsl(45, 35%, 95%)");
       bgGradient.addColorStop(0.3, "hsl(50, 30%, 88%)");
       bgGradient.addColorStop(0.5, "hsl(140, 35%, 70%)");
       bgGradient.addColorStop(0.75, "hsl(150, 45%, 45%)");
       bgGradient.addColorStop(1, "hsl(155, 55%, 30%)");
-      
       ctx.fillStyle = bgGradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw sparkle particles
+      // Sparkle particles
       particlesRef.current.forEach((particle) => {
         const twinkle = Math.sin(time * particle.twinkleSpeed + particle.twinkleOffset) * 0.5 + 0.5;
         ctx.beginPath();
@@ -273,11 +308,10 @@ export const AnimatedBackground = () => {
         ctx.fill();
       });
 
-      // Update rotation
       rotationRef.current += 0.002;
       const rotation = rotationRef.current;
 
-      // Draw globe glow
+      // Globe glow
       const glowGradient = ctx.createRadialGradient(
         globeCenterX, globeCenterY, 0,
         globeCenterX, globeCenterY, globeRadius * 1.8
@@ -285,57 +319,41 @@ export const AnimatedBackground = () => {
       glowGradient.addColorStop(0, "hsla(150, 50%, 50%, 0.15)");
       glowGradient.addColorStop(0.4, "hsla(155, 45%, 40%, 0.08)");
       glowGradient.addColorStop(1, "hsla(155, 40%, 35%, 0)");
-      
       ctx.beginPath();
       ctx.arc(globeCenterX, globeCenterY, globeRadius * 1.8, 0, Math.PI * 2);
       ctx.fillStyle = glowGradient;
       ctx.fill();
 
-      // Draw globe sphere (subtle)
+      // Globe sphere
       const sphereGradient = ctx.createRadialGradient(
-        globeCenterX - globeRadius * 0.3, 
-        globeCenterY - globeRadius * 0.3, 
-        0,
-        globeCenterX, 
-        globeCenterY, 
-        globeRadius
+        globeCenterX - globeRadius * 0.3, globeCenterY - globeRadius * 0.3, 0,
+        globeCenterX, globeCenterY, globeRadius
       );
       sphereGradient.addColorStop(0, "hsla(150, 40%, 55%, 0.15)");
       sphereGradient.addColorStop(0.5, "hsla(155, 45%, 45%, 0.1)");
       sphereGradient.addColorStop(1, "hsla(160, 50%, 35%, 0.05)");
-      
       ctx.beginPath();
       ctx.arc(globeCenterX, globeCenterY, globeRadius, 0, Math.PI * 2);
       ctx.fillStyle = sphereGradient;
       ctx.fill();
 
-      // Update and sort nodes by z-depth
-      nodesRef.current.forEach((node) => {
+      // Project nodes once
+      const nodeData = nodesRef.current.map((node) => {
         const projected = projectPoint(node.x, node.y, node.z, rotation);
         node.screenX = projected.screenX;
         node.screenY = projected.screenY;
+        const z = node.x * sinR + node.z * cosR;
+        return { node, z };
       });
+      nodeData.sort((a, b) => a.z - b.z);
 
-      // Draw connections (back to front)
-      const sortedNodeIndices = nodesRef.current
-        .map((node, i) => ({ node, i }))
-        .sort((a, b) => {
-          const aZ = a.node.x * Math.sin(rotation) + a.node.z * Math.cos(rotation);
-          const bZ = b.node.x * Math.sin(rotation) + b.node.z * Math.cos(rotation);
-          return aZ - bZ;
-        });
-
-      // Draw connections
-      ctx.strokeStyle = "hsla(150, 50%, 55%, 0.3)";
+      // Connections
       ctx.lineWidth = 0.5;
-      
-      sortedNodeIndices.forEach(({ node, i }) => {
-        const nodeZ = node.x * Math.sin(rotation) + node.z * Math.cos(rotation);
-        if (nodeZ < 0.1) { // Only draw connections for visible side
+      nodeData.forEach(({ node, z: nodeZ }) => {
+        if (nodeZ < 0.1) {
           node.connections.forEach((connectionIdx) => {
             const otherNode = nodesRef.current[connectionIdx];
-            const otherZ = otherNode.x * Math.sin(rotation) + otherNode.z * Math.cos(rotation);
-            
+            const otherZ = otherNode.x * sinR + otherNode.z * cosR;
             if (otherZ < 0.1) {
               const opacity = Math.max(0, 0.4 - (nodeZ + otherZ) * 0.3);
               ctx.strokeStyle = `hsla(150, 55%, 55%, ${opacity})`;
@@ -348,27 +366,21 @@ export const AnimatedBackground = () => {
         }
       });
 
-      // Draw nodes
-      sortedNodeIndices.forEach(({ node }) => {
-        const nodeZ = node.x * Math.sin(rotation) + node.z * Math.cos(rotation);
+      // Nodes
+      nodeData.forEach(({ node, z: nodeZ }) => {
         if (nodeZ < 0.2) {
           const opacity = Math.max(0, 0.8 - nodeZ * 0.5);
           const size = node.size * (1 - nodeZ * 0.3);
-          
-          // Node glow
           const nodeGlow = ctx.createRadialGradient(
             node.screenX, node.screenY, 0,
             node.screenX, node.screenY, size * 3
           );
           nodeGlow.addColorStop(0, `hsla(150, 60%, 55%, ${opacity * 0.5})`);
           nodeGlow.addColorStop(1, "hsla(150, 60%, 55%, 0)");
-          
           ctx.beginPath();
           ctx.arc(node.screenX, node.screenY, size * 3, 0, Math.PI * 2);
           ctx.fillStyle = nodeGlow;
           ctx.fill();
-          
-          // Node point
           ctx.beginPath();
           ctx.arc(node.screenX, node.screenY, size, 0, Math.PI * 2);
           ctx.fillStyle = `hsla(150, 60%, 60%, ${opacity})`;
@@ -376,45 +388,51 @@ export const AnimatedBackground = () => {
         }
       });
 
-      // Draw floating icons
+      // Floating icons
       iconsRef.current.forEach((icon) => {
         icon.angle += icon.speed;
-        
         const iconX = Math.cos(icon.angle) * 1.3;
         const iconZ = Math.sin(icon.angle) * 1.3;
         const iconY = icon.y + Math.sin(time * 0.001 + icon.angle) * 0.1;
-        
         const projected = projectPoint(iconX, iconY, iconZ, rotation);
-        const iconZDepth = iconX * Math.sin(rotation) + iconZ * Math.cos(rotation);
-        
+        const iconZDepth = iconX * sinR + iconZ * cosR;
         if (iconZDepth < 0.3) {
           const opacity = Math.max(0, 0.8 - iconZDepth * 0.5);
           drawIcon(
-            projected.screenX,
-            projected.screenY,
-            icon.type,
-            icon.size * projected.scale,
-            opacity
+            projected.screenX, projected.screenY,
+            icon.type, icon.size * projected.scale, opacity
           );
         }
       });
 
-      // Add subtle horizon glow at bottom
+      // Horizon glow
       const horizonGlow = ctx.createLinearGradient(0, canvas.height * 0.7, 0, canvas.height);
       horizonGlow.addColorStop(0, "hsla(150, 50%, 45%, 0)");
       horizonGlow.addColorStop(1, "hsla(155, 55%, 35%, 0.1)");
       ctx.fillStyle = horizonGlow;
       ctx.fillRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3);
-
-      animationRef.current = requestAnimationFrame(animate);
     };
 
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
+
+    // Pause when canvas is offscreen
+    const io = new IntersectionObserver(
+      (entries) => { isVisible = entries[0]?.isIntersecting ?? true; },
+      { threshold: 0 }
+    );
+    io.observe(canvas);
+
+    // Pause when tab is hidden
+    const onVisibility = () => { isVisible = !document.hidden; };
+    document.addEventListener("visibilitychange", onVisibility);
+
     animationRef.current = requestAnimationFrame(animate);
 
     return () => {
       window.removeEventListener("resize", resizeCanvas);
+      document.removeEventListener("visibilitychange", onVisibility);
+      io.disconnect();
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
