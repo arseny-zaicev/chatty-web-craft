@@ -42,13 +42,36 @@ export const AnimatedBackground = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    // Skip heavy animation on small screens or reduced motion
+    const isSmallScreen = window.matchMedia("(max-width: 768px)").matches;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (isSmallScreen || reducedMotion) {
+      // Render a static gradient only
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const draw = () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        g.addColorStop(0, "hsl(45, 35%, 95%)");
+        g.addColorStop(0.5, "hsl(140, 35%, 70%)");
+        g.addColorStop(1, "hsl(155, 55%, 30%)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      };
+      draw();
+      window.addEventListener("resize", draw);
+      return () => window.removeEventListener("resize", draw);
+    }
+
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     // Globe settings
     let globeCenterX = 0;
     let globeCenterY = 0;
     let globeRadius = 0;
+    let isVisible = true;
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
