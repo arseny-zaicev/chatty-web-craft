@@ -45,42 +45,34 @@ const CustomCursor = () => {
       visible = true;
     };
 
-    const hovered = new WeakSet<Element>();
-    const addHover = () => dotRef.current?.classList.add('is-hovered');
-    const removeHover = () => dotRef.current?.classList.remove('is-hovered');
+    // Event delegation - no MutationObserver needed
+    const isInteractive = (target: EventTarget | null): boolean => {
+      if (!(target instanceof Element)) return false;
+      return !!target.closest('a, button, [role="button"]');
+    };
 
-    const attachHover = () => {
-      document.querySelectorAll<Element>('a, button').forEach(el => {
-        if (hovered.has(el)) return;
-        hovered.add(el);
-        el.addEventListener('mouseenter', addHover, { passive: true });
-        el.addEventListener('mouseleave', removeHover, { passive: true });
-      });
+    const onOver = (e: MouseEvent) => {
+      if (isInteractive(e.target)) dotRef.current?.classList.add('is-hovered');
+    };
+    const onOut = (e: MouseEvent) => {
+      if (isInteractive(e.target)) dotRef.current?.classList.remove('is-hovered');
     };
 
     rafId = requestAnimationFrame(tick);
     window.addEventListener('pointermove', onMove, { passive: true });
-    window.addEventListener('mousemove', onMove, { passive: true });
     document.addEventListener('mouseleave', onLeave, { passive: true });
     document.addEventListener('mouseenter', onEnter, { passive: true });
-    attachHover();
-
-    let mutationTimeout = 0;
-    const observer = new MutationObserver(() => {
-      clearTimeout(mutationTimeout);
-      mutationTimeout = window.setTimeout(() => attachHover(), 200);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('mouseover', onOver, { passive: true });
+    document.addEventListener('mouseout', onOut, { passive: true });
 
     return () => {
       running = false;
       cancelAnimationFrame(rafId);
-      clearTimeout(mutationTimeout);
       window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseleave', onLeave);
       document.removeEventListener('mouseenter', onEnter);
-      observer.disconnect();
+      document.removeEventListener('mouseover', onOver);
+      document.removeEventListener('mouseout', onOut);
     };
   }, []);
 
