@@ -105,7 +105,7 @@ export const AnimatedBackground = () => {
 
     const initNetworkNodes = () => {
       nodesRef.current = [];
-      const nodeCount = 80;
+      const nodeCount = 40;
       
       // Create nodes distributed on sphere surface
       for (let i = 0; i < nodeCount; i++) {
