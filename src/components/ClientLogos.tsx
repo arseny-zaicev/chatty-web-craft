@@ -9,15 +9,15 @@ import hffInteriorsLogo from "@/assets/logos/hff_interiors.png";
 import achintLogo from "@/assets/logos/achint.png";
 
 const clients = [
-  { name: "Salesforge", logo: salesforgeLogo },
-  { name: "Pathos", logo: pathosLogo },
-  { name: "FB Marketing", logo: fbMarketingLogo },
-  { name: "Enara Properties", logo: enaraLogo },
-  { name: "Prop AI", logo: propAiLogo },
-  { name: "More Convos", logo: moreConvosLogo },
-  { name: "Key Digital", logo: keyDigitalLogo },
-  { name: "HFF Interiors", logo: hffInteriorsLogo },
-  { name: "Achint", logo: achintLogo },
+  { name: "Salesforge", logo: salesforgeLogo, url: "https://www.salesforge.ai" },
+  { name: "Pathos", logo: pathosLogo, url: "https://pathos.ai" },
+  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://fbmarketinginc.com" },
+  { name: "Enara Properties", logo: enaraLogo, url: "https://enaraproperties.com" },
+  { name: "Prop AI", logo: propAiLogo, url: "https://prop-ai.com" },
+  { name: "More Convos", logo: moreConvosLogo, url: "https://moreconvos.com" },
+  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv" },
+  { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://hffinteriors.com" },
+  { name: "Achint", logo: achintLogo, url: "https://achint.com" },
 ];
 
 const track = [...clients, ...clients];
@@ -25,26 +25,12 @@ const track = [...clients, ...clients];
 export const ClientLogos = () => (
   <section
     style={{
-      background: 'linear-gradient(135deg, hsl(38 28% 84%) 0%, hsl(36 22% 90%) 35%, hsl(40 30% 86%) 60%, hsl(35 25% 88%) 100%)',
-      borderTop: '1px solid hsl(38 30% 80%)',
-      borderBottom: '1px solid hsl(34 22% 78%)',
+      background: 'transparent',
       padding: '3rem 0 2.75rem',
       position: 'relative',
       overflow: 'hidden',
     }}
   >
-    {/* Shimmer sweep overlay */}
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        background: 'linear-gradient(105deg, transparent 30%, hsl(42 60% 96% / 0.45) 50%, transparent 70%)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer-sweep 5s ease-in-out infinite',
-        pointerEvents: 'none',
-      }}
-    />
-
     {/* Label */}
     <p
       style={{
@@ -64,22 +50,14 @@ export const ClientLogos = () => (
 
     {/* Full-width marquee */}
     <div style={{ overflow: 'hidden', position: 'relative', width: '100%', zIndex: 1 }}>
-      {/* Fade edges */}
-      <div style={{
-        position: 'absolute', left: 0, top: 0, bottom: 0, width: '100px',
-        background: 'linear-gradient(to right, hsl(38 28% 84%), transparent)',
-        zIndex: 2, pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', right: 0, top: 0, bottom: 0, width: '100px',
-        background: 'linear-gradient(to left, hsl(35 25% 88%), transparent)',
-        zIndex: 2, pointerEvents: 'none',
-      }} />
-
       <div className="marquee-inner" style={{ willChange: 'transform' }}>
         {track.map((client, i) => (
-          <div
+          <a
             key={i}
+            href={client.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Visit ${client.name}`}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -87,6 +65,7 @@ export const ClientLogos = () => (
               padding: '0 3.5rem',
               height: '60px',
               flexShrink: 0,
+              textDecoration: 'none',
             }}
           >
             <img
@@ -112,7 +91,7 @@ export const ClientLogos = () => (
                 e.currentTarget.style.filter = 'grayscale(1) brightness(0.42)';
               }}
             />
-          </div>
+          </a>
         ))}
       </div>
     </div>
