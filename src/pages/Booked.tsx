@@ -1,8 +1,11 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { CheckCircle2, MessageCircle, Clock, FileText, Target } from "lucide-react";
+import { CheckCircle2, MessageCircle, Clock, FileText, Target, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
+import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
+import { ClientLogos } from "@/components/ClientLogos";
+import { usePageAnalytics } from "@/hooks/usePageAnalytics";
 
 const checklist = [
   { icon: Target, text: "Think about your ideal client profile and target market" },
@@ -11,6 +14,8 @@ const checklist = [
 ];
 
 const Booked = () => {
+  usePageAnalytics({ pageName: "booked" });
+
   return (
     <>
       <Helmet>
@@ -23,7 +28,7 @@ const Booked = () => {
         {/* Header */}
         <header className="py-6 border-b border-border/50">
           <div className="container mx-auto px-4">
-            <Link to="/" className="flex items-center gap-2 w-fit">
+            <Link to="/" className="flex items-center gap-2 w-fit" data-track="header_logo_home">
               <svg width="22" height="22" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-foreground">
                 <circle cx="32" cy="32" r="4.5" fill="currentColor"/>
                 <line x1="32" y1="8" x2="32" y2="22" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
@@ -58,7 +63,7 @@ const Booked = () => {
         {/* Loom Video */}
         <section className="pb-16 px-4">
           <div className="container mx-auto max-w-3xl">
-            <div className="rounded-2xl overflow-hidden shadow-xl border border-border">
+            <div className="rounded-2xl overflow-hidden shadow-xl border border-border" data-track="loom_video_container">
               <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
                 <iframe
                   src="https://www.loom.com/embed/7141dff6f84c48b6b5158651b861fa91?sid=autoplay"
@@ -91,6 +96,79 @@ const Booked = () => {
           </div>
         </section>
 
+        {/* Social proof: client logos + testimonial */}
+        <section className="pb-8 px-4 border-t border-border/50 pt-12">
+          <ClientLogos />
+        </section>
+
+        <section className="pb-16 px-4">
+          <div className="container mx-auto max-w-4xl">
+            <div className="text-center mb-10">
+              <p className="text-iskra-emerald text-xs font-semibold uppercase tracking-widest mb-3">
+                What clients say
+              </p>
+              <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground">
+                Real results, real people
+              </h2>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6 items-stretch">
+              {/* Video */}
+              <div className="bg-card border border-iskra-emerald/30 rounded-2xl p-5 shadow-lg">
+                <div className="aspect-[9/16] max-h-[520px] mx-auto bg-black rounded-xl overflow-hidden">
+                  <video
+                    src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
+                    poster={kristapsPhoto}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full h-full object-contain"
+                    data-track="testimonial_video"
+                  />
+                </div>
+              </div>
+
+              {/* Quote */}
+              <div className="bg-card border border-border rounded-2xl p-7 relative flex flex-col justify-between">
+                <div>
+                  <Quote className="w-8 h-8 text-iskra-emerald/25 mb-4" />
+                  <p className="text-base md:text-lg text-foreground leading-relaxed mb-6">
+                    "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
+                  </p>
+                  <div className="bg-iskra-emerald/10 rounded-xl p-4 border border-iskra-emerald/20 mb-6">
+                    <p className="text-xs font-medium text-iskra-emerald mb-1 uppercase tracking-wider">Result</p>
+                    <p className="font-display text-base md:text-lg font-bold text-foreground">
+                      500 messages → 8 meetings booked in 2 days
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 pt-4 border-t border-border/50">
+                  <img
+                    src={kristapsPhoto}
+                    alt="Kristaps"
+                    className="w-12 h-12 rounded-full object-cover object-top border-2 border-iskra-emerald/30"
+                  />
+                  <div>
+                    <p className="font-semibold text-foreground">Kristaps</p>
+                    <p className="text-sm text-muted-foreground">
+                      Founder,{" "}
+                      <a
+                        href="https://key-digital.lv"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-iskra-emerald hover:underline"
+                        data-track="testimonial_client_link"
+                      >
+                        key-digital.lv
+                      </a>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Founder + WhatsApp */}
         <section className="pb-16 px-4">
           <div className="container mx-auto max-w-2xl">
@@ -106,7 +184,12 @@ const Booked = () => {
               <p className="text-muted-foreground text-sm mb-5">
                 Message me directly - I usually reply within minutes.
               </p>
-              <a href="https://wa.me/971568785008" target="_blank" rel="noopener noreferrer">
+              <a
+                href="https://wa.me/971568785008"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-track="whatsapp_cta_main"
+              >
                 <Button size="lg" className="bg-[#25D366] hover:bg-[#20BD5A] text-primary-foreground gap-2 text-base px-6 py-5 shadow-lg">
                   <MessageCircle className="w-5 h-5" />
                   Message on WhatsApp

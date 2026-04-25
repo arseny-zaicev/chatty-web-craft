@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
@@ -5,13 +6,29 @@ import { WhatsAppFloat } from "@/components/WhatsAppFloat";
 import { ClientLogos } from "@/components/ClientLogos";
 import { CampaignTypes } from "@/components/CampaignTypes";
 import { HowItWorks } from "@/components/HowItWorks";
-import { ClientDashboardPreview } from "@/components/whatsapp/ClientDashboardPreview";
-import { Testimonials } from "@/components/Testimonials";
-import { ROICalculator } from "@/components/whatsapp/ROICalculator";
-import { Pricing } from "@/components/Pricing";
-import { FAQ } from "@/components/FAQ";
-import { FounderSection } from "@/components/FounderSection";
 import { Footer } from "@/components/Footer";
+
+// Below-the-fold sections - load on demand to reduce initial JS
+const ClientDashboardPreview = lazy(() =>
+  import("@/components/whatsapp/ClientDashboardPreview").then((m) => ({ default: m.ClientDashboardPreview }))
+);
+const Testimonials = lazy(() =>
+  import("@/components/Testimonials").then((m) => ({ default: m.Testimonials }))
+);
+const ROICalculator = lazy(() =>
+  import("@/components/whatsapp/ROICalculator").then((m) => ({ default: m.ROICalculator }))
+);
+const Pricing = lazy(() =>
+  import("@/components/Pricing").then((m) => ({ default: m.Pricing }))
+);
+const FAQ = lazy(() =>
+  import("@/components/FAQ").then((m) => ({ default: m.FAQ }))
+);
+const FounderSection = lazy(() =>
+  import("@/components/FounderSection").then((m) => ({ default: m.FounderSection }))
+);
+
+const SectionFallback = () => <div style={{ minHeight: 400 }} aria-hidden="true" />;
 
 const Index = () => {
   return (
@@ -57,12 +74,14 @@ const Index = () => {
         <ClientLogos />
         <CampaignTypes />
         <HowItWorks />
-        <ClientDashboardPreview />
-        <Testimonials />
-        <ROICalculator />
-        <Pricing />
-        <FAQ />
-        <FounderSection />
+        <Suspense fallback={<SectionFallback />}>
+          <ClientDashboardPreview />
+          <Testimonials />
+          <ROICalculator />
+          <Pricing />
+          <FAQ />
+          <FounderSection />
+        </Suspense>
         <Footer />
       </main>
     </>
