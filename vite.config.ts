@@ -15,4 +15,27 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    target: "es2020",
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router-dom"],
+          "ui-vendor": [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-dropdown-menu",
+            "@radix-ui/react-popover",
+            "@radix-ui/react-tooltip",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-accordion",
+          ],
+          motion: ["framer-motion"],
+          supabase: ["@supabase/supabase-js"],
+          forms: ["react-hook-form", "zod", "@hookform/resolvers"],
+          query: ["@tanstack/react-query"],
+        },
+      },
+    },
+  },
 }));
