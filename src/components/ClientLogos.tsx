@@ -6,9 +6,9 @@ import hffInteriorsLogo from "@/assets/logos/hff_interiors.png";
 import sophiasLogo from "@/assets/logos/sophias.png";
 import redroverLogo from "@/assets/logos/redrover.avif";
 import revbizLogo from "@/assets/logos/revbiz.webp";
-import koldleadsLogo from "@/assets/logos/koldleads.webp";
+import koldleadsLogo from "@/assets/logos/koldleads.png";
 import cleon1Logo from "@/assets/logos/cleon1.png";
-import pluralsalesLogo from "@/assets/logos/pluralsales.png";
+import pluralsalesLogo from "@/assets/logos/pluralsales.svg";
 import recruitcloudLogo from "@/assets/logos/recruitcloud.avif";
 
 const clients = [
