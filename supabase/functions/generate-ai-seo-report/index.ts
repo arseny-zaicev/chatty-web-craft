@@ -10,27 +10,41 @@ interface ReqBody {
   website_url: string;
 }
 
-const SYSTEM_PROMPT = `You are an expert AI SEO analyst specialized in Generative Engine Optimization (GEO) and how brands appear in AI-powered search results like Google AI Overviews, ChatGPT, Perplexity, and Gemini.
+// Restrict access to specific clients only
+const ALLOWED_EMAILS = new Set<string>([
+  "paras@pndigital.co.uk",
+]);
 
-Given a website URL, you must produce a realistic, plausible AI SEO opportunity report estimating how much organic visibility this brand is currently MISSING in AI-powered search.
+const SYSTEM_PROMPT = `You are an expert AI SEO analyst specialized in Generative Engine Optimization (GEO) - how brands appear in AI-powered search results like Google AI Overviews, ChatGPT, Perplexity, and Gemini.
 
-Be specific to the brand's actual industry inferred from the URL/domain. Numbers should be realistic for a small-to-mid agency or business (not millions). Use UK-style English when domain ends in .co.uk.
+You will be given:
+1. A website URL
+2. The actual scraped text content from that website (homepage + meta info)
+
+Your task: produce a HIGHLY brand-specific AI SEO opportunity report based on the REAL content of the site - what services/products they actually offer, who they serve, and where their actual target customers would search.
+
+CRITICAL RULES:
+- Base every query, every competitor, every recommendation on the ACTUAL content of the scraped website. Do NOT invent unrelated industries.
+- If the site is a digital agency, queries should be about agency services they offer.
+- If the site is e-commerce, queries about their products.
+- Identify the ACTUAL target geography from the content (city, country mentioned).
+- Competitor names in AI Overview simulations must be plausible REAL competitors in that exact niche & geography.
+- Use UK-style English when domain ends in .co.uk.
 
 Tone: professional, data-driven, slightly alarming - this is a sales report meant to show the prospect what they're losing.`;
 
 const REPORT_SCHEMA = {
   type: "object",
   properties: {
-    company_name: { type: "string", description: "Inferred company name" },
-    industry: { type: "string", description: "Inferred industry / niche" },
+    company_name: { type: "string", description: "Real company name from the scraped content" },
+    industry: { type: "string", description: "Specific industry / niche based on actual site content" },
     summary: {
       type: "string",
-      description: "2-3 sentence executive summary of the opportunity",
+      description: "2-3 sentence executive summary referencing what THIS specific brand actually does",
     },
     lost_monthly_impressions: {
       type: "integer",
-      description:
-        "Realistic estimated monthly impressions the brand is losing in AI search results. Range 5,000 - 250,000 depending on niche size.",
+      description: "Realistic estimated monthly impressions missed in AI search. Range 5,000 - 250,000.",
     },
     potential_customers_monthly: {
       type: "integer",
@@ -43,25 +57,16 @@ const REPORT_SCHEMA = {
     missed_queries: {
       type: "array",
       description:
-        "6-8 high-intent queries where this brand should appear in AI results but doesn't. Real keywords related to their service.",
+        "6-8 high-intent queries DIRECTLY related to the actual services/products from the scraped content",
       items: {
         type: "object",
         properties: {
           query: { type: "string" },
           monthly_volume: { type: "integer" },
-          intent: {
-            type: "string",
-            enum: ["commercial", "transactional", "informational"],
-          },
+          intent: { type: "string", enum: ["commercial", "transactional", "informational"] },
           ai_platform: {
             type: "string",
-            enum: [
-              "Google AI Overview",
-              "ChatGPT",
-              "Perplexity",
-              "Gemini",
-              "Google SGE",
-            ],
+            enum: ["Google AI Overview", "ChatGPT", "Perplexity", "Gemini", "Google SGE"],
           },
         },
         required: ["query", "monthly_volume", "intent", "ai_platform"],
@@ -70,20 +75,16 @@ const REPORT_SCHEMA = {
     ai_overview_simulations: {
       type: "array",
       description:
-        "3 simulated Google AI Overview answers for queries in this brand's space, written as Google would render them. These should mention COMPETITORS, not the brand - to show what the brand is missing.",
+        "3 simulated Google AI Overview answers for queries DIRECTLY relevant to this brand's actual services. Mention 2-3 plausible real competitor brand names in the SAME niche & geography. Do NOT mention this brand.",
       items: {
         type: "object",
         properties: {
-          query: { type: "string", description: "The user's search query" },
-          ai_answer: {
-            type: "string",
-            description:
-              "A 3-4 sentence AI-generated answer as Google AI Overview would write it, mentioning 2-3 competitor brands by plausible names.",
-          },
+          query: { type: "string" },
+          ai_answer: { type: "string", description: "3-4 sentence AI Overview answer mentioning competitor brands" },
           cited_competitors: {
             type: "array",
             items: { type: "string" },
-            description: "Names of competitor brands cited in the AI answer",
+            description: "Names of competitor brands cited",
           },
         },
         required: ["query", "ai_answer", "cited_competitors"],
@@ -91,7 +92,7 @@ const REPORT_SCHEMA = {
     },
     recommendations: {
       type: "array",
-      description: "4-6 specific actionable recommendations to fix this",
+      description: "4-6 specific actionable recommendations referencing this brand's actual services",
       items: {
         type: "object",
         properties: {
@@ -117,13 +118,80 @@ const REPORT_SCHEMA = {
   ],
 };
 
+// Strip HTML to plain text and extract meta info
+function extractTextFromHtml(html: string): { text: string; title: string; description: string } {
+  // Title
+  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = (titleMatch?.[1] || "").trim();
+
+  // Meta description
+  const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
+  const description = (descMatch?.[1] || "").trim();
+
+  // Strip scripts/styles/noscript
+  let text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    // Convert headings/paragraphs/li to newlines
+    .replace(/<\/(h[1-6]|p|li|div|section|article|header|footer)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    // Strip remaining tags
+    .replace(/<[^>]+>/g, " ")
+    // Decode common entities
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    // Collapse whitespace
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  // Cap at ~12k characters to leave room in the prompt
+  if (text.length > 12000) text = text.slice(0, 12000) + "\n…[truncated]";
+
+  return { text, title, description };
+}
+
+async function scrapeWebsite(url: string): Promise<{ text: string; title: string; description: string } | null> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const resp = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; IskraSEOBot/1.0; +https://iskra.ae)",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      signal: ctrl.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (!resp.ok) {
+      console.warn("scrape non-200", resp.status, url);
+      return null;
+    }
+    const html = await resp.text();
+    return extractTextFromHtml(html);
+  } catch (e) {
+    console.warn("scrape failed", e);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing auth" }), {
@@ -149,6 +217,15 @@ Deno.serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Restrict access
+    const email = (userData.user.email || "").toLowerCase();
+    if (!ALLOWED_EMAILS.has(email)) {
+      return new Response(
+        JSON.stringify({ error: "This feature is not available for your account." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const body = (await req.json()) as ReqBody;
@@ -180,7 +257,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Call Lovable AI
+    // Scrape the actual website
+    const scraped = await scrapeWebsite(url);
+    const scrapedBlock = scraped
+      ? `SCRAPED CONTENT FROM ${url}\n--------\nTitle: ${scraped.title}\nMeta description: ${scraped.description}\n\nPage text:\n${scraped.text}`
+      : `NOTE: Could not scrape ${url}. Infer the brand context only from the domain name itself, conservatively.`;
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY missing");
@@ -201,7 +283,7 @@ Deno.serve(async (req) => {
             {
               role: "user",
               content:
-                `Analyze this website and produce the AI SEO opportunity report: ${url}\n\nInfer the industry from the domain and produce realistic, brand-specific data.`,
+                `Analyze the following website and produce the AI SEO opportunity report.\n\nWebsite: ${url}\n\n${scrapedBlock}\n\nProduce a report that is SPECIFIC to the actual services / products described in the scraped content above. Do not invent unrelated industries.`,
             },
           ],
           tools: [
@@ -209,8 +291,7 @@ Deno.serve(async (req) => {
               type: "function",
               function: {
                 name: "produce_ai_seo_report",
-                description:
-                  "Return the structured AI SEO opportunity report.",
+                description: "Return the structured AI SEO opportunity report.",
                 parameters: REPORT_SCHEMA,
               },
             },

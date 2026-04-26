@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,19 @@ import {
   AlertCircle,
   Plus,
   ExternalLink,
+  Download,
 } from "lucide-react";
 import { User } from "@supabase/supabase-js";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+const ALLOWED_EMAILS = new Set<string>(["paras@pndigital.co.uk"]);
+const PN_BRAND = {
+  name: "PN Digital",
+  url: "https://pndigital.co.uk",
+  primary: "#0B5FFF",
+  dark: "#0A1F44",
+};
 
 interface MissedQuery {
   query: string;
@@ -82,6 +93,12 @@ const AISeoReport = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) {
         navigate("/client-auth");
+        return;
+      }
+      const email = (session.user.email || "").toLowerCase();
+      if (!ALLOWED_EMAILS.has(email)) {
+        toast.error("This feature is not available for your account.");
+        navigate("/client-portal");
         return;
       }
       setUser(session.user);
@@ -368,6 +385,52 @@ const ReportView = ({
   fmt: (n: number) => string;
 }) => {
   const d = report.report_data;
+  const pdfRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!pdfRef.current) return;
+    setIsExporting(true);
+    try {
+      const node = pdfRef.current;
+      const canvas = await html2canvas(node, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        windowWidth: node.scrollWidth,
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Multi-page slicing
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const safeName = (d?.company_name || report.website_url)
+        .replace(/[^a-z0-9]+/gi, "-")
+        .toLowerCase();
+      pdf.save(`${PN_BRAND.name.replace(/\s+/g, "-")}-AI-SEO-Report-${safeName}.pdf`);
+      toast.success("PDF downloaded");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to generate PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (!d || !d.summary) {
     return (
       <Card>
@@ -381,35 +444,69 @@ const ReportView = ({
 
   return (
     <div className="space-y-6 mt-6">
-      {/* Header */}
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardContent className="py-6">
-          <div className="flex items-start gap-3 mb-4">
-            <img
-              src={`https://www.google.com/s2/favicons?domain=${report.website_url}&sz=64`}
-              alt=""
-              className="w-10 h-10 rounded"
-            />
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold">
-                Insight Report for {d.company_name}
-              </h2>
-              <a
-                href={report.website_url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+      <div className="flex justify-end">
+        <Button onClick={handleDownloadPDF} disabled={isExporting} size="sm">
+          {isExporting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Preparing PDF
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4 mr-2" /> Download branded PDF
+            </>
+          )}
+        </Button>
+      </div>
+
+      <div ref={pdfRef} className="bg-white text-slate-900 p-6 rounded-lg space-y-6">
+        {/* PN Digital branded cover header */}
+        <div
+          className="rounded-lg p-6 text-white"
+          style={{
+            background: `linear-gradient(135deg, ${PN_BRAND.dark} 0%, ${PN_BRAND.primary} 100%)`,
+          }}
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-11 h-11 rounded-md flex items-center justify-center font-bold text-lg"
+                style={{ background: "#ffffff", color: PN_BRAND.dark }}
               >
-                {report.website_url} <ExternalLink className="h-3 w-3" />
-              </a>
-              <div className="text-sm text-muted-foreground mt-1">
-                Industry: {d.industry}
+                PN
+              </div>
+              <div>
+                <div className="font-bold text-lg leading-tight">{PN_BRAND.name}</div>
+                <div className="text-xs opacity-80">{PN_BRAND.url}</div>
               </div>
             </div>
+            <div className="text-right text-xs opacity-80">
+              <div>AI SEO Insight Report</div>
+              <div>{new Date(report.created_at).toLocaleDateString()}</div>
+            </div>
           </div>
-          <p className="text-foreground/90 leading-relaxed">{d.summary}</p>
-        </CardContent>
-      </Card>
+          <h1 className="text-3xl font-bold mb-2">
+            AI SEO Opportunity Report
+          </h1>
+          <div className="text-sm opacity-90 mb-1">Prepared for</div>
+          <div className="text-2xl font-semibold">{d.company_name}</div>
+          <a
+            href={report.website_url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm opacity-90 underline"
+          >
+            {report.website_url}
+          </a>
+          <div className="text-xs opacity-75 mt-2">Industry: {d.industry}</div>
+        </div>
+
+        {/* Executive summary */}
+        <div className="border border-slate-200 rounded-lg p-5">
+          <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">
+            Executive Summary
+          </div>
+          <p className="text-slate-800 leading-relaxed">{d.summary}</p>
+        </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -577,6 +674,7 @@ const ReportView = ({
           ))}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
