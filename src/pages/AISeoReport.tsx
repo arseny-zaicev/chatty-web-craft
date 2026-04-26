@@ -507,25 +507,6 @@ const ReportView = ({
           </div>
           <p className="text-slate-800 leading-relaxed">{d.summary}</p>
         </div>
-              <h2 className="text-2xl font-bold">
-                Insight Report for {d.company_name}
-              </h2>
-              <a
-                href={report.website_url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-              >
-                {report.website_url} <ExternalLink className="h-3 w-3" />
-              </a>
-              <div className="text-sm text-muted-foreground mt-1">
-                Industry: {d.industry}
-              </div>
-            </div>
-          </div>
-          <p className="text-foreground/90 leading-relaxed">{d.summary}</p>
-        </CardContent>
-      </Card>
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -693,6 +674,7 @@ const ReportView = ({
           ))}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
