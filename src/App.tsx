@@ -57,6 +57,7 @@ const App = () => (
               <Route path="/client-auth" element={<ClientAuth />} />
               <Route path="/client-portal" element={<ClientPortal />} />
               <Route path="/client-stats" element={<ClientStats />} />
+              <Route path="/client-portal/ai-seo" element={<AISeoReport />} />
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/apply" element={<Apply />} />
