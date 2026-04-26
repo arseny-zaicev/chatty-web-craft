@@ -95,6 +95,12 @@ const AISeoReport = () => {
         navigate("/client-auth");
         return;
       }
+      const email = (session.user.email || "").toLowerCase();
+      if (!ALLOWED_EMAILS.has(email)) {
+        toast.error("This feature is not available for your account.");
+        navigate("/client-portal");
+        return;
+      }
       setUser(session.user);
       loadReports();
     });
