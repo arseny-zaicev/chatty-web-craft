@@ -19,6 +19,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const ClientAuth = lazy(() => import("./pages/ClientAuth"));
 const ClientPortal = lazy(() => import("./pages/ClientPortal"));
 const ClientStats = lazy(() => import("./pages/ClientStats"));
+const AISeoReport = lazy(() => import("./pages/AISeoReport"));
 const AdminAuth = lazy(() => import("./pages/AdminAuth"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 const Apply = lazy(() => import("./pages/Apply"));
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/client-auth" element={<ClientAuth />} />
               <Route path="/client-portal" element={<ClientPortal />} />
               <Route path="/client-stats" element={<ClientStats />} />
+              <Route path="/client-portal/ai-seo" element={<AISeoReport />} />
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/apply" element={<Apply />} />
