@@ -19,6 +19,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const ClientAuth = lazy(() => import("./pages/ClientAuth"));
 const ClientPortal = lazy(() => import("./pages/ClientPortal"));
 const ClientStats = lazy(() => import("./pages/ClientStats"));
+const AISeoReport = lazy(() => import("./pages/AISeoReport"));
 const AdminAuth = lazy(() => import("./pages/AdminAuth"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 const Apply = lazy(() => import("./pages/Apply"));
