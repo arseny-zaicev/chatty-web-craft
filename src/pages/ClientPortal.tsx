@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, Download, Filter, HelpCircle, Image, ExternalLink } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw, Phone, MapPin, User as UserIcon, Calendar, MessageSquare, Copy, Check, PhoneCall, PhoneOff, PhoneMissed, Bell, BarChart3, Download, Filter, HelpCircle, Image, ExternalLink, Sparkles } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ClientData {
