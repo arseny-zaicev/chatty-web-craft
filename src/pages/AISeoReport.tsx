@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,19 @@ import {
   AlertCircle,
   Plus,
   ExternalLink,
+  Download,
 } from "lucide-react";
 import { User } from "@supabase/supabase-js";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+const ALLOWED_EMAILS = new Set<string>(["paras@pndigital.co.uk"]);
+const PN_BRAND = {
+  name: "PN Digital",
+  url: "https://pndigital.co.uk",
+  primary: "#0B5FFF",
+  dark: "#0A1F44",
+};
 
 interface MissedQuery {
   query: string;
