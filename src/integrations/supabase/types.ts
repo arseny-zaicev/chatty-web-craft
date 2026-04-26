@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_seo_reports: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          id: string
+          industry: string | null
+          lost_monthly_impressions: number | null
+          report_data: Json
+          status: string
+          updated_at: string
+          user_id: string
+          website_url: string
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          id?: string
+          industry?: string | null
+          lost_monthly_impressions?: number | null
+          report_data?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+          website_url: string
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          id?: string
+          industry?: string | null
+          lost_monthly_impressions?: number | null
+          report_data?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+          website_url?: string
+        }
+        Relationships: []
+      }
       client_leads: {
         Row: {
           client_id: string
