@@ -326,12 +326,14 @@ const ClientPortal = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/client-portal/ai-seo">
-              <Button variant="outline" size="sm">
-                <Sparkles className="h-4 w-4 md:mr-2" />
-                <span className="hidden md:inline">AI SEO Report</span>
-              </Button>
-            </Link>
+            {user?.email?.toLowerCase() === "paras@pndigital.co.uk" && (
+              <Link to="/client-portal/ai-seo">
+                <Button variant="outline" size="sm">
+                  <Sparkles className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">AI SEO Report</span>
+                </Button>
+              </Link>
+            )}
             <Link to="/client-stats">
               <Button variant="outline" size="sm">
                 <BarChart3 className="h-4 w-4 md:mr-2" />
