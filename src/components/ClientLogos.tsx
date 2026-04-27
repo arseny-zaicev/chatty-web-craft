@@ -62,12 +62,14 @@ export const ClientLogos = () => (
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`Visit ${client.name}`}
+            className="client-logo-link"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               padding: '0 3rem',
               height: '80px',
+              width: '220px',
               flexShrink: 0,
               textDecoration: 'none',
             }}
@@ -77,6 +79,10 @@ export const ClientLogos = () => (
               alt={`${client.name} logo`}
               loading="eager"
               decoding="async"
+              draggable={false}
+              width={170}
+              height={48}
+              className="client-logo-img"
               style={{
                 height: '48px',
                 width: 'auto',
@@ -84,15 +90,10 @@ export const ClientLogos = () => (
                 objectFit: 'contain',
                 filter: 'grayscale(1) brightness(0.42)',
                 opacity: 0.65,
-                transition: 'opacity 0.3s, filter 0.3s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = '0.95';
-                e.currentTarget.style.filter = 'grayscale(0) brightness(1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '0.65';
-                e.currentTarget.style.filter = 'grayscale(1) brightness(0.42)';
+                transition: 'opacity 0.3s ease, filter 0.3s ease',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transform: 'translateZ(0)',
               }}
             />
           </a>

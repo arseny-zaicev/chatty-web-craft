@@ -367,6 +367,18 @@
     animation-play-state: paused;
   }
 
+  .client-logo-link:hover .client-logo-img {
+    opacity: 0.95 !important;
+    filter: grayscale(0) brightness(1) !important;
+  }
+
+  @media (hover: none) {
+    .client-logo-link:hover .client-logo-img {
+      opacity: 0.65 !important;
+      filter: grayscale(1) brightness(0.42) !important;
+    }
+  }
+
   .marquee-logo-item {
     display: flex;
     align-items: center;
