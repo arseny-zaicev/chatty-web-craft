@@ -10,6 +10,8 @@ import koldleadsLogo from "@/assets/logos/koldleads.png";
 import cleon1Logo from "@/assets/logos/cleon1.png";
 import pluralsalesLogo from "@/assets/logos/pluralsales.svg";
 import recruitcloudLogo from "@/assets/logos/recruitcloud.avif";
+import undergroundEcomLogo from "@/assets/logos/underground_ecom.svg";
+import pnDigitalLogo from "@/assets/logos/pn_digital.svg";
 
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://salesforge.ai" },
@@ -24,6 +26,8 @@ const clients = [
   { name: "Cleon1", logo: cleon1Logo, url: "https://cleon1.com" },
   { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com" },
   { name: "RecruitCloud", logo: recruitcloudLogo, url: "https://www.recruitcloud.io" },
+  { name: "Underground Ecom", logo: undergroundEcomLogo, url: "https://www.undergroundecom.com" },
+  { name: "PN Digital", logo: pnDigitalLogo, url: "https://pndigital.co.uk" },
 ];
 
 const track = [...clients, ...clients];

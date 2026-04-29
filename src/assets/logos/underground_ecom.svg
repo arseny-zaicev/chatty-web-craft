@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" fill="none">
+  <g fill="#111">
+    <!-- U mark (chevron stack) -->
+    <path d="M30 12 L70 12 L70 28 L46 28 L46 44 L70 44 L70 60 L46 60 L46 76 L70 76 L70 92 L30 92 Z"/>
+    <path d="M78 12 L118 12 L118 28 L94 28 L94 44 L118 44 L118 60 L94 60 L94 76 L118 76 L118 92 L78 92 Z" opacity=".55"/>
+  </g>
+  <g fill="#111" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="34" letter-spacing="1">
+    <text x="148" y="52">UNDERGROUND</text>
+    <text x="148" y="92">ECOM</text>
+  </g>
+</svg>
