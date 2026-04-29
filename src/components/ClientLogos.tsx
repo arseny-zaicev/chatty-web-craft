@@ -15,19 +15,19 @@ import pnDigitalLogo from "@/assets/logos/pn_digital.svg";
 
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://salesforge.ai" },
-  { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com" },
-  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://instagram.com/f.b.marketing" },
-  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv" },
-  { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://www.hffinteriors.ae" },
-  { name: "Sophias", logo: sophiasLogo, url: "https://sophias.io" },
+  { name: "Underground Ecom", logo: undergroundEcomLogo, url: "https://www.undergroundecom.com" },
   { name: "RedRover", logo: redroverLogo, url: "https://tryredrover.com" },
   { name: "The Revenue", logo: revbizLogo, url: "https://therevenue.biz" },
-  { name: "KoldLeads", logo: koldleadsLogo, url: "https://www.youtube.com/@karstonfox" },
+  { name: "PN Digital", logo: pnDigitalLogo, url: "https://pndigital.co.uk" },
+  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv" },
+  { name: "RecruitCloud", logo: recruitcloudLogo, url: "https://www.recruitcloud.io" },
+  { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com" },
   { name: "Cleon1", logo: cleon1Logo, url: "https://cleon1.com" },
   { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com" },
-  { name: "RecruitCloud", logo: recruitcloudLogo, url: "https://www.recruitcloud.io" },
-  { name: "Underground Ecom", logo: undergroundEcomLogo, url: "https://www.undergroundecom.com" },
-  { name: "PN Digital", logo: pnDigitalLogo, url: "https://pndigital.co.uk" },
+  { name: "Sophias", logo: sophiasLogo, url: "https://sophias.io" },
+  { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://www.hffinteriors.ae" },
+  { name: "KoldLeads", logo: koldleadsLogo, url: "https://www.youtube.com/@karstonfox" },
+  { name: "FB Marketing", logo: fbMarketingLogo, url: "https://instagram.com/f.b.marketing" },
 ];
 
 const track = [...clients, ...clients];
