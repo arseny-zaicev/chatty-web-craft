@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" fill="none">
+  <g fill="#111">
+    <path d="M30 16 L74 16 L74 32 L46 32 L46 48 L70 48 L70 64 L46 64 L46 94 L30 94 Z"/>
+    <path d="M82 16 L98 16 L98 94 L82 94 Z" opacity=".55"/>
+  </g>
+  <g fill="#111" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="42" letter-spacing="0.5">
+    <text x="120" y="68">FB Marketing</text>
+  </g>
+</svg>

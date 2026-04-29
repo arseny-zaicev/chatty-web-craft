@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" fill="none">
   <g fill="#111">
-    <path d="M30 16 L46 16 L46 48 L74 16 L94 16 L62 52 L96 94 L76 94 L46 58 L46 94 L30 94 Z"/>
+    <path d="M40 20 L80 20 L80 36 L56 36 L56 46 L80 46 L80 90 L40 90 L40 74 L64 74 L64 64 L40 64 Z"/>
   </g>
   <g fill="#111" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="44" letter-spacing="0.5">
-    <text x="115" y="70">Key Digital</text>
+    <text x="110" y="70">Salesforge</text>
   </g>
 </svg>

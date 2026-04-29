@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" fill="none">
+  <g fill="#111">
+    <path d="M30 16 L66 16 C82 16 92 26 92 40 C92 50 86 58 76 62 L94 94 L74 94 L60 66 L46 66 L46 94 L30 94 Z M46 32 L46 50 L64 50 C70 50 74 46 74 41 C74 36 70 32 64 32 Z"/>
+  </g>
+  <g fill="#111" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="42" letter-spacing="0.5">
+    <text x="115" y="70">RecruitCloud</text>
+  </g>
+</svg>

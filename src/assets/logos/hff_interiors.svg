@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" fill="none">
+  <g fill="#111">
+    <path d="M30 16 L46 16 L46 48 L74 48 L74 16 L90 16 L90 94 L74 94 L74 64 L46 64 L46 94 L30 94 Z"/>
+  </g>
+  <g fill="#111" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="40" letter-spacing="0.5">
+    <text x="110" y="52">HFF</text>
+    <text x="110" y="92" font-size="28" font-weight="600">INTERIORS</text>
+  </g>
+</svg>
