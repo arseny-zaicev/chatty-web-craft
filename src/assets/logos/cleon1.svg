@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" fill="none">
+  <g fill="#111">
+    <path d="M62 14 C82 14 96 28 96 48 L96 62 C96 82 82 96 62 96 C42 96 28 82 28 62 L28 48 C28 28 42 14 62 14 Z M62 30 C52 30 44 38 44 48 L44 62 C44 72 52 80 62 80 L80 80 L80 62 L62 62 L62 48 L80 48 L80 30 Z"/>
+  </g>
+  <g fill="#111" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="44" letter-spacing="0.5">
+    <text x="115" y="70">Cleon1</text>
+  </g>
+</svg>
