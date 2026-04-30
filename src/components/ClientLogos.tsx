@@ -88,12 +88,13 @@ export const ClientLogos = () => (
               height={48}
               className="client-logo-img"
               style={{
-                height: '48px',
+                height: '52px',
                 width: 'auto',
-                maxWidth: '170px',
+                maxWidth: '180px',
                 objectFit: 'contain',
-                filter: 'grayscale(1) brightness(0.42)',
-                opacity: 0.65,
+                filter: 'grayscale(1) contrast(1.1)',
+                opacity: 0.78,
+                mixBlendMode: 'multiply',
                 transition: 'opacity 0.3s ease, filter 0.3s ease',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
