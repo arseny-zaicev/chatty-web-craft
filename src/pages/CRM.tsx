@@ -279,6 +279,9 @@ const CRM = () => {
             <h1 className="font-display text-lg tracking-tight">CRM Inbox</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/pipeline")}>
+              Pipeline
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
               Admin
             </Button>
