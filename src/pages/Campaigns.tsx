@@ -98,6 +98,22 @@ const Campaigns = () => {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Launch failed"),
   });
 
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedNumber) throw new Error("Pick a sending number first");
+      const { data: res, error } = await supabase.functions.invoke("campaigns", {
+        body: { action: "sync_templates", whatsapp_number_id: selectedNumber },
+      });
+      if (error) throw error;
+      if ((res as { error?: string })?.error) throw new Error((res as { error: string }).error);
+      return res as { fetched: number; upserted: number };
+    },
+    onSuccess: async (res) => {
+      toast.success(`Synced ${res.upserted}/${res.fetched} templates`);
+      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Sync failed"),
+  });
   const loadChats = () => {
     setCsv(["phone,name,conversation_id", ...conversations.map((c) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
   };
