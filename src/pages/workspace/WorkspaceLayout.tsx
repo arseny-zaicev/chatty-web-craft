@@ -1,11 +1,12 @@
-import { Outlet, useNavigate, useParams } from "react-router-dom";
+import { Link, Outlet, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WorkspaceSidebar } from "@/components/workspace/WorkspaceSidebar";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export type WorkspaceContext = { workspace: Workspace };
 
@@ -29,6 +30,10 @@ export default function WorkspaceLayout() {
           <div className="flex-1 flex flex-col min-w-0">
             <header className="h-12 px-3 border-b border-border flex items-center gap-3 bg-card/40">
               <SidebarTrigger />
+              <Button asChild variant="ghost" size="sm" className="gap-1 h-8 px-2">
+                <Link to="/admin"><ArrowLeft className="w-4 h-4" />Admin</Link>
+              </Button>
+              <div className="w-px h-5 bg-border" />
               <div className="flex items-center gap-2 min-w-0">
                 {workspace && <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: workspace.color }} />}
                 <h1 className="font-display text-sm truncate">{workspace?.name ?? (slug === "new" ? "New client" : "Workspaces")}</h1>

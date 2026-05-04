@@ -884,27 +884,12 @@ const AdminPanel = () => {
             </Button>
 
             <div className="w-px h-5 bg-border mx-2" />
-            <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">WhatsApp</span>
+            <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">WhatsApp Ops</span>
             <Button asChild variant="ghost" size="sm" className="gap-2">
-              <Link to="/ws"><Building2 className="h-4 w-4" />Workspaces</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="gap-2">
-              <Link to="/ws/company15/inbox"><Inbox className="h-4 w-4" />Inbox</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="gap-2">
-              <Link to="/ws/company15/pipeline"><KanbanSquare className="h-4 w-4" />Pipeline</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="gap-2">
-              <Link to="/ws/company15/templates"><FileText className="h-4 w-4" />Templates</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="gap-2">
-              <Link to="/ws/company15/numbers"><Phone className="h-4 w-4" />Numbers</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="gap-2">
-              <Link to="/ws/company15/campaigns"><Megaphone className="h-4 w-4" />Campaigns</Link>
+              <Link to="/ws/company15/inbox"><Building2 className="h-4 w-4" />Open workspace</Link>
             </Button>
             <Button asChild variant="default" size="sm" className="gap-2">
-              <Link to="/ws/company15/launch"><Rocket className="h-4 w-4" />Launch</Link>
+              <Link to="/ws/company15/launch"><Rocket className="h-4 w-4" />Launch campaign</Link>
             </Button>
           </div>
         </div>
