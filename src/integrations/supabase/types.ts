@@ -53,6 +53,138 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_recipients: {
+        Row: {
+          campaign_id: string
+          contact_name: string | null
+          contact_phone: string
+          conversation_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          provider_message_id: string | null
+          scheduled_at: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["campaign_recipient_status"]
+          updated_at: string
+          user_id: string
+          variables: Json
+        }
+        Insert: {
+          campaign_id: string
+          contact_name?: string | null
+          contact_phone: string
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["campaign_recipient_status"]
+          updated_at?: string
+          user_id: string
+          variables?: Json
+        }
+        Update: {
+          campaign_id?: string
+          contact_name?: string | null
+          contact_phone?: string
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["campaign_recipient_status"]
+          updated_at?: string
+          user_id?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_recipients_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          created_at: string
+          delay_max_seconds: number
+          delay_min_seconds: number
+          failed_count: number
+          id: string
+          name: string
+          scheduled_start_at: string | null
+          sent_count: number
+          status: Database["public"]["Enums"]["campaign_status"]
+          template_id: string | null
+          total_recipients: number
+          updated_at: string
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          created_at?: string
+          delay_max_seconds?: number
+          delay_min_seconds?: number
+          failed_count?: number
+          id?: string
+          name: string
+          scheduled_start_at?: string | null
+          sent_count?: number
+          status?: Database["public"]["Enums"]["campaign_status"]
+          template_id?: string | null
+          total_recipients?: number
+          updated_at?: string
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          created_at?: string
+          delay_max_seconds?: number
+          delay_min_seconds?: number
+          failed_count?: number
+          id?: string
+          name?: string
+          scheduled_start_at?: string | null
+          sent_count?: number
+          status?: Database["public"]["Enums"]["campaign_status"]
+          template_id?: string | null
+          total_recipients?: number
+          updated_at?: string
+          user_id?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "message_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_leads: {
         Row: {
           client_id: string
@@ -227,7 +359,7 @@ export type Database = {
           {
             foreignKeyName: "deals_conversation_id_fkey"
             columns: ["conversation_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
@@ -317,6 +449,59 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      message_templates: {
+        Row: {
+          body: string | null
+          category: string | null
+          created_at: string
+          id: string
+          language: string
+          name: string
+          provider_template_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          variables: Json
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          language?: string
+          name: string
+          provider_template_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          variables?: Json
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          language?: string
+          name?: string
+          provider_template_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          variables?: Json
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_templates_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -534,6 +719,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_deal_for_conversation: {
+        Args: { _conversation_id: string }
+        Returns: string
+      }
+      ensure_pipeline_stage: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -546,6 +736,13 @@ export type Database = {
     Enums: {
       app_role: "owner" | "manager" | "viewer"
       automation_trigger: "button_click" | "inbound_keyword" | "inbound_any"
+      campaign_recipient_status:
+        | "pending"
+        | "scheduled"
+        | "sending"
+        | "sent"
+        | "failed"
+      campaign_status: "draft" | "running" | "paused" | "completed" | "failed"
       form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access"
       message_direction: "inbound" | "outbound"
       message_status: "queued" | "sent" | "delivered" | "read" | "failed"
@@ -680,6 +877,14 @@ export const Constants = {
     Enums: {
       app_role: ["owner", "manager", "viewer"],
       automation_trigger: ["button_click", "inbound_keyword", "inbound_any"],
+      campaign_recipient_status: [
+        "pending",
+        "scheduled",
+        "sending",
+        "sent",
+        "failed",
+      ],
+      campaign_status: ["draft", "running", "paused", "completed", "failed"],
       form_type: ["qualification", "seller_leads", "demo_request", "bm_access"],
       message_direction: ["inbound", "outbound"],
       message_status: ["queued", "sent", "delivered", "read", "failed"],
