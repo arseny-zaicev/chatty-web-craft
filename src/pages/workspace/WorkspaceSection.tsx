@@ -1,20 +1,31 @@
-import { Link, useOutletContext } from "react-router-dom";
-import { ExternalLink, Inbox, KanbanSquare, Megaphone, FileText, Phone, Rocket } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useOutletContext } from "react-router-dom";
+import { Inbox, KanbanSquare, Megaphone, FileText, Phone } from "lucide-react";
+import CRM from "@/pages/CRM";
+import Pipeline from "@/pages/Pipeline";
+import Campaigns from "@/pages/Campaigns";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const sections = {
-  inbox: { icon: Inbox, title: "Inbox", desc: "All WhatsApp chats for this client. Star, pin, mark as read.", link: "/crm" },
-  pipeline: { icon: KanbanSquare, title: "Pipeline", desc: "Kanban board of deals. Drag cards across stages.", link: "/pipeline" },
-  templates: { icon: FileText, title: "Templates", desc: "Approved Gupshup templates with statuses (approved / pending / rejected).", link: "/campaigns" },
-  numbers: { icon: Phone, title: "Numbers", desc: "WhatsApp numbers connected to this workspace.", link: "/campaigns" },
-  campaigns: { icon: Megaphone, title: "Campaigns", desc: "Past and active broadcasts with delivery, read, and reply stats.", link: "/campaigns" },
+  inbox: { icon: Inbox, title: "Inbox", desc: "All WhatsApp chats for this client." },
+  pipeline: { icon: KanbanSquare, title: "Pipeline", desc: "Kanban board of deals for this client." },
+  templates: { icon: FileText, title: "Templates", desc: "Templates and statuses for this client." },
+  numbers: { icon: Phone, title: "Numbers", desc: "WhatsApp numbers connected to this client." },
+  campaigns: { icon: Megaphone, title: "Campaigns", desc: "Campaigns for this client." },
 } as const;
 
 export default function WorkspaceSection({ section }: { section: keyof typeof sections }) {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const cfg = sections[section];
   const Icon = cfg.icon;
+
+  if (!workspace) {
+    return <div className="p-6 text-sm text-muted-foreground">Pick a client from the sidebar.</div>;
+  }
+
+  if (section === "inbox") return <CRM workspaceId={workspace.id} embedded />;
+  if (section === "pipeline") return <Pipeline workspaceId={workspace.id} embedded />;
+  if (section === "campaigns" || section === "templates" || section === "numbers") return <Campaigns workspaceId={workspace.id} embedded />;
+
   return (
     <div className="p-6 max-w-3xl">
       <div className="flex items-center gap-3 mb-2">
