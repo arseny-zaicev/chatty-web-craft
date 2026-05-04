@@ -3,7 +3,7 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export type WhatsAppNumber = Pick<
   Tables<"whatsapp_numbers">,
-  "id" | "phone_number" | "display_name"
+  "id" | "phone_number" | "display_name" | "workspace_id"
 >;
 
 export type Conversation = Pick<
@@ -15,11 +15,12 @@ export type Conversation = Pick<
   | "last_message_at"
   | "unread_count"
   | "whatsapp_number_id"
+  | "workspace_id"
   | "is_starred"
   | "pinned_at"
 >;
 
-export type Stage = Pick<Tables<"pipeline_stages">, "id" | "name" | "color" | "position" | "stage_type">;
+export type Stage = Pick<Tables<"pipeline_stages">, "id" | "name" | "color" | "position" | "stage_type" | "workspace_id">;
 
 export type Deal = Pick<
   Tables<"deals">,
@@ -31,27 +32,36 @@ export type Deal = Pick<
   | "currency"
   | "notes"
   | "stage_id"
+  | "workspace_id"
   | "position"
   | "conversation_id"
   | "updated_at"
 >;
 
 export const crmKeys = {
-  base: ["crm", "base"] as const,
-  pipeline: ["crm", "pipeline"] as const,
-  campaigns: ["crm", "campaigns"] as const,
+  base: (workspaceId?: string) => ["crm", "base", workspaceId ?? "all"] as const,
+  pipeline: (workspaceId?: string) => ["crm", "pipeline", workspaceId ?? "all"] as const,
+  campaigns: (workspaceId?: string) => ["crm", "campaigns", workspaceId ?? "all"] as const,
 };
 
-export async function fetchCrmBase() {
+export async function fetchCrmBase(workspaceId?: string) {
+  let numbersQuery = supabase.from("whatsapp_numbers").select("id, phone_number, display_name, workspace_id");
+  let conversationsQuery = supabase
+    .from("conversations")
+    .select(
+      "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at",
+    )
+    .order("last_message_at", { ascending: false, nullsFirst: false });
+
+  if (workspaceId) {
+    numbersQuery = numbersQuery.eq("workspace_id", workspaceId);
+    conversationsQuery = conversationsQuery.eq("workspace_id", workspaceId);
+  }
+
   const [{ data: numbers, error: numbersError }, { data: conversations, error: conversationsError }] =
     await Promise.all([
-      supabase.from("whatsapp_numbers").select("id, phone_number, display_name"),
-      supabase
-        .from("conversations")
-        .select(
-          "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, is_starred, pinned_at",
-        )
-        .order("last_message_at", { ascending: false, nullsFirst: false }),
+      numbersQuery,
+      conversationsQuery,
     ]);
 
   if (numbersError) throw numbersError;
