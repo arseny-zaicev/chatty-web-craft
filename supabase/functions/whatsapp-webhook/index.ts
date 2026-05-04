@@ -16,25 +16,41 @@ function normalizePhone(p: string): string {
 }
 
 async function handleInbound(payload: Record<string, unknown>) {
-  // Gupshup inbound format: { type: "message", payload: { source, sender:{name}, payload:{text|url|...}, type, id } }
+  console.log("Inbound payload:", JSON.stringify(payload));
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
   const sender = (inner.sender ?? {}) as Record<string, unknown>;
   const msgPayload = (inner.payload ?? {}) as Record<string, unknown>;
-  const destination = normalizePhone(String(inner.destination ?? payload.destination ?? ""));
-  const source = normalizePhone(String(inner.source ?? sender.phone ?? ""));
-  if (!destination || !source) {
-    console.warn("Missing source/destination", { destination, source });
+  const destination = normalizePhone(String(
+    inner.destination ?? payload.destination ?? ""
+  ));
+  const source = normalizePhone(String(inner.source ?? sender.phone ?? payload.source ?? ""));
+  if (!source) {
+    console.warn("Missing source", { destination, source });
     return;
   }
 
-  const { data: number } = await supabase
-    .from("whatsapp_numbers")
-    .select("id, user_id")
-    .eq("phone_number", destination)
-    .maybeSingle();
-
+  // Lookup by destination, OR fallback to single active number when destination is missing
+  let number: { id: string; user_id: string } | null = null;
+  if (destination) {
+    const { data } = await supabase
+      .from("whatsapp_numbers")
+      .select("id, user_id")
+      .eq("phone_number", destination)
+      .maybeSingle();
+    number = data;
+  }
   if (!number) {
-    console.warn("Unknown destination number, dropping", destination);
+    const { data: numbers } = await supabase
+      .from("whatsapp_numbers")
+      .select("id, user_id")
+      .eq("is_active", true);
+    if (numbers && numbers.length === 1) {
+      number = numbers[0];
+      console.log("Falling back to single active number", number.id);
+    }
+  }
+  if (!number) {
+    console.warn("No matching whatsapp_number for destination", destination);
     return;
   }
 
