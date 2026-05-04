@@ -53,6 +53,47 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_number_allocations: {
+        Row: {
+          allocated_count: number
+          campaign_id: string
+          created_at: string
+          id: string
+          is_manual_override: boolean
+          sent_count: number
+          whatsapp_number_id: string
+          workspace_id: string
+        }
+        Insert: {
+          allocated_count?: number
+          campaign_id: string
+          created_at?: string
+          id?: string
+          is_manual_override?: boolean
+          sent_count?: number
+          whatsapp_number_id: string
+          workspace_id: string
+        }
+        Update: {
+          allocated_count?: number
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          is_manual_override?: boolean
+          sent_count?: number
+          whatsapp_number_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_number_allocations_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_recipients: {
         Row: {
           campaign_id: string
@@ -69,6 +110,8 @@ export type Database = {
           updated_at: string
           user_id: string
           variables: Json
+          whatsapp_number_id: string | null
+          workspace_id: string | null
         }
         Insert: {
           campaign_id: string
@@ -85,6 +128,8 @@ export type Database = {
           updated_at?: string
           user_id: string
           variables?: Json
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
         }
         Update: {
           campaign_id?: string
@@ -101,6 +146,8 @@ export type Database = {
           updated_at?: string
           user_id?: string
           variables?: Json
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -121,12 +168,17 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          auto_allocated: boolean
           created_at: string
           delay_max_seconds: number
           delay_min_seconds: number
           failed_count: number
           id: string
           name: string
+          parent_campaign_id: string | null
+          per_number_quota: number
+          recurrence: Database["public"]["Enums"]["campaign_recurrence"]
+          recurrence_end_at: string | null
           scheduled_start_at: string | null
           sent_count: number
           status: Database["public"]["Enums"]["campaign_status"]
@@ -135,14 +187,20 @@ export type Database = {
           updated_at: string
           user_id: string
           whatsapp_number_id: string
+          workspace_id: string
         }
         Insert: {
+          auto_allocated?: boolean
           created_at?: string
           delay_max_seconds?: number
           delay_min_seconds?: number
           failed_count?: number
           id?: string
           name: string
+          parent_campaign_id?: string | null
+          per_number_quota?: number
+          recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
+          recurrence_end_at?: string | null
           scheduled_start_at?: string | null
           sent_count?: number
           status?: Database["public"]["Enums"]["campaign_status"]
@@ -151,14 +209,20 @@ export type Database = {
           updated_at?: string
           user_id: string
           whatsapp_number_id: string
+          workspace_id: string
         }
         Update: {
+          auto_allocated?: boolean
           created_at?: string
           delay_max_seconds?: number
           delay_min_seconds?: number
           failed_count?: number
           id?: string
           name?: string
+          parent_campaign_id?: string | null
+          per_number_quota?: number
+          recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
+          recurrence_end_at?: string | null
           scheduled_start_at?: string | null
           sent_count?: number
           status?: Database["public"]["Enums"]["campaign_status"]
@@ -167,8 +231,16 @@ export type Database = {
           updated_at?: string
           user_id?: string
           whatsapp_number_id?: string
+          workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "campaigns_parent_campaign_id_fkey"
+            columns: ["parent_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "campaigns_template_id_fkey"
             columns: ["template_id"]
@@ -270,6 +342,7 @@ export type Database = {
           updated_at: string
           user_id: string
           whatsapp_number_id: string
+          workspace_id: string
         }
         Insert: {
           contact_name?: string | null
@@ -284,6 +357,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           whatsapp_number_id: string
+          workspace_id: string
         }
         Update: {
           contact_name?: string | null
@@ -298,6 +372,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           whatsapp_number_id?: string
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -324,6 +399,7 @@ export type Database = {
           title: string
           updated_at: string
           user_id: string
+          workspace_id: string | null
         }
         Insert: {
           amount?: number | null
@@ -339,6 +415,7 @@ export type Database = {
           title: string
           updated_at?: string
           user_id: string
+          workspace_id?: string | null
         }
         Update: {
           amount?: number | null
@@ -354,6 +431,7 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -453,7 +531,7 @@ export type Database = {
       message_templates: {
         Row: {
           body: string | null
-          category: string | null
+          category: Database["public"]["Enums"]["template_category"]
           created_at: string
           id: string
           language: string
@@ -464,10 +542,11 @@ export type Database = {
           user_id: string
           variables: Json
           whatsapp_number_id: string | null
+          workspace_id: string
         }
         Insert: {
           body?: string | null
-          category?: string | null
+          category?: Database["public"]["Enums"]["template_category"]
           created_at?: string
           id?: string
           language?: string
@@ -478,10 +557,11 @@ export type Database = {
           user_id: string
           variables?: Json
           whatsapp_number_id?: string | null
+          workspace_id: string
         }
         Update: {
           body?: string | null
-          category?: string | null
+          category?: Database["public"]["Enums"]["template_category"]
           created_at?: string
           id?: string
           language?: string
@@ -492,6 +572,7 @@ export type Database = {
           user_id?: string
           variables?: Json
           whatsapp_number_id?: string | null
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -563,6 +644,7 @@ export type Database = {
           stage_type: Database["public"]["Enums"]["stage_type"]
           updated_at: string
           user_id: string
+          workspace_id: string | null
         }
         Insert: {
           color?: string
@@ -573,6 +655,7 @@ export type Database = {
           stage_type?: Database["public"]["Enums"]["stage_type"]
           updated_at?: string
           user_id: string
+          workspace_id?: string | null
         }
         Update: {
           color?: string
@@ -583,6 +666,7 @@ export type Database = {
           stage_type?: Database["public"]["Enums"]["stage_type"]
           updated_at?: string
           user_id?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
@@ -623,6 +707,7 @@ export type Database = {
           trigger_value: string | null
           updated_at: string
           user_id: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -633,6 +718,7 @@ export type Database = {
           trigger_value?: string | null
           updated_at?: string
           user_id: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -643,6 +729,7 @@ export type Database = {
           trigger_value?: string | null
           updated_at?: string
           user_id?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -687,6 +774,7 @@ export type Database = {
           provider_waba_id: string | null
           updated_at: string
           user_id: string
+          workspace_id: string
         }
         Insert: {
           created_at?: string
@@ -699,6 +787,7 @@ export type Database = {
           provider_waba_id?: string | null
           updated_at?: string
           user_id: string
+          workspace_id: string
         }
         Update: {
           created_at?: string
@@ -711,6 +800,72 @@ export type Database = {
           provider_waba_id?: string | null
           updated_at?: string
           user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      workspace_members: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          owner_user_id: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          owner_user_id: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          owner_user_id?: string
+          slug?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -732,6 +887,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_workspace_member: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "owner" | "manager" | "viewer"
@@ -742,12 +901,20 @@ export type Database = {
         | "sending"
         | "sent"
         | "failed"
-      campaign_status: "draft" | "running" | "paused" | "completed" | "failed"
+      campaign_recurrence: "none" | "daily" | "weekly" | "monthly"
+      campaign_status:
+        | "draft"
+        | "running"
+        | "paused"
+        | "completed"
+        | "failed"
+        | "scheduled"
       form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access"
       message_direction: "inbound" | "outbound"
       message_status: "queued" | "sent" | "delivered" | "read" | "failed"
       stage_type: "open" | "won" | "lost"
       submission_status: "new" | "contacted" | "converted" | "rejected"
+      template_category: "marketing" | "utility" | "authentication"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -884,12 +1051,21 @@ export const Constants = {
         "sent",
         "failed",
       ],
-      campaign_status: ["draft", "running", "paused", "completed", "failed"],
+      campaign_recurrence: ["none", "daily", "weekly", "monthly"],
+      campaign_status: [
+        "draft",
+        "running",
+        "paused",
+        "completed",
+        "failed",
+        "scheduled",
+      ],
       form_type: ["qualification", "seller_leads", "demo_request", "bm_access"],
       message_direction: ["inbound", "outbound"],
       message_status: ["queued", "sent", "delivered", "read", "failed"],
       stage_type: ["open", "won", "lost"],
       submission_status: ["new", "contacted", "converted", "rejected"],
+      template_category: ["marketing", "utility", "authentication"],
     },
   },
 } as const
