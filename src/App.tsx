@@ -32,6 +32,10 @@ const BMAccess = lazy(() => import("./pages/BMAccess"));
 const CRM = lazy(() => import("./pages/CRM"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
+const WorkspaceLayout = lazy(() => import("./pages/workspace/WorkspaceLayout"));
+const WorkspaceSection = lazy(() => import("./pages/workspace/WorkspaceSection"));
+const LaunchWizard = lazy(() => import("./pages/workspace/LaunchWizard"));
+const NewClient = lazy(() => import("./pages/workspace/NewClient"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -82,6 +86,17 @@ const App = () => (
               <Route path="/crm" element={<CRM />} />
               <Route path="/pipeline" element={<Pipeline />} />
               <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/ws" element={<WorkspaceLayout />}>
+                <Route index element={<NewClient />} />
+                <Route path="new" element={<NewClient />} />
+                <Route path=":slug" element={<WorkspaceSection section="inbox" />} />
+                <Route path=":slug/inbox" element={<WorkspaceSection section="inbox" />} />
+                <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />
+                <Route path=":slug/templates" element={<WorkspaceSection section="templates" />} />
+                <Route path=":slug/numbers" element={<WorkspaceSection section="numbers" />} />
+                <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
+                <Route path=":slug/launch" element={<LaunchWizard />} />
+              </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
