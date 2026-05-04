@@ -70,6 +70,7 @@ const App = () => (
               <Route path="/demo" element={<Demo />} />
               <Route path="/bm-access" element={<BMAccess />} />
               <Route path="/crm" element={<CRM />} />
+              <Route path="/pipeline" element={<Pipeline />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
