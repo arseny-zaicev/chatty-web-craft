@@ -329,7 +329,7 @@ const CRM = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {loading ? (
+              {isLoading ? (
                 <div className="p-6 flex justify-center">
                   <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                 </div>
