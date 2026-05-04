@@ -379,8 +379,31 @@ const CRM = () => {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="border-t border-border px-6 py-4 bg-card/30 text-xs text-muted-foreground text-center">
-                  Reply functionality coming next. View-only for now.
+                <div className="border-t border-border px-4 py-3 bg-card/30">
+                  <div className="flex items-end gap-2">
+                    <Textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                      placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+                      rows={2}
+                      className="resize-none flex-1"
+                      disabled={sending}
+                    />
+                    <Button
+                      onClick={handleSend}
+                      disabled={sending || !draft.trim()}
+                      size="icon"
+                      className="h-10 w-10 shrink-0"
+                    >
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </Button>
+                  </div>
                 </div>
               </>
             )}
