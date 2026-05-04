@@ -133,30 +133,15 @@ const CRM = () => {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
-  // Initial data
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      const [{ data: nums }, { data: convs }] = await Promise.all([
-        supabase.from("whatsapp_numbers").select("id, phone_number, display_name"),
-        supabase
-          .from("conversations")
-          .select(
-            "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, is_starred, pinned_at",
-          )
-          .order("last_message_at", { ascending: false, nullsFirst: false }),
-      ]);
-      if (cancelled) return;
-      setNumbers(nums ?? []);
-      setConversations((convs ?? []) as Conversation[]);
-      setLoading(false);
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!baseData) return;
+    setNumbers(baseData.numbers);
+    setConversations(baseData.conversations);
+    const requested = searchParams.get("conversation");
+    if (requested && baseData.conversations.some((c) => c.id === requested)) {
+      setActiveId(requested);
+    }
+  }, [baseData, searchParams]);
 
   // Realtime conversations
   useEffect(() => {
@@ -169,16 +154,18 @@ const CRM = () => {
           }
           const incoming = payload.new as Conversation;
           const idx = prev.findIndex((c) => c.id === incoming.id);
-          return idx >= 0
+          const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [incoming, ...prev];
+          queryClient.setQueryData(crmKeys.base, { numbers, conversations: next });
+          return next;
         });
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [numbers, queryClient]);
 
   // Load messages when active conversation changes
   useEffect(() => {
