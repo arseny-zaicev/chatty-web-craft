@@ -259,6 +259,9 @@ const CRM = () => {
             <Button variant="ghost" size="sm" onClick={() => navigate("/pipeline")}>
               Pipeline
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/campaigns")}>
+              Campaigns
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
               Admin
             </Button>
