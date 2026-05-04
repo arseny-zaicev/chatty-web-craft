@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles, Activity, Image, Upload, ExternalLink } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles, Activity, Image, Upload, ExternalLink, Building2, Inbox, KanbanSquare, Megaphone, Rocket } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
