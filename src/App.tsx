@@ -68,6 +68,7 @@ const App = () => (
               <Route path="/booked" element={<Booked />} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/bm-access" element={<BMAccess />} />
+              <Route path="/crm" element={<CRM />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
