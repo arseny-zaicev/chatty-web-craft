@@ -1,10 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, MessageSquare, Phone, Search, LogOut, Send } from "lucide-react";
+import {
+  Loader2,
+  MessageSquare,
+  Phone,
+  Search,
+  LogOut,
+  Send,
+  Star,
+  Pin,
+  CheckCheck,
+} from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -17,6 +27,8 @@ type Conversation = {
   last_message_at: string | null;
   unread_count: number;
   whatsapp_number_id: string;
+  is_starred: boolean;
+  pinned_at: string | null;
 };
 
 type Message = {
@@ -39,6 +51,7 @@ const CRM = () => {
   const [loading, setLoading] = useState(true);
   const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
   const [numberFilter, setNumberFilter] = useState<string>("all");
+  const [starredOnly, setStarredOnly] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -47,6 +60,12 @@ const CRM = () => {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const numberById = useMemo(() => {
+    const map = new Map<string, WhatsAppNumber>();
+    numbers.forEach((n) => map.set(n.id, n));
+    return map;
+  }, [numbers]);
 
   const handleSend = async () => {
     if (!activeId || !draft.trim() || sending) return;
@@ -66,12 +85,57 @@ const CRM = () => {
     }
   };
 
+  const toggleStar = async (conv: Conversation) => {
+    const next = !conv.is_starred;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conv.id ? { ...c, is_starred: next } : c)),
+    );
+    const { error } = await supabase
+      .from("conversations")
+      .update({ is_starred: next })
+      .eq("id", conv.id);
+    if (error) {
+      toast.error("Failed to update star");
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conv.id ? { ...c, is_starred: !next } : c)),
+      );
+    }
+  };
+
+  const togglePin = async (conv: Conversation) => {
+    const next = conv.pinned_at ? null : new Date().toISOString();
+    setConversations((prev) =>
+      prev.map((c) => (c.id === conv.id ? { ...c, pinned_at: next } : c)),
+    );
+    const { error } = await supabase
+      .from("conversations")
+      .update({ pinned_at: next })
+      .eq("id", conv.id);
+    if (error) {
+      toast.error("Failed to update pin");
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conv.id ? { ...c, pinned_at: conv.pinned_at } : c)),
+      );
+    }
+  };
+
+  const markUnread = async (conv: Conversation) => {
+    const { error } = await supabase
+      .from("conversations")
+      .update({ unread_count: Math.max(1, conv.unread_count) })
+      .eq("id", conv.id);
+    if (error) toast.error("Failed");
+  };
+
+  const markRead = async (conv: Conversation) => {
+    if (conv.unread_count === 0) return;
+    await supabase.from("conversations").update({ unread_count: 0 }).eq("id", conv.id);
+  };
+
   // Auth gate
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) {
-        navigate("/admin-auth");
-      }
+      if (!data.session) navigate("/admin-auth");
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) navigate("/admin-auth");
@@ -88,7 +152,9 @@ const CRM = () => {
         supabase.from("whatsapp_numbers").select("id, phone_number, display_name"),
         supabase
           .from("conversations")
-          .select("id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id")
+          .select(
+            "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, is_starred, pinned_at",
+          )
           .order("last_message_at", { ascending: false, nullsFirst: false }),
       ]);
       if (cancelled) return;
@@ -113,12 +179,9 @@ const CRM = () => {
           }
           const incoming = payload.new as Conversation;
           const idx = prev.findIndex((c) => c.id === incoming.id);
-          const next = idx >= 0 ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)] : [incoming, ...prev];
-          return next.sort((a, b) => {
-            const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-            const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-            return tb - ta;
-          });
+          return idx >= 0
+            ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
+            : [incoming, ...prev];
         });
       })
       .subscribe();
@@ -145,7 +208,6 @@ const CRM = () => {
         setMessages((data ?? []) as Message[]);
         setLoadingMessages(false);
       });
-    // Mark read
     supabase.from("conversations").update({ unread_count: 0 }).eq("id", activeId).then(() => {});
     return () => {
       cancelled = true;
@@ -171,13 +233,27 @@ const CRM = () => {
     };
   }, [activeId]);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const filtered = conversations.filter((c) => {
+  const sorted = useMemo(() => {
+    return [...conversations].sort((a, b) => {
+      // pinned first (newest pin first)
+      if (a.pinned_at && !b.pinned_at) return -1;
+      if (!a.pinned_at && b.pinned_at) return 1;
+      if (a.pinned_at && b.pinned_at) {
+        return new Date(b.pinned_at).getTime() - new Date(a.pinned_at).getTime();
+      }
+      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return tb - ta;
+    });
+  }, [conversations]);
+
+  const filtered = sorted.filter((c) => {
     if (numberFilter !== "all" && c.whatsapp_number_id !== numberFilter) return false;
+    if (starredOnly && !c.is_starred) return false;
     if (search) {
       const q = search.toLowerCase();
       const hay = `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`.toLowerCase();
@@ -187,6 +263,7 @@ const CRM = () => {
   });
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
+  const activeNumber = active ? numberById.get(active.whatsapp_number_id) : null;
 
   return (
     <>
@@ -196,7 +273,6 @@ const CRM = () => {
       </Helmet>
 
       <div className="h-screen flex flex-col bg-background text-foreground">
-        {/* Header */}
         <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
           <div className="flex items-center gap-3">
             <MessageSquare className="w-5 h-5 text-primary" />
@@ -232,33 +308,44 @@ const CRM = () => {
                   className="pl-9 h-9"
                 />
               </div>
-              {numbers.length > 1 && (
-                <div className="flex flex-wrap gap-1">
+
+              <div className="flex flex-wrap gap-1">
+                <button
+                  onClick={() => setNumberFilter("all")}
+                  className={`text-xs px-2 py-1 rounded-full border transition ${
+                    numberFilter === "all"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  All numbers
+                </button>
+                {numbers.map((n) => (
                   <button
-                    onClick={() => setNumberFilter("all")}
+                    key={n.id}
+                    onClick={() => setNumberFilter(n.id)}
                     className={`text-xs px-2 py-1 rounded-full border transition ${
-                      numberFilter === "all"
+                      numberFilter === n.id
                         ? "bg-primary text-primary-foreground border-primary"
                         : "border-border text-muted-foreground hover:border-primary/40"
                     }`}
+                    title={`+${n.phone_number}`}
                   >
-                    All
+                    {n.display_name ?? `+${n.phone_number}`}
                   </button>
-                  {numbers.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => setNumberFilter(n.id)}
-                      className={`text-xs px-2 py-1 rounded-full border transition ${
-                        numberFilter === n.id
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border text-muted-foreground hover:border-primary/40"
-                      }`}
-                    >
-                      {n.display_name ?? n.phone_number}
-                    </button>
-                  ))}
-                </div>
-              )}
+                ))}
+                <button
+                  onClick={() => setStarredOnly((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
+                    starredOnly
+                      ? "bg-amber-500/15 text-amber-600 border-amber-500/40"
+                      : "border-border text-muted-foreground hover:border-amber-500/40"
+                  }`}
+                >
+                  <Star className={`w-3 h-3 ${starredOnly ? "fill-amber-500" : ""}`} />
+                  Starred
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -268,37 +355,101 @@ const CRM = () => {
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="p-6 text-sm text-muted-foreground text-center">
-                  No conversations yet. Incoming WhatsApp messages will appear here.
+                  No conversations match these filters.
                 </div>
               ) : (
-                filtered.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => { setActiveId(c.id); setDraft(""); }}
-                    className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/40 transition ${
-                      activeId === c.id ? "bg-muted/60" : ""
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="font-medium text-sm truncate">
-                        {c.contact_name || `+${c.contact_phone}`}
+                filtered.map((c) => {
+                  const num = numberById.get(c.whatsapp_number_id);
+                  const isActive = activeId === c.id;
+                  return (
+                    <div
+                      key={c.id}
+                      className={`group relative border-b border-border/50 transition ${
+                        isActive ? "bg-muted/60" : "hover:bg-muted/40"
+                      } ${c.pinned_at ? "bg-primary/5" : ""}`}
+                    >
+                      <button
+                        onClick={() => {
+                          setActiveId(c.id);
+                          setDraft("");
+                        }}
+                        className="w-full text-left px-4 py-3"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {c.pinned_at && <Pin className="w-3 h-3 text-primary shrink-0" />}
+                            {c.is_starred && (
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500 shrink-0" />
+                            )}
+                            <div
+                              className={`text-sm truncate ${
+                                c.unread_count > 0 ? "font-semibold" : "font-medium"
+                              }`}
+                            >
+                              {c.contact_name || `+${c.contact_phone}`}
+                            </div>
+                          </div>
+                          {c.unread_count > 0 && (
+                            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">
+                              {c.unread_count}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {c.last_message_text || "-"}
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <div className="text-[10px] text-muted-foreground/70 truncate">
+                            {num ? `via ${num.display_name ?? `+${num.phone_number}`}` : ""}
+                          </div>
+                          {c.last_message_at && (
+                            <div className="text-[10px] text-muted-foreground/70 shrink-0">
+                              {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true })}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+
+                      {/* hover actions */}
+                      <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1 bg-card/95 border border-border rounded-md shadow-sm px-1 py-0.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePin(c);
+                          }}
+                          title={c.pinned_at ? "Unpin" : "Pin to top"}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                        >
+                          <Pin className={`w-3.5 h-3.5 ${c.pinned_at ? "fill-primary text-primary" : ""}`} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleStar(c);
+                          }}
+                          title={c.is_starred ? "Unstar" : "Star"}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-amber-500"
+                        >
+                          <Star
+                            className={`w-3.5 h-3.5 ${
+                              c.is_starred ? "fill-amber-500 text-amber-500" : ""
+                            }`}
+                          />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            c.unread_count > 0 ? markRead(c) : markUnread(c);
+                          }}
+                          title={c.unread_count > 0 ? "Mark as read" : "Mark as unread"}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                        >
+                          <CheckCheck className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      {c.unread_count > 0 && (
-                        <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">
-                          {c.unread_count}
-                        </span>
-                      )}
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {c.last_message_text || "—"}
-                    </div>
-                    {c.last_message_at && (
-                      <div className="text-[10px] text-muted-foreground/70 mt-1">
-                        {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true })}
-                      </div>
-                    )}
-                  </button>
-                ))
+                  );
+                })
               )}
             </div>
           </aside>
@@ -314,17 +465,69 @@ const CRM = () => {
               </div>
             ) : (
               <>
-                <div className="h-14 px-6 border-b border-border flex items-center gap-3 bg-card/40">
-                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
-                    {(active.contact_name ?? active.contact_phone).slice(0, 1).toUpperCase()}
+                <div className="h-16 px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
+                      {(active.contact_name ?? active.contact_phone).slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate flex items-center gap-2">
+                        {active.contact_name || `+${active.contact_phone}`}
+                        {active.is_starred && (
+                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                        )}
+                        {active.pinned_at && <Pin className="w-3.5 h-3.5 text-primary" />}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Phone className="w-3 h-3" />+{active.contact_phone}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">
-                      {active.contact_name || `+${active.contact_phone}`}
-                    </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Phone className="w-3 h-3" />+{active.contact_phone}
-                    </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {activeNumber && (
+                      <div className="text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        Sending from {activeNumber.display_name ?? `+${activeNumber.phone_number}`}
+                      </div>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => togglePin(active)}
+                      title={active.pinned_at ? "Unpin" : "Pin"}
+                      className="h-8 w-8"
+                    >
+                      <Pin
+                        className={`w-4 h-4 ${
+                          active.pinned_at ? "fill-primary text-primary" : ""
+                        }`}
+                      />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => toggleStar(active)}
+                      title={active.is_starred ? "Unstar" : "Star"}
+                      className="h-8 w-8"
+                    >
+                      <Star
+                        className={`w-4 h-4 ${
+                          active.is_starred ? "fill-amber-500 text-amber-500" : ""
+                        }`}
+                      />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        active.unread_count > 0 ? markRead(active) : markUnread(active)
+                      }
+                      title={active.unread_count > 0 ? "Mark as read" : "Mark as unread"}
+                      className="h-8 text-xs"
+                    >
+                      <CheckCheck className="w-4 h-4 mr-1" />
+                      {active.unread_count > 0 ? "Mark read" : "Mark unread"}
+                    </Button>
                   </div>
                 </div>
 
