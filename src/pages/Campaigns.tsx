@@ -36,7 +36,7 @@ const parseRecipients = (raw: string): Recipient[] => {
 const Campaigns = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: crmKeys.campaigns, queryFn: fetchCampaignBase });
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns, queryFn: fetchCampaignBase });
   const numbers = data?.numbers ?? [];
   const templates = data?.templates ?? [];
   const campaigns = data?.campaigns ?? [];
@@ -114,7 +114,7 @@ const Campaigns = () => {
           <main className="p-4 grid lg:grid-cols-[1fr_360px] gap-4">
             <section className="rounded-lg border border-border bg-card/30 p-4 space-y-4">
               <div className="grid sm:grid-cols-2 gap-3"><Field label="Campaign name"><Input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} /></Field><Field label="Sending number"><Select value={selectedNumber} onValueChange={setNumberId}><SelectTrigger><SelectValue placeholder="Select number" /></SelectTrigger><SelectContent>{numbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.display_name ?? `+${n.phone_number}`}</SelectItem>)}</SelectContent></Select></Field></div>
-              <div className="grid sm:grid-cols-2 gap-3"><Field label="Approved template"><Select value={selectedTemplate} onValueChange={setTemplateId}><SelectTrigger><SelectValue placeholder="Select or create below" /></SelectTrigger><SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.language}</SelectItem>)}</SelectContent></Select></Field><Field label="New template name"><Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="gupshup_approved_name" /></Field></div>
+              <div className="grid sm:grid-cols-[1fr_auto_1fr] gap-3 items-end"><Field label="Approved template"><Select value={selectedTemplate} onValueChange={setTemplateId}><SelectTrigger><SelectValue placeholder="Select or create below" /></SelectTrigger><SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.language}</SelectItem>)}</SelectContent></Select></Field><Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} title="Refresh templates"><RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} /></Button><Field label="New template name"><Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="gupshup_approved_name" /></Field></div>
               <Field label="Template body preview"><Textarea rows={3} value={templateBody} onChange={(e) => setTemplateBody(e.target.value)} placeholder="Only for manager preview - sending uses approved Gupshup template name" /></Field>
               <Field label="Variables"><Input value={variables} onChange={(e) => setVariables(e.target.value)} placeholder="name, city, offer" /></Field>
               <div className="grid sm:grid-cols-2 gap-3"><Field label="Min delay seconds"><Input type="number" min={5} value={delayMin} onChange={(e) => setDelayMin(Number(e.target.value))} /></Field><Field label="Max delay seconds"><Input type="number" min={delayMin} value={delayMax} onChange={(e) => setDelayMax(Number(e.target.value))} /></Field></div>
