@@ -121,11 +121,11 @@ const Campaigns = ({ workspaceId, embedded = false }: { workspaceId?: string; em
   return (
     <>
       <Helmet><title>Campaigns - Iskra CRM</title><meta name="robots" content="noindex,nofollow" /></Helmet>
-      <div className="min-h-screen bg-background text-foreground">
-        <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40">
+      <div className={`${embedded ? "min-h-full" : "min-h-screen"} bg-background text-foreground`}>
+        {!embedded && <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40">
           <div className="flex items-center gap-3"><Megaphone className="w-5 h-5 text-primary" /><h1 className="font-display text-lg">Campaigns</h1></div>
           <div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => navigate("/pipeline")}><ArrowLeft className="w-4 h-4 mr-1" />Pipeline</Button><Button variant="ghost" size="sm" onClick={() => navigate("/crm")}>CRM</Button></div>
-        </header>
+        </header>}
         {isLoading ? <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div> : (
           <main className="p-4 grid lg:grid-cols-[1fr_360px] gap-4">
             <section className="rounded-lg border border-border bg-card/30 p-4 space-y-4">
