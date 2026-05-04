@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Anyone can submit forms" ON public.form_submissions;
