@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import CustomCursor from "@/components/CustomCursor";
 import CookieConsent from "@/components/CookieConsent";
@@ -87,8 +87,8 @@ const App = () => (
               <Route path="/pipeline" element={<Pipeline />} />
               <Route path="/campaigns" element={<Campaigns />} />
               <Route path="/ws" element={<WorkspaceLayout />}>
-                <Route index element={<NewClient />} />
-                <Route path="new" element={<NewClient />} />
+                <Route index element={<Navigate to="/ws/company15/inbox" replace />} />
+                <Route path="new" element={<Navigate to="/ws/company15/inbox" replace />} />
                 <Route path=":slug" element={<WorkspaceSection section="inbox" />} />
                 <Route path=":slug/inbox" element={<WorkspaceSection section="inbox" />} />
                 <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />

@@ -51,7 +51,7 @@ import {
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
-const Pipeline = () => {
+const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [stages, setStages] = useState<Stage[]>([]);
@@ -70,8 +70,8 @@ const Pipeline = () => {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data: pipelineData, isLoading } = useQuery({
-    queryKey: crmKeys.pipeline,
-    queryFn: fetchPipelineBase,
+    queryKey: crmKeys.pipeline(workspaceId),
+    queryFn: () => fetchPipelineBase(workspaceId),
   });
 
   // Auth gate
@@ -100,11 +100,12 @@ const Pipeline = () => {
         setDeals((prev) => {
           if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
           const incoming = payload.new as Deal;
+          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
           const idx = prev.findIndex((d) => d.id === incoming.id);
           const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [...prev, incoming];
-          queryClient.setQueryData(crmKeys.pipeline, { stages, deals: next });
+          queryClient.setQueryData(crmKeys.pipeline(workspaceId), { stages, deals: next });
           return next;
         });
       })
@@ -112,7 +113,7 @@ const Pipeline = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, stages]);
+  }, [queryClient, stages, workspaceId]);
 
   const dealsByStage = useMemo(() => {
     const map = new Map<string, Deal[]>();
@@ -179,6 +180,7 @@ const Pipeline = () => {
     const stageDeals = dealsByStage.get(newStageId) ?? [];
     const { error } = await supabase.from("deals").insert({
       user_id: userData.user.id,
+      workspace_id: workspaceId ?? null,
       title: newTitle.trim(),
       contact_name: newContact.trim() || null,
       contact_phone: newPhone.trim() || null,
@@ -239,8 +241,8 @@ const Pipeline = () => {
         <meta name="robots" content="noindex,nofollow" />
       </Helmet>
 
-      <div className="h-screen flex flex-col bg-background text-foreground">
-        <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
+      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-background text-foreground`}>
+        {!embedded && <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
           <div className="flex items-center gap-3">
             <KanbanSquare className="w-5 h-5 text-primary" />
             <h1 className="font-display text-lg tracking-tight">Pipeline</h1>
@@ -272,7 +274,7 @@ const Pipeline = () => {
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
-        </header>
+        </header>}
 
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">

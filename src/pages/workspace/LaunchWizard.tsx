@@ -36,10 +36,10 @@ const parseRecipients = (raw: string): Recipient[] => {
 export default function LaunchWizard() {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const qc = useQueryClient();
-  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns, queryFn: fetchCampaignBase });
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns(workspace?.id), queryFn: () => fetchCampaignBase(workspace?.id), enabled: Boolean(workspace) });
 
-  const numbers = (data?.numbers ?? []).filter((n: any) => !workspace || n.workspace_id === workspace.id || !n.workspace_id);
-  const templates = (data?.templates ?? []).filter((t: any) => !workspace || t.workspace_id === workspace.id || !t.workspace_id);
+  const numbers = data?.numbers ?? [];
+  const templates = data?.templates ?? [];
   const conversations = data?.conversations ?? [];
 
   const [campaignName, setCampaignName] = useState("");
@@ -90,7 +90,7 @@ export default function LaunchWizard() {
     },
     onSuccess: async () => {
       toast.success("Campaign scheduled");
-      await qc.invalidateQueries({ queryKey: crmKeys.campaigns });
+      await qc.invalidateQueries({ queryKey: crmKeys.campaigns(workspace?.id) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Launch failed"),
   });
@@ -104,7 +104,7 @@ export default function LaunchWizard() {
       if (error) throw error;
       return res as { fetched: number; upserted: number };
     },
-    onSuccess: async (r) => { toast.success(`Synced ${r.upserted}/${r.fetched}`); await qc.invalidateQueries({ queryKey: crmKeys.campaigns }); },
+    onSuccess: async (r) => { toast.success(`Synced ${r.upserted}/${r.fetched}`); await qc.invalidateQueries({ queryKey: crmKeys.campaigns(workspace?.id) }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Sync failed"),
   });
 

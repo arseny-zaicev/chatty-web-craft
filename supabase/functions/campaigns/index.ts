@@ -56,7 +56,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   const { data: number } = await admin
     .from("whatsapp_numbers")
-    .select("id, user_id, phone_number, provider_app_id")
+    .select("id, user_id, workspace_id, phone_number, provider_app_id")
     .eq("id", whatsappNumberId)
     .maybeSingle();
   if (!number) return json({ error: "WhatsApp number not found" }, 404);
@@ -84,6 +84,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     .from("campaigns")
     .insert({
       user_id: number.user_id,
+      workspace_id: number.workspace_id,
       whatsapp_number_id: number.id,
       template_id: template.id,
       name,
@@ -103,6 +104,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     return {
       ...r,
       user_id: number.user_id,
+      workspace_id: number.workspace_id,
       campaign_id: campaign.id,
       status: "scheduled",
       scheduled_at: new Date(cursor).toISOString(),
@@ -120,7 +122,7 @@ async function upsertTemplate(admin: any, requesterId: string, body: any) {
   const language = String(body.language || "en").trim().slice(0, 16);
   if (!uuidRegex.test(whatsappNumberId) || !name) return json({ error: "Number and template name required" }, 400);
 
-  const { data: number } = await admin.from("whatsapp_numbers").select("id, user_id").eq("id", whatsappNumberId).maybeSingle();
+  const { data: number } = await admin.from("whatsapp_numbers").select("id, user_id, workspace_id").eq("id", whatsappNumberId).maybeSingle();
   if (!number) return json({ error: "WhatsApp number not found" }, 404);
   if (!(await canAccessUser(admin, requesterId, number.user_id))) return json({ error: "Forbidden" }, 403);
 
@@ -129,6 +131,7 @@ async function upsertTemplate(admin: any, requesterId: string, body: any) {
     .upsert(
       {
         user_id: number.user_id,
+        workspace_id: number.workspace_id,
         whatsapp_number_id: number.id,
         name,
         language,

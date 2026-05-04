@@ -33,10 +33,10 @@ const parseRecipients = (raw: string): Recipient[] => {
   }).filter((r) => r.phone.replace(/[^\d]/g, "").length >= 8);
 };
 
-const Campaigns = () => {
+const Campaigns = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns, queryFn: fetchCampaignBase });
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns(workspaceId), queryFn: () => fetchCampaignBase(workspaceId) });
   const numbers = data?.numbers ?? [];
   const templates = data?.templates ?? [];
   const campaigns = data?.campaigns ?? [];
@@ -93,7 +93,7 @@ const Campaigns = () => {
     },
     onSuccess: async () => {
       toast.success("Campaign scheduled");
-      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns });
+      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns(workspaceId) });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Launch failed"),
   });
@@ -110,7 +110,7 @@ const Campaigns = () => {
     },
     onSuccess: async (res) => {
       toast.success(`Synced ${res.upserted}/${res.fetched} templates`);
-      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns });
+      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns(workspaceId) });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Sync failed"),
   });
@@ -121,11 +121,11 @@ const Campaigns = () => {
   return (
     <>
       <Helmet><title>Campaigns - Iskra CRM</title><meta name="robots" content="noindex,nofollow" /></Helmet>
-      <div className="min-h-screen bg-background text-foreground">
-        <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40">
+      <div className={`${embedded ? "min-h-full" : "min-h-screen"} bg-background text-foreground`}>
+        {!embedded && <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40">
           <div className="flex items-center gap-3"><Megaphone className="w-5 h-5 text-primary" /><h1 className="font-display text-lg">Campaigns</h1></div>
           <div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => navigate("/pipeline")}><ArrowLeft className="w-4 h-4 mr-1" />Pipeline</Button><Button variant="ghost" size="sm" onClick={() => navigate("/crm")}>CRM</Button></div>
-        </header>
+        </header>}
         {isLoading ? <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div> : (
           <main className="p-4 grid lg:grid-cols-[1fr_360px] gap-4">
             <section className="rounded-lg border border-border bg-card/30 p-4 space-y-4">
