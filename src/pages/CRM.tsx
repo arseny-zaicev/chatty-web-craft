@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,18 +21,6 @@ import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
-type Conversation = {
-  id: string;
-  contact_phone: string;
-  contact_name: string | null;
-  last_message_text: string | null;
-  last_message_at: string | null;
-  unread_count: number;
-  whatsapp_number_id: string;
-  is_starred: boolean;
-  pinned_at: string | null;
-};
-
 type Message = {
   id: string;
   direction: "inbound" | "outbound";
@@ -40,15 +30,10 @@ type Message = {
   created_at: string;
 };
 
-type WhatsAppNumber = {
-  id: string;
-  phone_number: string;
-  display_name: string | null;
-};
-
 const CRM = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
   const [numberFilter, setNumberFilter] = useState<string>("all");
   const [starredOnly, setStarredOnly] = useState(false);
@@ -60,6 +45,11 @@ const CRM = () => {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { data: baseData, isLoading } = useQuery({
+    queryKey: crmKeys.base,
+    queryFn: fetchCrmBase,
+  });
 
   const numberById = useMemo(() => {
     const map = new Map<string, WhatsAppNumber>();
