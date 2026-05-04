@@ -36,7 +36,7 @@ const parseRecipients = (raw: string): Recipient[] => {
 const Campaigns = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: crmKeys.campaigns, queryFn: fetchCampaignBase });
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns, queryFn: fetchCampaignBase });
   const numbers = data?.numbers ?? [];
   const templates = data?.templates ?? [];
   const campaigns = data?.campaigns ?? [];
