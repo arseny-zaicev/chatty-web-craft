@@ -180,6 +180,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     const stageDeals = dealsByStage.get(newStageId) ?? [];
     const { error } = await supabase.from("deals").insert({
       user_id: userData.user.id,
+      workspace_id: workspaceId ?? null,
       title: newTitle.trim(),
       contact_name: newContact.trim() || null,
       contact_phone: newPhone.trim() || null,
