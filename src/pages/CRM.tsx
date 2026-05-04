@@ -44,7 +44,27 @@ const CRM = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleSend = async () => {
+    if (!activeId || !draft.trim() || sending) return;
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
+        body: { conversation_id: activeId, text: draft.trim() },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      setDraft("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send";
+      toast.error(msg);
+    } finally {
+      setSending(false);
+    }
+  };
 
   // Auth gate
   useEffect(() => {
