@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
+import { Deal, Stage, crmKeys, fetchPipelineBase } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,31 +51,9 @@ import {
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
-type Stage = {
-  id: string;
-  name: string;
-  color: string;
-  position: number;
-  stage_type: "open" | "won" | "lost";
-};
-
-type Deal = {
-  id: string;
-  title: string;
-  contact_name: string | null;
-  contact_phone: string | null;
-  amount: number | null;
-  currency: string | null;
-  notes: string | null;
-  stage_id: string;
-  position: number;
-  conversation_id: string | null;
-  updated_at: string;
-};
-
 const Pipeline = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
@@ -89,6 +69,11 @@ const Pipeline = () => {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
+  const { data: pipelineData, isLoading } = useQuery({
+    queryKey: crmKeys.pipeline,
+    queryFn: fetchPipelineBase,
+  });
+
   // Auth gate
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -100,25 +85,12 @@ const Pipeline = () => {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
-  // Initial load
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const [{ data: stagesData }, { data: dealsData }] = await Promise.all([
-        supabase.from("pipeline_stages").select("*").order("position"),
-        supabase.from("deals").select("*").order("position"),
-      ]);
-      if (cancelled) return;
-      setStages((stagesData ?? []) as Stage[]);
-      setDeals((dealsData ?? []) as Deal[]);
-      if (stagesData?.[0]) setNewStageId(stagesData[0].id);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!pipelineData) return;
+    setStages(pipelineData.stages);
+    setDeals(pipelineData.deals);
+    if (pipelineData.stages[0] && !newStageId) setNewStageId(pipelineData.stages[0].id);
+  }, [pipelineData, newStageId]);
 
   // Realtime
   useEffect(() => {
@@ -129,16 +101,18 @@ const Pipeline = () => {
           if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
           const incoming = payload.new as Deal;
           const idx = prev.findIndex((d) => d.id === incoming.id);
-          return idx >= 0
+          const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [...prev, incoming];
+          queryClient.setQueryData(crmKeys.pipeline, { stages, deals: next });
+          return next;
         });
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [queryClient, stages]);
 
   const dealsByStage = useMemo(() => {
     const map = new Map<string, Deal[]>();
