@@ -83,9 +83,9 @@ const App = () => (
               <Route path="/booked" element={<Booked />} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/bm-access" element={<BMAccess />} />
-              <Route path="/crm" element={<CRM />} />
-              <Route path="/pipeline" element={<Pipeline />} />
-              <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/crm" element={<Navigate to="/ws/company15/inbox" replace />} />
+              <Route path="/pipeline" element={<Navigate to="/ws/company15/pipeline" replace />} />
+              <Route path="/campaigns" element={<Navigate to="/ws/company15/campaigns" replace />} />
               <Route path="/ws" element={<WorkspaceLayout />}>
                 <Route index element={<Navigate to="/ws/company15/inbox" replace />} />
                 <Route path="new" element={<Navigate to="/ws/company15/inbox" replace />} />
