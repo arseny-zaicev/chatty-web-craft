@@ -274,7 +274,7 @@ const CRM = () => {
                 filtered.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => setActiveId(c.id)}
+                    onClick={() => { setActiveId(c.id); setDraft(""); }}
                     className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/40 transition ${
                       activeId === c.id ? "bg-muted/60" : ""
                     }`}
