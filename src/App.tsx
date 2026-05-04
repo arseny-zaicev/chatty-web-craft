@@ -31,9 +31,19 @@ const Demo = lazy(() => import("./pages/Demo"));
 const BMAccess = lazy(() => import("./pages/BMAccess"));
 const CRM = lazy(() => import("./pages/CRM"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
+const Campaigns = lazy(() => import("./pages/Campaigns"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    },
+  },
+});
 
 const RouteFallback = () => (
   <div className="min-h-screen bg-background" aria-hidden="true" />
@@ -71,6 +81,7 @@ const App = () => (
               <Route path="/bm-access" element={<BMAccess />} />
               <Route path="/crm" element={<CRM />} />
               <Route path="/pipeline" element={<Pipeline />} />
+              <Route path="/campaigns" element={<Campaigns />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
