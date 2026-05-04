@@ -20,9 +20,12 @@ async function handleInbound(payload: Record<string, unknown>) {
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
   const sender = (inner.sender ?? {}) as Record<string, unknown>;
   const msgPayload = (inner.payload ?? {}) as Record<string, unknown>;
-  const destination = normalizePhone(String(inner.destination ?? payload.destination ?? ""));
-  const source = normalizePhone(String(inner.source ?? sender.phone ?? ""));
-  if (!destination || !source) {
+  // In Gupshup v2 format, destination can be at top level OR inside payload
+  const destination = normalizePhone(String(
+    inner.destination ?? payload.destination ?? (payload.app as string) ?? ""
+  ));
+  const source = normalizePhone(String(inner.source ?? sender.phone ?? payload.source ?? ""));
+  if (!source) {
     console.warn("Missing source/destination", { destination, source });
     return;
   }
