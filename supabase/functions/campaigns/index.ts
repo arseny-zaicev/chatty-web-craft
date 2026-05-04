@@ -182,7 +182,7 @@ async function sendTemplate(admin: any, recipient: any) {
 async function processQueue(admin: any) {
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, campaign_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id), message_templates(name, language, variables, provider_template_id))")
+    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id), message_templates(name, language, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date().toISOString())
     .eq("campaigns.status", "running")
@@ -206,15 +206,17 @@ async function processQueue(admin: any) {
       const gsBody = await sendTemplate(admin, recipient);
       const providerId = gsBody.messageId || null;
       await admin.from("campaign_recipients").update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: providerId }).eq("id", recipient.id);
-      await admin.from("messages").insert({
-        user_id: recipient.user_id,
-        conversation_id: recipient.conversation_id,
-        direction: "outbound",
-        body: `[Template] ${recipient.campaigns.message_templates.name}`,
-        status: "sent",
-        provider_message_id: providerId,
-        metadata: { campaign_id: recipient.campaign_id, campaign_recipient_id: recipient.id, gupshup_response: gsBody },
-      }).select("id").maybeSingle();
+      if (recipient.conversation_id) {
+        await admin.from("messages").insert({
+          user_id: recipient.user_id,
+          conversation_id: recipient.conversation_id,
+          direction: "outbound",
+          body: `[Template] ${recipient.campaigns.message_templates.name}`,
+          status: "sent",
+          provider_message_id: providerId,
+          metadata: { campaign_id: recipient.campaign_id, campaign_recipient_id: recipient.id, gupshup_response: gsBody },
+        }).select("id").maybeSingle();
+      }
       sent++;
     } catch (err) {
       failed++;
