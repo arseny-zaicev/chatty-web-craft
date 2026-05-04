@@ -98,6 +98,22 @@ const Campaigns = () => {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Launch failed"),
   });
 
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedNumber) throw new Error("Pick a sending number first");
+      const { data: res, error } = await supabase.functions.invoke("campaigns", {
+        body: { action: "sync_templates", whatsapp_number_id: selectedNumber },
+      });
+      if (error) throw error;
+      if ((res as { error?: string })?.error) throw new Error((res as { error: string }).error);
+      return res as { fetched: number; upserted: number };
+    },
+    onSuccess: async (res) => {
+      toast.success(`Synced ${res.upserted}/${res.fetched} templates`);
+      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Sync failed"),
+  });
   const loadChats = () => {
     setCsv(["phone,name,conversation_id", ...conversations.map((c) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
   };
@@ -114,7 +130,31 @@ const Campaigns = () => {
           <main className="p-4 grid lg:grid-cols-[1fr_360px] gap-4">
             <section className="rounded-lg border border-border bg-card/30 p-4 space-y-4">
               <div className="grid sm:grid-cols-2 gap-3"><Field label="Campaign name"><Input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} /></Field><Field label="Sending number"><Select value={selectedNumber} onValueChange={setNumberId}><SelectTrigger><SelectValue placeholder="Select number" /></SelectTrigger><SelectContent>{numbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.display_name ?? `+${n.phone_number}`}</SelectItem>)}</SelectContent></Select></Field></div>
-              <div className="grid sm:grid-cols-[1fr_auto_1fr] gap-3 items-end"><Field label="Approved template"><Select value={selectedTemplate} onValueChange={setTemplateId}><SelectTrigger><SelectValue placeholder="Select or create below" /></SelectTrigger><SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.language}</SelectItem>)}</SelectContent></Select></Field><Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} title="Refresh templates"><RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} /></Button><Field label="New template name"><Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="gupshup_approved_name" /></Field></div>
+              <div className="grid sm:grid-cols-[1fr_auto_auto_1fr] gap-2 items-end">
+                <Field label="Approved template">
+                  <Select value={selectedTemplate} onValueChange={setTemplateId}>
+                    <SelectTrigger><SelectValue placeholder="Select or create below" /></SelectTrigger>
+                    <SelectContent>
+                      {templates.map((t: any) => {
+                        const status = t.status || "pending";
+                        const dot = status === "approved" ? "bg-emerald-500" : status === "rejected" ? "bg-red-500" : status === "paused" ? "bg-amber-500" : "bg-yellow-400 animate-pulse";
+                        return (
+                          <SelectItem key={t.id} value={t.id}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className={`inline-block w-2 h-2 rounded-full ${dot}`} />
+                              <span>{t.name} · {t.language}</span>
+                              <span className="text-xs text-muted-foreground">({status}{t.category ? ` · ${t.category}` : ""})</span>
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} title="Refresh list"><RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} /></Button>
+                <Button variant="outline" size="sm" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending || !selectedNumber} title="Pull templates and statuses from Gupshup">{syncMutation.isPending ? "Syncing..." : "Sync Gupshup"}</Button>
+                <Field label="New template name"><Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="gupshup_approved_name" /></Field>
+              </div>
               <Field label="Template body preview"><Textarea rows={3} value={templateBody} onChange={(e) => setTemplateBody(e.target.value)} placeholder="Only for manager preview - sending uses approved Gupshup template name" /></Field>
               <Field label="Variables"><Input value={variables} onChange={(e) => setVariables(e.target.value)} placeholder="name, city, offer" /></Field>
               <div className="grid sm:grid-cols-2 gap-3"><Field label="Min delay seconds"><Input type="number" min={5} value={delayMin} onChange={(e) => setDelayMin(Number(e.target.value))} /></Field><Field label="Max delay seconds"><Input type="number" min={delayMin} value={delayMax} onChange={(e) => setDelayMax(Number(e.target.value))} /></Field></div>

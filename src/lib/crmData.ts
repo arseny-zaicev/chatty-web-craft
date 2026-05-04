@@ -79,7 +79,7 @@ export async function fetchCampaignBase() {
       fetchCrmBase(),
       supabase
         .from("message_templates")
-        .select("id, name, language, status, body, whatsapp_number_id")
+        .select("id, name, language, status, category, body, whatsapp_number_id")
         .order("created_at", { ascending: false }),
       supabase
         .from("campaigns")
