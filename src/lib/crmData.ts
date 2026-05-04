@@ -72,13 +72,21 @@ export async function fetchCrmBase(workspaceId?: string) {
   return { numbers: (numbers ?? []) as WhatsAppNumber[], conversations: (conversations ?? []) as Conversation[] };
 }
 
-export async function fetchPipelineBase() {
+export async function fetchPipelineBase(workspaceId?: string) {
+  let stagesQuery = supabase.from("pipeline_stages").select("id, name, color, position, stage_type, workspace_id").order("position");
+  let dealsQuery = supabase
+    .from("deals")
+    .select("id, title, contact_name, contact_phone, amount, currency, notes, stage_id, workspace_id, position, conversation_id, updated_at")
+    .order("position");
+
+  if (workspaceId) {
+    stagesQuery = stagesQuery.eq("workspace_id", workspaceId);
+    dealsQuery = dealsQuery.eq("workspace_id", workspaceId);
+  }
+
   const [{ data: stages, error: stagesError }, { data: deals, error: dealsError }] = await Promise.all([
-    supabase.from("pipeline_stages").select("id, name, color, position, stage_type").order("position"),
-    supabase
-      .from("deals")
-      .select("id, title, contact_name, contact_phone, amount, currency, notes, stage_id, position, conversation_id, updated_at")
-      .order("position"),
+    stagesQuery,
+    dealsQuery,
   ]);
 
   if (stagesError) throw stagesError;
@@ -86,19 +94,27 @@ export async function fetchPipelineBase() {
   return { stages: (stages ?? []) as Stage[], deals: (deals ?? []) as Deal[] };
 }
 
-export async function fetchCampaignBase() {
+export async function fetchCampaignBase(workspaceId?: string) {
+  let templatesQuery = supabase
+    .from("message_templates")
+    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id")
+    .order("created_at", { ascending: false });
+  let campaignsQuery = supabase
+    .from("campaigns")
+    .select("id, name, status, delay_min_seconds, delay_max_seconds, total_recipients, sent_count, failed_count, created_at, whatsapp_number_id, template_id, workspace_id")
+    .order("created_at", { ascending: false })
+    .limit(25);
+
+  if (workspaceId) {
+    templatesQuery = templatesQuery.eq("workspace_id", workspaceId);
+    campaignsQuery = campaignsQuery.eq("workspace_id", workspaceId);
+  }
+
   const [crmBase, { data: templates, error: templatesError }, { data: campaigns, error: campaignsError }] =
     await Promise.all([
-      fetchCrmBase(),
-      supabase
-        .from("message_templates")
-        .select("id, name, language, status, category, body, whatsapp_number_id")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("campaigns")
-        .select("id, name, status, delay_min_seconds, delay_max_seconds, total_recipients, sent_count, failed_count, created_at, whatsapp_number_id, template_id")
-        .order("created_at", { ascending: false })
-        .limit(25),
+      fetchCrmBase(workspaceId),
+      templatesQuery,
+      campaignsQuery,
     ]);
 
   if (templatesError) throw templatesError;
