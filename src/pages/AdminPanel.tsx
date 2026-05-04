@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles, Activity, Image, Upload, ExternalLink } from "lucide-react";
+import { Loader2, LogOut, Plus, Users, Trash2, RefreshCw, Copy, Eye, EyeOff, ArrowLeft, Save, X, Key, Shuffle, Mail, BarChart3, Phone, PhoneCall, PhoneOff, PhoneMissed, TrendingUp, PieChart, FileText, Sparkles, Activity, Image, Upload, ExternalLink, Building2, Inbox, KanbanSquare, Megaphone, Rocket } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
@@ -854,7 +854,7 @@ const AdminPanel = () => {
         </div>
         {/* Tabs */}
         <div className="container mx-auto px-4">
-          <div className="flex gap-1 border-t pt-2">
+          <div className="flex flex-wrap items-center gap-1 border-t pt-2">
             <Button
               variant={activeTab === "clients" ? "default" : "ghost"}
               size="sm"
@@ -881,6 +881,30 @@ const AdminPanel = () => {
             >
               <Activity className="h-4 w-4" />
               Form Analytics
+            </Button>
+
+            <div className="w-px h-5 bg-border mx-2" />
+            <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">WhatsApp</span>
+            <Button asChild variant="ghost" size="sm" className="gap-2">
+              <Link to="/ws"><Building2 className="h-4 w-4" />Workspaces</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-2">
+              <Link to="/ws/company15/inbox"><Inbox className="h-4 w-4" />Inbox</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-2">
+              <Link to="/ws/company15/pipeline"><KanbanSquare className="h-4 w-4" />Pipeline</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-2">
+              <Link to="/ws/company15/templates"><FileText className="h-4 w-4" />Templates</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-2">
+              <Link to="/ws/company15/numbers"><Phone className="h-4 w-4" />Numbers</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-2">
+              <Link to="/ws/company15/campaigns"><Megaphone className="h-4 w-4" />Campaigns</Link>
+            </Button>
+            <Button asChild variant="default" size="sm" className="gap-2">
+              <Link to="/ws/company15/launch"><Rocket className="h-4 w-4" />Launch</Link>
             </Button>
           </div>
         </div>
