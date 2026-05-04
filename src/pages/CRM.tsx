@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, MessageSquare, Phone, Search, LogOut } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, MessageSquare, Phone, Search, LogOut, Send } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 type Conversation = {
   id: string;
