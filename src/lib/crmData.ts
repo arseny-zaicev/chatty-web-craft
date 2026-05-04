@@ -42,6 +42,9 @@ export const crmKeys = {
   base: (workspaceId?: string) => ["crm", "base", workspaceId ?? "all"] as const,
   pipeline: (workspaceId?: string) => ["crm", "pipeline", workspaceId ?? "all"] as const,
   campaigns: (workspaceId?: string) => ["crm", "campaigns", workspaceId ?? "all"] as const,
+  allBase: ["crm", "base", "all"] as const,
+  allPipeline: ["crm", "pipeline", "all"] as const,
+  allCampaigns: ["crm", "campaigns", "all"] as const,
 };
 
 export async function fetchCrmBase(workspaceId?: string) {
