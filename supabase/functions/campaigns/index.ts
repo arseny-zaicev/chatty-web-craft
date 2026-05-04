@@ -145,6 +145,72 @@ async function upsertTemplate(admin: any, requesterId: string, body: any) {
   return json({ ok: true, template_id: data.id });
 }
 
+async function syncTemplates(admin: any, requesterId: string, body: any) {
+  const whatsappNumberId = String(body.whatsapp_number_id || "");
+  if (!uuidRegex.test(whatsappNumberId)) return json({ error: "WhatsApp number required" }, 400);
+
+  const { data: number } = await admin
+    .from("whatsapp_numbers")
+    .select("id, user_id, workspace_id, provider_app_id, provider_waba_id")
+    .eq("id", whatsappNumberId)
+    .maybeSingle();
+  if (!number) return json({ error: "WhatsApp number not found" }, 404);
+  if (!(await canAccessUser(admin, requesterId, number.user_id))) return json({ error: "Forbidden" }, 403);
+
+  const apiKey = Deno.env.get("GUPSHUP_API_KEY");
+  if (!apiKey) return json({ error: "GUPSHUP_API_KEY not configured" }, 500);
+  const appId = number.provider_app_id || Deno.env.get("GUPSHUP_APP_ID");
+  if (!appId) return json({ error: "Gupshup app id missing for this number" }, 400);
+
+  const res = await fetch(`https://api.gupshup.io/wa/app/${appId}/template`, {
+    headers: { apikey: apiKey, accept: "application/json" },
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) return json({ error: `Gupshup error: ${JSON.stringify(payload).slice(0, 400)}` }, 502);
+
+  const templates: any[] = Array.isArray(payload.templates) ? payload.templates : [];
+  let upserted = 0;
+  for (const t of templates) {
+    const name = String(t.elementName || t.name || "").trim().slice(0, 120);
+    if (!name) continue;
+    const language = String(t.languageCode || t.language || "en").trim().slice(0, 16);
+    const rawStatus = String(t.status || "PENDING").toUpperCase();
+    const status =
+      rawStatus === "APPROVED" || rawStatus === "ENABLED"
+        ? "approved"
+        : rawStatus === "REJECTED" || rawStatus === "FAILED"
+          ? "rejected"
+          : rawStatus === "PAUSED" || rawStatus === "DISABLED"
+            ? "paused"
+            : "pending";
+    const rawCategory = String(t.category || "MARKETING").toUpperCase();
+    const category =
+      rawCategory.includes("UTILITY") ? "utility" : rawCategory.includes("AUTH") ? "authentication" : "marketing";
+    const bodyText = String(t.data || t.body || "").slice(0, 4096) || null;
+    const vars = Array.from(new Set((bodyText || "").match(/\{\{\s*(\w+)\s*\}\}/g)?.map((m: string) => m.replace(/[{}\s]/g, "")) ?? []));
+
+    const { error: upsertError } = await admin
+      .from("message_templates")
+      .upsert(
+        {
+          user_id: number.user_id,
+          workspace_id: number.workspace_id,
+          whatsapp_number_id: number.id,
+          name,
+          language,
+          body: bodyText,
+          provider_template_id: String(t.id || t.templateId || "").trim().slice(0, 160) || null,
+          variables: vars,
+          status,
+          category,
+        },
+        { onConflict: "user_id,name,language" },
+      );
+    if (!upsertError) upserted++;
+  }
+  return json({ ok: true, fetched: templates.length, upserted });
+}
+
 async function sendTemplate(admin: any, recipient: any) {
   const campaign = recipient.campaigns;
   const template = campaign?.message_templates;
