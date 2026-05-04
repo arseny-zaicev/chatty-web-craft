@@ -18,6 +18,7 @@ export async function fetchWorkspaces(): Promise<Workspace[]> {
   const { data, error } = await supabase
     .from("workspaces")
     .select("id, name, slug, color, is_active, owner_user_id")
+    .eq("is_active", true)
     .order("name");
   if (error) throw error;
   return (data ?? []) as Workspace[];
