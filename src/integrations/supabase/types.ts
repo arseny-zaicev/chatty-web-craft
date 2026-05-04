@@ -130,8 +130,10 @@ export type Database = {
           contact_phone: string
           created_at: string
           id: string
+          is_starred: boolean
           last_message_at: string | null
           last_message_text: string | null
+          pinned_at: string | null
           unread_count: number
           updated_at: string
           user_id: string
@@ -142,8 +144,10 @@ export type Database = {
           contact_phone: string
           created_at?: string
           id?: string
+          is_starred?: boolean
           last_message_at?: string | null
           last_message_text?: string | null
+          pinned_at?: string | null
           unread_count?: number
           updated_at?: string
           user_id: string
@@ -154,8 +158,10 @@ export type Database = {
           contact_phone?: string
           created_at?: string
           id?: string
+          is_starred?: boolean
           last_message_at?: string | null
           last_message_text?: string | null
+          pinned_at?: string | null
           unread_count?: number
           updated_at?: string
           user_id?: string
