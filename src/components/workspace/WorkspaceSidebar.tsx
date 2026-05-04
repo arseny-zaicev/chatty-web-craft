@@ -46,6 +46,14 @@ export function WorkspaceSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="New client">
+                  <NavLink to="/ws/new" className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+                    <Plus className="w-4 h-4" />
+                    {!collapsed && <span>New client</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
