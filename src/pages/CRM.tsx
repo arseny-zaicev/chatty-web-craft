@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, MessageSquare, Phone, Search, LogOut } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, MessageSquare, Phone, Search, LogOut, Send } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 type Conversation = {
   id: string;
@@ -42,7 +44,27 @@ const CRM = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleSend = async () => {
+    if (!activeId || !draft.trim() || sending) return;
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-whatsapp", {
+        body: { conversation_id: activeId, text: draft.trim() },
+      });
+      if (error) throw error;
+      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      setDraft("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to send";
+      toast.error(msg);
+    } finally {
+      setSending(false);
+    }
+  };
 
   // Auth gate
   useEffect(() => {
@@ -252,7 +274,7 @@ const CRM = () => {
                 filtered.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => setActiveId(c.id)}
+                    onClick={() => { setActiveId(c.id); setDraft(""); }}
                     className={`w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/40 transition ${
                       activeId === c.id ? "bg-muted/60" : ""
                     }`}
@@ -357,8 +379,31 @@ const CRM = () => {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="border-t border-border px-6 py-4 bg-card/30 text-xs text-muted-foreground text-center">
-                  Reply functionality coming next. View-only for now.
+                <div className="border-t border-border px-4 py-3 bg-card/30">
+                  <div className="flex items-end gap-2">
+                    <Textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                      placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+                      rows={2}
+                      className="resize-none flex-1"
+                      disabled={sending}
+                    />
+                    <Button
+                      onClick={handleSend}
+                      disabled={sending || !draft.trim()}
+                      size="icon"
+                      className="h-10 w-10 shrink-0"
+                    >
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </Button>
+                  </div>
                 </div>
               </>
             )}
