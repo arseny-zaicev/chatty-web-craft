@@ -88,7 +88,7 @@ const App = () => (
               <Route path="/campaigns" element={<Campaigns />} />
               <Route path="/ws" element={<WorkspaceLayout />}>
                 <Route index element={<Navigate to="/ws/company15/inbox" replace />} />
-                <Route path="new" element={<NewClient />} />
+                <Route path="new" element={<Navigate to="/ws/company15/inbox" replace />} />
                 <Route path=":slug" element={<WorkspaceSection section="inbox" />} />
                 <Route path=":slug/inbox" element={<WorkspaceSection section="inbox" />} />
                 <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />
