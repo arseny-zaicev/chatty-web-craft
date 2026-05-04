@@ -124,6 +124,116 @@ export type Database = {
         }
         Relationships: []
       }
+      conversations: {
+        Row: {
+          contact_name: string | null
+          contact_phone: string
+          created_at: string
+          id: string
+          last_message_at: string | null
+          last_message_text: string | null
+          unread_count: number
+          updated_at: string
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          contact_name?: string | null
+          contact_phone: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_message_text?: string | null
+          unread_count?: number
+          updated_at?: string
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          contact_name?: string | null
+          contact_phone?: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_message_text?: string | null
+          unread_count?: number
+          updated_at?: string
+          user_id?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deals: {
+        Row: {
+          amount: number | null
+          contact_name: string | null
+          contact_phone: string | null
+          conversation_id: string | null
+          created_at: string
+          currency: string | null
+          id: string
+          notes: string | null
+          position: number
+          stage_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          notes?: string | null
+          position?: number
+          stage_id: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          notes?: string | null
+          position?: number
+          stage_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deals_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       form_analytics: {
         Row: {
           created_at: string
@@ -202,6 +312,89 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          body: string | null
+          conversation_id: string
+          created_at: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          id: string
+          media_type: string | null
+          media_url: string | null
+          metadata: Json
+          provider_message_id: string | null
+          status: Database["public"]["Enums"]["message_status"]
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          conversation_id: string
+          created_at?: string
+          direction: Database["public"]["Enums"]["message_direction"]
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          metadata?: Json
+          provider_message_id?: string | null
+          status?: Database["public"]["Enums"]["message_status"]
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          conversation_id?: string
+          created_at?: string
+          direction?: Database["public"]["Enums"]["message_direction"]
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          metadata?: Json
+          provider_message_id?: string | null
+          status?: Database["public"]["Enums"]["message_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipeline_stages: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          position: number
+          stage_type: Database["public"]["Enums"]["stage_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          stage_type?: Database["public"]["Enums"]["stage_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          stage_type?: Database["public"]["Enums"]["stage_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -229,15 +422,128 @@ export type Database = {
         }
         Relationships: []
       }
+      stage_automations: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          target_stage_id: string
+          trigger: Database["public"]["Enums"]["automation_trigger"]
+          trigger_value: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          target_stage_id: string
+          trigger: Database["public"]["Enums"]["automation_trigger"]
+          trigger_value?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          target_stage_id?: string
+          trigger?: Database["public"]["Enums"]["automation_trigger"]
+          trigger_value?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_automations_target_stage_id_fkey"
+            columns: ["target_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_numbers: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          is_active: boolean
+          phone_number: string
+          provider: string
+          provider_app_id: string | null
+          provider_waba_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean
+          phone_number: string
+          provider?: string
+          provider_app_id?: string | null
+          provider_waba_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean
+          phone_number?: string
+          provider?: string
+          provider_app_id?: string | null
+          provider_waba_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      app_role: "owner" | "manager" | "viewer"
+      automation_trigger: "button_click" | "inbound_keyword" | "inbound_any"
       form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access"
+      message_direction: "inbound" | "outbound"
+      message_status: "queued" | "sent" | "delivered" | "read" | "failed"
+      stage_type: "open" | "won" | "lost"
       submission_status: "new" | "contacted" | "converted" | "rejected"
     }
     CompositeTypes: {
@@ -366,7 +672,12 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["owner", "manager", "viewer"],
+      automation_trigger: ["button_click", "inbound_keyword", "inbound_any"],
       form_type: ["qualification", "seller_leads", "demo_request", "bm_access"],
+      message_direction: ["inbound", "outbound"],
+      message_status: ["queued", "sent", "delivered", "read", "failed"],
+      stage_type: ["open", "won", "lost"],
       submission_status: ["new", "contacted", "converted", "rejected"],
     },
   },
