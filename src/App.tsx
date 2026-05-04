@@ -29,6 +29,7 @@ const Book = lazy(() => import("./pages/Book"));
 const Booked = lazy(() => import("./pages/Booked"));
 const Demo = lazy(() => import("./pages/Demo"));
 const BMAccess = lazy(() => import("./pages/BMAccess"));
+const CRM = lazy(() => import("./pages/CRM"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -67,6 +68,7 @@ const App = () => (
               <Route path="/booked" element={<Booked />} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/bm-access" element={<BMAccess />} />
+              <Route path="/crm" element={<CRM />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
