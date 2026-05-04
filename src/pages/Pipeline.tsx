@@ -255,6 +255,9 @@ const Pipeline = () => {
             <Button variant="ghost" size="sm" onClick={() => navigate("/crm")}>
               CRM
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/campaigns")}>
+              Campaigns
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
               Admin
             </Button>
