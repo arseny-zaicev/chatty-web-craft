@@ -33,10 +33,10 @@ const parseRecipients = (raw: string): Recipient[] => {
   }).filter((r) => r.phone.replace(/[^\d]/g, "").length >= 8);
 };
 
-const Campaigns = () => {
+const Campaigns = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns, queryFn: fetchCampaignBase });
+  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns(workspaceId), queryFn: () => fetchCampaignBase(workspaceId) });
   const numbers = data?.numbers ?? [];
   const templates = data?.templates ?? [];
   const campaigns = data?.campaigns ?? [];
@@ -93,7 +93,7 @@ const Campaigns = () => {
     },
     onSuccess: async () => {
       toast.success("Campaign scheduled");
-      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns });
+      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns(workspaceId) });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Launch failed"),
   });
@@ -110,7 +110,7 @@ const Campaigns = () => {
     },
     onSuccess: async (res) => {
       toast.success(`Synced ${res.upserted}/${res.fetched} templates`);
-      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns });
+      await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns(workspaceId) });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Sync failed"),
   });
