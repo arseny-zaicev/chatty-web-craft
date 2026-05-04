@@ -29,6 +29,7 @@ const Book = lazy(() => import("./pages/Book"));
 const Booked = lazy(() => import("./pages/Booked"));
 const Demo = lazy(() => import("./pages/Demo"));
 const BMAccess = lazy(() => import("./pages/BMAccess"));
+const CRM = lazy(() => import("./pages/CRM"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
