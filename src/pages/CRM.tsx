@@ -153,6 +153,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
             return prev.filter((c) => c.id !== (payload.old as Conversation).id);
           }
           const incoming = payload.new as Conversation;
+          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
           const idx = prev.findIndex((c) => c.id === incoming.id);
           const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
