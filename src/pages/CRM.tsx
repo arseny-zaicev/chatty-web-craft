@@ -30,7 +30,7 @@ type Message = {
   created_at: string;
 };
 
-const CRM = () => {
+const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -47,8 +47,8 @@ const CRM = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: baseData, isLoading } = useQuery({
-    queryKey: crmKeys.base,
-    queryFn: fetchCrmBase,
+    queryKey: crmKeys.base(workspaceId),
+    queryFn: () => fetchCrmBase(workspaceId),
   });
 
   const numberById = useMemo(() => {
@@ -157,7 +157,7 @@ const CRM = () => {
           const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [incoming, ...prev];
-          queryClient.setQueryData(crmKeys.base, { numbers, conversations: next });
+          queryClient.setQueryData(crmKeys.base(workspaceId), { numbers, conversations: next });
           return next;
         });
       })
@@ -165,7 +165,7 @@ const CRM = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [numbers, queryClient]);
+  }, [numbers, queryClient, workspaceId]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -249,8 +249,8 @@ const CRM = () => {
         <meta name="robots" content="noindex,nofollow" />
       </Helmet>
 
-      <div className="h-screen flex flex-col bg-background text-foreground">
-        <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
+      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-background text-foreground`}>
+        {!embedded && <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
           <div className="flex items-center gap-3">
             <MessageSquare className="w-5 h-5 text-primary" />
             <h1 className="font-display text-lg tracking-tight">CRM Inbox</h1>
@@ -276,7 +276,7 @@ const CRM = () => {
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
-        </header>
+        </header>}
 
         <div className="flex-1 flex min-h-0">
           {/* Left: conversation list */}
