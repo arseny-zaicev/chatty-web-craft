@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,18 +21,6 @@ import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
-type Conversation = {
-  id: string;
-  contact_phone: string;
-  contact_name: string | null;
-  last_message_text: string | null;
-  last_message_at: string | null;
-  unread_count: number;
-  whatsapp_number_id: string;
-  is_starred: boolean;
-  pinned_at: string | null;
-};
-
 type Message = {
   id: string;
   direction: "inbound" | "outbound";
@@ -40,15 +30,10 @@ type Message = {
   created_at: string;
 };
 
-type WhatsAppNumber = {
-  id: string;
-  phone_number: string;
-  display_name: string | null;
-};
-
 const CRM = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
   const [numberFilter, setNumberFilter] = useState<string>("all");
   const [starredOnly, setStarredOnly] = useState(false);
@@ -60,6 +45,11 @@ const CRM = () => {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { data: baseData, isLoading } = useQuery({
+    queryKey: crmKeys.base,
+    queryFn: fetchCrmBase,
+  });
 
   const numberById = useMemo(() => {
     const map = new Map<string, WhatsAppNumber>();
@@ -143,30 +133,15 @@ const CRM = () => {
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
-  // Initial data
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      const [{ data: nums }, { data: convs }] = await Promise.all([
-        supabase.from("whatsapp_numbers").select("id, phone_number, display_name"),
-        supabase
-          .from("conversations")
-          .select(
-            "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, is_starred, pinned_at",
-          )
-          .order("last_message_at", { ascending: false, nullsFirst: false }),
-      ]);
-      if (cancelled) return;
-      setNumbers(nums ?? []);
-      setConversations((convs ?? []) as Conversation[]);
-      setLoading(false);
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!baseData) return;
+    setNumbers(baseData.numbers);
+    setConversations(baseData.conversations);
+    const requested = searchParams.get("conversation");
+    if (requested && baseData.conversations.some((c) => c.id === requested)) {
+      setActiveId(requested);
+    }
+  }, [baseData, searchParams]);
 
   // Realtime conversations
   useEffect(() => {
@@ -179,16 +154,18 @@ const CRM = () => {
           }
           const incoming = payload.new as Conversation;
           const idx = prev.findIndex((c) => c.id === incoming.id);
-          return idx >= 0
+          const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [incoming, ...prev];
+          queryClient.setQueryData(crmKeys.base, { numbers, conversations: next });
+          return next;
         });
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [numbers, queryClient]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -282,6 +259,9 @@ const CRM = () => {
             <Button variant="ghost" size="sm" onClick={() => navigate("/pipeline")}>
               Pipeline
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/campaigns")}>
+              Campaigns
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
               Admin
             </Button>
@@ -352,7 +332,7 @@ const CRM = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {loading ? (
+              {isLoading ? (
                 <div className="p-6 flex justify-center">
                   <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                 </div>
