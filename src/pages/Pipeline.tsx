@@ -51,7 +51,7 @@ import {
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
-const Pipeline = () => {
+const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [stages, setStages] = useState<Stage[]>([]);
@@ -70,8 +70,8 @@ const Pipeline = () => {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data: pipelineData, isLoading } = useQuery({
-    queryKey: crmKeys.pipeline,
-    queryFn: fetchPipelineBase,
+    queryKey: crmKeys.pipeline(workspaceId),
+    queryFn: () => fetchPipelineBase(workspaceId),
   });
 
   // Auth gate
@@ -100,11 +100,12 @@ const Pipeline = () => {
         setDeals((prev) => {
           if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
           const incoming = payload.new as Deal;
+          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
           const idx = prev.findIndex((d) => d.id === incoming.id);
           const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [...prev, incoming];
-          queryClient.setQueryData(crmKeys.pipeline, { stages, deals: next });
+          queryClient.setQueryData(crmKeys.pipeline(workspaceId), { stages, deals: next });
           return next;
         });
       })
@@ -112,7 +113,7 @@ const Pipeline = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, stages]);
+  }, [queryClient, stages, workspaceId]);
 
   const dealsByStage = useMemo(() => {
     const map = new Map<string, Deal[]>();
