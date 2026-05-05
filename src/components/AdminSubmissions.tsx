@@ -499,12 +499,18 @@ export const AdminSubmissions = () => {
                 )}
               </div>
 
+              {/* Screenshots (BM Access) */}
+              {selectedSubmission.form_type === "bm_access" && typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Array.isArray((selectedSubmission.data as Record<string, unknown>).screenshot_paths) && (
+                <ScreenshotGallery paths={(selectedSubmission.data as { screenshot_paths: string[] }).screenshot_paths} />
+              )}
+
               {/* Form Data */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">Form Responses</p>
                 <div className="bg-muted p-4 rounded-lg space-y-2">
                   {typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Object.entries(selectedSubmission.data as Record<string, unknown>).map(([key, value]) => {
                     if (value === null || value === undefined) return null;
+                    if (key === "screenshot_paths") return null;
                     const labels: Record<string, string> = {
                       campaign_type: "Campaign Type",
                       crm: "CRM",
