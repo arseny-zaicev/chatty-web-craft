@@ -499,12 +499,18 @@ export const AdminSubmissions = () => {
                 )}
               </div>
 
+              {/* Screenshots (BM Access) */}
+              {selectedSubmission.form_type === "bm_access" && typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Array.isArray((selectedSubmission.data as Record<string, unknown>).screenshot_paths) && (
+                <ScreenshotGallery paths={(selectedSubmission.data as { screenshot_paths: string[] }).screenshot_paths} />
+              )}
+
               {/* Form Data */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">Form Responses</p>
                 <div className="bg-muted p-4 rounded-lg space-y-2">
                   {typeof selectedSubmission.data === 'object' && selectedSubmission.data !== null && Object.entries(selectedSubmission.data as Record<string, unknown>).map(([key, value]) => {
                     if (value === null || value === undefined) return null;
+                    if (key === "screenshot_paths") return null;
                     const labels: Record<string, string> = {
                       campaign_type: "Campaign Type",
                       crm: "CRM",
@@ -574,6 +580,45 @@ export const AdminSubmissions = () => {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+const ScreenshotGallery = ({ paths }: { paths: string[] }) => {
+  const [urls, setUrls] = useState<{ path: string; url: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const results = await Promise.all(
+        paths.map(async (p) => {
+          const { data } = await supabase.storage.from("bm-screenshots").createSignedUrl(p, 3600);
+          return { path: p, url: data?.signedUrl ?? "" };
+        })
+      );
+      if (!cancelled) {
+        setUrls(results.filter((r) => r.url));
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [paths]);
+
+  if (loading) return <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Loading screenshots...</div>;
+  if (urls.length === 0) return <div className="text-sm text-muted-foreground">No screenshots available</div>;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">Screenshots ({urls.length})</p>
+      <div className="grid grid-cols-2 gap-3">
+        {urls.map((u, idx) => (
+          <a key={u.path} href={u.url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border hover:ring-2 hover:ring-primary transition">
+            <img src={u.url} alt={`Screenshot ${idx + 1}`} className="w-full h-48 object-cover bg-muted" loading="lazy" />
+          </a>
+        ))}
+      </div>
     </div>
   );
 };
