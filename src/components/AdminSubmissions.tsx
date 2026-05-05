@@ -583,3 +583,42 @@ export const AdminSubmissions = () => {
     </div>
   );
 };
+
+const ScreenshotGallery = ({ paths }: { paths: string[] }) => {
+  const [urls, setUrls] = useState<{ path: string; url: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const results = await Promise.all(
+        paths.map(async (p) => {
+          const { data } = await supabase.storage.from("bm-screenshots").createSignedUrl(p, 3600);
+          return { path: p, url: data?.signedUrl ?? "" };
+        })
+      );
+      if (!cancelled) {
+        setUrls(results.filter((r) => r.url));
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [paths]);
+
+  if (loading) return <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Loading screenshots...</div>;
+  if (urls.length === 0) return <div className="text-sm text-muted-foreground">No screenshots available</div>;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">Screenshots ({urls.length})</p>
+      <div className="grid grid-cols-2 gap-3">
+        {urls.map((u, idx) => (
+          <a key={u.path} href={u.url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border hover:ring-2 hover:ring-primary transition">
+            <img src={u.url} alt={`Screenshot ${idx + 1}`} className="w-full h-48 object-cover bg-muted" loading="lazy" />
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+};
