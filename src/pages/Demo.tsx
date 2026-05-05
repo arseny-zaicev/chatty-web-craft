@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowRight, ArrowLeft, MessageSquare, RefreshCw, Send, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
+const CALENDLY_URL = "https://calendly.com/arseny-iskra/iskra-ae-whatsapp-outreach-web";
 
 const CAMPAIGN_TYPES = [
   {
@@ -32,125 +32,85 @@ const CAMPAIGN_TYPES = [
   },
 ];
 
-const LEADS_PER_DAY = ["0 - 5", "6 - 50", "51 - 250", "251+"];
-const TRAFFIC_SOURCES = ["Facebook/Meta Ads", "Google Ads", "SEO / Organic", "Social Media", "Referrals", "Marketplace / Portal", "Multiple channels", "Other"];
-const BASE_SIZES = ["Under 1,000", "1,000 - 5,000", "5,000 - 20,000", "20,000+"];
-const BASE_AGES = ["Less than 6 months", "6 - 12 months", "1 - 2 years", "2+ years"];
-const BASE_SOURCES = ["CRM export", "Google Sheets / Excel", "Old ad campaigns", "Website signups", "Event attendees", "Mixed / multiple sources"];
+const normalizeWebsite = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
 
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 export default function Demo() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
 
-  // Form data
   const [campaignType, setCampaignType] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [businessUrl, setBusinessUrl] = useState("");
-  const [leadsPerDay, setLeadsPerDay] = useState("");
-  const [trafficSource, setTrafficSource] = useState("");
-  const [baseSize, setBaseSize] = useState("");
-  const [baseAge, setBaseAge] = useState("");
-  const [baseSource, setBaseSource] = useState("");
-  const [hasMobileNumbers, setHasMobileNumbers] = useState("");
-  const [targetAudience, setTargetAudience] = useState("");
-  
 
   const totalSteps = 3;
-
+  const selectedCampaign = CAMPAIGN_TYPES.find((ct) => ct.id === campaignType);
+  const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
   const canProceedStep1 = campaignType !== "";
-  const canProceedStep2 =
-    firstName.trim() !== "" &&
-    email.trim() !== "" &&
-    phone.trim() !== "";
+  const canProceedStep2 = firstName.trim() !== "" && isValidEmail(email) && phone.trim() !== "";
 
-  const canProceedStep3 = (() => {
-    if (campaignType === "warm") return leadsPerDay !== "" && trafficSource !== "";
-    if (campaignType === "reactivation") return baseSize !== "" && baseAge !== "" && baseSource !== "";
-    if (campaignType === "cold") return hasMobileNumbers !== "";
-    return false;
-  })();
+  const calendlyUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (fullName) params.set("name", fullName);
+    if (email.trim()) params.set("email", email.trim().toLowerCase());
+    if (phone.trim()) params.set("a1", phone.trim());
+    return params.toString() ? `${CALENDLY_URL}?${params.toString()}` : CALENDLY_URL;
+  }, [email, fullName, phone]);
 
-  const handleSubmit = async () => {
+  const handleSaveLead = async () => {
+    if (!canProceedStep2 || !selectedCampaign) {
+      toast.error("Please fill in your name, valid email, and phone number.");
+      return;
+    }
+
+    if (submissionId) {
+      setStep(3);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const normalizedWebsite = normalizeWebsite(businessUrl);
       const formData = {
-        campaign_type: campaignType,
-        business_url: businessUrl,
-        ...(campaignType === "warm" && { leads_per_day: leadsPerDay, traffic_source: trafficSource }),
-        ...(campaignType === "reactivation" && { base_size: baseSize, base_age: baseAge, base_source: baseSource }),
-        ...(campaignType === "cold" && { has_mobile_numbers: hasMobileNumbers, target_audience: targetAudience || null }),
+        campaign_type: selectedCampaign.id,
+        campaign_label: selectedCampaign.label,
+        business_url: normalizedWebsite,
+        calendar_url: CALENDLY_URL,
+        source_page: "/demo",
       };
 
-      const { error } = await supabase.functions.invoke("submit-form", {
+      const { data, error } = await supabase.functions.invoke("submit-form", {
         body: {
           form_type: "demo_request",
-          contact_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-          contact_email: email.trim(),
+          contact_name: fullName,
+          contact_email: email.trim().toLowerCase(),
           contact_phone: phone.trim(),
-          contact_website: businessUrl.trim() || null,
+          contact_website: normalizedWebsite,
           data: formData,
         },
       });
 
       if (error) throw error;
-      setSubmitted(true);
+
+      setSubmissionId((data as { id?: string } | null)?.id ?? null);
+      setStep(3);
+      toast.success("Request saved. Pick a time below.");
     } catch (err) {
-      console.error("Submit error:", err);
-      toast.error("Something went wrong. Please try again.");
+      console.error("Demo request submit error:", err);
+      toast.error("Could not save the request. Please check the fields and try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  if (submitted) {
-    return (
-      <>
-        <Helmet>
-          <title>Demo Booked - ISKRA</title>
-        </Helmet>
-        <Navbar />
-        <main className="min-h-screen bg-background pt-24 pb-16 flex items-center justify-center">
-          <div className="container mx-auto px-4 max-w-2xl">
-            <div className="card-light text-center py-12">
-              <CheckCircle2 className="w-16 h-16 text-primary mx-auto mb-6" />
-              <h1 className="font-display text-3xl font-bold mb-3 text-foreground">You're all set!</h1>
-              <p className="text-muted-foreground text-lg mb-8">
-                Pick a time below that works for you, and we'll walk you through how it works for your case.
-              </p>
-              {/* Calendly Embed */}
-              <div className="rounded-xl overflow-hidden border border-border">
-                <iframe
-                  src="https://calendly.com/iskra-demo/30min"
-                  width="100%"
-                  height="630"
-                  frameBorder="0"
-                  title="Schedule a demo"
-                  className="bg-card"
-                />
-              </div>
-              <p className="text-sm text-muted-foreground mt-4">
-                Can't find a time?{" "}
-                <a
-                  href="https://wa.me/971568785008?text=Hi!%20I%20just%20filled%20the%20demo%20form%20on%20iskra.ae"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Message us on WhatsApp
-                </a>
-              </p>
-            </div>
-          </div>
-        </main>
-        <Footer />
-      </>
-    );
-  }
 
   return (
     <>
@@ -161,8 +121,7 @@ export default function Demo() {
       </Helmet>
       <Navbar />
       <main className="min-h-screen bg-background pt-24 pb-16 flex items-center justify-center">
-        <div className="container mx-auto px-4 max-w-xl">
-          {/* Progress */}
+        <div className={`container mx-auto px-4 ${step === 3 ? "max-w-4xl" : "max-w-xl"}`}>
           <div className="flex items-center justify-center gap-2 mb-8">
             {Array.from({ length: totalSteps }).map((_, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -183,11 +142,10 @@ export default function Demo() {
           </div>
 
           <div className="card-light">
-            {/* Step 1: Campaign Type */}
             {step === 1 && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="font-display text-2xl font-bold text-foreground mb-1">What do you need?</h2>
+                  <h1 className="font-display text-2xl font-bold text-foreground mb-1">What do you need?</h1>
                   <p className="text-muted-foreground">Select the campaign type that fits your business.</p>
                 </div>
                 <div className="space-y-3">
@@ -223,15 +181,14 @@ export default function Demo() {
               </div>
             )}
 
-            {/* Step 2: Contact Info */}
             {step === 2 && (
               <div className="space-y-5">
                 <div>
-                  <h2 className="font-display text-2xl font-bold text-foreground mb-1">About you</h2>
-                  <p className="text-muted-foreground">We'll use this to prepare a personalized demo.</p>
+                  <h1 className="font-display text-2xl font-bold text-foreground mb-1">About you</h1>
+                  <p className="text-muted-foreground">We'll save your request first, then you can pick a time.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <Label className="text-foreground">First Name *</Label>
                     <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" className="mt-1" />
@@ -254,146 +211,59 @@ export default function Demo() {
 
                 <div>
                   <Label className="text-foreground">Business URL</Label>
-                  <Input value={businessUrl} onChange={(e) => setBusinessUrl(e.target.value)} placeholder="https://yourcompany.com" className="mt-1" />
+                  <Input value={businessUrl} onChange={(e) => setBusinessUrl(e.target.value)} placeholder="yourcompany.com" className="mt-1" />
                 </div>
-
-
-                <div className="flex gap-3">
-                  <Button variant="outline" size="lg" onClick={() => setStep(1)} className="flex-1">
-                    <ArrowLeft className="w-4 h-4" /> Back
-                  </Button>
-                  <Button variant="cta" size="lg" className="flex-1" disabled={!canProceedStep2} onClick={() => setStep(3)}>
-                    Continue <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Campaign-specific questions */}
-            {step === 3 && (
-              <div className="space-y-5">
-                <div>
-                  <h2 className="font-display text-2xl font-bold text-foreground mb-1">
-                    {campaignType === "warm" && "About your inbound leads"}
-                    {campaignType === "reactivation" && "About your contact base"}
-                    {campaignType === "cold" && "About your outreach"}
-                  </h2>
-                  <p className="text-muted-foreground">This helps us tailor the demo to your situation.</p>
-                </div>
-
-                {/* Warm-specific */}
-                {campaignType === "warm" && (
-                  <>
-                    <div>
-                      <Label className="text-foreground">How many new leads do you get per day? *</Label>
-                      <RadioGroup value={leadsPerDay} onValueChange={setLeadsPerDay} className="mt-2 space-y-2">
-                        {LEADS_PER_DAY.map((opt) => (
-                          <div key={opt} className="flex items-center gap-2">
-                            <RadioGroupItem value={opt} id={`leads-${opt}`} />
-                            <Label htmlFor={`leads-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                    <div>
-                      <Label className="text-foreground">Where does your traffic come from? *</Label>
-                      <RadioGroup value={trafficSource} onValueChange={setTrafficSource} className="mt-2 space-y-2">
-                        {TRAFFIC_SOURCES.map((opt) => (
-                          <div key={opt} className="flex items-center gap-2">
-                            <RadioGroupItem value={opt} id={`traffic-${opt}`} />
-                            <Label htmlFor={`traffic-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                  </>
-                )}
-
-                {/* Reactivation-specific */}
-                {campaignType === "reactivation" && (
-                  <>
-                    <div>
-                      <Label className="text-foreground">How large is your contact base? *</Label>
-                      <RadioGroup value={baseSize} onValueChange={setBaseSize} className="mt-2 space-y-2">
-                        {BASE_SIZES.map((opt) => (
-                          <div key={opt} className="flex items-center gap-2">
-                            <RadioGroupItem value={opt} id={`base-${opt}`} />
-                            <Label htmlFor={`base-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                    <div>
-                      <Label className="text-foreground">Where did you generate this data? *</Label>
-                      <RadioGroup value={baseSource} onValueChange={setBaseSource} className="mt-2 space-y-2">
-                        {BASE_SOURCES.map((opt) => (
-                          <div key={opt} className="flex items-center gap-2">
-                            <RadioGroupItem value={opt} id={`source-${opt}`} />
-                            <Label htmlFor={`source-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                    <div>
-                      <Label className="text-foreground">How old are these contacts? *</Label>
-                      <RadioGroup value={baseAge} onValueChange={setBaseAge} className="mt-2 space-y-2">
-                        {BASE_AGES.map((opt) => (
-                          <div key={opt} className="flex items-center gap-2">
-                            <RadioGroupItem value={opt} id={`age-${opt}`} />
-                            <Label htmlFor={`age-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                  </>
-                )}
-
-                {/* Cold-specific */}
-                {campaignType === "cold" && (
-                  <>
-                    <div>
-                      <Label className="text-foreground">Do you have mobile numbers of your target audience? *</Label>
-                      <RadioGroup value={hasMobileNumbers} onValueChange={setHasMobileNumbers} className="mt-2 space-y-2">
-                        {["Yes, I have a list", "No, I need you to source them", "Partially"].map((opt) => (
-                          <div key={opt} className="flex items-center gap-2">
-                            <RadioGroupItem value={opt} id={`mobile-${opt}`} />
-                            <Label htmlFor={`mobile-${opt}`} className="text-foreground cursor-pointer">{opt}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </div>
-                    <div>
-                      <Label className="text-foreground">Describe your target audience (optional)</Label>
-                      <Input
-                        value={targetAudience}
-                        onChange={(e) => setTargetAudience(e.target.value)}
-                        placeholder="e.g. SaaS founders in UAE with 10-50 employees"
-                        className="mt-1"
-                      />
-                    </div>
-                  </>
-                )}
-
 
                 <p className="text-xs text-muted-foreground">
-                  By submitting, you consent to your data being processed in accordance with our{" "}
+                  By continuing, you consent to your data being processed in accordance with our{" "}
                   <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a> and{" "}
                   <a href="/terms" className="text-primary hover:underline">Terms</a>.
                 </p>
 
                 <div className="flex gap-3">
-                  <Button variant="outline" size="lg" onClick={() => setStep(2)} className="flex-1">
+                  <Button variant="outline" size="lg" onClick={() => setStep(1)} className="flex-1">
                     <ArrowLeft className="w-4 h-4" /> Back
                   </Button>
-                  <Button
-                    variant="cta"
-                    size="lg"
-                    className="flex-1"
-                    disabled={!canProceedStep3 || isSubmitting}
-                    onClick={handleSubmit}
-                  >
-                    {isSubmitting ? "Submitting…" : "Book a Demo"} <ArrowRight className="w-4 h-4" />
+                  <Button variant="cta" size="lg" className="flex-1" disabled={!canProceedStep2 || isSubmitting} onClick={handleSaveLead}>
+                    {isSubmitting ? "Saving…" : "Continue"} <ArrowRight className="w-4 h-4" />
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <CheckCircle2 className="w-12 h-12 text-primary mx-auto mb-4" />
+                  <h1 className="font-display text-2xl font-bold text-foreground mb-2">Request saved</h1>
+                  <p className="text-muted-foreground max-w-xl mx-auto">
+                    Now pick a slot with Arseny. Your details are already saved in admin submissions.
+                  </p>
+                </div>
+
+                <div className="rounded-xl overflow-hidden border border-border bg-card shadow-card">
+                  <iframe
+                    src={calendlyUrl}
+                    width="100%"
+                    height="720"
+                    frameBorder="0"
+                    title="Schedule a demo with ISKRA"
+                    className="block w-full bg-card"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <Button variant="outline" size="lg" onClick={() => setStep(2)} className="w-full sm:w-auto">
+                    <ArrowLeft className="w-4 h-4" /> Edit Details
+                  </Button>
+                  <a
+                    href="https://wa.me/971568785008?text=Hi!%20I%20just%20filled%20the%20demo%20form%20on%20iskra.ae"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Can't find a time? Message us on WhatsApp
+                  </a>
                 </div>
               </div>
             )}
