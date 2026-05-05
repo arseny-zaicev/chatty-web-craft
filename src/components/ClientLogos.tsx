@@ -12,9 +12,11 @@ import pluralsalesLogo from "@/assets/logos/pluralsales.svg";
 import recruitcloudLogo from "@/assets/logos/recruitcloud.avif";
 import undergroundEcomLogo from "@/assets/logos/underground_ecom.svg";
 import pnDigitalLogo from "@/assets/logos/pn_digital.svg";
+import goflowLogo from "@/assets/logos/goflow.svg";
 
 const clients = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://salesforge.ai" },
+  { name: "Goflow", logo: goflowLogo, url: "https://goflow.com" },
   { name: "Underground Ecom", logo: undergroundEcomLogo, url: "https://www.undergroundecom.com" },
   { name: "RedRover", logo: redroverLogo, url: "https://tryredrover.com" },
   { name: "The Revenue", logo: revbizLogo, url: "https://therevenue.biz" },
