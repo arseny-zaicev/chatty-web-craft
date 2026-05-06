@@ -2,53 +2,35 @@ import { useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Loader2, Upload, X, CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
+import bmExample from "@/assets/bm-example.jpg";
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 0 | 1 | 2 | 3;
 
-const formSchema = z.object({
-  full_name: z.string().trim().min(2, "Name is required").max(100),
-  email: z.string().trim().email("Valid email required").max(255),
-  phone: z.string().trim().min(6, "Phone is required").max(30),
-  location: z.string().trim().min(2, "Location is required").max(100),
+const schema = z.object({
   has_bm: z.enum(["yes", "no", "not_sure"]),
-  is_verified: z.enum(["yes", "no", "not_sure"]),
   bm_age: z.enum(["lt_3m", "3_6m", "6_12m", "12m_plus", "not_sure"]),
-  used_whatsapp: z.enum(["yes", "no", "not_sure"]),
-  can_provide_access: z.enum(["yes", "no", "need_details"]),
-  notes: z.string().trim().max(2000).optional(),
+  is_verified: z.enum(["yes", "no", "not_sure"]),
+  ran_ads: z.enum(["yes", "no", "not_sure"]),
 });
 
-type FormData = z.infer<typeof formSchema>;
-
-const initialData: Partial<FormData> = {
-  full_name: "",
-  email: "",
-  phone: "",
-  location: "",
-  notes: "",
-};
+type FormData = z.infer<typeof schema>;
 
 export const BMAccessForm = () => {
   const [step, setStep] = useState<Step>(0);
-  const [data, setData] = useState<Partial<FormData>>(initialData);
+  const [data, setData] = useState<Partial<FormData>>({});
   const [files, setFiles] = useState<File[]>([]);
-  const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitted, setSubmitted] = useState(false);
 
-  const update = (key: keyof FormData, value: string) => {
+  const update = (key: keyof FormData, value: string) =>
     setData((d) => ({ ...d, [key]: value }));
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files || []);
@@ -59,77 +41,44 @@ export const BMAccessForm = () => {
       }
       const ok = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"].includes(f.type);
       if (!ok) {
-        toast.error(`${f.name}: only PNG, JPG, WebP, or PDF`);
+        toast.error(`${f.name}: only PNG, JPG, or PDF`);
         return false;
       }
       return true;
     });
-    setFiles((prev) => [...prev, ...valid].slice(0, 5));
+    setFiles((prev) => [...prev, ...valid].slice(0, 3));
   };
 
-  const removeFile = (i: number) => {
-    setFiles((prev) => prev.filter((_, idx) => idx !== i));
-  };
-
-  const validateFormFields = () => {
-    const result = formSchema.safeParse(data);
-    if (!result.success) {
-      const firstError = result.error.issues[0];
-      toast.error(firstError.message);
-      return false;
-    }
-    return true;
-  };
-
-  const canProceed = (): boolean => {
-    if (step === 3) {
-      return !!(data.full_name && data.email && data.phone && data.location);
-    }
-    if (step === 4) {
-      return !!(
-        data.has_bm &&
-        data.is_verified &&
-        data.bm_age &&
-        data.used_whatsapp &&
-        data.can_provide_access
-      );
-    }
-    if (step === 5) {
-      return files.length >= 2;
-    }
-    return true;
-  };
+  const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
 
   const next = () => {
-    if (step === 3 && !canProceed()) {
-      toast.error("Please fill in all required fields");
-      return;
+    if (step === 1) {
+      const result = schema.safeParse(data);
+      if (!result.success) {
+        toast.error("Please answer all questions");
+        return;
+      }
     }
-    if (step === 4 && !canProceed()) {
-      toast.error("Please answer all questions");
-      return;
-    }
-    if (step === 5 && !canProceed()) {
-      toast.error("Please upload at least 2 screenshots");
-      return;
-    }
-    setStep((s) => Math.min(6, s + 1) as Step);
+    setStep((s) => Math.min(3, s + 1) as Step);
   };
 
   const back = () => setStep((s) => Math.max(0, s - 1) as Step);
 
   const handleSubmit = async () => {
-    if (!agreed) {
-      toast.error("Please agree to the terms");
+    if (files.length < 1) {
+      toast.error("Please upload at least 1 screenshot");
       return;
     }
-    if (!validateFormFields()) return;
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      toast.error("Please complete the previous step");
+      return;
+    }
 
     setSubmitting(true);
     setUploadProgress(0);
 
     try {
-      // Upload files to private bucket
       const submissionId = crypto.randomUUID();
       const uploadedPaths: string[] = [];
 
@@ -137,43 +86,30 @@ export const BMAccessForm = () => {
         const file = files[i];
         const ext = file.name.split(".").pop();
         const path = `${submissionId}/${i + 1}-${Date.now()}.${ext}`;
-
         const { error: uploadError } = await supabase.storage
           .from("bm-screenshots")
           .upload(path, file, { upsert: false });
-
-        if (uploadError) {
-          throw new Error(`Upload failed: ${uploadError.message}`);
-        }
+        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
         uploadedPaths.push(path);
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       }
 
-      // Submit form via edge function
       const { error } = await supabase.functions.invoke("submit-form", {
         body: {
           form_type: "bm_access",
-          contact_name: data.full_name,
-          contact_email: data.email,
-          contact_phone: data.phone,
           data: {
             submission_id: submissionId,
-            location: data.location,
             has_bm: data.has_bm,
-            is_verified: data.is_verified,
             bm_age: data.bm_age,
-            used_whatsapp: data.used_whatsapp,
-            can_provide_access: data.can_provide_access,
-            notes: data.notes || "",
+            is_verified: data.is_verified,
+            ran_ads: data.ran_ads,
             screenshot_paths: uploadedPaths,
           },
         },
       });
 
       if (error) throw error;
-
       setSubmitted(true);
-      setStep(6);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Submission failed");
@@ -182,8 +118,8 @@ export const BMAccessForm = () => {
     }
   };
 
-  const totalSteps = 7;
-  const progress = ((step + 1) / totalSteps) * 100;
+  const totalSteps = 3;
+  const progress = ((Math.min(step, 2) + 1) / totalSteps) * 100;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 py-12 px-4">
@@ -192,7 +128,7 @@ export const BMAccessForm = () => {
           <div className="mb-8">
             <Progress value={progress} className="h-1" />
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              Step {step + 1} of {totalSteps}
+              Step {Math.min(step, 2) + 1} of {totalSteps}
             </p>
           </div>
         )}
@@ -205,21 +141,15 @@ export const BMAccessForm = () => {
                 Partnership Opportunity
               </div>
               <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight">
-                Old Business Manager Access
+                Rent Your Old Business Manager
               </h1>
-              <div className="space-y-4 text-muted-foreground text-lg leading-relaxed text-left">
+              <div className="space-y-4 text-muted-foreground text-lg leading-relaxed">
+                <p>Have an old Meta Business Manager?</p>
                 <p>
-                  To receive the <strong className="text-foreground">$30 payment</strong>, you must
-                  first complete the form below.
+                  You can rent access to our team and earn{" "}
+                  <strong className="text-foreground">$200 to $400 per month</strong>.
                 </p>
-                <p>
-                  Once submitted, our team will review your Business Manager details and contact you
-                  if your account is a fit for our setup.
-                </p>
-                <p>
-                  If we successfully connect WhatsApp API on your Business Manager, we will send
-                  you $30.
-                </p>
+                <p>We will review your account first.</p>
               </div>
               <Button size="lg" onClick={next} className="w-full md:w-auto px-12">
                 Start <ArrowRight className="ml-2 h-4 w-4" />
@@ -227,103 +157,8 @@ export const BMAccessForm = () => {
             </div>
           )}
 
-          {/* Step 1: How payment works */}
+          {/* Step 1: BM Details */}
           {step === 1 && (
-            <div className="space-y-6">
-              <h2 className="font-display text-3xl md:text-4xl font-bold">
-                Important: How to Receive Your $30
-              </h2>
-              <div className="space-y-4 text-muted-foreground leading-relaxed">
-                <p>
-                  To receive the $30 payment, you must first complete the form provided.
-                </p>
-                <p>
-                  Once submitted, our team will review your account details and verify whether your
-                  Business Manager is suitable.
-                </p>
-                <p>
-                  If approved, we will contact you with the next steps.{" "}
-                  <strong className="text-foreground">
-                    Payment is sent only after WhatsApp API is successfully connected on the
-                    Business Manager.
-                  </strong>
-                </p>
-              </div>
-              <NavButtons onBack={back} onNext={next} />
-            </div>
-          )}
-
-          {/* Step 2: What we look for */}
-          {step === 2 && (
-            <div className="space-y-6">
-              <h2 className="font-display text-3xl md:text-4xl font-bold">
-                What We Are Looking For
-              </h2>
-              <div className="space-y-4 text-muted-foreground leading-relaxed">
-                <p>We are looking for old Business Manager accounts, ideally verified.</p>
-                <p>
-                  If your account is a good fit, we may be able to work together with our team on
-                  an ongoing basis.
-                </p>
-                <p>
-                  This is not guaranteed for every submission. Our team reviews each account
-                  individually before approval.
-                </p>
-              </div>
-              <NavButtons onBack={back} onNext={next} />
-            </div>
-          )}
-
-          {/* Step 3: Contact info */}
-          {step === 3 && (
-            <div className="space-y-6">
-              <h2 className="font-display text-3xl font-bold">Your Details</h2>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="full_name">Full Name *</Label>
-                  <Input
-                    id="full_name"
-                    value={data.full_name || ""}
-                    onChange={(e) => update("full_name", e.target.value)}
-                    placeholder="John Smith"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email Address *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={data.email || ""}
-                    onChange={(e) => update("email", e.target.value)}
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Telephone Number *</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={data.phone || ""}
-                    onChange={(e) => update("phone", e.target.value)}
-                    placeholder="+1 555 123 4567"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="location">Current Location *</Label>
-                  <Input
-                    id="location"
-                    value={data.location || ""}
-                    onChange={(e) => update("location", e.target.value)}
-                    placeholder="City, Country"
-                  />
-                </div>
-              </div>
-              <NavButtons onBack={back} onNext={next} />
-            </div>
-          )}
-
-          {/* Step 4: BM questions */}
-          {step === 4 && (
             <div className="space-y-8">
               <h2 className="font-display text-3xl font-bold">Business Manager Details</h2>
 
@@ -331,17 +166,6 @@ export const BMAccessForm = () => {
                 label="Do you already have an old Business Manager?"
                 value={data.has_bm}
                 onChange={(v) => update("has_bm", v)}
-                options={[
-                  { value: "yes", label: "Yes" },
-                  { value: "no", label: "No" },
-                  { value: "not_sure", label: "Not sure" },
-                ]}
-              />
-
-              <RadioField
-                label="Is the Business Manager verified?"
-                value={data.is_verified}
-                onChange={(v) => update("is_verified", v)}
                 options={[
                   { value: "yes", label: "Yes" },
                   { value: "no", label: "No" },
@@ -363,9 +187,9 @@ export const BMAccessForm = () => {
               />
 
               <RadioField
-                label="Have you already used WhatsApp API on it?"
-                value={data.used_whatsapp}
-                onChange={(v) => update("used_whatsapp", v)}
+                label="Is the Business Manager verified?"
+                value={data.is_verified}
+                onChange={(v) => update("is_verified", v)}
                 options={[
                   { value: "yes", label: "Yes" },
                   { value: "no", label: "No" },
@@ -374,42 +198,45 @@ export const BMAccessForm = () => {
               />
 
               <RadioField
-                label="Can you provide admin access if approved?"
-                value={data.can_provide_access}
-                onChange={(v) => update("can_provide_access", v)}
+                label="Have you already run ads on it?"
+                value={data.ran_ads}
+                onChange={(v) => update("ran_ads", v)}
                 options={[
                   { value: "yes", label: "Yes" },
                   { value: "no", label: "No" },
-                  { value: "need_details", label: "Need more details" },
+                  { value: "not_sure", label: "Not sure" },
                 ]}
               />
 
-              <div>
-                <Label htmlFor="notes">Anything else we should know?</Label>
-                <Textarea
-                  id="notes"
-                  value={data.notes || ""}
-                  onChange={(e) => update("notes", e.target.value)}
-                  placeholder="Optional"
-                  rows={4}
-                />
+              <div className="flex gap-3 pt-4">
+                <Button variant="outline" onClick={back}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                </Button>
+                <Button onClick={next} className="flex-1">
+                  Continue <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               </div>
-
-              <NavButtons onBack={back} onNext={next} />
             </div>
           )}
 
-          {/* Step 5: Upload */}
-          {step === 5 && (
+          {/* Step 2: Upload + Submit */}
+          {step === 2 && !submitted && (
             <div className="space-y-6">
               <div>
-                <h2 className="font-display text-3xl font-bold mb-3">
-                  Please Upload 2-3 Screenshots of Your Business Manager
-                </h2>
-                <p className="text-muted-foreground">
-                  Please upload clear screenshots showing the Business Manager details, account age
-                  if visible, and verification status if available.
+                <h2 className="font-display text-3xl font-bold mb-3">Upload Screenshot</h2>
+                <p className="text-muted-foreground">Upload a screenshot of your Business Manager.</p>
+                <p className="text-muted-foreground mt-2">
+                  The screenshot should show what your account looks like.
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Example screenshot:</p>
+                <img
+                  src={bmExample}
+                  alt="Example Business Manager screenshot"
+                  className="w-full rounded-lg border border-border"
+                />
               </div>
 
               <label
@@ -417,10 +244,8 @@ export const BMAccessForm = () => {
                 className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:border-primary transition-colors"
               >
                 <Upload className="h-10 w-10 text-muted-foreground mb-3" />
-                <p className="font-medium mb-1">Click to upload screenshots</p>
-                <p className="text-xs text-muted-foreground">
-                  Accepted: PNG, JPG, WebP, PDF · max 10MB each · up to 5 files
-                </p>
+                <p className="font-medium mb-1">Click to upload screenshot</p>
+                <p className="text-xs text-muted-foreground">Accepted: PNG, JPG, PDF · max 10MB</p>
                 <input
                   id="file-upload"
                   type="file"
@@ -434,10 +259,7 @@ export const BMAccessForm = () => {
               {files.length > 0 && (
                 <div className="space-y-2">
                   {files.map((f, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between p-3 bg-muted rounded-lg"
-                    >
+                    <div key={i} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                       <span className="text-sm truncate">{f.name}</span>
                       <button
                         type="button"
@@ -448,90 +270,41 @@ export const BMAccessForm = () => {
                       </button>
                     </div>
                   ))}
-                  <p className="text-xs text-muted-foreground">
-                    {files.length} of 5 files · minimum 2 required
-                  </p>
                 </div>
               )}
-
-              <NavButtons onBack={back} onNext={next} nextDisabled={files.length < 2} />
-            </div>
-          )}
-
-          {/* Step 6: Agreement + submit, OR thank you */}
-          {step === 6 && !submitted && (
-            <div className="space-y-6">
-              <h2 className="font-display text-3xl font-bold">Agreement</h2>
-              <div className="space-y-4 text-muted-foreground leading-relaxed">
-                <p>
-                  By submitting this form, you confirm that the Business Manager belongs to you or
-                  that you are authorized to provide access to it.
-                </p>
-                <p>
-                  You understand that our team will review the account to determine whether it is
-                  suitable for WhatsApp API setup.
-                </p>
-                <p>
-                  <strong className="text-foreground">
-                    The $30 payment is sent only if the account is approved and WhatsApp API is
-                    successfully connected.
-                  </strong>
-                </p>
-                <p>We do not guarantee approval for every submission.</p>
-              </div>
-
-              <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50">
-                <Checkbox
-                  checked={agreed}
-                  onCheckedChange={(c) => setAgreed(c === true)}
-                  className="mt-0.5"
-                />
-                <span className="text-sm font-medium">
-                  I Agree to the terms above
-                </span>
-              </label>
 
               {submitting && uploadProgress > 0 && (
                 <div className="space-y-2">
                   <Progress value={uploadProgress} />
                   <p className="text-xs text-muted-foreground text-center">
-                    Uploading screenshots... {uploadProgress}%
+                    Uploading... {uploadProgress}%
                   </p>
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <Button variant="outline" onClick={back} disabled={submitting}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Back
                 </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!agreed || submitting}
-                  className="flex-1"
-                >
+                <Button onClick={handleSubmit} disabled={submitting || files.length < 1} className="flex-1">
                   {submitting ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
                     </>
                   ) : (
-                    "Submit Application"
+                    "Submit"
                   )}
                 </Button>
               </div>
             </div>
           )}
 
-          {step === 6 && submitted && (
+          {submitted && (
             <div className="space-y-6 text-center py-8">
               <CheckCircle2 className="h-16 w-16 text-iskra-emerald mx-auto" />
               <h2 className="font-display text-3xl md:text-4xl font-bold">Submission Received</h2>
               <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto">
-                Thank you. Our team will review your submission and contact you if your Business
-                Manager is a fit.
-              </p>
-              <p className="text-muted-foreground leading-relaxed max-w-lg mx-auto">
-                If approved, we will explain the next steps clearly before moving forward.
+                Thank you. Our team will review your Business Manager and contact you if it is a fit.
               </p>
             </div>
           )}
@@ -540,25 +313,6 @@ export const BMAccessForm = () => {
     </div>
   );
 };
-
-const NavButtons = ({
-  onBack,
-  onNext,
-  nextDisabled,
-}: {
-  onBack: () => void;
-  onNext: () => void;
-  nextDisabled?: boolean;
-}) => (
-  <div className="flex gap-3 pt-4">
-    <Button variant="outline" onClick={onBack}>
-      <ArrowLeft className="mr-2 h-4 w-4" /> Back
-    </Button>
-    <Button onClick={onNext} className="flex-1" disabled={nextDisabled}>
-      Continue <ArrowRight className="ml-2 h-4 w-4" />
-    </Button>
-  </div>
-);
 
 const RadioField = ({
   label,
