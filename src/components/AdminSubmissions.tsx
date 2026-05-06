@@ -307,10 +307,9 @@ export const AdminSubmissions = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="new">New</SelectItem>
-                <SelectItem value="contacted">Contacted</SelectItem>
-                <SelectItem value="converted">Converted</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
+                {STATUS_ORDER.map(st => (
+                  <SelectItem key={st} value={st}>{statusConfig[st].label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button variant="outline" size="icon" onClick={fetchSubmissions}>
