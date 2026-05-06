@@ -6,6 +6,16 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Require admin secret to prevent unauthorized webhook re-registration / metadata leakage
+  const adminSecret = req.headers.get("x-admin-secret");
+  const expectedSecret = Deno.env.get("ADMIN_INIT_SECRET");
+  if (!expectedSecret || adminSecret !== expectedSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const TOKEN = Deno.env.get("CALENDLY_API_TOKEN");
   if (!TOKEN) {
     return new Response(JSON.stringify({ error: "CALENDLY_API_TOKEN not set" }), { status: 500, headers: corsHeaders });
