@@ -77,8 +77,8 @@ export const useFormAnalytics = ({ formType, totalSteps, stepNames }: UseFormAna
     await trackAnalyticsEvent({
       session_id: sessionIdRef.current,
       form_type: formType,
-      step_number: totalSteps,
-      step_name: "Form Submitted",
+      step_number: totalSteps + 1,
+      step_name: "Submitted",
       event_type: "form_submitted",
     });
   }, [formType, totalSteps]);
