@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ type Step = 0 | 1 | 2 | 3;
 const CALENDLY_URL = "https://calendly.com/nitish-iskra/20min";
 
 const schema = z.object({
+  contact_phone: z.string().trim().regex(/^[\+]?[\d\s\-\(\)]{10,20}$/, "Please enter a valid phone number"),
   has_bm: z.enum(["yes", "no", "not_sure"]),
   bm_age: z.enum(["lt_3m", "3_6m", "6_12m", "12m_plus", "not_sure"]),
   is_verified: z.enum(["yes", "no", "not_sure"]),
@@ -113,8 +115,10 @@ export const BMAccessForm = () => {
       const { error } = await supabase.functions.invoke("submit-form", {
         body: {
           form_type: "bm_access",
+          contact_phone: data.contact_phone,
           data: {
             submission_id: submissionId,
+            contact_phone: data.contact_phone,
             has_bm: data.has_bm,
             bm_age: data.bm_age,
             is_verified: data.is_verified,
@@ -179,6 +183,17 @@ export const BMAccessForm = () => {
           {step === 1 && (
             <div className="space-y-8">
               <h2 className="font-display text-3xl font-bold">Business Manager Details</h2>
+
+              <div className="space-y-3">
+                <Label htmlFor="phone" className="text-base font-medium">Your phone number (WhatsApp)</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={data.contact_phone || ""}
+                  onChange={(e) => update("contact_phone", e.target.value)}
+                />
+              </div>
 
               <RadioField
                 label="Do you already have an old Business Manager?"
