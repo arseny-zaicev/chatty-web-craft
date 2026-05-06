@@ -20,9 +20,11 @@ interface FormFunnel {
 }
 
 const FORM_LABELS: Record<string, string> = {
-  qualification: "AI Agent Qualification",
+  qualification: "Qualification",
   seller_leads: "Seller Leads",
   whatsapp_outreach: "WhatsApp Outreach",
+  bm_access: "BM Access",
+  demo_request: "Demo Request",
 };
 
 export const FormAnalyticsDashboard = () => {
