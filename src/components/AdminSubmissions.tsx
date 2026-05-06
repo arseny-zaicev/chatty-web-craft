@@ -424,10 +424,9 @@ export const AdminSubmissions = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="new">New</SelectItem>
-                          <SelectItem value="contacted">Contacted</SelectItem>
-                          <SelectItem value="converted">Converted</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
+                          {STATUS_ORDER.map(st => (
+                            <SelectItem key={st} value={st}>{statusConfig[st].label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <Button
@@ -586,9 +585,9 @@ export const AdminSubmissions = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="contacted">Contacted</SelectItem>
-                    <SelectItem value="converted">Converted</SelectItem>
+                    {STATUS_ORDER.map(st => (
+                      <SelectItem key={st} value={st}>{statusConfig[st].label}</SelectItem>
+                    ))}
                     <SelectItem value="rejected">Rejected</SelectItem>
                   </SelectContent>
                 </Select>
