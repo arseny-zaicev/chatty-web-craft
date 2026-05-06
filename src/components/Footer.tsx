@@ -55,7 +55,7 @@ export const Footer = () => {
               }}
               className="hover:opacity-80 transition-opacity cursor-pointer inline-block mb-4"
             >
-              <IskraLogo />
+              <IskraLogo size={18} textClass="text-lg" />
             </a>
             <p className="text-sm text-muted-foreground mb-4">
               WhatsApp outreach infrastructure that delivers qualified replies and booked calls.
