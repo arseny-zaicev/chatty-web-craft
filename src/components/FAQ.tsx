@@ -100,6 +100,50 @@ export const FAQ = () => {
           </div>
         </ScrollReveal>
 
+        <ScrollReveal delay={100}>
+          <div className="max-w-2xl mx-auto mb-10 p-6 md:p-7 rounded-2xl border border-iskra-emerald/30 bg-gradient-to-br from-iskra-emerald/10 to-transparent">
+            <p className="font-display text-lg md:text-xl font-semibold mb-1">
+              Get answers in minutes
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Leave your name and phone - we'll reach out and answer everything personally.
+            </p>
+            {submitted ? (
+              <div className="text-iskra-emerald font-medium text-sm">
+                ✓ Got it. We'll be in touch shortly.
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="grid sm:grid-cols-[1fr_1fr_auto] gap-3">
+                <input
+                  type="text"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-iskra-emerald/40"
+                  disabled={submitting}
+                  required
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-iskra-emerald/40"
+                  disabled={submitting}
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-3 rounded-lg bg-iskra-emerald text-white font-semibold text-sm hover:bg-iskra-emerald-light transition-colors disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                </button>
+              </form>
+            )}
+          </div>
+        </ScrollReveal>
+
         <div className="max-w-2xl mx-auto space-y-3">
           {faqs.map((faq, index) => (
             <ScrollReveal key={index} delay={index * 50}>
