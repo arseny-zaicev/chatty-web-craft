@@ -143,6 +143,8 @@ Deno.serve(async (req) => {
 
     // BM access form is anonymous (no contact fields required)
     const isAnonymous = body.form_type === "bm_access";
+    // Quick contact (FAQ form) requires name + phone, email optional
+    const isQuickContact = body.form_type === "demo_request" && !body.contact_email;
 
     // Validate contact_name
     if (!isAnonymous && !validateString(body.contact_name || "", 2, 100)) {
@@ -152,10 +154,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate contact_email
-    if (!isAnonymous && (!body.contact_email || !validateEmail(body.contact_email))) {
+    // Validate contact_email (required unless anonymous or quick-contact)
+    if (!isAnonymous && !isQuickContact && (!body.contact_email || !validateEmail(body.contact_email))) {
       return new Response(
         JSON.stringify({ error: "Please provide a valid email address" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Quick contact requires phone
+    if (isQuickContact && (!body.contact_phone || !validatePhone(body.contact_phone))) {
+      return new Response(
+        JSON.stringify({ error: "Please provide a valid phone number" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
