@@ -244,13 +244,12 @@ export const AdminSubmissions = () => {
 
   const filteredSubmissions = getFilteredSubmissions();
 
-  const stats = {
-    total: submissions.length,
-    new: submissions.filter(s => s.status === "new").length,
-    contacted: submissions.filter(s => s.status === "contacted").length,
-    converted: submissions.filter(s => s.status === "converted").length,
-    rejected: submissions.filter(s => s.status === "rejected").length,
-  };
+  const total = submissions.length;
+  const counts = STATUS_ORDER.reduce<Record<SubmissionStatus, number>>((acc, st) => {
+    acc[st] = submissions.filter(s => s.status === st).length;
+    return acc;
+  }, {} as Record<SubmissionStatus, number>);
+  const pct = (n: number) => total === 0 ? 0 : Math.round((n / total) * 100);
 
   if (isLoading) {
     return (
@@ -263,27 +262,21 @@ export const AdminSubmissions = () => {
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="p-4 text-center">
-          <p className="text-2xl font-bold">{stats.total}</p>
+          <p className="text-2xl font-bold">{total}</p>
           <p className="text-xs text-muted-foreground">Total</p>
         </Card>
-        <Card className="p-4 text-center border-blue-500/30 bg-blue-500/5">
-          <p className="text-2xl font-bold text-blue-500">{stats.new}</p>
-          <p className="text-xs text-muted-foreground">New</p>
-        </Card>
-        <Card className="p-4 text-center border-yellow-500/30 bg-yellow-500/5">
-          <p className="text-2xl font-bold text-yellow-500">{stats.contacted}</p>
-          <p className="text-xs text-muted-foreground">Contacted</p>
-        </Card>
-        <Card className="p-4 text-center border-green-500/30 bg-green-500/5">
-          <p className="text-2xl font-bold text-green-500">{stats.converted}</p>
-          <p className="text-xs text-muted-foreground">Converted</p>
-        </Card>
-        <Card className="p-4 text-center border-red-500/30 bg-red-500/5">
-          <p className="text-2xl font-bold text-red-500">{stats.rejected}</p>
-          <p className="text-xs text-muted-foreground">Rejected</p>
-        </Card>
+        {STATUS_ORDER.map(st => {
+          const cfg = statusConfig[st];
+          return (
+            <Card key={st} className="p-4 text-center">
+              <p className="text-2xl font-bold">{counts[st]}</p>
+              <p className="text-xs text-muted-foreground">{cfg.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{pct(counts[st])}%</p>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Filters & Actions */}
