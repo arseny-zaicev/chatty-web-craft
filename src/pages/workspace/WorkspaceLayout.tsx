@@ -47,6 +47,14 @@ export default function WorkspaceLayout() {
     if (!slug && data && data.length > 0) navigate(`/ws/${data[0].slug}/inbox`, { replace: true });
   }, [slug, data, navigate]);
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <>
       <Helmet><title>Iskra Workspaces</title><meta name="robots" content="noindex,nofollow" /></Helmet>
