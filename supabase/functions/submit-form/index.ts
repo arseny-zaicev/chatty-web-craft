@@ -266,6 +266,28 @@ Deno.serve(async (req) => {
       }
 
       await sendTelegramNotification(lines.join("\n"));
+
+      // Send screenshots from bm-screenshots bucket if present
+      const screenshotPaths = (dataObj.screenshot_paths as unknown);
+      if (Array.isArray(screenshotPaths) && screenshotPaths.length > 0) {
+        for (const p of screenshotPaths.slice(0, 5)) {
+          if (typeof p !== "string") continue;
+          const { data: signed, error: signErr } = await adminClient
+            .storage
+            .from("bm-screenshots")
+            .createSignedUrl(p, 60 * 60 * 24);
+          if (signErr || !signed?.signedUrl) {
+            console.error("Signed URL failed", signErr);
+            continue;
+          }
+          const isPdf = p.toLowerCase().endsWith(".pdf");
+          if (isPdf) {
+            await sendTelegramDocument(signed.signedUrl, `📎 ${escapeHtml(p.split("/").pop() || p)}`);
+          } else {
+            await sendTelegramPhoto(signed.signedUrl, `🖼 ${escapeHtml(p.split("/").pop() || p)}`);
+          }
+        }
+      }
     } catch (e) {
       console.error("Telegram notify failed", e);
     }
