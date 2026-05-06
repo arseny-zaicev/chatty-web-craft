@@ -68,7 +68,7 @@ function validateJsonbSize(data: unknown): boolean {
 }
 
 // Analytics validation functions
-const VALID_FORM_TYPES_ANALYTICS = ["qualification", "seller_leads", "whatsapp_outreach"];
+const VALID_FORM_TYPES_ANALYTICS = ["qualification", "seller_leads", "whatsapp_outreach", "bm_access", "demo_request"];
 const VALID_EVENT_TYPES = ["step_viewed", "step_completed", "form_submitted"];
 
 function validateSessionId(sessionId: string): boolean {
@@ -140,8 +140,11 @@ Deno.serve(async (req) => {
       );
     }
 
+    // BM access form is anonymous (no contact fields required)
+    const isAnonymous = body.form_type === "bm_access";
+
     // Validate contact_name
-    if (!validateString(body.contact_name || "", 2, 100)) {
+    if (!isAnonymous && !validateString(body.contact_name || "", 2, 100)) {
       return new Response(
         JSON.stringify({ error: "Name must be between 2 and 100 characters" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -149,7 +152,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate contact_email
-    if (!body.contact_email || !validateEmail(body.contact_email)) {
+    if (!isAnonymous && (!body.contact_email || !validateEmail(body.contact_email))) {
       return new Response(
         JSON.stringify({ error: "Please provide a valid email address" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
