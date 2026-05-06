@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { Mail, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { IskraLogo } from "@/components/IskraLogo";
 
 const footerLinks = [
   { label: "How It Works", href: "/#how-it-works" },
@@ -13,24 +14,6 @@ const legalLinks = [
   { label: "Privacy Policy", href: "/privacy", isPage: true },
   { label: "Terms of Service", href: "/terms", isPage: true },
 ];
-
-// ISKRA Logo Component
-const IskraLogo = () => (
-  <div className="flex items-center gap-2.5">
-    <svg width="18" height="18" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-foreground">
-      <circle cx="32" cy="32" r="4.5" fill="currentColor"/>
-      <line x1="32" y1="8" x2="32" y2="22" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="32" y1="42" x2="32" y2="56" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="8" y1="32" x2="22" y2="32" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="42" y1="32" x2="56" y2="32" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="15" y1="15" x2="24" y2="24" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="40" y1="40" x2="49" y2="49" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="49" y1="15" x2="40" y2="24" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="24" y1="40" x2="15" y2="49" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-    </svg>
-    <span className="font-display text-lg font-bold tracking-tight">ISKRA</span>
-  </div>
-);
 
 export const Footer = () => {
   const navigate = useNavigate();
