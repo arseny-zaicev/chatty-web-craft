@@ -1,25 +1,59 @@
 import { Link, Outlet, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WorkspaceSidebar } from "@/components/workspace/WorkspaceSidebar";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+const ADMIN_EMAIL = "arseny@iskra.ae";
 
 export type WorkspaceContext = { workspace: Workspace };
 
 export default function WorkspaceLayout() {
   const { slug } = useParams<{ slug?: string }>();
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({ queryKey: workspaceKeys.list, queryFn: fetchWorkspaces });
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const guard = (email?: string | null) => {
+      if (!email) {
+        navigate("/admin-auth", { replace: true });
+        return;
+      }
+      if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        supabase.auth.signOut();
+        toast.error("Access denied. Admin only.");
+        navigate("/admin-auth", { replace: true });
+        return;
+      }
+      setAuthChecked(true);
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => guard(session?.user?.email));
+    supabase.auth.getSession().then(({ data: { session } }) => guard(session?.user?.email));
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const { data, isLoading } = useQuery({ queryKey: workspaceKeys.list, queryFn: fetchWorkspaces, enabled: authChecked });
+
 
   const workspace = data?.find((w) => w.slug === slug);
 
   useEffect(() => {
     if (!slug && data && data.length > 0) navigate(`/ws/${data[0].slug}/inbox`, { replace: true });
   }, [slug, data, navigate]);
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <>

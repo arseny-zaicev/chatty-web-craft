@@ -47,7 +47,7 @@ export const VideoThumbnail = ({ videoSrc, onPlay }: VideoThumbnailProps) => {
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-white/40">
             <div className="w-3 h-3 rounded-sm bg-iskra-emerald" />
-            ISKRA | AI Chatbots & Whats...
+            ISKRA | WhatsApp Outreach D...
             <span className="text-white/20">×</span>
           </div>
         </div>
