@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Upload, X, CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, Upload, X, CheckCircle2, ArrowRight, ArrowLeft, Calendar } from "lucide-react";
 import bmExample from "@/assets/bm-example.jpg";
+import { useFormAnalytics } from "@/hooks/useFormAnalytics";
 
 type Step = 0 | 1 | 2 | 3;
+
+const CALENDLY_URL = "https://calendly.com/nitish-iskra/20min";
 
 const schema = z.object({
   has_bm: z.enum(["yes", "no", "not_sure"]),
@@ -21,6 +24,8 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+const STEP_NAMES = ["Welcome", "BM Details", "Upload Screenshot"];
+
 export const BMAccessForm = () => {
   const [step, setStep] = useState<Step>(0);
   const [data, setData] = useState<Partial<FormData>>({});
@@ -28,6 +33,16 @@ export const BMAccessForm = () => {
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+
+  const analytics = useFormAnalytics({
+    formType: "bm_access",
+    totalSteps: 3,
+    stepNames: STEP_NAMES,
+  });
+
+  useEffect(() => {
+    if (step <= 2) analytics.trackStepView(step + 1);
+  }, [step, analytics]);
 
   const update = (key: keyof FormData, value: string) =>
     setData((d) => ({ ...d, [key]: value }));
@@ -59,6 +74,7 @@ export const BMAccessForm = () => {
         return;
       }
     }
+    analytics.trackStepComplete(step + 1);
     setStep((s) => Math.min(3, s + 1) as Step);
   };
 
@@ -109,6 +125,8 @@ export const BMAccessForm = () => {
       });
 
       if (error) throw error;
+      analytics.trackStepComplete(3);
+      analytics.trackFormSubmit();
       setSubmitted(true);
     } catch (err) {
       console.error(err);
@@ -300,12 +318,35 @@ export const BMAccessForm = () => {
           )}
 
           {submitted && (
-            <div className="space-y-6 text-center py-8">
+            <div className="space-y-8 text-center py-4">
               <CheckCircle2 className="h-16 w-16 text-iskra-emerald mx-auto" />
-              <h2 className="font-display text-3xl md:text-4xl font-bold">Submission Received</h2>
-              <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto">
-                Thank you. Our team will review your Business Manager and contact you if it is a fit.
-              </p>
+              <div className="space-y-3">
+                <h2 className="font-display text-3xl md:text-4xl font-bold">Submission Received</h2>
+                <p className="text-muted-foreground text-lg leading-relaxed max-w-lg mx-auto">
+                  Thank you. Our team will review your Business Manager and contact you if it is a fit.
+                </p>
+              </div>
+
+              <div className="border-t border-border pt-8 space-y-5">
+                <div className="space-y-2">
+                  <h3 className="font-display text-3xl md:text-4xl font-bold tracking-tight">
+                    Book Your Call Now
+                  </h3>
+                  <p className="text-base text-muted-foreground">
+                    The call will be conducted in <strong className="text-foreground">Hindi</strong>.
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  asChild
+                  className="w-full md:w-auto px-12 h-14 text-lg"
+                >
+                  <a href={CALENDLY_URL} target="_blank" rel="noopener noreferrer">
+                    <Calendar className="mr-2 h-5 w-5" />
+                    Book a Time Slot
+                  </a>
+                </Button>
+              </div>
             </div>
           )}
         </Card>
