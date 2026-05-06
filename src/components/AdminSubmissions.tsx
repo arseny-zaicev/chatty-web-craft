@@ -34,16 +34,32 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  CalendarCheck,
+  Rocket,
+  ThumbsDown,
+  Hourglass,
+  ThumbsUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+type SubmissionStatus =
+  | "new"
+  | "contacted"
+  | "qualified"
+  | "not_qualified"
+  | "in_progress"
+  | "meeting_booked"
+  | "started"
+  | "converted"
+  | "rejected";
 
 interface Submission {
   id: string;
   created_at: string;
   updated_at: string;
   form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access";
-  status: "new" | "contacted" | "converted" | "rejected";
+  status: SubmissionStatus;
   data: unknown;
   contact_name: string | null;
   contact_email: string | null;
@@ -53,12 +69,21 @@ interface Submission {
   notes: string | null;
 }
 
-const statusConfig = {
+const statusConfig: Record<SubmissionStatus, { label: string; color: string; icon: typeof AlertCircle }> = {
   new: { label: "New", color: "bg-blue-500", icon: AlertCircle },
-  contacted: { label: "Contacted", color: "bg-yellow-500", icon: Clock },
-  converted: { label: "Converted", color: "bg-green-500", icon: CheckCircle },
+  contacted: { label: "Contacted", color: "bg-sky-500", icon: Clock },
+  qualified: { label: "Qualified", color: "bg-emerald-500", icon: ThumbsUp },
+  not_qualified: { label: "Not Qualified", color: "bg-zinc-500", icon: ThumbsDown },
+  in_progress: { label: "In Progress", color: "bg-yellow-500", icon: Hourglass },
+  meeting_booked: { label: "Meeting Booked", color: "bg-purple-500", icon: CalendarCheck },
+  started: { label: "Started Work", color: "bg-iskra-emerald", icon: Rocket },
+  converted: { label: "Converted", color: "bg-green-600", icon: CheckCircle },
   rejected: { label: "Rejected", color: "bg-red-500", icon: XCircle },
 };
+
+const STATUS_ORDER: SubmissionStatus[] = [
+  "new", "contacted", "qualified", "not_qualified", "in_progress", "meeting_booked", "started", "converted", "rejected"
+];
 
 export const AdminSubmissions = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
