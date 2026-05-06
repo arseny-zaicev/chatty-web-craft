@@ -80,6 +80,9 @@ export const FormAnalyticsDashboard = () => {
             step.views.add(event.session_id);
           } else if (event.event_type === "step_completed") {
             step.completions.add(event.session_id);
+          } else if (event.event_type === "form_submitted") {
+            step.views.add(event.session_id);
+            step.completions.add(event.session_id);
           }
         });
 
