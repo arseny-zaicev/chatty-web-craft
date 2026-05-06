@@ -89,7 +89,7 @@ export const AdminSubmissions = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterType, setFilterType] = useState<"all" | "qualification" | "seller_leads" | "demo_request" | "bm_access">("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | "new" | "contacted" | "converted" | "rejected">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | SubmissionStatus>("all");
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [editNotes, setEditNotes] = useState("");
 
