@@ -245,6 +245,26 @@ Deno.serve(async (req) => {
         body.contact_company ? `🏢 ${escapeHtml(body.contact_company)}` : null,
         body.contact_website ? `🌐 ${escapeHtml(body.contact_website)}` : null,
       ].filter(Boolean);
+
+      // Append form answers from data jsonb
+      const dataObj = (body.data && typeof body.data === "object") ? body.data as Record<string, unknown> : {};
+      const skipKeys = new Set(["source", "calendly"]);
+      const answerLines: string[] = [];
+      for (const [key, value] of Object.entries(dataObj)) {
+        if (skipKeys.has(key)) continue;
+        if (value === null || value === undefined || value === "") continue;
+        const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        let valStr: string;
+        if (Array.isArray(value)) valStr = value.join(", ");
+        else if (typeof value === "object") valStr = JSON.stringify(value);
+        else valStr = String(value);
+        if (valStr.length > 200) valStr = valStr.slice(0, 200) + "…";
+        answerLines.push(`• <b>${escapeHtml(label)}:</b> ${escapeHtml(valStr)}`);
+      }
+      if (answerLines.length > 0) {
+        lines.push("", "<b>Answers:</b>", ...answerLines.slice(0, 20));
+      }
+
       await sendTelegramNotification(lines.join("\n"));
     } catch (e) {
       console.error("Telegram notify failed", e);
