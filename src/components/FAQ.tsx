@@ -34,6 +34,43 @@ const faqs = [
 
 export const FAQ = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (name.trim().length < 2) {
+      toast({ title: "Please enter your name", variant: "destructive" });
+      return;
+    }
+    if (phone.trim().length < 7) {
+      toast({ title: "Please enter a valid phone number", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.functions.invoke("submit-form", {
+        body: {
+          form_type: "demo_request",
+          contact_name: name.trim(),
+          contact_phone: phone.trim(),
+          data: { source: "faq_quick_contact" },
+        },
+      });
+      if (error) throw error;
+      setSubmitted(true);
+      setName("");
+      setPhone("");
+      toast({ title: "Thanks! We'll be in touch shortly." });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Something went wrong. Please try again.", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <section id="faq" className="py-24">
