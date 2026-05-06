@@ -322,7 +322,14 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "process");
 
-    if (action === "process") return await processQueue(admin);
+    if (action === "process") {
+      const cronSecret = Deno.env.get("CRON_SECRET");
+      const provided = req.headers.get("x-cron-secret") ?? "";
+      if (!cronSecret || provided !== cronSecret) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+      return await processQueue(admin);
+    }
 
     const auth = await getUser(req, supabaseUrl, anonKey);
     if (!auth) return json({ error: "Unauthorized" }, 401);
