@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.whatsapp-webhook]
 verify_jwt = false
+
+[functions.calendly-webhook]
+verify_jwt = false
