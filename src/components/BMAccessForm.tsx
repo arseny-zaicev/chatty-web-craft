@@ -17,6 +17,7 @@ type Step = 0 | 1 | 2 | 3;
 const CALENDLY_URL = "https://calendly.com/nitish-iskra/20min";
 
 const schema = z.object({
+  contact_phone: z.string().trim().regex(/^[\+]?[\d\s\-\(\)]{10,20}$/, "Please enter a valid phone number"),
   has_bm: z.enum(["yes", "no", "not_sure"]),
   bm_age: z.enum(["lt_3m", "3_6m", "6_12m", "12m_plus", "not_sure"]),
   is_verified: z.enum(["yes", "no", "not_sure"]),
