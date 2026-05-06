@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { ChevronDown, MessageCircle } from "lucide-react";
+import { ChevronDown, MessageCircle, Loader2 } from "lucide-react";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const faqs = [
   {
@@ -32,6 +34,43 @@ const faqs = [
 
 export const FAQ = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (name.trim().length < 2) {
+      toast({ title: "Please enter your name", variant: "destructive" });
+      return;
+    }
+    if (phone.trim().length < 7) {
+      toast({ title: "Please enter a valid phone number", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.functions.invoke("submit-form", {
+        body: {
+          form_type: "demo_request",
+          contact_name: name.trim(),
+          contact_phone: phone.trim(),
+          data: { source: "faq_quick_contact" },
+        },
+      });
+      if (error) throw error;
+      setSubmitted(true);
+      setName("");
+      setPhone("");
+      toast({ title: "Thanks! We'll be in touch shortly." });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Something went wrong. Please try again.", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <section id="faq" className="py-24">
@@ -58,6 +97,50 @@ export const FAQ = () => {
             <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
               Common Questions
             </h2>
+          </div>
+        </ScrollReveal>
+
+        <ScrollReveal delay={100}>
+          <div className="max-w-2xl mx-auto mb-10 p-6 md:p-7 rounded-2xl border border-iskra-emerald/30 bg-gradient-to-br from-iskra-emerald/10 to-transparent">
+            <p className="font-display text-lg md:text-xl font-semibold mb-1">
+              Get answers in minutes
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Leave your name and phone - we'll reach out and answer everything personally.
+            </p>
+            {submitted ? (
+              <div className="text-iskra-emerald font-medium text-sm">
+                ✓ Got it. We'll be in touch shortly.
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="grid sm:grid-cols-[1fr_1fr_auto] gap-3">
+                <input
+                  type="text"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-iskra-emerald/40"
+                  disabled={submitting}
+                  required
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-iskra-emerald/40"
+                  disabled={submitting}
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-3 rounded-lg bg-iskra-emerald text-white font-semibold text-sm hover:bg-iskra-emerald-light transition-colors disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                </button>
+              </form>
+            )}
           </div>
         </ScrollReveal>
 
