@@ -1,4 +1,4 @@
-# ISKRA - AI Chatbots & WhatsApp Outreach Solutions
+# ISKRA - WhatsApp Outreach Agency Dubai
 # https://iskra.ae
 
 User-agent: Googlebot
