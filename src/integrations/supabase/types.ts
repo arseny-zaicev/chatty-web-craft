@@ -917,7 +917,16 @@ export type Database = {
       message_direction: "inbound" | "outbound"
       message_status: "queued" | "sent" | "delivered" | "read" | "failed"
       stage_type: "open" | "won" | "lost"
-      submission_status: "new" | "contacted" | "converted" | "rejected"
+      submission_status:
+        | "new"
+        | "contacted"
+        | "converted"
+        | "rejected"
+        | "qualified"
+        | "not_qualified"
+        | "in_progress"
+        | "meeting_booked"
+        | "started"
       template_category: "marketing" | "utility" | "authentication"
     }
     CompositeTypes: {
@@ -1068,7 +1077,17 @@ export const Constants = {
       message_direction: ["inbound", "outbound"],
       message_status: ["queued", "sent", "delivered", "read", "failed"],
       stage_type: ["open", "won", "lost"],
-      submission_status: ["new", "contacted", "converted", "rejected"],
+      submission_status: [
+        "new",
+        "contacted",
+        "converted",
+        "rejected",
+        "qualified",
+        "not_qualified",
+        "in_progress",
+        "meeting_booked",
+        "started",
+      ],
       template_category: ["marketing", "utility", "authentication"],
     },
   },

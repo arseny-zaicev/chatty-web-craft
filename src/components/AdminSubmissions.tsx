@@ -34,16 +34,32 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  CalendarCheck,
+  Rocket,
+  ThumbsDown,
+  Hourglass,
+  ThumbsUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+type SubmissionStatus =
+  | "new"
+  | "contacted"
+  | "qualified"
+  | "not_qualified"
+  | "in_progress"
+  | "meeting_booked"
+  | "started"
+  | "converted"
+  | "rejected";
 
 interface Submission {
   id: string;
   created_at: string;
   updated_at: string;
   form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access";
-  status: "new" | "contacted" | "converted" | "rejected";
+  status: SubmissionStatus;
   data: unknown;
   contact_name: string | null;
   contact_email: string | null;
@@ -53,18 +69,27 @@ interface Submission {
   notes: string | null;
 }
 
-const statusConfig = {
+const statusConfig: Record<SubmissionStatus, { label: string; color: string; icon: typeof AlertCircle }> = {
   new: { label: "New", color: "bg-blue-500", icon: AlertCircle },
-  contacted: { label: "Contacted", color: "bg-yellow-500", icon: Clock },
-  converted: { label: "Converted", color: "bg-green-500", icon: CheckCircle },
+  contacted: { label: "Contacted", color: "bg-sky-500", icon: Clock },
+  qualified: { label: "Qualified", color: "bg-emerald-500", icon: ThumbsUp },
+  not_qualified: { label: "Not Qualified", color: "bg-zinc-500", icon: ThumbsDown },
+  in_progress: { label: "In Progress", color: "bg-yellow-500", icon: Hourglass },
+  meeting_booked: { label: "Meeting Booked", color: "bg-purple-500", icon: CalendarCheck },
+  started: { label: "Started Work", color: "bg-iskra-emerald", icon: Rocket },
+  converted: { label: "Converted", color: "bg-green-600", icon: CheckCircle },
   rejected: { label: "Rejected", color: "bg-red-500", icon: XCircle },
 };
+
+const STATUS_ORDER: SubmissionStatus[] = [
+  "new", "contacted", "qualified", "not_qualified", "in_progress", "meeting_booked", "started", "converted", "rejected"
+];
 
 export const AdminSubmissions = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterType, setFilterType] = useState<"all" | "qualification" | "seller_leads" | "demo_request" | "bm_access">("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | "new" | "contacted" | "converted" | "rejected">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | SubmissionStatus>("all");
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [editNotes, setEditNotes] = useState("");
 
@@ -219,13 +244,12 @@ export const AdminSubmissions = () => {
 
   const filteredSubmissions = getFilteredSubmissions();
 
-  const stats = {
-    total: submissions.length,
-    new: submissions.filter(s => s.status === "new").length,
-    contacted: submissions.filter(s => s.status === "contacted").length,
-    converted: submissions.filter(s => s.status === "converted").length,
-    rejected: submissions.filter(s => s.status === "rejected").length,
-  };
+  const total = submissions.length;
+  const counts = STATUS_ORDER.reduce<Record<SubmissionStatus, number>>((acc, st) => {
+    acc[st] = submissions.filter(s => s.status === st).length;
+    return acc;
+  }, {} as Record<SubmissionStatus, number>);
+  const pct = (n: number) => total === 0 ? 0 : Math.round((n / total) * 100);
 
   if (isLoading) {
     return (
@@ -238,27 +262,21 @@ export const AdminSubmissions = () => {
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="p-4 text-center">
-          <p className="text-2xl font-bold">{stats.total}</p>
+          <p className="text-2xl font-bold">{total}</p>
           <p className="text-xs text-muted-foreground">Total</p>
         </Card>
-        <Card className="p-4 text-center border-blue-500/30 bg-blue-500/5">
-          <p className="text-2xl font-bold text-blue-500">{stats.new}</p>
-          <p className="text-xs text-muted-foreground">New</p>
-        </Card>
-        <Card className="p-4 text-center border-yellow-500/30 bg-yellow-500/5">
-          <p className="text-2xl font-bold text-yellow-500">{stats.contacted}</p>
-          <p className="text-xs text-muted-foreground">Contacted</p>
-        </Card>
-        <Card className="p-4 text-center border-green-500/30 bg-green-500/5">
-          <p className="text-2xl font-bold text-green-500">{stats.converted}</p>
-          <p className="text-xs text-muted-foreground">Converted</p>
-        </Card>
-        <Card className="p-4 text-center border-red-500/30 bg-red-500/5">
-          <p className="text-2xl font-bold text-red-500">{stats.rejected}</p>
-          <p className="text-xs text-muted-foreground">Rejected</p>
-        </Card>
+        {STATUS_ORDER.map(st => {
+          const cfg = statusConfig[st];
+          return (
+            <Card key={st} className="p-4 text-center">
+              <p className="text-2xl font-bold">{counts[st]}</p>
+              <p className="text-xs text-muted-foreground">{cfg.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{pct(counts[st])}%</p>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Filters & Actions */}
@@ -289,10 +307,9 @@ export const AdminSubmissions = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="new">New</SelectItem>
-                <SelectItem value="contacted">Contacted</SelectItem>
-                <SelectItem value="converted">Converted</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
+                {STATUS_ORDER.map(st => (
+                  <SelectItem key={st} value={st}>{statusConfig[st].label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button variant="outline" size="icon" onClick={fetchSubmissions}>
@@ -407,10 +424,9 @@ export const AdminSubmissions = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="new">New</SelectItem>
-                          <SelectItem value="contacted">Contacted</SelectItem>
-                          <SelectItem value="converted">Converted</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
+                          {STATUS_ORDER.map(st => (
+                            <SelectItem key={st} value={st}>{statusConfig[st].label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <Button
@@ -569,10 +585,10 @@ export const AdminSubmissions = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="contacted">Contacted</SelectItem>
-                    <SelectItem value="converted">Converted</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
+                    {STATUS_ORDER.map(st => (
+                      <SelectItem key={st} value={st}>{statusConfig[st].label}</SelectItem>
+                    ))}
+                    
                   </SelectContent>
                 </Select>
               </div>
