@@ -2,10 +2,10 @@
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#2d9d74"/>
-      <stop offset="100%" stop-color="#1a7a5a"/>
+      <stop offset="100%" stop-color="#1a4d3a"/>
     </linearGradient>
   </defs>
-  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bgGrad)"/>
-  <!-- 4-pointed spark/star -->
-  <path d="M256 80 L280 220 L420 256 L280 292 L256 432 L232 292 L92 256 L232 220 Z" fill="white"/>
+  <rect x="0" y="0" width="512" height="512" rx="96" ry="96" fill="url(#bgGrad)"/>
+  <path d="M256 80 L294 256 L432 256 L294 256 L256 432 L218 256 L80 256 L218 256 Z" fill="white"/>
+  <path d="M256 64L294 242L450 256L294 270L256 448L218 270L62 256L218 242L256 64Z" fill="white"/>
 </svg>
