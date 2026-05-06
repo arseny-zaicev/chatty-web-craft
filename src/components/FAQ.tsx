@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { ChevronDown, MessageCircle } from "lucide-react";
+import { ChevronDown, MessageCircle, Loader2 } from "lucide-react";
 import { ScrollReveal } from "@/hooks/useScrollReveal";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const faqs = [
   {
