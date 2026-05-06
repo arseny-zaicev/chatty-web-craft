@@ -115,8 +115,10 @@ export const BMAccessForm = () => {
       const { error } = await supabase.functions.invoke("submit-form", {
         body: {
           form_type: "bm_access",
+          contact_phone: data.contact_phone,
           data: {
             submission_id: submissionId,
+            contact_phone: data.contact_phone,
             has_bm: data.has_bm,
             bm_age: data.bm_age,
             is_verified: data.is_verified,
