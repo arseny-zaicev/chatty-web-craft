@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendTelegramNotification, escapeHtml } from "../_shared/telegram.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,6 +59,22 @@ Deno.serve(async (req) => {
         contact_name: name ?? null,
         data: { source: "calendly_only", calendly: { event, eventUri, startTime } },
       });
+    }
+
+    // Telegram notification
+    try {
+      const isCancel = event === "invitee.canceled";
+      const header = isCancel ? "❌ <b>Meeting canceled</b>" : "📅 <b>Meeting booked</b>";
+      const lines = [
+        header,
+        name ? `👤 ${escapeHtml(name)}` : null,
+        invitee ? `✉️ ${escapeHtml(invitee)}` : null,
+        startTime ? `🕒 ${escapeHtml(startTime)}` : null,
+        eventUri ? `🔗 ${escapeHtml(eventUri)}` : null,
+      ].filter(Boolean);
+      await sendTelegramNotification(lines.join("\n"));
+    } catch (e) {
+      console.error("Telegram notify failed", e);
     }
 
     return new Response(JSON.stringify({ ok: true }), {

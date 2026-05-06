@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTelegramNotification, escapeHtml } from "../_shared/telegram.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -223,6 +224,21 @@ Deno.serve(async (req) => {
     }
 
     console.log("Form submission successful:", { id: data.id, form_type: body.form_type });
+
+    // Fire-and-forget Telegram notification
+    try {
+      const lines = [
+        `🆕 <b>New ${escapeHtml(body.form_type)} submission</b>`,
+        body.contact_name ? `👤 ${escapeHtml(body.contact_name)}` : null,
+        body.contact_email ? `✉️ ${escapeHtml(body.contact_email)}` : null,
+        body.contact_phone ? `📞 ${escapeHtml(body.contact_phone)}` : null,
+        body.contact_company ? `🏢 ${escapeHtml(body.contact_company)}` : null,
+        body.contact_website ? `🌐 ${escapeHtml(body.contact_website)}` : null,
+      ].filter(Boolean);
+      await sendTelegramNotification(lines.join("\n"));
+    } catch (e) {
+      console.error("Telegram notify failed", e);
+    }
 
     return new Response(
       JSON.stringify({ success: true, id: data.id }),
