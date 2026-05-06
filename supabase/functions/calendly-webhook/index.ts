@@ -61,6 +61,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Telegram notification
+    try {
+      const isCancel = event === "invitee.canceled";
+      const header = isCancel ? "❌ <b>Meeting canceled</b>" : "📅 <b>Meeting booked</b>";
+      const lines = [
+        header,
+        name ? `👤 ${escapeHtml(name)}` : null,
+        invitee ? `✉️ ${escapeHtml(invitee)}` : null,
+        startTime ? `🕒 ${escapeHtml(startTime)}` : null,
+        eventUri ? `🔗 ${escapeHtml(eventUri)}` : null,
+      ].filter(Boolean);
+      await sendTelegramNotification(lines.join("\n"));
+    } catch (e) {
+      console.error("Telegram notify failed", e);
+    }
+
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
