@@ -588,7 +588,7 @@ export const AdminSubmissions = () => {
                     {STATUS_ORDER.map(st => (
                       <SelectItem key={st} value={st}>{statusConfig[st].label}</SelectItem>
                     ))}
-                    <SelectItem value="rejected">Rejected</SelectItem>
+                    
                   </SelectContent>
                 </Select>
               </div>
