@@ -184,6 +184,17 @@ export const BMAccessForm = () => {
             <div className="space-y-8">
               <h2 className="font-display text-3xl font-bold">Business Manager Details</h2>
 
+              <div className="space-y-3">
+                <Label htmlFor="phone" className="text-base font-medium">Your phone number (WhatsApp)</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={data.contact_phone || ""}
+                  onChange={(e) => update("contact_phone", e.target.value)}
+                />
+              </div>
+
               <RadioField
                 label="Do you already have an old Business Manager?"
                 value={data.has_bm}
