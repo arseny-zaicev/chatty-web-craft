@@ -189,8 +189,12 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
     const rawCategory = String(t.category || "MARKETING").toUpperCase();
     const category =
       rawCategory.includes("UTILITY") ? "utility" : rawCategory.includes("AUTH") ? "authentication" : "marketing";
-    const bodyText = String(t.data || t.body || "").slice(0, 4096) || null;
+    let container: any = {};
+    try { container = typeof t.containerMeta === "string" ? JSON.parse(t.containerMeta) : (t.containerMeta || {}); } catch { container = {}; }
+    const bodyText = String(container.data || t.data || t.body || "").slice(0, 4096) || null;
+    const buttons = Array.isArray(container.buttons) ? container.buttons : [];
     const vars = Array.from(new Set((bodyText || "").match(/\{\{\s*(\w+)\s*\}\}/g)?.map((m: string) => m.replace(/[{}\s]/g, "")) ?? []));
+    const quality = (t.quality && String(t.quality) !== "UNKNOWN") ? String(t.quality).toLowerCase() : null;
 
     const { error: upsertError } = await admin
       .from("message_templates")
@@ -206,6 +210,12 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
           variables: vars,
           status,
           category,
+          buttons,
+          quality,
+          namespace: t.namespace ? String(t.namespace).slice(0, 120) : null,
+          external_id: t.externalId ? String(t.externalId).slice(0, 120) : null,
+          raw: t,
+          synced_at: new Date().toISOString(),
         },
         { onConflict: "user_id,name,language" },
       );
