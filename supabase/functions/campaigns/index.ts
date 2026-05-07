@@ -230,7 +230,7 @@ async function sendTemplate(admin: any, recipient: any) {
   const number = campaign?.whatsapp_numbers;
   if (!campaign || !template || !number) throw new Error("Missing campaign data");
 
-  const apiKey = Deno.env.get("GUPSHUP_API_KEY");
+  const apiKey = number.provider_api_key || Deno.env.get("GUPSHUP_API_KEY");
   if (!apiKey) throw new Error("GUPSHUP_API_KEY not configured");
 
   const variableNames = Array.isArray(template.variables) ? template.variables : [];
