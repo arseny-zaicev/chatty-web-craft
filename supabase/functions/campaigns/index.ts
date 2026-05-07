@@ -185,7 +185,20 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   const { error: recipientsError } = await admin.from("campaign_recipients").insert(rows);
   if (recipientsError) return json({ error: recipientsError.message }, 500);
-  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length });
+
+  let immediate: any = null;
+  if (minDelay === 0 && maxDelay === 0) {
+    await admin.from("campaign_recipients")
+      .update({ scheduled_at: new Date(Date.now() - 1000).toISOString() })
+      .eq("campaign_id", campaign.id);
+    try {
+      const res = await processQueue(admin);
+      immediate = await res.json();
+    } catch (err) {
+      immediate = { error: err instanceof Error ? err.message : "process failed" };
+    }
+  }
+  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate });
 }
 
 async function upsertTemplate(admin: any, requesterId: string, body: any) {
