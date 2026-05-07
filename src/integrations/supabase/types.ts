@@ -531,13 +531,19 @@ export type Database = {
       message_templates: {
         Row: {
           body: string | null
+          buttons: Json
           category: Database["public"]["Enums"]["template_category"]
           created_at: string
+          external_id: string | null
           id: string
           language: string
           name: string
+          namespace: string | null
           provider_template_id: string | null
+          quality: string | null
+          raw: Json | null
           status: string
+          synced_at: string | null
           updated_at: string
           user_id: string
           variables: Json
@@ -546,13 +552,19 @@ export type Database = {
         }
         Insert: {
           body?: string | null
+          buttons?: Json
           category?: Database["public"]["Enums"]["template_category"]
           created_at?: string
+          external_id?: string | null
           id?: string
           language?: string
           name: string
+          namespace?: string | null
           provider_template_id?: string | null
+          quality?: string | null
+          raw?: Json | null
           status?: string
+          synced_at?: string | null
           updated_at?: string
           user_id: string
           variables?: Json
@@ -561,13 +573,19 @@ export type Database = {
         }
         Update: {
           body?: string | null
+          buttons?: Json
           category?: Database["public"]["Enums"]["template_category"]
           created_at?: string
+          external_id?: string | null
           id?: string
           language?: string
           name?: string
+          namespace?: string | null
           provider_template_id?: string | null
+          quality?: string | null
+          raw?: Json | null
           status?: string
+          synced_at?: string | null
           updated_at?: string
           user_id?: string
           variables?: Json
