@@ -154,13 +154,13 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
 
   const { data: number } = await admin
     .from("whatsapp_numbers")
-    .select("id, user_id, workspace_id, provider_app_id, provider_waba_id")
+    .select("id, user_id, workspace_id, provider_app_id, provider_waba_id, provider_api_key")
     .eq("id", whatsappNumberId)
     .maybeSingle();
   if (!number) return json({ error: "WhatsApp number not found" }, 404);
   if (!(await canAccessUser(admin, requesterId, number.user_id))) return json({ error: "Forbidden" }, 403);
 
-  const apiKey = Deno.env.get("GUPSHUP_API_KEY");
+  const apiKey = number.provider_api_key || Deno.env.get("GUPSHUP_API_KEY");
   if (!apiKey) return json({ error: "GUPSHUP_API_KEY not configured" }, 500);
   const appId = number.provider_app_id || Deno.env.get("GUPSHUP_APP_ID");
   if (!appId) return json({ error: "Gupshup app id missing for this number" }, 400);
@@ -230,7 +230,7 @@ async function sendTemplate(admin: any, recipient: any) {
   const number = campaign?.whatsapp_numbers;
   if (!campaign || !template || !number) throw new Error("Missing campaign data");
 
-  const apiKey = Deno.env.get("GUPSHUP_API_KEY");
+  const apiKey = number.provider_api_key || Deno.env.get("GUPSHUP_API_KEY");
   if (!apiKey) throw new Error("GUPSHUP_API_KEY not configured");
 
   const variableNames = Array.isArray(template.variables) ? template.variables : [];
@@ -261,7 +261,7 @@ async function sendTemplate(admin: any, recipient: any) {
 async function processQueue(admin: any) {
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id), message_templates(name, language, variables, provider_template_id))")
+    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id, provider_api_key), message_templates(name, language, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date().toISOString())
     .eq("campaigns.status", "running")

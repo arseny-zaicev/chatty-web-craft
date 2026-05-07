@@ -788,6 +788,7 @@ export type Database = {
           is_active: boolean
           phone_number: string
           provider: string
+          provider_api_key: string | null
           provider_app_id: string | null
           provider_waba_id: string | null
           updated_at: string
@@ -801,6 +802,7 @@ export type Database = {
           is_active?: boolean
           phone_number: string
           provider?: string
+          provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
           updated_at?: string
@@ -814,6 +816,7 @@ export type Database = {
           is_active?: boolean
           phone_number?: string
           provider?: string
+          provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
           updated_at?: string
