@@ -115,8 +115,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const name = String(body.name || "").trim().slice(0, 160);
   const whatsappNumberId = String(body.whatsapp_number_id || "");
   const templateId = String(body.template_id || "");
-  const minDelay = Math.max(5, Math.min(86400, Number(body.delay_min_seconds || 30)));
-  const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds || 90)));
+  const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
+  const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
 
   if (!name || !uuidRegex.test(whatsappNumberId) || !uuidRegex.test(templateId)) {
