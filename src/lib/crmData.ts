@@ -97,7 +97,7 @@ export async function fetchPipelineBase(workspaceId?: string) {
 export async function fetchCampaignBase(workspaceId?: string) {
   let templatesQuery = supabase
     .from("message_templates")
-    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id")
+    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, buttons, quality, namespace, external_id, variables, synced_at, created_at, provider_template_id")
     .order("created_at", { ascending: false });
   let campaignsQuery = supabase
     .from("campaigns")
