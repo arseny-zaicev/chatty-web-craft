@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { AnimatedBackground } from "@/components/AnimatedBackground";
-import { Sparkles } from "@/components/Sparkles";
 import mariaAvatar from "@/assets/maria-avatar.avif";
 
 const DOT_GRID_BG = `radial-gradient(hsl(38 40% 68%) 1px, transparent 1px)`;

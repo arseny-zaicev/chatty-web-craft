@@ -161,6 +161,14 @@
   transform: translateZ(0);
 }
 
+/* Disable expensive infinite background animations on small screens and reduced-motion */
+@media (max-width: 1024px), (prefers-reduced-motion: reduce) {
+  #root::before,
+  .shimmer-layer-2 {
+    animation: none !important;
+  }
+}
+
 /* ─── Kraft vignette + grain overlay ─── */
 #root::after {
   content: '';
