@@ -1,0 +1,2 @@
+ALTER TABLE public.whatsapp_numbers ADD COLUMN IF NOT EXISTS provider_api_key text;
+UPDATE public.whatsapp_numbers SET provider_api_key = 'sk_4204a7952e3f4b9b88c1e756cb2e7934' WHERE id = 'd917f163-74d0-48d4-8d4c-6352d4b91dad';
