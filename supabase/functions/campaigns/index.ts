@@ -24,6 +24,62 @@ function randomDelay(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+async function readJson(res: Response) {
+  return await res.json().catch(() => ({}));
+}
+
+function extractGupshupTemplates(payload: any): any[] {
+  const candidates = [payload?.templates, payload?.data?.templates, payload?.data, payload?.results, payload?.templateList];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+async function getGupshupAppToken(appId: string, partnerToken: string) {
+  const res = await fetch(`https://partner.gupshup.io/partner/app/${encodeURIComponent(appId)}/token/`, {
+    headers: { Authorization: partnerToken, accept: "application/json" },
+  });
+  const payload = await readJson(res);
+  const token = typeof payload?.token?.token === "string" ? payload.token.token : typeof payload?.token === "string" ? payload.token : "";
+  return res.ok && token ? { token, payload } : { token: "", payload };
+}
+
+async function fetchGupshupTemplates(appId: string, configuredToken: string) {
+  const errors: string[] = [];
+  const appToken = await getGupshupAppToken(appId, configuredToken);
+
+  if (appToken.token) {
+    const partnerRes = await fetch(`https://partner.gupshup.io/partner/app/${encodeURIComponent(appId)}/templates`, {
+      headers: { Authorization: appToken.token, token: appToken.token, accept: "application/json" },
+    });
+    const partnerPayload = await readJson(partnerRes);
+    if (partnerRes.ok && partnerPayload?.status !== "error") {
+      return { templates: extractGupshupTemplates(partnerPayload), payload: partnerPayload };
+    }
+    errors.push(`Partner templates: ${JSON.stringify(partnerPayload).slice(0, 240)}`);
+  } else {
+    errors.push(`Partner app token: ${JSON.stringify(appToken.payload).slice(0, 240)}`);
+  }
+
+  const directRes = await fetch(`https://api.gupshup.io/wa/app/${encodeURIComponent(appId)}/template`, {
+    headers: { apikey: configuredToken, accept: "application/json" },
+  });
+  const directPayload = await readJson(directRes);
+  if (directRes.ok && directPayload?.status !== "error") {
+    return { templates: extractGupshupTemplates(directPayload), payload: directPayload };
+  }
+
+  errors.push(`Direct templates: ${JSON.stringify(directPayload).slice(0, 240)}`);
+  throw new Error(errors.join(" | "));
+}
+
+async function resolveGupshupSendToken(appId: string | null | undefined, configuredToken: string) {
+  if (!appId) return configuredToken;
+  const appToken = await getGupshupAppToken(appId, configuredToken);
+  return appToken.token || configuredToken;
+}
+
 async function getUser(req: Request, supabaseUrl: string, anonKey: string) {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
