@@ -261,7 +261,7 @@ async function sendTemplate(admin: any, recipient: any) {
 async function processQueue(admin: any) {
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id), message_templates(name, language, variables, provider_template_id))")
+    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id, provider_api_key), message_templates(name, language, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date().toISOString())
     .eq("campaigns.status", "running")
