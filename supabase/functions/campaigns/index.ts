@@ -154,13 +154,13 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
 
   const { data: number } = await admin
     .from("whatsapp_numbers")
-    .select("id, user_id, workspace_id, provider_app_id, provider_waba_id")
+    .select("id, user_id, workspace_id, provider_app_id, provider_waba_id, provider_api_key")
     .eq("id", whatsappNumberId)
     .maybeSingle();
   if (!number) return json({ error: "WhatsApp number not found" }, 404);
   if (!(await canAccessUser(admin, requesterId, number.user_id))) return json({ error: "Forbidden" }, 403);
 
-  const apiKey = Deno.env.get("GUPSHUP_API_KEY");
+  const apiKey = number.provider_api_key || Deno.env.get("GUPSHUP_API_KEY");
   if (!apiKey) return json({ error: "GUPSHUP_API_KEY not configured" }, 500);
   const appId = number.provider_app_id || Deno.env.get("GUPSHUP_APP_ID");
   if (!appId) return json({ error: "Gupshup app id missing for this number" }, 400);
