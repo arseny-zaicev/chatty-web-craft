@@ -313,7 +313,9 @@ async function sendTemplate(admin: any, recipient: any) {
   const number = campaign?.whatsapp_numbers;
   if (!campaign || !template || !number) throw new Error("Missing campaign data");
 
-  const configuredToken = number.provider_api_key || Deno.env.get("GUPSHUP_API_KEY");
+  const perNumberKey = number.provider_api_key && !String(number.provider_api_key).startsWith("sk_") ? number.provider_api_key : null;
+  const globalKey = Deno.env.get("GUPSHUP_API_KEY");
+  const configuredToken = perNumberKey || globalKey;
   if (!configuredToken) throw new Error("GUPSHUP_API_KEY not configured");
   const apiKey = await resolveGupshupSendToken(number.provider_app_id, configuredToken);
 
