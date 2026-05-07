@@ -3,7 +3,7 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export type WhatsAppNumber = Pick<
   Tables<"whatsapp_numbers">,
-  "id" | "phone_number" | "display_name" | "workspace_id"
+  "id" | "phone_number" | "display_name" | "workspace_id" | "is_active" | "provider_api_key" | "provider_app_id"
 >;
 
 export type Conversation = Pick<
@@ -48,7 +48,7 @@ export const crmKeys = {
 };
 
 export async function fetchCrmBase(workspaceId?: string) {
-  let numbersQuery = supabase.from("whatsapp_numbers").select("id, phone_number, display_name, workspace_id");
+  let numbersQuery = supabase.from("whatsapp_numbers").select("id, phone_number, display_name, workspace_id, is_active, provider_api_key, provider_app_id");
   let conversationsQuery = supabase
     .from("conversations")
     .select(
