@@ -37,27 +37,43 @@ function extractGupshupTemplates(payload: any): any[] {
 }
 
 async function getGupshupAppToken(appId: string, partnerToken: string) {
-  const res = await fetch(`https://partner.gupshup.io/partner/app/${encodeURIComponent(appId)}/token/`, {
-    headers: { Authorization: partnerToken, accept: "application/json" },
-  });
-  const payload = await readJson(res);
-  const token = typeof payload?.token?.token === "string" ? payload.token.token : typeof payload?.token === "string" ? payload.token : "";
-  return res.ok && token ? { token, payload } : { token: "", payload };
+  const attempts = [
+    { Authorization: partnerToken, accept: "application/json" },
+    { token: partnerToken, accept: "application/json" },
+  ];
+  let lastPayload: any = {};
+  for (const headers of attempts) {
+    const res = await fetch(`https://partner.gupshup.io/partner/app/${encodeURIComponent(appId)}/token/`, { headers });
+    const payload = await readJson(res);
+    const token = typeof payload?.token?.token === "string" ? payload.token.token : typeof payload?.token === "string" ? payload.token : "";
+    if (res.ok && token) return { token, payload };
+    lastPayload = payload;
+  }
+  return { token: "", payload: lastPayload };
 }
 
 async function fetchGupshupTemplates(appId: string, configuredToken: string) {
   const errors: string[] = [];
-  const appToken = await getGupshupAppToken(appId, configuredToken);
-
-  if (appToken.token) {
+  const fetchPartnerTemplates = async (token: string, label: string) => {
     const partnerRes = await fetch(`https://partner.gupshup.io/partner/app/${encodeURIComponent(appId)}/templates`, {
-      headers: { Authorization: appToken.token, token: appToken.token, accept: "application/json" },
+      headers: { Authorization: token, token, accept: "application/json" },
     });
     const partnerPayload = await readJson(partnerRes);
     if (partnerRes.ok && partnerPayload?.status !== "error") {
       return { templates: extractGupshupTemplates(partnerPayload), payload: partnerPayload };
     }
-    errors.push(`Partner templates: ${JSON.stringify(partnerPayload).slice(0, 240)}`);
+    errors.push(`${label}: ${JSON.stringify(partnerPayload).slice(0, 240)}`);
+    return null;
+  };
+
+  const directPartnerResult = await fetchPartnerTemplates(configuredToken, "Partner templates with configured token");
+  if (directPartnerResult) return directPartnerResult;
+
+  const appToken = await getGupshupAppToken(appId, configuredToken);
+
+  if (appToken.token) {
+    const appTokenResult = await fetchPartnerTemplates(appToken.token, "Partner templates with app token");
+    if (appTokenResult) return appTokenResult;
   } else {
     errors.push(`Partner app token: ${JSON.stringify(appToken.payload).slice(0, 240)}`);
   }
