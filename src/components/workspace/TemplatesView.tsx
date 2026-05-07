@@ -128,23 +128,17 @@ export default function TemplatesView({ workspaceId }: { workspaceId: string }) 
             <p className="text-xs text-muted-foreground">Live status from Gupshup. Only Approved templates can be sent.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={`w-4 h-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />
-            Reload
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => syncMutation.mutate(sendingNumberId)}
-            disabled={syncMutation.isPending || !sendingNumberId}
-          >
-            {syncMutation.isPending ? (
-              <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Syncing</>
-            ) : (
-              <><RefreshCw className="w-4 h-4 mr-1.5" />Sync from Gupshup</>
-            )}
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          onClick={() => syncMutation.mutate(sendingNumberId)}
+          disabled={syncMutation.isPending || !sendingNumberId}
+        >
+          {syncMutation.isPending ? (
+            <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Syncing</>
+          ) : (
+            <><RefreshCw className="w-4 h-4 mr-1.5" />Sync from Gupshup</>
+          )}
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
