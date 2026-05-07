@@ -221,13 +221,13 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
   const appId = number.provider_app_id || Deno.env.get("GUPSHUP_APP_ID");
   if (!appId) return json({ error: "Gupshup app id missing for this number" }, 400);
 
-  const res = await fetch(`https://api.gupshup.io/wa/app/${appId}/template`, {
-    headers: { apikey: apiKey, accept: "application/json" },
-  });
-  const payload = await res.json().catch(() => ({}));
-  if (!res.ok) return json({ error: `Gupshup error: ${JSON.stringify(payload).slice(0, 400)}` }, 502);
-
-  const templates: any[] = Array.isArray(payload.templates) ? payload.templates : [];
+  let templates: any[] = [];
+  try {
+    ({ templates } = await fetchGupshupTemplates(appId, apiKey));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    return json({ error: `Gupshup error: ${msg.slice(0, 400)}` }, 502);
+  }
   let upserted = 0;
   for (const t of templates) {
     const name = String(t.elementName || t.name || "").trim().slice(0, 120);
@@ -286,8 +286,9 @@ async function sendTemplate(admin: any, recipient: any) {
   const number = campaign?.whatsapp_numbers;
   if (!campaign || !template || !number) throw new Error("Missing campaign data");
 
-  const apiKey = number.provider_api_key || Deno.env.get("GUPSHUP_API_KEY");
-  if (!apiKey) throw new Error("GUPSHUP_API_KEY not configured");
+  const configuredToken = number.provider_api_key || Deno.env.get("GUPSHUP_API_KEY");
+  if (!configuredToken) throw new Error("GUPSHUP_API_KEY not configured");
+  const apiKey = await resolveGupshupSendToken(number.provider_app_id, configuredToken);
 
   const variableNames = Array.isArray(template.variables) ? template.variables : [];
   const params = variableNames.map((key: string) => String(recipient.variables?.[key] ?? ""));
