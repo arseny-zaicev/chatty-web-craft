@@ -260,13 +260,20 @@ export default function FleetRegistry() {
         </div>
 
         {view === "by-client" ? (
-          <GroupedByClient rows={filtered} workspaces={workspaces} onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })} />
+          <GroupedByClient rows={filtered} workspaces={workspaces}
+            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
+            onEdit={setEditing}
+            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         ) : (
-          <FleetTable rows={filtered} workspaces={workspaces} onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })} />
+          <FleetTable rows={filtered} workspaces={workspaces}
+            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
+            onEdit={setEditing}
+            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         )}
       </main>
 
-      <AddNumberDrawer open={adderOpen} onOpenChange={setAdderOpen} workspaces={workspaces}
+      <AddNumberDrawer open={adderOpen || !!editing} onOpenChange={(v) => { if (!v) { setAdderOpen(false); setEditing(null); } else setAdderOpen(true); }} workspaces={workspaces}
+        editing={editing}
         onCreated={async () => { await qc.invalidateQueries({ queryKey: ["fleet-registry"] }); }} />
     </div>
   );
