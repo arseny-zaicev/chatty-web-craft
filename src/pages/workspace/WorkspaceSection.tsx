@@ -4,6 +4,7 @@ import CRM from "@/pages/CRM";
 import Pipeline from "@/pages/Pipeline";
 import Campaigns from "@/pages/Campaigns";
 import TemplatesView from "@/components/workspace/TemplatesView";
+import NumbersInventory from "@/components/workspace/NumbersInventory";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const sections = {
@@ -24,7 +25,9 @@ export default function WorkspaceSection({ section }: { section: keyof typeof se
   if (section === "inbox") return <CRM workspaceId={workspace.id} embedded />;
   if (section === "pipeline") return <Pipeline workspaceId={workspace.id} embedded />;
   if (section === "templates") return <TemplatesView workspaceId={workspace.id} />;
-  if (section === "campaigns" || section === "numbers") return <Campaigns workspaceId={workspace.id} embedded />;
+  if (section === "numbers") return <NumbersInventory workspaceId={workspace.id} />;
+  if (section === "campaigns") return <Campaigns workspaceId={workspace.id} embedded />;
 
   return null;
 }
+
