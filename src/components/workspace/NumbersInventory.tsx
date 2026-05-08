@@ -94,6 +94,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
 
   const numbers = data?.numbers ?? [];
   const allocs = data?.allocations ?? [];
+  const syncByNumber = data?.syncByNumber ?? new Map<string, { lastSync: string | null; approved: number; total: number }>();
 
   const runningByNumber = useMemo(() => {
     const m = new Map<string, Allocation[]>();
@@ -172,9 +173,12 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
           {numbers.map((n) => {
             const draft: NumberRow = { ...n, ...(drafts[n.id] ?? {}) };
             const running = runningByNumber.get(n.id) ?? [];
+            const sync = syncByNumber.get(n.id) ?? { lastSync: null, approved: 0, total: 0 };
+            const inGupshup = Boolean(draft.provider_app_id) && (sync.total > 0 || Boolean(draft.provider_api_key));
+            const inIskra = Boolean(draft.phone_number) && Boolean(draft.provider_app_id);
             const key = apiKeyStatus(draft.provider_api_key);
             const work = workStatus(draft, running.length);
-            const ready = launchReadiness(draft);
+            const ready = launchReadiness(draft, inGupshup, inIskra);
             const dirty = Boolean(drafts[n.id]);
             return (
               <div key={n.id} className="rounded-lg border border-border bg-card/30 p-4 space-y-3">
@@ -182,12 +186,17 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   <div className="font-medium text-base">+{n.phone_number}</div>
                   <Badge variant="outline" className={`text-[10px] ${tone(key.tone)}`}>API key: {key.label}</Badge>
                   <Badge variant="outline" className={`text-[10px] ${tone(work.tone)}`}>{work.label}</Badge>
+                  <Badge variant="outline" className={`text-[10px] ${tone(inGupshup ? "ok" : "warn")}`}>Gupshup: {inGupshup ? "connected" : "unconfirmed"}</Badge>
+                  <Badge variant="outline" className={`text-[10px] ${tone(inIskra ? "ok" : "warn")}`}>ISKRA: {inIskra ? "connected" : "incomplete"}</Badge>
                   <Badge variant="outline" className={`text-[10px] ${tone(ready.tone)}`}>
                     {ready.tone === "ok" ? <CheckCircle2 className="w-3 h-3 mr-1 inline" /> : ready.tone === "bad" ? <XCircle className="w-3 h-3 mr-1 inline" /> : <AlertTriangle className="w-3 h-3 mr-1 inline" />}
                     launch: {ready.label}
                   </Badge>
                   {ready.reasons.length > 0 && <span className="text-[11px] text-muted-foreground">({ready.reasons.join(", ")})</span>}
                   <div className="ml-auto flex items-center gap-2">
+                    {sync.lastSync && (
+                      <span className="text-[11px] text-muted-foreground">templates {sync.approved}/{sync.total} approved · synced {new Date(sync.lastSync).toLocaleString()}</span>
+                    )}
                     {running.length > 0 && (
                       <span className="text-[11px] text-muted-foreground">campaigns: {running.map((r) => r.campaign_name).join(", ")}</span>
                     )}
@@ -207,10 +216,8 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   <Field label="Phone (digits)"><Input value={draft.phone_number} onChange={(e) => update(n.id, { phone_number: e.target.value.replace(/[^\d]/g, "") })} /></Field>
                   <Field label="App ID"><Input value={draft.provider_app_id ?? ""} onChange={(e) => update(n.id, { provider_app_id: e.target.value })} /></Field>
                   <Field label="API key (per-number)"><Input value={draft.provider_api_key ?? ""} onChange={(e) => update(n.id, { provider_api_key: e.target.value })} placeholder="leave blank to use global key" /></Field>
-                  <div className="grid grid-cols-3 gap-2 items-end">
-                    <Toggle label="Active" checked={draft.is_active} onChange={(v) => update(n.id, { is_active: v })} />
-                    <Toggle label="Gupshup" checked={draft.connected_in_gupshup} onChange={(v) => update(n.id, { connected_in_gupshup: v })} />
-                    <Toggle label="ISKRA" checked={draft.connected_in_iskra} onChange={(v) => update(n.id, { connected_in_iskra: v })} />
+                  <div className="flex items-end">
+                    <Toggle label="Active (sending allowed)" checked={draft.is_active} onChange={(v) => update(n.id, { is_active: v })} />
                   </div>
                 </div>
 
