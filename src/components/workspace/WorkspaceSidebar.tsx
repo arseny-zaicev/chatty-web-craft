@@ -1,6 +1,6 @@
 import { NavLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, LayoutDashboard, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus, BookOpen, BarChart3, Settings as SettingsIcon } from "lucide-react";
+import { Building2, LayoutDashboard, Inbox, KanbanSquare, Megaphone, Rocket, Loader2, Plus, BookOpen, Settings as SettingsIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,7 +19,6 @@ const opsTabs = [
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
   { key: "campaigns", label: "Campaigns", icon: Megaphone },
-  { key: "reporting", label: "Reporting", icon: BarChart3 },
   { key: "library", label: "Library", icon: BookOpen },
 ];
 const setupTabs = [

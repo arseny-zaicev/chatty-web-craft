@@ -35,7 +35,7 @@ const Campaigns = lazy(() => import("./pages/Campaigns"));
 const WorkspaceLayout = lazy(() => import("./pages/workspace/WorkspaceLayout"));
 const WorkspaceSection = lazy(() => import("./pages/workspace/WorkspaceSection"));
 const WorkspaceOverview = lazy(() => import("./pages/workspace/WorkspaceOverview"));
-const WorkspaceReporting = lazy(() => import("./pages/workspace/WorkspaceReporting"));
+
 const WorkspaceSettings = lazy(() => import("./pages/workspace/WorkspaceSettings"));
 const LaunchWizard = lazy(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazy(() => import("./pages/workspace/NewClient"));
@@ -98,7 +98,7 @@ const App = () => (
                 <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />
                 <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
                 <Route path=":slug/library" element={<WorkspaceSection section="library" />} />
-                <Route path=":slug/reporting" element={<WorkspaceReporting />} />
+                <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
                 <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
               </Route>

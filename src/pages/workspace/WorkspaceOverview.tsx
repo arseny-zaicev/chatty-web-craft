@@ -2,7 +2,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
-  Inbox, KanbanSquare, Megaphone, Rocket, BarChart3, BookOpen, Settings as SettingsIcon,
+  Inbox, Megaphone, Rocket,
   Phone, FileText, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, Clock, Loader2,
   Globe, ExternalLink,
 } from "lucide-react";
@@ -48,11 +48,7 @@ export default function WorkspaceOverview() {
           <p className="text-sm text-muted-foreground mt-1">/{slug}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/inbox`}><Inbox className="w-4 h-4 mr-1.5" />Inbox</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/pipeline`}><KanbanSquare className="w-4 h-4 mr-1.5" />Pipeline</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/library`}><BookOpen className="w-4 h-4 mr-1.5" />Library</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/reporting`}><BarChart3 className="w-4 h-4 mr-1.5" />Reporting</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/settings`}><SettingsIcon className="w-4 h-4 mr-1.5" />Settings</Link></Button>
+          <Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/inbox`}><Inbox className="w-4 h-4 mr-1.5" />Open Inbox</Link></Button>
           <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />Launch</Link></Button>
         </div>
       </div>
