@@ -44,8 +44,15 @@ const AdminAuth = () => {
       }
 
       if (data.user) {
-        toast.success("Welcome, Admin!");
-        navigate("/admin");
+        const { data: factors } = await supabase.auth.mfa.listFactors();
+        const verified = factors?.totp?.find((f) => f.status === "verified");
+        if (!verified) {
+          toast.success("Welcome. Set up 2FA to continue.");
+          navigate("/admin/mfa-setup");
+        } else {
+          toast.success("Enter your 2FA code");
+          navigate("/admin/mfa-verify");
+        }
       }
     } catch (error) {
       console.error("Unexpected error:", error);
