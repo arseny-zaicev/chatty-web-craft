@@ -622,6 +622,14 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                     })
                   )}
                   <div ref={messagesEndRef} />
+                  {showJumpToLatest && (
+                    <button
+                      onClick={() => scrollToBottom()}
+                      className="sticky bottom-2 ml-auto mr-2 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-primary text-primary-foreground shadow-md hover:opacity-90 transition w-fit"
+                    >
+                      Jump to latest
+                    </button>
+                  )}
                 </div>
 
                 <div className="border-t border-border px-4 py-3 bg-card/30">
