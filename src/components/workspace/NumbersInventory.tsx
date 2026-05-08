@@ -28,19 +28,29 @@ type NumberRow = {
 type Allocation = { whatsapp_number_id: string; campaign_id: string; campaign_name: string; status: string };
 
 const fetchData = async (workspaceId: string) => {
-  const [{ data: numbers, error: nErr }, { data: campaigns, error: cErr }, { data: allocs, error: aErr }] = await Promise.all([
+  const [{ data: numbers, error: nErr }, { data: campaigns, error: cErr }, { data: tpl, error: tErr }] = await Promise.all([
     supabase.from("whatsapp_numbers").select("id, workspace_id, phone_number, display_name, label, partner_source, bm_name, notes, provider_app_id, provider_api_key, is_active, connected_in_gupshup, connected_in_iskra").eq("workspace_id", workspaceId),
     supabase.from("campaigns").select("id, name, status, whatsapp_number_id").eq("workspace_id", workspaceId).in("status", ["draft", "scheduled", "running", "paused"]),
-    supabase.from("campaign_number_allocations").select("whatsapp_number_id, campaign_id, allocated_count, sent_count").eq("workspace_id", workspaceId),
+    supabase.from("message_templates").select("whatsapp_number_id, status, synced_at").eq("workspace_id", workspaceId),
   ]);
-  if (nErr) throw nErr; if (cErr) throw cErr; if (aErr) throw aErr;
+  if (nErr) throw nErr; if (cErr) throw cErr; if (tErr) throw tErr;
   const allocations: Allocation[] = (campaigns ?? []).map((c) => ({
     whatsapp_number_id: c.whatsapp_number_id,
     campaign_id: c.id,
     campaign_name: c.name,
     status: c.status,
   }));
-  return { numbers: (numbers ?? []) as NumberRow[], allocations, allocs: allocs ?? [] };
+  // For each number, latest sync time + approved template count
+  const syncByNumber = new Map<string, { lastSync: string | null; approved: number; total: number }>();
+  for (const t of tpl ?? []) {
+    if (!t.whatsapp_number_id) continue;
+    const cur = syncByNumber.get(t.whatsapp_number_id) ?? { lastSync: null, approved: 0, total: 0 };
+    cur.total += 1;
+    if (t.status === "approved") cur.approved += 1;
+    if (t.synced_at && (!cur.lastSync || t.synced_at > cur.lastSync)) cur.lastSync = t.synced_at;
+    syncByNumber.set(t.whatsapp_number_id, cur);
+  }
+  return { numbers: (numbers ?? []) as NumberRow[], allocations, syncByNumber };
 };
 
 const apiKeyStatus = (k: string | null) => {
@@ -55,11 +65,11 @@ const workStatus = (n: NumberRow, running: number) => {
   return { label: "idle", tone: "warn" as const };
 };
 
-const launchReadiness = (n: NumberRow) => {
+const launchReadiness = (n: NumberRow, gup: boolean, iskra: boolean) => {
   const reasons: string[] = [];
   if (!n.is_active) reasons.push("disabled");
-  if (!n.connected_in_gupshup) reasons.push("not in Gupshup");
-  if (!n.connected_in_iskra) reasons.push("not in ISKRA");
+  if (!gup) reasons.push("not in Gupshup");
+  if (!iskra) reasons.push("not in ISKRA");
   if (!n.provider_app_id) reasons.push("no app id");
   if (!n.phone_number) reasons.push("no phone");
   if (reasons.length === 0) return { label: "ready", tone: "ok" as const, reasons };
@@ -84,6 +94,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
 
   const numbers = data?.numbers ?? [];
   const allocs = data?.allocations ?? [];
+  const syncByNumber = data?.syncByNumber ?? new Map<string, { lastSync: string | null; approved: number; total: number }>();
 
   const runningByNumber = useMemo(() => {
     const m = new Map<string, Allocation[]>();
@@ -162,9 +173,12 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
           {numbers.map((n) => {
             const draft: NumberRow = { ...n, ...(drafts[n.id] ?? {}) };
             const running = runningByNumber.get(n.id) ?? [];
+            const sync = syncByNumber.get(n.id) ?? { lastSync: null, approved: 0, total: 0 };
+            const inGupshup = Boolean(draft.provider_app_id) && (sync.total > 0 || Boolean(draft.provider_api_key));
+            const inIskra = Boolean(draft.phone_number) && Boolean(draft.provider_app_id);
             const key = apiKeyStatus(draft.provider_api_key);
             const work = workStatus(draft, running.length);
-            const ready = launchReadiness(draft);
+            const ready = launchReadiness(draft, inGupshup, inIskra);
             const dirty = Boolean(drafts[n.id]);
             return (
               <div key={n.id} className="rounded-lg border border-border bg-card/30 p-4 space-y-3">
@@ -172,12 +186,17 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   <div className="font-medium text-base">+{n.phone_number}</div>
                   <Badge variant="outline" className={`text-[10px] ${tone(key.tone)}`}>API key: {key.label}</Badge>
                   <Badge variant="outline" className={`text-[10px] ${tone(work.tone)}`}>{work.label}</Badge>
+                  <Badge variant="outline" className={`text-[10px] ${tone(inGupshup ? "ok" : "warn")}`}>Gupshup: {inGupshup ? "connected" : "unconfirmed"}</Badge>
+                  <Badge variant="outline" className={`text-[10px] ${tone(inIskra ? "ok" : "warn")}`}>ISKRA: {inIskra ? "connected" : "incomplete"}</Badge>
                   <Badge variant="outline" className={`text-[10px] ${tone(ready.tone)}`}>
                     {ready.tone === "ok" ? <CheckCircle2 className="w-3 h-3 mr-1 inline" /> : ready.tone === "bad" ? <XCircle className="w-3 h-3 mr-1 inline" /> : <AlertTriangle className="w-3 h-3 mr-1 inline" />}
                     launch: {ready.label}
                   </Badge>
                   {ready.reasons.length > 0 && <span className="text-[11px] text-muted-foreground">({ready.reasons.join(", ")})</span>}
                   <div className="ml-auto flex items-center gap-2">
+                    {sync.lastSync && (
+                      <span className="text-[11px] text-muted-foreground">templates {sync.approved}/{sync.total} approved · synced {new Date(sync.lastSync).toLocaleString()}</span>
+                    )}
                     {running.length > 0 && (
                       <span className="text-[11px] text-muted-foreground">campaigns: {running.map((r) => r.campaign_name).join(", ")}</span>
                     )}
@@ -197,10 +216,8 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   <Field label="Phone (digits)"><Input value={draft.phone_number} onChange={(e) => update(n.id, { phone_number: e.target.value.replace(/[^\d]/g, "") })} /></Field>
                   <Field label="App ID"><Input value={draft.provider_app_id ?? ""} onChange={(e) => update(n.id, { provider_app_id: e.target.value })} /></Field>
                   <Field label="API key (per-number)"><Input value={draft.provider_api_key ?? ""} onChange={(e) => update(n.id, { provider_api_key: e.target.value })} placeholder="leave blank to use global key" /></Field>
-                  <div className="grid grid-cols-3 gap-2 items-end">
-                    <Toggle label="Active" checked={draft.is_active} onChange={(v) => update(n.id, { is_active: v })} />
-                    <Toggle label="Gupshup" checked={draft.connected_in_gupshup} onChange={(v) => update(n.id, { connected_in_gupshup: v })} />
-                    <Toggle label="ISKRA" checked={draft.connected_in_iskra} onChange={(v) => update(n.id, { connected_in_iskra: v })} />
+                  <div className="flex items-end">
+                    <Toggle label="Active (sending allowed)" checked={draft.is_active} onChange={(v) => update(n.id, { is_active: v })} />
                   </div>
                 </div>
 

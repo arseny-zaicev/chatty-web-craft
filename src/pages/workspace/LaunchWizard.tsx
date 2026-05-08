@@ -3,7 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Play, RefreshCw, Rocket, Users, FileText, Phone, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { crmKeys, fetchCampaignBase } from "@/lib/crmData";
+import { crmKeys, fetchCampaignBase, fetchConversationsForCsv } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -108,7 +108,10 @@ export default function LaunchWizard() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Sync failed"),
   });
 
-  const loadChats = () => setCsv(["phone,name,conversation_id", ...conversations.map((c) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
+  const loadChats = async () => {
+    const list = conversations.length > 0 ? conversations : await fetchConversationsForCsv(workspace?.id);
+    setCsv(["phone,name,conversation_id", ...list.map((c: any) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
+  };
 
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
