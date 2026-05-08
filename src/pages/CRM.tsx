@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase } from "@/lib/crmData";
+import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase, friendlySenderLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,7 @@ import {
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
 
 type Message = {
   id: string;
@@ -375,7 +376,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                     }`}
                     title={`+${n.phone_number}`}
                   >
-                    {n.display_name ?? `+${n.phone_number}`}
+                    {friendlySenderLabel(n)}
                   </button>
                 ))}
                 <button
@@ -535,9 +536,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {activeNumber && (
-                      <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1">
+                      <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1" title={`+${activeNumber.phone_number}`}>
                         <Phone className="w-3 h-3" />
-                        Sending from {activeNumber.display_name ?? "WhatsApp"} (+{activeNumber.phone_number})
+                        Sending from {friendlySenderLabel(activeNumber)}
                       </div>
                     )}
                     <Button
@@ -646,6 +647,16 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
                 <div className="shrink-0 max-h-[45%] overflow-hidden border-t border-border px-4 py-3 bg-card/30 flex flex-col">
                   <div className="flex items-end gap-2">
+                    <ComposerInsertButton
+                      workspaceId={workspaceId}
+                      disabled={sending}
+                      onInsert={(text) => {
+                        setDraft((d) => {
+                          const sep = d && !d.endsWith("\n") && !d.endsWith(" ") ? " " : "";
+                          return d + sep + text;
+                        });
+                      }}
+                    />
                     <Textarea
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}

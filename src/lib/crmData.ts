@@ -3,8 +3,18 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export type WhatsAppNumber = Pick<
   Tables<"whatsapp_numbers">,
-  "id" | "phone_number" | "display_name" | "workspace_id" | "is_active" | "provider_api_key" | "provider_app_id"
+  "id" | "phone_number" | "display_name" | "label" | "workspace_id" | "is_active" | "provider_api_key" | "provider_app_id"
 >;
+
+/** Friendly, human-facing sender label for use in normal chat UI.
+ * Never exposes the technical Gupshup app name (display_name).
+ * Order: explicit label -> +phone. */
+export const friendlySenderLabel = (n: Pick<WhatsAppNumber, "label" | "phone_number"> | null | undefined) => {
+  if (!n) return "WhatsApp";
+  const l = n.label?.trim();
+  if (l) return l;
+  return `+${n.phone_number}`;
+};
 
 export type Conversation = Pick<
   Tables<"conversations">,
@@ -48,7 +58,7 @@ export const crmKeys = {
 };
 
 export async function fetchCrmBase(workspaceId?: string) {
-  let numbersQuery = supabase.from("whatsapp_numbers").select("id, phone_number, display_name, workspace_id, is_active, provider_api_key, provider_app_id");
+  let numbersQuery = supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, workspace_id, is_active, provider_api_key, provider_app_id");
   let conversationsQuery = supabase
     .from("conversations")
     .select(
@@ -98,7 +108,7 @@ export async function fetchCampaignBase(workspaceId?: string) {
   // Lightweight: numbers + templates + recent campaigns. Conversations fetched lazily via fetchConversationsForCsv.
   let numbersQuery = supabase
     .from("whatsapp_numbers")
-    .select("id, phone_number, display_name, workspace_id, is_active, provider_api_key, provider_app_id");
+    .select("id, phone_number, display_name, label, workspace_id, is_active, provider_api_key, provider_app_id");
   let templatesQuery = supabase
     .from("message_templates")
     .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, synced_at, provider_template_id, buttons, quality, namespace, external_id, created_at")

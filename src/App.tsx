@@ -95,6 +95,7 @@ const App = () => (
                 <Route path=":slug/templates" element={<WorkspaceSection section="templates" />} />
                 <Route path=":slug/numbers" element={<WorkspaceSection section="numbers" />} />
                 <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
+                <Route path=":slug/library" element={<WorkspaceSection section="library" />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
