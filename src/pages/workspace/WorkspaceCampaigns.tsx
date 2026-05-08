@@ -113,10 +113,9 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
     const r = data ?? [];
     return {
       total: r.length,
-      sent: r.filter((x) => x.sent_at).length,
-      delivered: r.filter((x) => x.delivered_at).length,
-      read: r.filter((x) => x.read_at).length,
-      replied: r.filter((x) => x.replied_at).length,
+      sent: r.filter((x) => x.sent_at && x.status !== "failed").length,
+      pending: r.filter((x) => x.status === "pending" || x.status === "scheduled").length,
+      sending: r.filter((x) => x.status === "sending").length,
       failed: r.filter((x) => x.status === "failed").length,
     };
   }, [data]);
@@ -125,30 +124,27 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
 
   return (
     <div className="px-4 pb-4 pt-2 bg-background/40">
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
         <Stat label="Total" value={stats.total} />
-        <Stat label="Sent" value={stats.sent} />
-        <Stat label="Delivered" value={stats.delivered} />
-        <Stat label="Read" value={stats.read} />
-        <Stat label="Replied" value={stats.replied} tone="good" />
+        <Stat label="Sent" value={stats.sent} tone="good" />
+        <Stat label="Sending" value={stats.sending} />
+        <Stat label="Pending" value={stats.pending} />
         <Stat label="Failed" value={stats.failed} tone={stats.failed > 0 ? "bad" : undefined} />
       </div>
+      <p className="text-[11px] text-muted-foreground mb-2">Delivered / read / reply tracking will appear once provider receipts are wired in.</p>
       {(data ?? []).length > 0 && (
         <div className="rounded-md border border-border bg-card/30 max-h-64 overflow-auto">
           <table className="w-full text-xs">
             <thead className="bg-muted/40 sticky top-0"><tr className="text-left text-muted-foreground">
-              <th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Status</th><th className="px-2 py-1.5">Sent</th><th className="px-2 py-1.5">Delivered</th><th className="px-2 py-1.5">Read</th><th className="px-2 py-1.5">Replied</th><th className="px-2 py-1.5">Error</th>
+              <th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Status</th><th className="px-2 py-1.5">Sent at</th><th className="px-2 py-1.5">Error</th>
             </tr></thead>
             <tbody>
               {(data ?? []).slice(0, 200).map((r) => (
                 <tr key={r.id} className="border-t border-border/60">
                   <td className="px-2 py-1 font-mono">{r.contact_phone}</td>
                   <td className="px-2 py-1 capitalize">{r.status}</td>
-                  <td className="px-2 py-1">{r.sent_at ? "✓" : "—"}</td>
-                  <td className="px-2 py-1">{r.delivered_at ? "✓" : "—"}</td>
-                  <td className="px-2 py-1">{r.read_at ? "✓" : "—"}</td>
-                  <td className="px-2 py-1">{r.replied_at ? "✓" : "—"}</td>
-                  <td className="px-2 py-1 text-red-600 truncate max-w-[200px]">{r.failed_reason ?? ""}</td>
+                  <td className="px-2 py-1">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}</td>
+                  <td className="px-2 py-1 text-red-600 truncate max-w-[260px]">{r.error_message ?? ""}</td>
                 </tr>
               ))}
             </tbody>
