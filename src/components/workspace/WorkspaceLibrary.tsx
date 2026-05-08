@@ -114,6 +114,26 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
     onSuccess: () => { toast.success("Deleted"); invalidate(); },
   });
 
+  const seedStarter = useMutation({
+    mutationFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Sign in required");
+      const rows = STARTER_PACK.map((s) => ({
+        workspace_id: workspaceId,
+        user_id: auth.user!.id,
+        title: s.title,
+        body: s.body,
+        folder: s.folder,
+        tags: [] as string[],
+        is_favorite: !!s.is_favorite,
+      }));
+      const { error } = await supabase.from("workspace_saved_replies").insert(rows);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Starter pack added"); invalidate(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to seed"),
+  });
+
   const toggleFav = async (r: SavedReply) => {
     await supabase.from("workspace_saved_replies").update({ is_favorite: !r.is_favorite }).eq("id", r.id);
     invalidate();
@@ -197,13 +217,30 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
           ) : items.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground gap-3">
               <FolderOpen className="w-8 h-8 opacity-40" />
-              <div className="text-sm">Empty folder.</div>
-              <Button size="sm" variant="outline" onClick={() => setEditing({
-                title: "", body: "", folder: activeFolder !== ALL && activeFolder !== FAV ? activeFolder : "",
-                tags: [], is_favorite: false,
-              })}>
-                <Plus className="w-3.5 h-3.5 mr-1" />Add snippet
-              </Button>
+              <div className="text-sm">
+                {replies.length === 0 ? "Your library is empty." : "Empty folder."}
+              </div>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {replies.length === 0 && (
+                  <Button size="sm" onClick={() => seedStarter.mutate()} disabled={seedStarter.isPending}>
+                    {seedStarter.isPending
+                      ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      : <Sparkles className="w-3.5 h-3.5 mr-1" />}
+                    Load starter pack
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => setEditing({
+                  title: "", body: "", folder: activeFolder !== ALL && activeFolder !== FAV ? activeFolder : "",
+                  tags: [], is_favorite: false,
+                })}>
+                  <Plus className="w-3.5 h-3.5 mr-1" />Add snippet
+                </Button>
+              </div>
+              {replies.length === 0 && (
+                <p className="text-[11px] max-w-xs">
+                  Adds 8 ready-to-use snippets in <span className="font-medium">Links</span>, <span className="font-medium">Greetings</span> and <span className="font-medium">Follow-ups</span>. Fill the link variables once in the Variables panel.
+                </p>
+              )}
             </div>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
