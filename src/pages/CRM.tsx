@@ -46,6 +46,29 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [sending, setSending] = useState(false);
   const [lastSendDebug, setLastSendDebug] = useState<Record<string, unknown> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const prevActiveIdRef = useRef<string | null>(null);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
+    if (behavior === "smooth") {
+      // noop - we already snapped; keep API simple
+    }
+  };
+
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom < 80;
+    stickToBottomRef.current = atBottom;
+    setShowJumpToLatest(!atBottom);
+  };
 
   const { data: baseData, isLoading } = useQuery({
     queryKey: crmKeys.base(workspaceId),
@@ -81,6 +104,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
       if (d?.debug) setLastSendDebug(d.debug);
       if (d?.error) throw new Error(d.error);
       setDraft("");
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => {
+        const el = messagesScrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send";
       toast.error(msg);
@@ -226,8 +254,25 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [activeId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    // On conversation switch: snap to bottom instantly, reset stickiness.
+    if (prevActiveIdRef.current !== activeId) {
+      prevActiveIdRef.current = activeId;
+      stickToBottomRef.current = true;
+      setShowJumpToLatest(false);
+      requestAnimationFrame(() => {
+        const el = messagesScrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+      return;
+    }
+    // New message arrived: only auto-scroll if user is already near bottom.
+    if (stickToBottomRef.current) {
+      const el = messagesScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    } else {
+      setShowJumpToLatest(true);
+    }
+  }, [messages.length, activeId]);
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {
@@ -529,7 +574,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-3 bg-background">
+                <div
+                  ref={messagesScrollRef}
+                  onScroll={handleMessagesScroll}
+                  className="flex-1 overflow-y-auto px-6 py-6 space-y-3 bg-background overscroll-contain relative"
+                >
                   {loadingMessages ? (
                     <div className="flex justify-center pt-8">
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -578,6 +627,14 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                     })
                   )}
                   <div ref={messagesEndRef} />
+                  {showJumpToLatest && (
+                    <button
+                      onClick={() => scrollToBottom()}
+                      className="sticky bottom-2 ml-auto mr-2 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-primary text-primary-foreground shadow-md hover:opacity-90 transition w-fit"
+                    >
+                      Jump to latest
+                    </button>
+                  )}
                 </div>
 
                 <div className="border-t border-border px-4 py-3 bg-card/30">
