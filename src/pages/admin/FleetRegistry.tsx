@@ -290,7 +290,13 @@ const FilterSelect = ({ value, onChange, options, placeholder }: { value: string
   </Select>
 );
 
-function FleetTable({ rows, workspaces, onReassign }: { rows: Row[]; workspaces: WS[]; onReassign: (id: string, workspaceId: string | null) => void }) {
+type RowActions = {
+  onReassign: (id: string, workspaceId: string | null) => void;
+  onEdit: (r: Row) => void;
+  onDelete: (id: string) => void;
+};
+
+function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   return (
     <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
       <Table>
