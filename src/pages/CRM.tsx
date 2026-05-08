@@ -569,7 +569,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-3 bg-background">
+                <div
+                  ref={messagesScrollRef}
+                  onScroll={handleMessagesScroll}
+                  className="flex-1 overflow-y-auto px-6 py-6 space-y-3 bg-background overscroll-contain relative"
+                >
                   {loadingMessages ? (
                     <div className="flex justify-center pt-8">
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
