@@ -406,43 +406,68 @@ export default function LaunchWizard() {
             )}
           </Step>
 
-          {/* Step 3: Sending numbers */}
-          <Step n={3} icon={Phone} title={`Sending number${routing ? "s" : ""}`}>
-            {numbers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No numbers in this workspace.</p>
+          {/* Step 3: Sender pool */}
+          <Step n={3} icon={Phone} title="Sender pool">
+            {pools.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active numbers in this workspace.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-2">
-                {numbers.map((n) => {
-                  const selected = numberIds.includes(n.id);
-                  const hasVariant = activeLogical?.variantByNumber.has(n.id);
-                  return (
-                    <label
-                      key={n.id}
-                      className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
-                    >
-                      <input
-                        type={routing ? "checkbox" : "radio"}
-                        name="number-pick"
-                        checked={selected}
-                        onChange={() => toggleNumber(n.id)}
-                      />
-                      <span className="truncate flex-1">{n.label ?? `+${n.phone_number}`}</span>
-                      {activeLogical && (
-                        hasVariant
-                          ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">variant ok</Badge>
-                          : <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">no variant</Badge>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Country pool</span>
+                  <Select value={poolCountry} onValueChange={setPoolCountry}>
+                    <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {pools.map((p) => (
+                        <SelectItem key={p.country} value={p.country}>
+                          {p.country} · {p.numbers.length} number{p.numbers.length === 1 ? "" : "s"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="outline" className="text-[11px]">
+                    {readyInPool.length} ready of {poolNumbers.length}
+                  </Badge>
+                  <Badge variant="outline" className="text-[11px] border-primary/30 text-primary">
+                    {type === "utility" ? "Utility · distribute across pool" : "Marketing · single sender"}
+                  </Badge>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-2 mt-3">
+                  {poolNumbers.map((n) => {
+                    const selected = numberIds.includes(n.id);
+                    const hasVariant = activeLogical?.variantByNumber.has(n.id);
+                    const inputType = type === "utility" ? "checkbox" : "radio";
+                    return (
+                      <label
+                        key={n.id}
+                        className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
+                      >
+                        <input
+                          type={inputType}
+                          name="number-pick"
+                          checked={selected}
+                          onChange={() => toggleNumber(n.id)}
+                        />
+                        <span className="truncate flex-1">{n.label ?? `+${n.phone_number}`}</span>
+                        {activeLogical && (
+                          hasVariant
+                            ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">ready</Badge>
+                            : <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">no variant</Badge>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
             )}
+
             {resolution.missing.length > 0 && (
               <div className="mt-2 text-xs text-amber-600 flex items-start gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                Selected numbers without an approved variant of this template will block launch. Sync templates or pick another template.
+                {resolution.missing.length} selected number(s) lack an approved variant of this template. Launch is blocked until resolved.
               </div>
             )}
+
             <div className="grid grid-cols-3 gap-2 mt-3">
               <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
               <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
