@@ -834,6 +834,8 @@ export type Database = {
           country_code: string | null
           created_at: string
           display_name: string | null
+          display_name_approved: boolean
+          display_name_checked_at: string | null
           id: string
           is_active: boolean
           is_warming: boolean
@@ -865,6 +867,8 @@ export type Database = {
           country_code?: string | null
           created_at?: string
           display_name?: string | null
+          display_name_approved?: boolean
+          display_name_checked_at?: string | null
           id?: string
           is_active?: boolean
           is_warming?: boolean
@@ -896,6 +900,8 @@ export type Database = {
           country_code?: string | null
           created_at?: string
           display_name?: string | null
+          display_name_approved?: boolean
+          display_name_checked_at?: string | null
           id?: string
           is_active?: boolean
           is_warming?: boolean
