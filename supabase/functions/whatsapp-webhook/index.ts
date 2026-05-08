@@ -89,6 +89,7 @@ async function handleInbound(payload: Record<string, unknown>) {
       .from("conversations")
       .insert({
         user_id: number.user_id,
+        workspace_id: number.workspace_id,
         whatsapp_number_id: number.id,
         contact_phone: source,
         contact_name: contactName,
