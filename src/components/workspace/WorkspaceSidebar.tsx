@@ -19,7 +19,6 @@ const opsTabs = [
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
   { key: "campaigns", label: "Campaigns", icon: Megaphone },
-  { key: "reporting", label: "Reporting", icon: BarChart3 },
   { key: "library", label: "Library", icon: BookOpen },
 ];
 const setupTabs = [
