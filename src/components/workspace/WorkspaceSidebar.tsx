@@ -1,6 +1,6 @@
 import { NavLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus } from "lucide-react";
+import { Building2, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus, BookOpen } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -17,6 +17,7 @@ import { fetchWorkspaces, workspaceKeys } from "@/lib/workspaces";
 const tabs = [
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
+  { key: "library", label: "Library", icon: BookOpen },
   { key: "templates", label: "Templates", icon: FileText },
   { key: "numbers", label: "Numbers", icon: Phone },
   { key: "campaigns", label: "Campaigns", icon: Megaphone },
