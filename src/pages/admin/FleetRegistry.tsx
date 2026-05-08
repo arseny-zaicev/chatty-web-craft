@@ -327,11 +327,13 @@ export default function FleetRegistry() {
           <GroupedByClient rows={filtered} workspaces={workspaces}
             onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
             onEdit={setEditing}
+            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
             onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         ) : (
           <FleetTable rows={filtered} workspaces={workspaces}
             onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
             onEdit={setEditing}
+            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
             onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         )}
       </main>
