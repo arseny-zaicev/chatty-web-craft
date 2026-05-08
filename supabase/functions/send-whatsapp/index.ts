@@ -79,7 +79,7 @@ serve(async (req) => {
 
     const { data: number } = await admin
       .from("whatsapp_numbers")
-      .select("phone_number, provider_app_id")
+      .select("phone_number, provider_app_id, provider_api_key, display_name")
       .eq("id", conv.whatsapp_number_id)
       .maybeSingle();
     if (!number) {
@@ -89,21 +89,30 @@ serve(async (req) => {
       });
     }
 
-    const GUPSHUP_API_KEY = Deno.env.get("GUPSHUP_API_KEY");
+    // Prefer per-number app key when it looks like an app apikey (not a partner sk_ token).
+    // Partner sk_ tokens don't work with /wa/api/v1/msg directly, so fall back to global GUPSHUP_API_KEY.
+    const perNumberKey = number.provider_api_key && !number.provider_api_key.startsWith("sk_")
+      ? number.provider_api_key
+      : null;
+    const GUPSHUP_API_KEY = perNumberKey || Deno.env.get("GUPSHUP_API_KEY");
     if (!GUPSHUP_API_KEY) {
-      return new Response(JSON.stringify({ error: "GUPSHUP_API_KEY not configured" }), {
+      return new Response(JSON.stringify({ error: "No Gupshup API key available for this number" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Send via Gupshup
+    // Normalize destination to digits-only with no leading +
+    const destination = (conv.contact_phone || "").toString().replace(/[^\d]/g, "");
+    const source = (number.phone_number || "").toString().replace(/[^\d]/g, "");
+
+    // Send via Gupshup. src.name MUST be the Gupshup app name, not the app UUID.
     const form = new URLSearchParams();
     form.set("channel", "whatsapp");
-    form.set("source", number.phone_number);
-    form.set("destination", conv.contact_phone);
+    form.set("source", source);
+    form.set("destination", destination);
     form.set("message", JSON.stringify({ type: "text", text }));
-    if (number.provider_app_id) form.set("src.name", number.provider_app_id);
+    if (number.display_name) form.set("src.name", number.display_name);
 
     const gsRes = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
       method: "POST",
@@ -113,10 +122,14 @@ serve(async (req) => {
       },
       body: form.toString(),
     });
-    const gsBody = await gsRes.json().catch(() => ({}));
-    console.log("Gupshup send response", gsRes.status, JSON.stringify(gsBody));
+    const gsBody = await gsRes.json().catch(() => ({} as Record<string, unknown>));
+    console.log("Gupshup send response", gsRes.status, JSON.stringify(gsBody), "src.name=", number.display_name, "src=", source, "dst=", destination, "keyType=", perNumberKey ? "per-number" : "global");
 
-    if (!gsRes.ok || gsBody.status === "error") {
+    const providerMessageId = (gsBody as Record<string, unknown>).messageId as string | undefined;
+    const gsStatus = (gsBody as Record<string, unknown>).status as string | undefined;
+    const accepted = gsRes.ok && !!providerMessageId && gsStatus !== "error";
+
+    if (!accepted) {
       // Persist failed message for visibility
       await admin.from("messages").insert({
         user_id: conv.user_id,
@@ -127,12 +140,16 @@ serve(async (req) => {
         metadata: { gupshup_response: gsBody, http_status: gsRes.status },
       });
       return new Response(
-        JSON.stringify({ error: "Gupshup send failed", details: gsBody }),
+        JSON.stringify({
+          error: "Gupshup did not accept the message",
+          http_status: gsRes.status,
+          provider_status: gsStatus ?? null,
+          provider_message: (gsBody as Record<string, unknown>).message ?? null,
+          details: gsBody,
+        }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-
-    const providerMessageId = (gsBody.messageId as string) ?? null;
 
     const { data: inserted } = await admin
       .from("messages")
