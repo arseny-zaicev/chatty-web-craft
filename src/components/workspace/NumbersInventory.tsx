@@ -99,9 +99,6 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
     queryFn: () => fetchData(workspaceId),
   });
   const [drafts, setDrafts] = useState<Record<string, Partial<NumberRow>>>({});
-  const [adding, setAdding] = useState(false);
-  const [newPhone, setNewPhone] = useState("");
-  const [newLabel, setNewLabel] = useState("");
 
   const numbers = data?.numbers ?? [];
   const syncByNumber = data?.syncByNumber ?? new Map();
@@ -126,39 +123,6 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
 
-  const addNumber = useMutation({
-    mutationFn: async () => {
-      const phone = newPhone.replace(/[^\d]/g, "");
-      if (!phone) throw new Error("Phone required");
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) throw new Error("Sign in");
-      // Prevent ambiguous assignment: check if phone already exists anywhere
-      const { data: existing } = await supabase.from("whatsapp_numbers")
-        .select("id, workspace_id").eq("phone_number", phone).maybeSingle();
-      if (existing) {
-        const otherWs = workspaces.find((w) => w.id === existing.workspace_id)?.name ?? "another client";
-        throw new Error(`+${phone} is already assigned to ${otherWs}. Move it instead of duplicating.`);
-      }
-      const { error } = await supabase.from("whatsapp_numbers").insert({
-        workspace_id: workspaceId,
-        user_id: auth.user.id,
-        phone_number: phone,
-        label: newLabel || null,
-        display_name: newLabel || null,
-        country_code: geoFromPhone(phone),
-        status: "draft",
-        usage_type: "both",
-      });
-      if (error) throw error;
-    },
-    onSuccess: async () => {
-      setNewPhone(""); setNewLabel(""); setAdding(false);
-      toast.success("Number added");
-      await qc.invalidateQueries({ queryKey: ["numbers-inventory", workspaceId] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Add failed"),
-  });
-
   const update = (id: string, patch: Partial<NumberRow>) =>
     setDrafts((p) => ({ ...p, [id]: { ...(p[id] ?? {}), ...patch } }));
 
@@ -174,22 +138,24 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={`w-4 h-4 mr-1 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button>
-          <Button size="sm" onClick={() => setAdding((v) => !v)}><Plus className="w-4 h-4 mr-1" />Add number</Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/fleet"><ExternalLink className="w-4 h-4 mr-1" />Manage in Fleet</Link>
+          </Button>
         </div>
       </div>
 
-      {adding && (
-        <div className="rounded-lg border border-border bg-card/30 p-3 flex flex-wrap gap-2 items-end">
-          <div className="space-y-1"><label className="text-xs text-muted-foreground">Phone (digits only)</label><Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="971500000000" className="w-48" /></div>
-          <div className="space-y-1"><label className="text-xs text-muted-foreground">Label (e.g. UAE main)</label><Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="UAE main" className="w-48" /></div>
-          <Button size="sm" onClick={() => addNumber.mutate()} disabled={addNumber.isPending}>{addNumber.isPending ? "Adding..." : "Save"}</Button>
-          <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
-          <p className="text-[11px] text-muted-foreground w-full">A phone number can only belong to one client at a time. Duplicates are blocked.</p>
-        </div>
-      )}
+      <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+        Numbers are managed centrally in <Link to="/admin/fleet" className="underline hover:text-foreground">Fleet · Numbers Registry</Link>.
+        To add a new number or move one between clients, open Fleet. Status, templates and webhook for already-allocated numbers can still be edited here.
+      </div>
 
       {numbers.length === 0 ? (
-        <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">No WhatsApp numbers in this client.</div>
+        <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+          No WhatsApp numbers allocated to this client yet.
+          <div className="mt-3">
+            <Button asChild size="sm" variant="outline"><Link to="/admin/fleet"><ExternalLink className="w-3.5 h-3.5 mr-1" />Allocate from Fleet</Link></Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           {numbers.map((n) => {
