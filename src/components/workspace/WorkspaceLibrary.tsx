@@ -4,114 +4,90 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  BookOpen, Star, Search, Plus, Trash2, Save, Loader2, Link2, FileText, Type, AlignLeft,
+  Folder, FolderOpen, Star, Search, Plus, Trash2, Link2, MessageSquare,
+  Loader2, Copy, ChevronDown, ChevronRight, Settings2, Pencil,
 } from "lucide-react";
 import {
-  BUILTIN_FIELDS, LibraryField, LibraryFieldType, SavedReply,
+  BUILTIN_FIELDS, LibraryField, SavedReply,
   fetchLibraryFields, fetchSavedReplies, libraryKeys,
 } from "@/lib/workspaceLibrary";
 
-type Tab = "replies" | "fields" | "custom";
+const ALL = "__all__";
+const FAV = "__fav__";
+
+type Draft = Partial<SavedReply> & { url?: string };
+
+/** Detect a URL in a snippet body so a snippet can act as a "link". */
+const looksLikeUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
 
 export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>("replies");
+  const [activeFolder, setActiveFolder] = useState<string>(ALL);
+  const [q, setQ] = useState("");
+  const [editing, setEditing] = useState<Draft | null>(null);
+  const [showVars, setShowVars] = useState(false);
 
-  const { data: fields = [], isLoading: lf } = useQuery({
-    queryKey: libraryKeys.fields(workspaceId),
-    queryFn: () => fetchLibraryFields(workspaceId),
-  });
-  const { data: replies = [], isLoading: lr } = useQuery({
+  const { data: replies = [], isLoading } = useQuery({
     queryKey: libraryKeys.replies(workspaceId),
     queryFn: () => fetchSavedReplies(workspaceId),
   });
-
-  const invalidateAll = () => {
-    qc.invalidateQueries({ queryKey: libraryKeys.fields(workspaceId) });
-    qc.invalidateQueries({ queryKey: libraryKeys.replies(workspaceId) });
-  };
-
-  return (
-    <div className="h-full overflow-y-auto p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <BookOpen className="w-5 h-5 text-primary" />
-        <h2 className="font-display text-xl">Workspace Library</h2>
-        <span className="text-xs text-muted-foreground">Internal — operators only</span>
-      </div>
-
-      <div className="flex flex-wrap gap-1 border-b border-border">
-        {[
-          { k: "replies", label: "Saved Replies" },
-          { k: "fields", label: "Core Links / Assets" },
-          { k: "custom", label: "Custom Fields" },
-        ].map((t) => (
-          <button
-            key={t.k}
-            onClick={() => setTab(t.k as Tab)}
-            className={`text-xs px-3 py-2 -mb-px border-b-2 transition ${
-              tab === t.k ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "replies" && <SavedRepliesPane workspaceId={workspaceId} replies={replies} loading={lr} onChange={invalidateAll} />}
-      {tab === "fields" && <CoreFieldsPane workspaceId={workspaceId} fields={fields} loading={lf} onChange={invalidateAll} />}
-      {tab === "custom" && <CustomFieldsPane workspaceId={workspaceId} fields={fields} loading={lf} onChange={invalidateAll} />}
-    </div>
-  );
-}
-
-// ---------------- Saved Replies ----------------
-function SavedRepliesPane({ workspaceId, replies, loading, onChange }: {
-  workspaceId: string; replies: SavedReply[]; loading: boolean; onChange: () => void;
-}) {
-  const [q, setQ] = useState("");
-  const [favOnly, setFavOnly] = useState(false);
-  const [folder, setFolder] = useState<string>("all");
-  const [editing, setEditing] = useState<Partial<SavedReply> | null>(null);
-
-  const folders = useMemo(() => {
-    const s = new Set<string>();
-    replies.forEach((r) => r.folder && s.add(r.folder));
-    return Array.from(s).sort();
-  }, [replies]);
-
-  const filtered = replies.filter((r) => {
-    if (favOnly && !r.is_favorite) return false;
-    if (folder !== "all" && r.folder !== folder) return false;
-    if (q) {
-      const hay = `${r.title} ${r.body} ${r.tags.join(" ")}`.toLowerCase();
-      if (!hay.includes(q.toLowerCase())) return false;
-    }
-    return true;
+  const { data: fields = [] } = useQuery({
+    queryKey: libraryKeys.fields(workspaceId),
+    queryFn: () => fetchLibraryFields(workspaceId),
   });
 
+  const folders = useMemo(() => {
+    const counts = new Map<string, number>();
+    replies.forEach((r) => {
+      const f = r.folder?.trim() || "Uncategorized";
+      counts.set(f, (counts.get(f) ?? 0) + 1);
+    });
+    return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [replies]);
+
+  const items = useMemo(() => {
+    return replies.filter((r) => {
+      if (activeFolder === FAV && !r.is_favorite) return false;
+      if (activeFolder !== ALL && activeFolder !== FAV) {
+        const f = r.folder?.trim() || "Uncategorized";
+        if (f !== activeFolder) return false;
+      }
+      if (q) {
+        const hay = `${r.title} ${r.body} ${r.tags.join(" ")}`.toLowerCase();
+        if (!hay.includes(q.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [replies, activeFolder, q]);
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: libraryKeys.replies(workspaceId) });
+
   const save = useMutation({
-    mutationFn: async (r: Partial<SavedReply>) => {
+    mutationFn: async (r: Draft) => {
       const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) throw new Error("Sign in");
+      if (!auth.user) throw new Error("Sign in required");
+      const folder = r.folder?.trim() || null;
+      const payload = {
+        title: r.title?.trim() ?? "",
+        body: r.body ?? "",
+        folder,
+        tags: r.tags ?? [],
+        is_favorite: !!r.is_favorite,
+      };
       if (r.id) {
-        const { error } = await supabase.from("workspace_saved_replies").update({
-          title: r.title ?? "", body: r.body ?? "", folder: r.folder || null,
-          tags: r.tags ?? [], is_favorite: !!r.is_favorite,
-        }).eq("id", r.id);
+        const { error } = await supabase.from("workspace_saved_replies").update(payload).eq("id", r.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("workspace_saved_replies").insert({
-          workspace_id: workspaceId, user_id: auth.user.id,
-          title: r.title ?? "", body: r.body ?? "", folder: r.folder || null,
-          tags: r.tags ?? [], is_favorite: !!r.is_favorite,
+          workspace_id: workspaceId, user_id: auth.user.id, ...payload,
         });
         if (error) throw error;
       }
     },
-    onSuccess: () => { setEditing(null); toast.success("Saved"); onChange(); },
+    onSuccess: () => { setEditing(null); toast.success("Saved"); invalidate(); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
 
@@ -120,263 +96,270 @@ function SavedRepliesPane({ workspaceId, replies, loading, onChange }: {
       const { error } = await supabase.from("workspace_saved_replies").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Deleted"); onChange(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+    onSuccess: () => { toast.success("Deleted"); invalidate(); },
   });
 
   const toggleFav = async (r: SavedReply) => {
     await supabase.from("workspace_saved_replies").update({ is_favorite: !r.is_favorite }).eq("id", r.id);
-    onChange();
+    invalidate();
   };
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search replies, tags, body..." className="pl-9 h-9" />
-        </div>
-        <select value={folder} onChange={(e) => setFolder(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-          <option value="all">All folders</option>
-          {folders.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <Button size="sm" variant={favOnly ? "default" : "outline"} onClick={() => setFavOnly((v) => !v)}>
-          <Star className={`w-3.5 h-3.5 mr-1 ${favOnly ? "fill-current" : ""}`} />Favorites
-        </Button>
-        <Button size="sm" onClick={() => setEditing({ title: "", body: "", folder: "", tags: [], is_favorite: false })}>
-          <Plus className="w-4 h-4 mr-1" />New reply
-        </Button>
-      </div>
+  const copy = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); toast.success("Copied"); }
+    catch { toast.error("Copy failed"); }
+  };
 
+  const folderTitle =
+    activeFolder === ALL ? "All snippets"
+    : activeFolder === FAV ? "Favorites"
+    : activeFolder;
+
+  return (
+    <div className="h-full flex bg-background">
+      {/* ========== Sidebar: folders ========== */}
+      <aside className="w-60 shrink-0 border-r border-border flex flex-col">
+        <div className="p-3 border-b border-border">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Library</div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          <FolderRow icon={FolderOpen} label="All snippets" count={replies.length}
+            active={activeFolder === ALL} onClick={() => setActiveFolder(ALL)} />
+          <FolderRow icon={Star} label="Favorites" count={replies.filter((r) => r.is_favorite).length}
+            active={activeFolder === FAV} onClick={() => setActiveFolder(FAV)} starred />
+          <div className="h-px bg-border my-2" />
+          {folders.length === 0 && (
+            <div className="text-xs text-muted-foreground px-2 py-3">No folders yet.</div>
+          )}
+          {folders.map(([name, n]) => (
+            <FolderRow key={name} icon={Folder} label={name} count={n}
+              active={activeFolder === name} onClick={() => setActiveFolder(name)} />
+          ))}
+        </div>
+
+        {/* Variables (collapsed by default — power-user only) */}
+        <div className="border-t border-border">
+          <button
+            onClick={() => setShowVars((v) => !v)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {showVars ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+            <Settings2 className="w-3.5 h-3.5" />
+            Variables
+          </button>
+          {showVars && (
+            <div className="px-2 pb-3 space-y-1.5 max-h-64 overflow-y-auto">
+              <p className="text-[10px] text-muted-foreground px-1">
+                Use as <code className="bg-muted px-1 rounded">{`{key}`}</code> inside a snippet.
+              </p>
+              <VariablesEditor workspaceId={workspaceId} fields={fields} onChange={() =>
+                qc.invalidateQueries({ queryKey: libraryKeys.fields(workspaceId) })
+              } />
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* ========== Main: items ========== */}
+      <main className="flex-1 min-w-0 flex flex-col">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          <h2 className="font-display text-base truncate">{folderTitle}</h2>
+          <span className="text-xs text-muted-foreground">{items.length}</span>
+          <div className="relative ml-auto w-64 max-w-full">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="pl-8 h-8 text-xs" />
+          </div>
+          <Button size="sm" className="h-8" onClick={() => setEditing({
+            title: "", body: "", folder: activeFolder !== ALL && activeFolder !== FAV ? activeFolder : "",
+            tags: [], is_favorite: false,
+          })}>
+            <Plus className="w-3.5 h-3.5 mr-1" />New
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {isLoading ? (
+            <div className="p-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : items.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground gap-3">
+              <FolderOpen className="w-8 h-8 opacity-40" />
+              <div className="text-sm">Empty folder.</div>
+              <Button size="sm" variant="outline" onClick={() => setEditing({
+                title: "", body: "", folder: activeFolder !== ALL && activeFolder !== FAV ? activeFolder : "",
+                tags: [], is_favorite: false,
+              })}>
+                <Plus className="w-3.5 h-3.5 mr-1" />Add snippet
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {items.map((r) => {
+                const isLink = looksLikeUrl(r.body);
+                return (
+                  <div key={r.id} className="group rounded-lg border border-border bg-card/40 hover:border-primary/40 hover:bg-card/70 transition p-3 flex flex-col gap-2">
+                    <div className="flex items-start gap-2 min-w-0">
+                      <div className={`mt-0.5 w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
+                        isLink ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {isLink ? <Link2 className="w-3.5 h-3.5" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">{r.title || "Untitled"}</div>
+                        <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5 break-words">{r.body}</div>
+                      </div>
+                      <button onClick={() => toggleFav(r)} title="Favorite" className="shrink-0">
+                        <Star className={`w-3.5 h-3.5 ${r.is_favorite ? "fill-amber-500 text-amber-500" : "text-muted-foreground/60"}`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => copy(r.body)}>
+                        <Copy className="w-3 h-3 mr-1" />Copy
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditing(r)}>
+                        <Pencil className="w-3 h-3 mr-1" />Edit
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-auto text-destructive"
+                        onClick={() => { if (confirm(`Delete "${r.title}"?`)) del.mutate(r.id); }}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* ========== Editor drawer ========== */}
       {editing && (
-        <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2">
-          <Input placeholder="Title" value={editing.title ?? ""} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-          <Textarea rows={4} placeholder="Body. Use {website_url}, {booking_url}, {cta_text}, custom keys..." value={editing.body ?? ""} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
-          <div className="flex flex-wrap gap-2">
-            <Input placeholder="Folder (optional)" value={editing.folder ?? ""} onChange={(e) => setEditing({ ...editing, folder: e.target.value })} className="w-48" />
-            <Input
-              placeholder="Tags (comma separated)"
-              value={(editing.tags ?? []).join(", ")}
-              onChange={(e) => setEditing({ ...editing, tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })}
-              className="w-64"
-            />
-            <label className="flex items-center gap-1.5 text-xs">
-              <input type="checkbox" checked={!!editing.is_favorite} onChange={(e) => setEditing({ ...editing, is_favorite: e.target.checked })} />
-              Favorite
-            </label>
-            <div className="ml-auto flex gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
-              <Button size="sm" onClick={() => save.mutate(editing)} disabled={save.isPending || !editing.title || !editing.body}>
-                <Save className="w-3.5 h-3.5 mr-1" />Save
+        <div className="fixed inset-0 z-50 flex" onClick={() => setEditing(null)}>
+          <div className="flex-1 bg-foreground/20 backdrop-blur-sm" />
+          <div className="w-full max-w-md bg-card border-l border-border h-full flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <div className="font-display text-base">{editing.id ? "Edit snippet" : "New snippet"}</div>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Close</Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <Field label="Title">
+                <Input value={editing.title ?? ""} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="e.g. Pricing link" />
+              </Field>
+              <Field label="Content" hint="Paste a URL to make this a link snippet, or write text. Use {variables} from the sidebar.">
+                <Textarea rows={6} value={editing.body ?? ""} onChange={(e) => setEditing({ ...editing, body: e.target.value })} placeholder="https://...   or   Hi {name}, here's our pricing: {pricing_url}" />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Folder">
+                  <Input value={editing.folder ?? ""} onChange={(e) => setEditing({ ...editing, folder: e.target.value })} placeholder="e.g. Objections" list="lib-folders" />
+                  <datalist id="lib-folders">
+                    {folders.map(([f]) => <option key={f} value={f} />)}
+                  </datalist>
+                </Field>
+                <Field label="Tags">
+                  <Input
+                    value={(editing.tags ?? []).join(", ")}
+                    onChange={(e) => setEditing({ ...editing, tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })}
+                    placeholder="comma, separated"
+                  />
+                </Field>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!editing.is_favorite} onChange={(e) => setEditing({ ...editing, is_favorite: e.target.checked })} />
+                Favorite
+              </label>
+            </div>
+            <div className="px-4 py-3 border-t border-border flex items-center justify-end gap-2">
+              <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button onClick={() => save.mutate(editing)} disabled={save.isPending || !editing.title?.trim() || !editing.body?.trim()}>
+                {save.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+                Save
               </Button>
             </div>
           </div>
-        </div>
-      )}
-
-      {loading ? <Spinner /> : filtered.length === 0 ? (
-        <Empty text="No saved replies yet." />
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((r) => (
-            <div key={r.id} className="rounded-lg border border-border bg-card/30 p-3">
-              <div className="flex items-start gap-2">
-                <button onClick={() => toggleFav(r)} title="Favorite" className="mt-0.5">
-                  <Star className={`w-4 h-4 ${r.is_favorite ? "fill-amber-500 text-amber-500" : "text-muted-foreground"}`} />
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-sm">{r.title}</span>
-                    {r.folder && <Badge variant="outline" className="text-[10px]">{r.folder}</Badge>}
-                    {r.tags.map((t) => <Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>)}
-                    {r.last_used_at && (
-                      <span className="text-[10px] text-muted-foreground ml-auto">
-                        used {new Date(r.last_used_at).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground whitespace-pre-wrap mt-1 line-clamp-3">{r.body}</div>
-                </div>
-                <div className="flex gap-1">
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(r)}><FileText className="w-3.5 h-3.5" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => { if (confirm("Delete this reply?")) del.mutate(r.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>
   );
 }
 
-// ---------------- Core Fields (built-in) ----------------
-function CoreFieldsPane({ workspaceId, fields, loading, onChange }: {
-  workspaceId: string; fields: LibraryField[]; loading: boolean; onChange: () => void;
+function FolderRow({ icon: Icon, label, count, active, onClick, starred }: {
+  icon: typeof Folder; label: string; count: number; active: boolean; onClick: () => void; starred?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition ${
+        active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      }`}
+    >
+      <Icon className={`w-4 h-4 shrink-0 ${active ? "text-primary" : ""} ${starred && active ? "fill-amber-500 text-amber-500" : ""}`} />
+      <span className="truncate flex-1 text-left">{label}</span>
+      <span className="text-[10px] text-muted-foreground tabular-nums">{count}</span>
+    </button>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      {children}
+      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ----- Variables editor (compact, inline) -----
+function VariablesEditor({ workspaceId, fields, onChange }: {
+  workspaceId: string; fields: LibraryField[]; onChange: () => void;
 }) {
   const byKey = useMemo(() => new Map(fields.map((f) => [f.key, f])), [fields]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  const save = useMutation({
-    mutationFn: async ({ key, label, type, value }: { key: string; label: string; type: LibraryFieldType; value: string }) => {
-      const existing = byKey.get(key);
+  const save = async (key: string, label: string, value: string) => {
+    const existing = byKey.get(key);
+    try {
       if (existing) {
-        const { error } = await supabase.from("workspace_library_fields").update({ value, label, type }).eq("id", existing.id);
+        const { error } = await supabase.from("workspace_library_fields").update({ value }).eq("id", existing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("workspace_library_fields").insert({
-          workspace_id: workspaceId, key, label, type, value, is_builtin: true,
+          workspace_id: workspaceId, key, label, type: "text", value, is_builtin: true,
         });
         if (error) throw error;
       }
-    },
-    onSuccess: (_d, vars) => { setDrafts((p) => { const n = { ...p }; delete n[vars.key]; return n; }); toast.success("Saved"); onChange(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
-  });
-
-  if (loading) return <Spinner />;
+      setDrafts((p) => { const n = { ...p }; delete n[key]; return n; });
+      toast.success("Saved");
+      onChange();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    }
+  };
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">Built-in workspace fields. Use these keys in saved-reply templates: <code className="bg-muted px-1 rounded">{`{key}`}</code>.</p>
+    <div className="space-y-1.5">
       {BUILTIN_FIELDS.map((b) => {
-        const existing = byKey.get(b.key);
-        const value = drafts[b.key] ?? existing?.value ?? "";
+        const cur = drafts[b.key] ?? byKey.get(b.key)?.value ?? "";
         const dirty = drafts[b.key] !== undefined;
         return (
-          <div key={b.key} className="rounded-lg border border-border bg-card/30 p-3">
-            <div className="flex items-center gap-2 mb-1.5">
-              <TypeIcon t={b.type} />
-              <span className="font-medium text-sm">{b.label}</span>
-              <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{`{${b.key}}`}</code>
-              {dirty && <Button size="sm" className="ml-auto h-7" onClick={() => save.mutate({ key: b.key, label: b.label, type: b.type, value })}>Save</Button>}
+          <div key={b.key} className="space-y-0.5">
+            <div className="flex items-center gap-1">
+              <code className="text-[10px] text-muted-foreground">{`{${b.key}}`}</code>
+              <span className="text-[10px] text-muted-foreground/70 truncate">— {b.label}</span>
+              {dirty && (
+                <button
+                  onClick={() => save(b.key, b.label, cur)}
+                  className="ml-auto text-[10px] text-primary hover:underline"
+                >save</button>
+              )}
             </div>
-            {b.type === "long_text" ? (
-              <Textarea rows={3} value={value} onChange={(e) => setDrafts((p) => ({ ...p, [b.key]: e.target.value }))} />
-            ) : (
-              <Input value={value} placeholder={b.type === "link" ? "https://..." : ""} onChange={(e) => setDrafts((p) => ({ ...p, [b.key]: e.target.value }))} />
-            )}
+            <Input
+              value={cur}
+              onChange={(e) => setDrafts((p) => ({ ...p, [b.key]: e.target.value }))}
+              placeholder={b.type === "link" ? "https://..." : ""}
+              className="h-7 text-xs"
+            />
           </div>
         );
       })}
     </div>
   );
 }
-
-// ---------------- Custom Fields ----------------
-function CustomFieldsPane({ workspaceId, fields, loading, onChange }: {
-  workspaceId: string; fields: LibraryField[]; loading: boolean; onChange: () => void;
-}) {
-  const custom = fields.filter((f) => !f.is_builtin);
-  const [adding, setAdding] = useState<{ key: string; label: string; type: LibraryFieldType; value: string } | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, Partial<LibraryField>>>({});
-
-  const upsert = useMutation({
-    mutationFn: async (row: Partial<LibraryField> & { key: string }) => {
-      if (row.id) {
-        const { error } = await supabase.from("workspace_library_fields").update({
-          label: row.label, type: row.type, value: row.value ?? "",
-        }).eq("id", row.id);
-        if (error) throw error;
-      } else {
-        if (!/^[a-z0-9_]+$/.test(row.key)) throw new Error("Key must be lowercase letters, numbers, underscore");
-        const { error } = await supabase.from("workspace_library_fields").insert({
-          workspace_id: workspaceId, key: row.key, label: row.label ?? row.key,
-          type: row.type ?? "text", value: row.value ?? "", is_builtin: false,
-        });
-        if (error) throw error;
-      }
-    },
-    onSuccess: (_d, vars) => {
-      if (vars.id) setDrafts((p) => { const n = { ...p }; delete n[vars.id!]; return n; });
-      else setAdding(null);
-      toast.success("Saved"); onChange();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
-  });
-
-  const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("workspace_library_fields").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success("Deleted"); onChange(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
-  });
-
-  if (loading) return <Spinner />;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Define your own workspace variables. Reference them in saved replies as <code className="bg-muted px-1 rounded">{`{key}`}</code>.</p>
-        <Button size="sm" onClick={() => setAdding({ key: "", label: "", type: "text", value: "" })}>
-          <Plus className="w-4 h-4 mr-1" />New field
-        </Button>
-      </div>
-
-      {adding && (
-        <div className="rounded-lg border border-border bg-card/40 p-3 grid sm:grid-cols-4 gap-2">
-          <Input placeholder="key (e.g. demo_video)" value={adding.key} onChange={(e) => setAdding({ ...adding, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })} />
-          <Input placeholder="Label" value={adding.label} onChange={(e) => setAdding({ ...adding, label: e.target.value })} />
-          <select value={adding.type} onChange={(e) => setAdding({ ...adding, type: e.target.value as LibraryFieldType })} className="h-10 rounded-md border border-input bg-background px-2 text-sm">
-            <option value="text">text</option>
-            <option value="long_text">long_text</option>
-            <option value="link">link</option>
-          </select>
-          <Input placeholder="Value" value={adding.value} onChange={(e) => setAdding({ ...adding, value: e.target.value })} />
-          <div className="sm:col-span-4 flex gap-2 justify-end">
-            <Button size="sm" variant="ghost" onClick={() => setAdding(null)}>Cancel</Button>
-            <Button size="sm" onClick={() => upsert.mutate(adding)} disabled={!adding.key || !adding.label}>
-              <Save className="w-3.5 h-3.5 mr-1" />Save
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {custom.length === 0 ? <Empty text="No custom fields yet." /> : (
-        <div className="space-y-2">
-          {custom.map((f) => {
-            const draft = { ...f, ...(drafts[f.id] ?? {}) };
-            const dirty = !!drafts[f.id];
-            return (
-              <div key={f.id} className="rounded-lg border border-border bg-card/30 p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <TypeIcon t={draft.type as LibraryFieldType} />
-                  <Input className="max-w-[220px] h-8" value={draft.label} onChange={(e) => setDrafts((p) => ({ ...p, [f.id]: { ...(p[f.id] ?? {}), label: e.target.value } }))} />
-                  <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{`{${f.key}}`}</code>
-                  <select
-                    value={draft.type ?? "text"}
-                    onChange={(e) => setDrafts((p) => ({ ...p, [f.id]: { ...(p[f.id] ?? {}), type: e.target.value as LibraryFieldType } }))}
-                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                  >
-                    <option value="text">text</option>
-                    <option value="long_text">long_text</option>
-                    <option value="link">link</option>
-                  </select>
-                  {dirty && <Button size="sm" className="h-7" onClick={() => upsert.mutate(draft)}>Save</Button>}
-                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive ml-auto" onClick={() => { if (confirm(`Delete field {${f.key}}?`)) del.mutate(f.id); }}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-                {draft.type === "long_text" ? (
-                  <Textarea rows={2} value={draft.value ?? ""} onChange={(e) => setDrafts((p) => ({ ...p, [f.id]: { ...(p[f.id] ?? {}), value: e.target.value } }))} />
-                ) : (
-                  <Input value={draft.value ?? ""} onChange={(e) => setDrafts((p) => ({ ...p, [f.id]: { ...(p[f.id] ?? {}), value: e.target.value } }))} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const TypeIcon = ({ t }: { t: LibraryFieldType }) =>
-  t === "link" ? <Link2 className="w-3.5 h-3.5 text-muted-foreground" />
-  : t === "long_text" ? <AlignLeft className="w-3.5 h-3.5 text-muted-foreground" />
-  : <Type className="w-3.5 h-3.5 text-muted-foreground" />;
-
-const Spinner = () => <div className="p-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
-const Empty = ({ text }: { text: string }) => <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">{text}</div>;
