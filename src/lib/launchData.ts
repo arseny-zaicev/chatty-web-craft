@@ -134,11 +134,12 @@ export function renderTemplateBody(
 ): string {
   if (!body) return "";
   let out = String(body);
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   variableNames.forEach((name, idx) => {
     const v = String((values ?? {})[name] ?? "").trim() || `{${name}}`;
-    out = out.replaceAll(`{{${idx + 1}}}`, v);
-    out = out.replaceAll(`{${name}}`, v);
-    out = out.replaceAll(`{{${name}}}`, v);
+    out = out.replace(new RegExp(escape(`{{${idx + 1}}}`), "g"), v);
+    out = out.replace(new RegExp(escape(`{${name}}`), "g"), v);
+    out = out.replace(new RegExp(escape(`{{${name}}}`), "g"), v);
   });
   return out;
 }
