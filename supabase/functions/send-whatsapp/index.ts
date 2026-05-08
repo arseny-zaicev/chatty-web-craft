@@ -279,6 +279,15 @@ serve(async (req) => {
       .select("id, created_at")
       .single();
 
+    // Persist provider event for visibility ("enqueued" = accepted by provider).
+    await admin.from("whatsapp_message_events").insert({
+      event_type: "enqueued",
+      provider_message_id: providerMessageId,
+      message_id: inserted?.id ?? null,
+      whatsapp_number_id: conv.whatsapp_number_id,
+      raw: { gupshup_response: gsBody, http_status: gsRes.status },
+    });
+
     await admin
       .from("conversations")
       .update({
