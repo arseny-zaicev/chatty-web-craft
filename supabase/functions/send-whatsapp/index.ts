@@ -79,7 +79,7 @@ serve(async (req) => {
 
     const { data: number } = await admin
       .from("whatsapp_numbers")
-      .select("phone_number, provider_app_id")
+      .select("phone_number, provider_app_id, provider_api_key, display_name")
       .eq("id", conv.whatsapp_number_id)
       .maybeSingle();
     if (!number) {
