@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, AlertTriangle, XCircle, Phone, Plus, RefreshCw, Save, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Phone, Plus, RefreshCw, Save, Loader2, Ban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { geoFromPhone } from "@/lib/launchData";
+
+type NumberStatus = "draft" | "ready" | "warming" | "restricted" | "banned" | "inactive";
+type NumberUsage = "marketing" | "utility" | "both";
 
 type NumberRow = {
   id: string;
@@ -23,24 +27,26 @@ type NumberRow = {
   is_active: boolean;
   connected_in_gupshup: boolean;
   connected_in_iskra: boolean;
+  status: NumberStatus;
+  usage_type: NumberUsage;
+  country_code: string | null;
+  webhook_connected: boolean;
 };
 
-type Allocation = { whatsapp_number_id: string; campaign_id: string; campaign_name: string; status: string };
+type Workspace = { id: string; name: string };
 
 const fetchData = async (workspaceId: string) => {
-  const [{ data: numbers, error: nErr }, { data: campaigns, error: cErr }, { data: tpl, error: tErr }] = await Promise.all([
-    supabase.from("whatsapp_numbers").select("id, workspace_id, phone_number, display_name, label, partner_source, bm_name, notes, provider_app_id, provider_api_key, is_active, connected_in_gupshup, connected_in_iskra").eq("workspace_id", workspaceId),
-    supabase.from("campaigns").select("id, name, status, whatsapp_number_id").eq("workspace_id", workspaceId).in("status", ["draft", "scheduled", "running", "paused"]),
-    supabase.from("message_templates").select("whatsapp_number_id, status, synced_at").eq("workspace_id", workspaceId),
+  const [{ data: numbers, error: nErr }, { data: tpl, error: tErr }, { data: workspaces, error: wErr }] = await Promise.all([
+    supabase.from("whatsapp_numbers")
+      .select("id, workspace_id, phone_number, display_name, label, partner_source, bm_name, notes, provider_app_id, provider_api_key, is_active, connected_in_gupshup, connected_in_iskra, status, usage_type, country_code, webhook_connected")
+      .eq("workspace_id", workspaceId),
+    supabase.from("message_templates")
+      .select("whatsapp_number_id, status, synced_at")
+      .eq("workspace_id", workspaceId),
+    supabase.from("workspaces").select("id, name").eq("is_active", true),
   ]);
-  if (nErr) throw nErr; if (cErr) throw cErr; if (tErr) throw tErr;
-  const allocations: Allocation[] = (campaigns ?? []).map((c) => ({
-    whatsapp_number_id: c.whatsapp_number_id,
-    campaign_id: c.id,
-    campaign_name: c.name,
-    status: c.status,
-  }));
-  // For each number, latest sync time + approved template count
+  if (nErr) throw nErr; if (tErr) throw tErr; if (wErr) throw wErr;
+
   const syncByNumber = new Map<string, { lastSync: string | null; approved: number; total: number }>();
   for (const t of tpl ?? []) {
     if (!t.whatsapp_number_id) continue;
@@ -50,36 +56,40 @@ const fetchData = async (workspaceId: string) => {
     if (t.synced_at && (!cur.lastSync || t.synced_at > cur.lastSync)) cur.lastSync = t.synced_at;
     syncByNumber.set(t.whatsapp_number_id, cur);
   }
-  return { numbers: (numbers ?? []) as NumberRow[], allocations, syncByNumber };
+  return {
+    numbers: (numbers ?? []) as NumberRow[],
+    syncByNumber,
+    workspaces: (workspaces ?? []) as Workspace[],
+  };
 };
 
-const apiKeyStatus = (k: string | null) => {
-  if (!k) return { label: "global fallback", tone: "warn" as const };
-  if (k.startsWith("sk_")) return { label: "partner key (fallback)", tone: "warn" as const };
-  return { label: "app key set", tone: "ok" as const };
-};
-
-const workStatus = (n: NumberRow, running: number) => {
-  if (!n.is_active) return { label: "blocked", tone: "bad" as const };
-  if (running > 0) return { label: `in use (${running})`, tone: "ok" as const };
-  return { label: "idle", tone: "warn" as const };
-};
-
-const launchReadiness = (n: NumberRow, gup: boolean, iskra: boolean) => {
-  const reasons: string[] = [];
-  if (!n.is_active) reasons.push("disabled");
-  if (!gup) reasons.push("not in Gupshup");
-  if (!iskra) reasons.push("not in ISKRA");
-  if (!n.provider_app_id) reasons.push("no app id");
-  if (!n.phone_number) reasons.push("no phone");
-  if (reasons.length === 0) return { label: "ready", tone: "ok" as const, reasons };
-  return { label: "not ready", tone: reasons.length > 1 ? "bad" as const : "warn" as const, reasons };
-};
-
-const tone = (t: "ok" | "warn" | "bad") =>
+const tone = (t: "ok" | "warn" | "bad" | "muted") =>
   t === "ok" ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
   : t === "warn" ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
-  : "bg-red-500/15 text-red-700 border-red-500/30";
+  : t === "bad" ? "bg-red-500/15 text-red-700 border-red-500/30"
+  : "bg-muted text-muted-foreground border-border";
+
+const STATUS_TONE: Record<NumberStatus, "ok" | "warn" | "bad" | "muted"> = {
+  ready: "ok",
+  warming: "warn",
+  draft: "muted",
+  restricted: "bad",
+  banned: "bad",
+  inactive: "muted",
+};
+
+type Readiness = { ready: boolean; reasons: string[] };
+const computeReadiness = (n: NumberRow, approved: number): Readiness => {
+  const reasons: string[] = [];
+  if (!n.phone_number) reasons.push("no phone");
+  if (!n.provider_app_id) reasons.push("no app id");
+  if (!n.provider_api_key) reasons.push("no API key");
+  if (!n.webhook_connected) reasons.push("webhook not connected");
+  if (approved === 0) reasons.push("no approved templates");
+  if (!n.is_active) reasons.push("disabled");
+  if (n.status === "restricted" || n.status === "banned" || n.status === "inactive") reasons.push(`status: ${n.status}`);
+  return { ready: reasons.length === 0, reasons };
+};
 
 export default function NumbersInventory({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
@@ -93,17 +103,12 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
   const [newLabel, setNewLabel] = useState("");
 
   const numbers = data?.numbers ?? [];
-  const allocs = data?.allocations ?? [];
-  const syncByNumber = data?.syncByNumber ?? new Map<string, { lastSync: string | null; approved: number; total: number }>();
-
-  const runningByNumber = useMemo(() => {
-    const m = new Map<string, Allocation[]>();
-    for (const a of allocs) {
-      if (!m.has(a.whatsapp_number_id)) m.set(a.whatsapp_number_id, []);
-      m.get(a.whatsapp_number_id)!.push(a);
-    }
-    return m;
-  }, [allocs]);
+  const syncByNumber = data?.syncByNumber ?? new Map();
+  const workspaces = data?.workspaces ?? [];
+  const workspaceName = useMemo(
+    () => workspaces.find((w) => w.id === workspaceId)?.name ?? "this client",
+    [workspaces, workspaceId],
+  );
 
   const save = useMutation({
     mutationFn: async (id: string) => {
@@ -122,15 +127,26 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
 
   const addNumber = useMutation({
     mutationFn: async () => {
-      if (!newPhone.trim()) throw new Error("Phone required");
+      const phone = newPhone.replace(/[^\d]/g, "");
+      if (!phone) throw new Error("Phone required");
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sign in");
+      // Prevent ambiguous assignment: check if phone already exists anywhere
+      const { data: existing } = await supabase.from("whatsapp_numbers")
+        .select("id, workspace_id").eq("phone_number", phone).maybeSingle();
+      if (existing) {
+        const otherWs = workspaces.find((w) => w.id === existing.workspace_id)?.name ?? "another client";
+        throw new Error(`+${phone} is already assigned to ${otherWs}. Move it instead of duplicating.`);
+      }
       const { error } = await supabase.from("whatsapp_numbers").insert({
         workspace_id: workspaceId,
         user_id: auth.user.id,
-        phone_number: newPhone.replace(/[^\d]/g, ""),
+        phone_number: phone,
         label: newLabel || null,
         display_name: newLabel || null,
+        country_code: geoFromPhone(phone),
+        status: "draft",
+        usage_type: "both",
       });
       if (error) throw error;
     },
@@ -148,9 +164,13 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 overflow-y-auto h-full">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2"><Phone className="w-5 h-5 text-primary" /><h2 className="font-display text-xl">Numbers inventory</h2></div>
+        <div className="flex items-center gap-2">
+          <Phone className="w-5 h-5 text-primary" />
+          <h2 className="font-display text-xl">Numbers</h2>
+          <span className="text-xs text-muted-foreground">- assigned to {workspaceName}</span>
+        </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={`w-4 h-4 mr-1 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button>
           <Button size="sm" onClick={() => setAdding((v) => !v)}><Plus className="w-4 h-4 mr-1" />Add number</Button>
@@ -160,9 +180,10 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
       {adding && (
         <div className="rounded-lg border border-border bg-card/30 p-3 flex flex-wrap gap-2 items-end">
           <div className="space-y-1"><label className="text-xs text-muted-foreground">Phone (digits only)</label><Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="971500000000" className="w-48" /></div>
-          <div className="space-y-1"><label className="text-xs text-muted-foreground">Label</label><Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="UAE main" className="w-48" /></div>
+          <div className="space-y-1"><label className="text-xs text-muted-foreground">Label (e.g. UAE main)</label><Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="UAE main" className="w-48" /></div>
           <Button size="sm" onClick={() => addNumber.mutate()} disabled={addNumber.isPending}>{addNumber.isPending ? "Adding..." : "Save"}</Button>
           <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+          <p className="text-[11px] text-muted-foreground w-full">A phone number can only belong to one client at a time. Duplicates are blocked.</p>
         </div>
       )}
 
@@ -172,52 +193,59 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
         <div className="space-y-3">
           {numbers.map((n) => {
             const draft: NumberRow = { ...n, ...(drafts[n.id] ?? {}) };
-            const running = runningByNumber.get(n.id) ?? [];
             const sync = syncByNumber.get(n.id) ?? { lastSync: null, approved: 0, total: 0 };
-            const inGupshup = Boolean(draft.provider_app_id) && (sync.total > 0 || Boolean(draft.provider_api_key));
-            const inIskra = Boolean(draft.phone_number) && Boolean(draft.provider_app_id);
-            const key = apiKeyStatus(draft.provider_api_key);
-            const work = workStatus(draft, running.length);
-            const ready = launchReadiness(draft, inGupshup, inIskra);
+            const ready = computeReadiness(draft, sync.approved);
             const dirty = Boolean(drafts[n.id]);
+            const excludedFromLaunch = draft.status === "restricted" || draft.status === "banned" || draft.status === "inactive" || !draft.is_active;
+            const country = draft.country_code || geoFromPhone(draft.phone_number);
             return (
               <div key={n.id} className="rounded-lg border border-border bg-card/30 p-4 space-y-3">
+                {/* Header row: identity + status badges */}
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="font-medium text-base">+{n.phone_number}</div>
-                  <Badge variant="outline" className={`text-[10px] ${tone(key.tone)}`}>API key: {key.label}</Badge>
-                  <Badge variant="outline" className={`text-[10px] ${tone(work.tone)}`}>{work.label}</Badge>
-                  <Badge variant="outline" className={`text-[10px] ${tone(inGupshup ? "ok" : "warn")}`}>Gupshup: {inGupshup ? "connected" : "unconfirmed"}</Badge>
-                  <Badge variant="outline" className={`text-[10px] ${tone(inIskra ? "ok" : "warn")}`}>ISKRA: {inIskra ? "connected" : "incomplete"}</Badge>
-                  <Badge variant="outline" className={`text-[10px] ${tone(ready.tone)}`}>
-                    {ready.tone === "ok" ? <CheckCircle2 className="w-3 h-3 mr-1 inline" /> : ready.tone === "bad" ? <XCircle className="w-3 h-3 mr-1 inline" /> : <AlertTriangle className="w-3 h-3 mr-1 inline" />}
-                    launch: {ready.label}
+                  <Badge variant="outline" className={tone("muted")}>{country || "--"}</Badge>
+                  <Badge variant="outline" className={tone(STATUS_TONE[draft.status])}>
+                    {draft.status === "banned" || draft.status === "restricted" ? <Ban className="w-3 h-3 mr-1 inline" /> : null}
+                    {draft.status}
                   </Badge>
-                  {ready.reasons.length > 0 && <span className="text-[11px] text-muted-foreground">({ready.reasons.join(", ")})</span>}
+                  <Badge variant="outline" className={tone("muted")}>use: {draft.usage_type}</Badge>
+                  <Badge variant="outline" className={tone(draft.provider_api_key ? "ok" : "warn")}>
+                    auth: {draft.provider_api_key ? "ok" : "missing"}
+                  </Badge>
+                  <Badge variant="outline" className={tone(draft.webhook_connected ? "ok" : "warn")}>
+                    webhook: {draft.webhook_connected ? "connected" : "not set"}
+                  </Badge>
+                  <Badge variant="outline" className={tone(sync.approved > 0 ? "ok" : "warn")}>
+                    templates: {sync.approved}/{sync.total} approved
+                  </Badge>
+                  <Badge variant="outline" className={tone(ready.ready ? "ok" : "warn")}>
+                    {ready.ready ? <CheckCircle2 className="w-3 h-3 mr-1 inline" /> : <AlertTriangle className="w-3 h-3 mr-1 inline" />}
+                    {ready.ready ? "ready" : "not ready"}
+                  </Badge>
+                  {excludedFromLaunch && (
+                    <Badge variant="outline" className={tone("bad")}>
+                      <XCircle className="w-3 h-3 mr-1 inline" />excluded from launch
+                    </Badge>
+                  )}
                   <div className="ml-auto flex items-center gap-2">
-                    {sync.lastSync && (
-                      <span className="text-[11px] text-muted-foreground">templates {sync.approved}/{sync.total} approved · synced {new Date(sync.lastSync).toLocaleString()}</span>
-                    )}
-                    {running.length > 0 && (
-                      <span className="text-[11px] text-muted-foreground">campaigns: {running.map((r) => r.campaign_name).join(", ")}</span>
-                    )}
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={!draft.provider_app_id}
                       onClick={async () => {
-                        const t = toast.loading("Registering Gupshup callback...");
+                        const t = toast.loading("Registering webhook...");
                         const { data, error } = await supabase.functions.invoke("gupshup-set-callback", { body: { number_id: n.id } });
                         toast.dismiss(t);
                         if (error || !data?.ok) {
-                          toast.error("Auto-set failed - paste the webhook URL into Gupshup manually (see field below).", { duration: 6000 });
-                          console.warn("set-callback result", data, error);
+                          toast.error("Auto-set failed - paste the webhook URL into Gupshup manually.", { duration: 6000 });
                         } else {
-                          toast.success("Gupshup callback set");
+                          toast.success("Webhook connected");
+                          await supabase.from("whatsapp_numbers").update({ webhook_connected: true }).eq("id", n.id);
                           await qc.invalidateQueries({ queryKey: ["numbers-inventory", workspaceId] });
                         }
                       }}
                     >
-                      Configure inbound webhook
+                      Connect webhook
                     </Button>
                     {dirty && (
                       <Button size="sm" onClick={() => save.mutate(n.id)} disabled={save.isPending}>
@@ -227,26 +255,59 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   </div>
                 </div>
 
+                {!ready.ready && (
+                  <div className="text-[11px] text-amber-700">Missing: {ready.reasons.join(", ")}</div>
+                )}
+
+                {/* Operator-facing fields only */}
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <Field label="Country / sender label">
+                    <Input value={draft.label ?? ""} onChange={(e) => update(n.id, { label: e.target.value })} placeholder="UAE main" />
+                  </Field>
+                  <Field label="Country code">
+                    <Input value={draft.country_code ?? ""} onChange={(e) => update(n.id, { country_code: e.target.value.toUpperCase() })} placeholder="US / UK / AE" maxLength={4} />
+                  </Field>
+                  <Field label="Status">
+                    <Select value={draft.status} onValueChange={(v) => update(n.id, { status: v as NumberStatus })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">draft</SelectItem>
+                        <SelectItem value="ready">ready</SelectItem>
+                        <SelectItem value="warming">warming</SelectItem>
+                        <SelectItem value="restricted">restricted</SelectItem>
+                        <SelectItem value="banned">banned</SelectItem>
+                        <SelectItem value="inactive">inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Use for">
+                    <Select value={draft.usage_type} onValueChange={(v) => update(n.id, { usage_type: v as NumberUsage })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="marketing">marketing</SelectItem>
+                        <SelectItem value="utility">utility</SelectItem>
+                        <SelectItem value="both">both</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+
+                {/* Technical / advanced (collapsed by default) */}
                 <details className="text-[11px] text-muted-foreground">
-                  <summary className="cursor-pointer hover:text-foreground select-none">Show inbound webhook URL (advanced)</summary>
-                  <div className="mt-1 break-all">
-                    Paste this into the Gupshup app → Callback URL if auto-configure fails:
-                    <code className="ml-1 px-1 py-0.5 rounded bg-muted">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
+                  <summary className="cursor-pointer hover:text-foreground select-none">Technical setup (phone, app id, API key, BM)</summary>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+                    <Field label="Phone (digits)"><Input value={draft.phone_number} onChange={(e) => update(n.id, { phone_number: e.target.value.replace(/[^\d]/g, "") })} /></Field>
+                    <Field label="Gupshup app ID"><Input value={draft.provider_app_id ?? ""} onChange={(e) => update(n.id, { provider_app_id: e.target.value })} /></Field>
+                    <Field label="API key"><Input value={draft.provider_api_key ?? ""} onChange={(e) => update(n.id, { provider_api_key: e.target.value })} placeholder="leave blank to use global" /></Field>
+                    <Field label="Gupshup app name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} placeholder="01Ashik02" /></Field>
+                    <Field label="Partner / source"><Input value={draft.partner_source ?? ""} onChange={(e) => update(n.id, { partner_source: e.target.value })} /></Field>
+                    <Field label="BM name"><Input value={draft.bm_name ?? ""} onChange={(e) => update(n.id, { bm_name: e.target.value })} /></Field>
+                  </div>
+                  <div className="mt-2 break-all">
+                    Inbound webhook URL (paste into Gupshup if auto-connect fails):{" "}
+                    <code className="px-1 py-0.5 rounded bg-muted">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
                   </div>
                 </details>
-
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <Field label="Country / sender label"><Input value={draft.label ?? ""} onChange={(e) => update(n.id, { label: e.target.value })} placeholder="UAE main" /></Field>
-                  <Field label="Partner / Source"><Input value={draft.partner_source ?? ""} onChange={(e) => update(n.id, { partner_source: e.target.value })} placeholder="Gupshup, 360dialog, etc." /></Field>
-                  <Field label="BM name"><Input value={draft.bm_name ?? ""} onChange={(e) => update(n.id, { bm_name: e.target.value })} placeholder="Business Manager" /></Field>
-                  <Field label="Gupshup app name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} placeholder="01Ashik02" /></Field>
-                  <Field label="Phone (digits)"><Input value={draft.phone_number} onChange={(e) => update(n.id, { phone_number: e.target.value.replace(/[^\d]/g, "") })} /></Field>
-                  <Field label="Gupshup app ID"><Input value={draft.provider_app_id ?? ""} onChange={(e) => update(n.id, { provider_app_id: e.target.value })} /></Field>
-                  <Field label="API key (per-number)"><Input value={draft.provider_api_key ?? ""} onChange={(e) => update(n.id, { provider_api_key: e.target.value })} placeholder="leave blank to use global key" /></Field>
-                  <div className="flex items-end">
-                    <Toggle label="Active (sending allowed)" checked={draft.is_active} onChange={(v) => update(n.id, { is_active: v })} />
-                  </div>
-                </div>
 
                 <Field label="Notes">
                   <Textarea rows={2} value={draft.notes ?? ""} onChange={(e) => update(n.id, { notes: e.target.value })} placeholder="Internal notes - issues, history, who set it up" />
@@ -262,11 +323,4 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="space-y-1"><label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>{children}</div>
-);
-
-const Toggle = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
-  <label className="flex flex-col gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-    <span>{label}</span>
-    <Switch checked={checked} onCheckedChange={onChange} />
-  </label>
 );
