@@ -14,7 +14,7 @@ import {
   Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import type { User } from "@supabase/supabase-js";
+
 import { toast } from "sonner";
 import { geoFromPhone } from "@/lib/launchData";
 
@@ -178,16 +178,21 @@ export default function FleetRegistry() {
   const [editing, setEditing] = useState<Row | null>(null);
 
   useEffect(() => {
-    const guard = (u: User | null) => {
-      if (!u) { navigate("/admin-auth"); return; }
-      if (u.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        supabase.auth.signOut(); navigate("/admin-auth"); toast.error("Admin only"); return;
+    let mounted = true;
+    const check = async () => {
+      const { evaluateAdminAccess } = await import("@/lib/adminGuard");
+      const r = await evaluateAdminAccess();
+      if (!mounted) return;
+      if (r.state === "redirect") {
+        if (r.reason === "not-admin") toast.error("Admin only");
+        navigate(r.to);
+      } else {
+        setAuthChecked(true);
       }
-      setAuthChecked(true);
     };
-    supabase.auth.getSession().then(({ data: { session } }) => guard(session?.user ?? null));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => guard(s?.user ?? null));
-    return () => subscription.unsubscribe();
+    check();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { check(); });
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, [navigate]);
 
   const { data, isLoading } = useQuery({
@@ -503,10 +508,10 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientC
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
-      <TableCell className="text-xs font-medium tabular-nums">{r.total_sent.toLocaleString()}</TableCell>
+      <TableCell className="text-xs font-medium tabular-nums">{(r.total_sent ?? 0).toLocaleString()}</TableCell>
       <TableCell className="text-xs tabular-nums">
-        {r.total_errors > 0 ? <span className="text-red-600 font-medium">{r.total_errors.toLocaleString()}</span> : <span className="text-muted-foreground">0</span>}
-        {r.unrestricted_at && r.errors_since_unban > 0 ? (
+        {(r.total_errors ?? 0) > 0 ? <span className="text-red-600 font-medium">{(r.total_errors ?? 0).toLocaleString()}</span> : <span className="text-muted-foreground">0</span>}
+        {r.unrestricted_at && (r.errors_since_unban ?? 0) > 0 ? (
           <span className="text-[10px] text-amber-700 ml-1" title="Errors since unban">({r.errors_since_unban} since unban)</span>
         ) : null}
       </TableCell>

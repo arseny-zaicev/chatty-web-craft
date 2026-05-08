@@ -23,6 +23,8 @@ const AISeoReport = lazy(() => import("./pages/AISeoReport"));
 const AdminAuth = lazy(() => import("./pages/AdminAuth"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 const FleetRegistry = lazy(() => import("./pages/admin/FleetRegistry"));
+const AdminMfaSetup = lazy(() => import("./pages/admin/AdminMfaSetup"));
+const AdminMfaVerify = lazy(() => import("./pages/admin/AdminMfaVerify"));
 const Apply = lazy(() => import("./pages/Apply"));
 const SellerLeadsApply = lazy(() => import("./pages/SellerLeadsApply"));
 const WhatsAppApply = lazy(() => import("./pages/WhatsAppApply"));
@@ -81,6 +83,8 @@ const App = () => (
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
+              <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
+              <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
               <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
