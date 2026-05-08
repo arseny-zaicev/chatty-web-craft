@@ -557,9 +557,7 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
         ) : null}
       </TableCell>
       <TableCell className="text-xs whitespace-nowrap"><BanCell r={r} /></TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_inbound ? formatDistanceToNow(new Date(r.last_inbound), { addSuffix: true }) : "—"}</TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_outbound ? formatDistanceToNow(new Date(r.last_outbound), { addSuffix: true }) : "—"}</TableCell>
-      <TableCell className="text-xs text-red-600 max-w-[180px] truncate" title={r.last_error ?? ""}>{r.last_error ?? "—"}</TableCell>
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap" title={r.last_campaign_name ?? ""}>{r.last_campaign_at ? formatDistanceToNow(new Date(r.last_campaign_at), { addSuffix: true }) : "—"}</TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(r)} title="Edit">
