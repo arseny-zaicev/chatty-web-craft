@@ -21,6 +21,7 @@ import {
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
 
 type Message = {
   id: string;
