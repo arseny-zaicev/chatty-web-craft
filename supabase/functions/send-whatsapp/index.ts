@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const FUNCTION_VERSION = "send-whatsapp-inbox-debug-2026-05-08-1";
+const FUNCTION_VERSION = "send-whatsapp-inbox-debug-2026-05-08-2";
 const GUPSHUP_SEND_ENDPOINT = "https://api.gupshup.io/wa/api/v1/msg";
 
 async function readJson(res: Response) {
@@ -31,6 +31,38 @@ async function exchangePartnerToken(appId: string, partnerToken: string) {
     if (res.ok && appToken) return { token: appToken, attempts: results };
   }
   return { token: "", attempts: results };
+}
+
+async function sendTextMessage({
+  apiKey,
+  source,
+  destination,
+  text,
+  srcName,
+}: {
+  apiKey: string;
+  source: string;
+  destination: string;
+  text: string;
+  srcName: string | null;
+}) {
+  const form = new URLSearchParams();
+  form.set("channel", "whatsapp");
+  form.set("source", source);
+  form.set("destination", destination);
+  form.set("message", JSON.stringify({ type: "text", text }));
+  if (srcName) form.set("src.name", srcName);
+
+  const response = await fetch(GUPSHUP_SEND_ENDPOINT, {
+    method: "POST",
+    headers: {
+      apikey: apiKey,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+  });
+  const body = await response.json().catch(() => ({} as Record<string, unknown>));
+  return { response, body };
 }
 
 serve(async (req) => {
@@ -116,44 +148,13 @@ serve(async (req) => {
       });
     }
 
-    // Resolve which apikey to use:
-    // 1) per-number app apikey (not sk_) → use directly
-    // 2) per-number partner sk_ token → exchange for app token via Partner API
-    // 3) otherwise → global GUPSHUP_API_KEY (only correct if it belongs to THIS app)
-    let GUPSHUP_API_KEY: string | null = null;
-    let keyType: "per-number-app" | "partner-exchanged" | "global" | "none" = "none";
-    let exchangeDebug: unknown = null;
-    const storedKeyType = number.provider_api_key
-      ? String(number.provider_api_key).startsWith("sk_") ? "partner" : "app"
+    const storedApiKey = number.provider_api_key?.trim() || null;
+    const fallbackApiKey = Deno.env.get("GUPSHUP_API_KEY")?.trim() || null;
+    const storedKeyType = storedApiKey
+      ? storedApiKey.startsWith("sk_") ? "partner-like" : "app"
       : "none";
 
-    if (number.provider_api_key && !number.provider_api_key.startsWith("sk_")) {
-      GUPSHUP_API_KEY = number.provider_api_key;
-      keyType = "per-number-app";
-    } else if (number.provider_api_key?.startsWith("sk_") && number.provider_app_id) {
-      try {
-        const exchanged = await exchangePartnerToken(number.provider_app_id, number.provider_api_key);
-        exchangeDebug = exchanged.attempts;
-        if (exchanged.token) {
-          GUPSHUP_API_KEY = exchanged.token;
-          keyType = "partner-exchanged";
-        }
-      } catch (e) {
-        exchangeDebug = { error: e instanceof Error ? e.message : String(e) };
-      }
-    }
-    if (!GUPSHUP_API_KEY && storedKeyType !== "partner") {
-      GUPSHUP_API_KEY = Deno.env.get("GUPSHUP_API_KEY") ?? null;
-      if (GUPSHUP_API_KEY) keyType = "global";
-    }
-    if (!GUPSHUP_API_KEY && storedKeyType === "partner") {
-      const debug = { function_version: FUNCTION_VERSION, src_name: number.display_name ?? null, key_type: "partner-exchange-failed", stored_key_type: storedKeyType, partner_exchange: exchangeDebug };
-      return new Response(JSON.stringify({ error: "Stored partner key could not be exchanged for an app send token", debug }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (!GUPSHUP_API_KEY) {
+    if (!storedApiKey && !fallbackApiKey) {
       return new Response(JSON.stringify({ error: "No Gupshup API key available for this number" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -164,23 +165,82 @@ serve(async (req) => {
     const destination = (conv.contact_phone || "").toString().replace(/[^\d]/g, "");
     const source = (number.phone_number || "").toString().replace(/[^\d]/g, "");
 
-    // Send via Gupshup. src.name MUST be the Gupshup app name, not the app UUID.
-    const form = new URLSearchParams();
-    form.set("channel", "whatsapp");
-    form.set("source", source);
-    form.set("destination", destination);
-    form.set("message", JSON.stringify({ type: "text", text }));
-    if (number.display_name) form.set("src.name", number.display_name);
+    const sendAttempts: Array<{ key_type: string; http_status: number; provider_body: unknown }> = [];
+    let keyType: "per-number-app" | "per-number-direct-sk" | "partner-exchanged" | "global" | "none" = "none";
+    let exchangeDebug: unknown = null;
 
-    const gsRes = await fetch(GUPSHUP_SEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        apikey: GUPSHUP_API_KEY,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: form.toString(),
-    });
-    const gsBody = await gsRes.json().catch(() => ({} as Record<string, unknown>));
+    let gsRes: Response | null = null;
+    let gsBody: Record<string, unknown> = {};
+
+    if (storedApiKey) {
+      const initialSend = await sendTextMessage({
+        apiKey: storedApiKey,
+        source,
+        destination,
+        text,
+        srcName: number.display_name ?? null,
+      });
+      gsRes = initialSend.response;
+      gsBody = initialSend.body as Record<string, unknown>;
+      keyType = storedApiKey.startsWith("sk_") ? "per-number-direct-sk" : "per-number-app";
+      sendAttempts.push({ key_type: keyType, http_status: gsRes.status, provider_body: gsBody });
+
+      if ((gsRes.status === 401 || gsRes.status === 403) && storedApiKey.startsWith("sk_") && number.provider_app_id) {
+        try {
+          const exchanged = await exchangePartnerToken(number.provider_app_id, storedApiKey);
+          exchangeDebug = exchanged.attempts;
+          if (exchanged.token) {
+            const retrySend = await sendTextMessage({
+              apiKey: exchanged.token,
+              source,
+              destination,
+              text,
+              srcName: number.display_name ?? null,
+            });
+            gsRes = retrySend.response;
+            gsBody = retrySend.body as Record<string, unknown>;
+            keyType = "partner-exchanged";
+            sendAttempts.push({ key_type: keyType, http_status: gsRes.status, provider_body: gsBody });
+          }
+        } catch (e) {
+          exchangeDebug = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
+
+      if ((gsRes.status === 401 || gsRes.status === 403) && fallbackApiKey && fallbackApiKey !== storedApiKey) {
+        const fallbackSend = await sendTextMessage({
+          apiKey: fallbackApiKey,
+          source,
+          destination,
+          text,
+          srcName: number.display_name ?? null,
+        });
+        gsRes = fallbackSend.response;
+        gsBody = fallbackSend.body as Record<string, unknown>;
+        keyType = "global";
+        sendAttempts.push({ key_type: keyType, http_status: gsRes.status, provider_body: gsBody });
+      }
+    } else if (fallbackApiKey) {
+      const fallbackSend = await sendTextMessage({
+        apiKey: fallbackApiKey,
+        source,
+        destination,
+        text,
+        srcName: number.display_name ?? null,
+      });
+      gsRes = fallbackSend.response;
+      gsBody = fallbackSend.body as Record<string, unknown>;
+      keyType = "global";
+      sendAttempts.push({ key_type: keyType, http_status: gsRes.status, provider_body: gsBody });
+    }
+
+    if (!gsRes) {
+      return new Response(JSON.stringify({ error: "No Gupshup API key available for this number" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     console.log("Gupshup send response", gsRes.status, JSON.stringify(gsBody), "src.name=", number.display_name, "src=", source, "dst=", destination, "keyType=", keyType);
 
     const providerMessageId = (gsBody as Record<string, unknown>).messageId as string | undefined;
@@ -196,6 +256,7 @@ serve(async (req) => {
       key_type: keyType,
       stored_key_type: storedKeyType,
       partner_exchange: exchangeDebug,
+      send_attempts: sendAttempts,
       http_status: gsRes.status,
       provider_status: gsStatus ?? null,
       provider_message: (gsBody as Record<string, unknown>).message ?? null,
