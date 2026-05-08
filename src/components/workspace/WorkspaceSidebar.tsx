@@ -1,6 +1,6 @@
 import { NavLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus, BookOpen } from "lucide-react";
+import { Building2, LayoutDashboard, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus, BookOpen, BarChart3, Settings as SettingsIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -14,13 +14,16 @@ import {
 } from "@/components/ui/sidebar";
 import { fetchWorkspaces, workspaceKeys } from "@/lib/workspaces";
 
-const tabs = [
+const opsTabs = [
+  { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
-  { key: "library", label: "Library", icon: BookOpen },
-  { key: "templates", label: "Templates", icon: FileText },
-  { key: "numbers", label: "Numbers", icon: Phone },
   { key: "campaigns", label: "Campaigns", icon: Megaphone },
+  { key: "reporting", label: "Reporting", icon: BarChart3 },
+  { key: "library", label: "Library", icon: BookOpen },
+];
+const setupTabs = [
+  { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export function WorkspaceSidebar() {

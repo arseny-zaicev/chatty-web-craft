@@ -34,6 +34,9 @@ const Pipeline = lazy(() => import("./pages/Pipeline"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
 const WorkspaceLayout = lazy(() => import("./pages/workspace/WorkspaceLayout"));
 const WorkspaceSection = lazy(() => import("./pages/workspace/WorkspaceSection"));
+const WorkspaceOverview = lazy(() => import("./pages/workspace/WorkspaceOverview"));
+const WorkspaceReporting = lazy(() => import("./pages/workspace/WorkspaceReporting"));
+const WorkspaceSettings = lazy(() => import("./pages/workspace/WorkspaceSettings"));
 const LaunchWizard = lazy(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazy(() => import("./pages/workspace/NewClient"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -83,19 +86,20 @@ const App = () => (
               <Route path="/booked" element={<Booked />} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/bm-access" element={<BMAccess />} />
-              <Route path="/crm" element={<Navigate to="/ws/company15/inbox" replace />} />
-              <Route path="/pipeline" element={<Navigate to="/ws/company15/pipeline" replace />} />
-              <Route path="/campaigns" element={<Navigate to="/ws/company15/campaigns" replace />} />
+              <Route path="/crm" element={<Navigate to="/admin" replace />} />
+              <Route path="/pipeline" element={<Navigate to="/admin" replace />} />
+              <Route path="/campaigns" element={<Navigate to="/admin" replace />} />
               <Route path="/ws" element={<WorkspaceLayout />}>
-                <Route index element={<Navigate to="/ws/company15/inbox" replace />} />
+                <Route index element={<Navigate to="/admin" replace />} />
                 <Route path="new" element={<NewClient />} />
-                <Route path=":slug" element={<WorkspaceSection section="inbox" />} />
+                <Route path=":slug" element={<WorkspaceOverview />} />
+                <Route path=":slug/overview" element={<WorkspaceOverview />} />
                 <Route path=":slug/inbox" element={<WorkspaceSection section="inbox" />} />
                 <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />
-                <Route path=":slug/templates" element={<WorkspaceSection section="templates" />} />
-                <Route path=":slug/numbers" element={<WorkspaceSection section="numbers" />} />
                 <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
                 <Route path=":slug/library" element={<WorkspaceSection section="library" />} />
+                <Route path=":slug/reporting" element={<WorkspaceReporting />} />
+                <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
