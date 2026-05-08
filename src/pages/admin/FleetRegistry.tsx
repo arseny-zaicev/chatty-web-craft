@@ -488,9 +488,7 @@ function FleetHeaders({ showClient }: { showClient: boolean }) {
       <TableHead>Sent</TableHead>
       <TableHead>Errors</TableHead>
       <TableHead>Ban</TableHead>
-      <TableHead>Last in</TableHead>
-      <TableHead>Last out</TableHead>
-      <TableHead>Last error</TableHead>
+      <TableHead>Last campaign</TableHead>
       <TableHead></TableHead>
     </>
   );
