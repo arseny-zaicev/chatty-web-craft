@@ -565,17 +565,15 @@ function AddNumberDrawer({
   const [wabaId, setWabaId] = useState("");
   const [messagingLimit, setMessagingLimit] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("__unassigned__");
-  const [isWarming, setIsWarming] = useState(false);
   const [usage, setUsage] = useState<Usage>("both");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
-  const [status, setStatus] = useState<Status>("draft");
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
-    setWorkspaceId("__unassigned__"); setIsWarming(false); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
+    setWorkspaceId("__unassigned__"); setUsage("both");
+    setProvidedBy(""); setAssignedRef("");
   };
 
   useEffect(() => {
@@ -590,11 +588,9 @@ function AddNumberDrawer({
       setWabaId(editing.provider_waba_id || "");
       setMessagingLimit(editing.messaging_limit || "");
       setWorkspaceId(editing.workspace_id ?? "__unassigned__");
-      setIsWarming(editing.is_warming);
       setUsage(editing.usage_type);
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
-      setStatus(editing.status);
     } else {
       reset();
     }
