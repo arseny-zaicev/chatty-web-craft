@@ -733,6 +733,28 @@ function AddNumberDrawer({
             <Switch checked={isWarming} onCheckedChange={setIsWarming} />
           </div>
 
+          {editing && (
+            <Field label="Status">
+              <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">draft</SelectItem>
+                  <SelectItem value="warming">warming</SelectItem>
+                  <SelectItem value="ready">ready</SelectItem>
+                  <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
+                  <SelectItem value="banned">banned</SelectItem>
+                  <SelectItem value="inactive">inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              {(editing.status === "restricted" || editing.status === "banned") && status !== "restricted" && status !== "banned" && (
+                <div className="text-[10px] text-emerald-700 mt-1">Saving will mark this number as unbanned now.</div>
+              )}
+              {editing.status !== "restricted" && editing.status !== "banned" && (status === "restricted" || status === "banned") && (
+                <div className="text-[10px] text-amber-700 mt-1">Saving will start a 30-day ban countdown.</div>
+              )}
+            </Field>
+          )}
+
           <Field label="Use for">
             <Select value={usage} onValueChange={(v) => setUsage(v as Usage)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
