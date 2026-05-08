@@ -782,10 +782,16 @@ export type Database = {
       }
       whatsapp_numbers: {
         Row: {
+          bm_name: string | null
+          connected_in_gupshup: boolean
+          connected_in_iskra: boolean
           created_at: string
           display_name: string | null
           id: string
           is_active: boolean
+          label: string | null
+          notes: string | null
+          partner_source: string | null
           phone_number: string
           provider: string
           provider_api_key: string | null
@@ -796,10 +802,16 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          bm_name?: string | null
+          connected_in_gupshup?: boolean
+          connected_in_iskra?: boolean
           created_at?: string
           display_name?: string | null
           id?: string
           is_active?: boolean
+          label?: string | null
+          notes?: string | null
+          partner_source?: string | null
           phone_number: string
           provider?: string
           provider_api_key?: string | null
@@ -810,10 +822,16 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          bm_name?: string | null
+          connected_in_gupshup?: boolean
+          connected_in_iskra?: boolean
           created_at?: string
           display_name?: string | null
           id?: string
           is_active?: boolean
+          label?: string | null
+          notes?: string | null
+          partner_source?: string | null
           phone_number?: string
           provider?: string
           provider_api_key?: string | null
@@ -926,6 +944,7 @@ export type Database = {
         | "sending"
         | "sent"
         | "failed"
+        | "replied"
       campaign_recurrence: "none" | "daily" | "weekly" | "monthly"
       campaign_status:
         | "draft"
@@ -1084,6 +1103,7 @@ export const Constants = {
         "sending",
         "sent",
         "failed",
+        "replied",
       ],
       campaign_recurrence: ["none", "daily", "weekly", "monthly"],
       campaign_status: [
