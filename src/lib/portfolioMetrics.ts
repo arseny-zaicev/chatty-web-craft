@@ -129,7 +129,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     unread_replies: Object.values(byWorkspace).reduce((s, m) => s + m.unread_replies, 0),
     delivered_today: Object.values(byWorkspace).reduce((s, m) => s + m.delivered_today, 0),
     replies_today: Object.values(byWorkspace).reduce((s, m) => s + m.replies_today, 0),
-    booked_calls_today: (bookedToday ?? []).length,
+    booked_calls_today: bookedToday.length,
     issues: Object.values(byWorkspace).filter((m) => m.health !== "healthy").length,
   };
 
