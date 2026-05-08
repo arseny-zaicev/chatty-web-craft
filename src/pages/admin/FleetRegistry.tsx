@@ -565,17 +565,15 @@ function AddNumberDrawer({
   const [wabaId, setWabaId] = useState("");
   const [messagingLimit, setMessagingLimit] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("__unassigned__");
-  const [isWarming, setIsWarming] = useState(false);
   const [usage, setUsage] = useState<Usage>("both");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
-  const [status, setStatus] = useState<Status>("draft");
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
-    setWorkspaceId("__unassigned__"); setIsWarming(false); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
+    setWorkspaceId("__unassigned__"); setUsage("both");
+    setProvidedBy(""); setAssignedRef("");
   };
 
   useEffect(() => {
@@ -590,11 +588,9 @@ function AddNumberDrawer({
       setWabaId(editing.provider_waba_id || "");
       setMessagingLimit(editing.messaging_limit || "");
       setWorkspaceId(editing.workspace_id ?? "__unassigned__");
-      setIsWarming(editing.is_warming);
       setUsage(editing.usage_type);
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
-      setStatus(editing.status);
     } else {
       reset();
     }
@@ -608,17 +604,16 @@ function AddNumberDrawer({
       if (!auth.user) throw new Error("Sign in required");
 
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
-      const nextStatus: Status = editing ? status : (isWarming ? "warming" : "draft");
-      const wasBanned = editing && (editing.status === "restricted" || editing.status === "banned");
-      const isBanned = nextStatus === "restricted" || nextStatus === "banned";
 
-      const restrictionPatch: Record<string, string | null> = {};
-      if (!wasBanned && isBanned) {
-        restrictionPatch.restricted_at = new Date().toISOString();
-      } else if (wasBanned && !isBanned) {
-        restrictionPatch.unrestricted_at = new Date().toISOString();
-        restrictionPatch.restricted_at = null;
-      }
+      // Status is derived automatically:
+      // - preserve restricted/banned (only Gupshup sync flips these)
+      // - no workspace -> inactive
+      // - otherwise -> ready
+      const currentStatus: Status | undefined = editing?.status;
+      const preserveBanned = currentStatus === "restricted" || currentStatus === "banned";
+      const nextStatus: Status = preserveBanned
+        ? currentStatus!
+        : (targetWs ? "ready" : "inactive");
 
       const payload = {
         phone_number: cleanPhone,
@@ -630,7 +625,6 @@ function AddNumberDrawer({
         provider_waba_id: wabaId || null,
         profile_avatar: profileAvatar || null,
         messaging_limit: messagingLimit || null,
-        is_warming: isWarming,
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
@@ -638,7 +632,7 @@ function AddNumberDrawer({
 
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
-          .update({ ...payload, workspace_id: targetWs, status: nextStatus, ...restrictionPatch })
+          .update({ ...payload, workspace_id: targetWs, status: nextStatus })
           .eq("id", editing.id);
         if (error) throw error;
       } else {
@@ -734,34 +728,11 @@ function AddNumberDrawer({
             </Select>
           </Field>
 
-          <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
-            <div>
-              <div className="text-sm font-medium">Warming</div>
-              <div className="text-xs text-muted-foreground">Mark this number as currently warming up.</div>
-            </div>
-            <Switch checked={isWarming} onCheckedChange={setIsWarming} />
-          </div>
-
           {editing && (
-            <Field label="Status">
-              <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">draft</SelectItem>
-                  <SelectItem value="warming">warming</SelectItem>
-                  <SelectItem value="ready">ready</SelectItem>
-                  <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
-                  <SelectItem value="banned">banned</SelectItem>
-                  <SelectItem value="inactive">inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              {(editing.status === "restricted" || editing.status === "banned") && status !== "restricted" && status !== "banned" && (
-                <div className="text-[10px] text-emerald-700 mt-1">Saving will mark this number as unbanned now.</div>
-              )}
-              {editing.status !== "restricted" && editing.status !== "banned" && (status === "restricted" || status === "banned") && (
-                <div className="text-[10px] text-amber-700 mt-1">Saving will start a 30-day ban countdown.</div>
-              )}
-            </Field>
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              <div className="font-medium text-foreground mb-1">Status (auto)</div>
+              Derived from connection: <span className="font-mono">{editing.status}</span>. Restricted / banned states are set automatically from Gupshup sync. Unassigned numbers are marked <span className="font-mono">inactive</span>.
+            </div>
           )}
 
           <Field label="Use for">
