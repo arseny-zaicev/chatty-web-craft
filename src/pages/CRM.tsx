@@ -535,9 +535,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {activeNumber && (
-                      <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1">
+                      <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1" title={`+${activeNumber.phone_number}`}>
                         <Phone className="w-3 h-3" />
-                        Sending from {activeNumber.display_name ?? "WhatsApp"} (+{activeNumber.phone_number})
+                        Sending from {friendlySenderLabel(activeNumber)}
                       </div>
                     )}
                     <Button
