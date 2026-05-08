@@ -469,6 +469,7 @@ serve(async (req) => {
     if (!auth) return json({ error: "Unauthorized" }, 401);
 
     if (action === "launch") return await launchCampaign(admin, auth.user.id, body);
+    if (action === "blast") return await blastCampaign(admin, auth.user.id, body);
     if (action === "upsert_template") return await upsertTemplate(admin, auth.user.id, body);
     if (action === "sync_templates") return await syncTemplates(admin, auth.user.id, body);
     return json({ error: "Unknown action" }, 400);
