@@ -29,8 +29,10 @@ const launchKeys = {
 
 const TYPE_PRESETS: Record<CampaignType, { label: string; mode: "Blast" | "Utility"; delayMin: number; delayMax: number; perNumber: number; routing: boolean; templateCategory: "marketing" | "utility" }> = {
   marketing: { label: "Marketing Blast", mode: "Blast", delayMin: 0, delayMax: 0, perNumber: 1000, routing: false, templateCategory: "marketing" },
-  utility: { label: "Utility Paced", mode: "Utility", delayMin: 30, delayMax: 90, perNumber: 200, routing: true, templateCategory: "utility" },
+  utility: { label: "Utility Paced", mode: "Utility", delayMin: 60, delayMax: 120, perNumber: 200, routing: true, templateCategory: "utility" },
 };
+
+const UTILITY_MIN_DELAY = 60;
 
 export default function LaunchWizard() {
   const { workspace } = useOutletContext<WorkspaceContext>();
