@@ -229,11 +229,9 @@ export function geoFromPhone(phone: string | null | undefined): string {
 export type NameInputs = {
   date?: Date;
   geo?: string;
-  icp?: string;
+  audience?: string;
   templateLabel?: string;
   cta?: string;
-  mode?: "Blast" | "Utility";
-  count?: number;
 };
 
 export function buildCampaignName(input: NameInputs): string {
@@ -244,14 +242,32 @@ export function buildCampaignName(input: NameInputs): string {
   const parts = [
     `${yyyy}-${mm}-${dd}`,
     input.geo || "--",
-    input.icp || "Audience",
-    input.templateLabel || "Template",
-    input.cta || "CTA",
-    input.mode || "Blast",
-    String(input.count ?? 0),
+    (input.audience || "Audience").trim(),
+    (input.templateLabel || "Template").trim(),
+    (input.cta || "CTA").trim(),
   ];
   return parts.join(" | ");
 }
+
+// ---------- Sender pools ----------
+
+export type SenderPool = {
+  country: string; // ISO2 or "--"
+  numbers: WhatsAppNumber[];
+};
+
+export function groupNumbersByCountry(numbers: WhatsAppNumber[]): SenderPool[] {
+  const map = new Map<string, WhatsAppNumber[]>();
+  for (const n of numbers) {
+    const code = geoFromPhone(n.phone_number);
+    if (!map.has(code)) map.set(code, []);
+    map.get(code)!.push(n);
+  }
+  return Array.from(map.entries())
+    .map(([country, list]) => ({ country, numbers: list }))
+    .sort((a, b) => b.numbers.length - a.numbers.length);
+}
+
 
 // ---------- Mapping persistence (localStorage) ----------
 
