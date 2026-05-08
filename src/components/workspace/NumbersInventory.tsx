@@ -209,7 +209,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                         const { data, error } = await supabase.functions.invoke("gupshup-set-callback", { body: { number_id: n.id } });
                         toast.dismiss(t);
                         if (error || !data?.ok) {
-                          toast.error("Could not auto-set callback. Set manually in Gupshup app settings.");
+                          toast.error("Auto-set failed - paste the webhook URL into Gupshup manually (see field below).", { duration: 6000 });
                           console.warn("set-callback result", data, error);
                         } else {
                           toast.success("Gupshup callback set");
