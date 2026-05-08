@@ -44,6 +44,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [lastSendDebug, setLastSendDebug] = useState<Record<string, unknown> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: baseData, isLoading } = useQuery({
@@ -65,18 +66,20 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
         body: { conversation_id: activeId, text: draft.trim() },
       });
       if (error) {
-        // Try to extract provider error body from the function response
         let detail = error.message;
         const ctx = (error as { context?: Response }).context;
         if (ctx && typeof ctx.json === "function") {
           try {
             const body = await ctx.json();
-            detail = body?.provider_message || body?.error || JSON.stringify(body);
+            if (body?.debug) setLastSendDebug(body.debug);
+            detail = body?.debug?.provider_message || body?.debug?.provider_status || body?.error || JSON.stringify(body);
           } catch { /* ignore */ }
         }
-        throw new Error(detail);
+        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
       }
-      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      const d = data as { error?: string; debug?: Record<string, unknown> };
+      if (d?.debug) setLastSendDebug(d.debug);
+      if (d?.error) throw new Error(d.error);
       setDraft("");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send";
