@@ -593,6 +593,46 @@ function ReassignInline({ value, workspaces, onChange }: { value: string | null;
   );
 }
 
+const dnTone: Record<DnStatus, string> = {
+  approved: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+  pending: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  rejected: "bg-red-500/15 text-red-700 border-red-500/30",
+};
+
+function InlineStatusSelect({ value, onChange }: { value: Status; onChange: (v: Status) => void }) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as Status)}>
+      <SelectTrigger className={`h-6 px-2 text-[10px] w-[110px] border ${statusTone[value]}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="draft">draft</SelectItem>
+        <SelectItem value="warming">warming</SelectItem>
+        <SelectItem value="ready">ready</SelectItem>
+        <SelectItem value="restricted">restricted</SelectItem>
+        <SelectItem value="banned">banned</SelectItem>
+        <SelectItem value="inactive">inactive</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function InlineDnSelect({ value, checkedAt, onChange }: { value: DnStatus; checkedAt: string | null; onChange: (v: DnStatus) => void }) {
+  const title = checkedAt ? `Last checked ${formatDistanceToNow(new Date(checkedAt), { addSuffix: true })}` : "Not yet checked";
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as DnStatus)}>
+      <SelectTrigger className={`h-6 px-2 text-[10px] w-[100px] border ${dnTone[value]}`} title={title}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="pending">pending</SelectItem>
+        <SelectItem value="approved">approved</SelectItem>
+        <SelectItem value="rejected">rejected</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 // Add Number drawer ---------------------------------------------------------
 function AddNumberDrawer({
   open, onOpenChange, workspaces, editing, onCreated,
