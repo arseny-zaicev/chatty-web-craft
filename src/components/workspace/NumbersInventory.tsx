@@ -217,7 +217,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                         }
                       }}
                     >
-                      Set Gupshup callback
+                      Configure inbound webhook
                     </Button>
                     {dirty && (
                       <Button size="sm" onClick={() => save.mutate(n.id)} disabled={save.isPending}>
