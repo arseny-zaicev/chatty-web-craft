@@ -20,6 +20,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
   const sender = (inner.sender ?? {}) as Record<string, unknown>;
   const msgPayload = (inner.payload ?? {}) as Record<string, unknown>;
+  const appName = String(payload.app ?? inner.app ?? "").trim();
   const destination = normalizePhone(String(
     inner.destination ?? payload.destination ?? ""
   ));
@@ -29,30 +30,38 @@ async function handleInbound(payload: Record<string, unknown>) {
     return;
   }
 
-  // Lookup by destination, OR fallback to single active number when destination is missing
-  let number: { id: string; user_id: string; workspace_id: string } | null = null;
-  if (destination) {
+  // Prefer the Gupshup app name because inbound webhooks often omit destination.
+  // Never guess by "single active number" - that silently attaches messages to the wrong sender.
+  let number: { id: string; user_id: string; workspace_id: string; phone_number: string; display_name: string | null; provider_app_id: string | null } | null = null;
+  if (appName) {
     const { data } = await supabase
       .from("whatsapp_numbers")
-      .select("id, user_id, workspace_id")
+      .select("id, user_id, workspace_id, phone_number, display_name, provider_app_id")
+      .or(`display_name.eq.${appName},provider_app_id.eq.${appName}`)
+      .maybeSingle();
+    number = data;
+  }
+  if (!number && destination) {
+    const { data } = await supabase
+      .from("whatsapp_numbers")
+      .select("id, user_id, workspace_id, phone_number, display_name, provider_app_id")
       .eq("phone_number", destination)
       .maybeSingle();
     number = data;
   }
   if (!number) {
-    const { data: numbers } = await supabase
-      .from("whatsapp_numbers")
-      .select("id, user_id, workspace_id")
-      .eq("is_active", true);
-    if (numbers && numbers.length === 1) {
-      number = numbers[0];
-      console.log("Falling back to single active number", number.id);
-    }
-  }
-  if (!number) {
-    console.warn("No matching whatsapp_number for destination", destination);
+    console.warn("No matching whatsapp_number for inbound webhook", { appName, destination, source });
     return;
   }
+  console.log("Matched inbound whatsapp_number", {
+    appName,
+    destination,
+    source,
+    whatsapp_number_id: number.id,
+    phone_number: number.phone_number,
+    display_name: number.display_name,
+    provider_app_id: number.provider_app_id,
+  });
 
   const contactName = (sender.name as string) ?? null;
   const messageType = (inner.type as string) ?? "text";
@@ -137,6 +146,14 @@ async function handleInbound(payload: Record<string, unknown>) {
     provider_message_id: providerMessageId,
     metadata: {
       ...(payload as Record<string, unknown>),
+      matched_whatsapp_number: {
+        id: number.id,
+        phone_number: number.phone_number,
+        display_name: number.display_name,
+        provider_app_id: number.provider_app_id,
+        app_name: appName || null,
+        destination: destination || null,
+      },
       campaign_recipient_id: recipient?.id ?? null,
       campaign_id: recipient?.campaign_id ?? null,
     },

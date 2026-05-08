@@ -138,7 +138,7 @@ serve(async (req) => {
 
     const { data: number } = await admin
       .from("whatsapp_numbers")
-      .select("phone_number, provider_app_id, provider_api_key, display_name")
+      .select("phone_number, provider_app_id, provider_api_key, display_name, is_active, connected_in_gupshup")
       .eq("id", conv.whatsapp_number_id)
       .maybeSingle();
     if (!number) {
@@ -147,16 +147,27 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (!number.is_active) {
+      return new Response(JSON.stringify({ error: "This WhatsApp number is inactive. Activate and connect the exact number before sending." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!number.provider_app_id) {
+      return new Response(JSON.stringify({ error: "This WhatsApp number has no Gupshup app ID. Sync the exact app before sending." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const storedApiKey = number.provider_api_key?.trim() || null;
-    const fallbackApiKey = Deno.env.get("GUPSHUP_API_KEY")?.trim() || null;
     const storedKeyType = storedApiKey
       ? storedApiKey.startsWith("sk_") ? "partner-like" : "app"
       : "none";
 
-    if (!storedApiKey && !fallbackApiKey) {
-      return new Response(JSON.stringify({ error: "No Gupshup API key available for this number" }), {
-        status: 500,
+    if (!storedApiKey) {
+      return new Response(JSON.stringify({ error: "This WhatsApp number has no per-number API key. Refusing global fallback to prevent sending from the wrong number." }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -207,35 +218,10 @@ serve(async (req) => {
         }
       }
 
-      if ((gsRes.status === 401 || gsRes.status === 403) && fallbackApiKey && fallbackApiKey !== storedApiKey) {
-        const fallbackSend = await sendTextMessage({
-          apiKey: fallbackApiKey,
-          source,
-          destination,
-          text,
-          srcName: number.display_name ?? null,
-        });
-        gsRes = fallbackSend.response;
-        gsBody = fallbackSend.body as Record<string, unknown>;
-        keyType = "global";
-        sendAttempts.push({ key_type: keyType, http_status: gsRes.status, provider_body: gsBody });
-      }
-    } else if (fallbackApiKey) {
-      const fallbackSend = await sendTextMessage({
-        apiKey: fallbackApiKey,
-        source,
-        destination,
-        text,
-        srcName: number.display_name ?? null,
-      });
-      gsRes = fallbackSend.response;
-      gsBody = fallbackSend.body as Record<string, unknown>;
-      keyType = "global";
-      sendAttempts.push({ key_type: keyType, http_status: gsRes.status, provider_body: gsBody });
     }
 
     if (!gsRes) {
-      return new Response(JSON.stringify({ error: "No Gupshup API key available for this number" }), {
+      return new Response(JSON.stringify({ error: "No valid per-number Gupshup API key available for this number" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
