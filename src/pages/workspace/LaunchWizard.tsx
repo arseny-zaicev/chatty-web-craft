@@ -673,6 +673,7 @@ export default function LaunchWizard() {
           <div className="font-display text-lg flex items-center gap-2"><Clock className="w-4 h-4 text-primary" />Review</div>
           <Row label="Type" value={preset.label} />
           <Row label="Workspace" value={workspace?.name ?? "-"} />
+          <Row label="Pool" value={poolCountry ? `${poolCountry} · ${readyInPool.length}/${poolNumbers.length} ready` : "-"} />
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
