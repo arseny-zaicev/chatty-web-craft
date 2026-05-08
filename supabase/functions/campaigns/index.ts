@@ -379,10 +379,59 @@ async function sendTemplate(_admin: any, recipient: any) {
   return payload;
 }
 
+function renderTemplateBody(body: string | null | undefined, variableNames: string[], values: Record<string, unknown> | undefined | null): string {
+  if (!body) return "";
+  let out = String(body);
+  // Positional {{1}}, {{2}}, ... mapped to variableNames order
+  variableNames.forEach((name, idx) => {
+    const v = String((values ?? {})[name] ?? "");
+    out = out.replaceAll(`{{${idx + 1}}}`, v);
+    out = out.replaceAll(`{${name}}`, v);
+    out = out.replaceAll(`{{${name}}}`, v);
+  });
+  return out;
+}
+
+async function ensureCampaignConversation(admin: any, recipient: any): Promise<string | null> {
+  const number = recipient.campaigns?.whatsapp_numbers;
+  const numberId = recipient.campaigns?.whatsapp_number_id;
+  const workspaceId = recipient.workspace_id;
+  const phone = String(recipient.contact_phone || "").replace(/[^\d]/g, "");
+  if (!numberId || !phone) return recipient.conversation_id ?? null;
+
+  if (recipient.conversation_id) return recipient.conversation_id;
+
+  const { data: existing } = await admin
+    .from("conversations")
+    .select("id")
+    .eq("whatsapp_number_id", numberId)
+    .eq("contact_phone", phone)
+    .maybeSingle();
+  if (existing) return existing.id;
+
+  const { data: created, error } = await admin
+    .from("conversations")
+    .insert({
+      user_id: recipient.user_id,
+      workspace_id: workspaceId,
+      whatsapp_number_id: numberId,
+      contact_phone: phone,
+      contact_name: recipient.contact_name ?? null,
+      unread_count: 0,
+    })
+    .select("id")
+    .single();
+  if (error || !created) {
+    console.error("ensureCampaignConversation: failed to create", error);
+    return null;
+  }
+  return created.id;
+}
+
 async function processQueue(admin: any) {
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(name, language, variables, provider_template_id))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date().toISOString())
     .eq("campaigns.status", "running")
@@ -405,17 +454,42 @@ async function processQueue(admin: any) {
     try {
       const gsBody = await sendTemplate(admin, recipient);
       const providerId = gsBody.messageId || null;
-      await admin.from("campaign_recipients").update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: providerId }).eq("id", recipient.id);
-      if (recipient.conversation_id) {
+      const tpl = recipient.campaigns?.message_templates;
+      const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
+      const renderedBody = renderTemplateBody(tpl?.body, variableNames, recipient.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
+      const sentAt = new Date().toISOString();
+
+      // Ensure a conversation exists so Inbox shows the thread starting from this opener
+      const conversationId = await ensureCampaignConversation(admin, recipient);
+
+      await admin.from("campaign_recipients").update({
+        status: "sent",
+        sent_at: sentAt,
+        provider_message_id: providerId,
+        conversation_id: conversationId,
+      }).eq("id", recipient.id);
+
+      if (conversationId) {
         await admin.from("messages").insert({
           user_id: recipient.user_id,
-          conversation_id: recipient.conversation_id,
+          conversation_id: conversationId,
           direction: "outbound",
-          body: `[Template] ${recipient.campaigns.message_templates.name}`,
+          body: renderedBody,
           status: "sent",
           provider_message_id: providerId,
-          metadata: { campaign_id: recipient.campaign_id, campaign_recipient_id: recipient.id, gupshup_response: gsBody },
-        }).select("id").maybeSingle();
+          metadata: {
+            campaign_id: recipient.campaign_id,
+            campaign_recipient_id: recipient.id,
+            template_id: tpl?.id ?? null,
+            template_name: tpl?.name ?? null,
+            source: "campaign_opener",
+            gupshup_response: gsBody,
+          },
+        });
+        await admin.from("conversations").update({
+          last_message_text: renderedBody.slice(0, 500),
+          last_message_at: sentAt,
+        }).eq("id", conversationId);
       }
       sent++;
     } catch (err) {
