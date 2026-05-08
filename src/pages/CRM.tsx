@@ -398,7 +398,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         </div>
                         <div className="flex items-center justify-between mt-1">
                           <div className="text-[10px] text-muted-foreground/70 truncate">
-                            {num ? `via ${num.display_name ?? `+${num.phone_number}`}` : ""}
+                            {num ? `via ${num.display_name ?? "WhatsApp"} (+${num.phone_number})` : ""}
                           </div>
                           {c.last_message_at && (
                             <div className="text-[10px] text-muted-foreground/70 shrink-0">
@@ -485,7 +485,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                     {activeNumber && (
                       <div className="text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
                         <Phone className="w-3 h-3" />
-                        Sending from {activeNumber.display_name ?? `+${activeNumber.phone_number}`}
+                        Sending from {activeNumber.display_name ?? "WhatsApp"} (+{activeNumber.phone_number})
                       </div>
                     )}
                     <Button
