@@ -360,9 +360,10 @@ type RowActions = {
   onReassign: (id: string, workspaceId: string | null) => void;
   onEdit: (r: Row) => void;
   onDelete: (id: string) => void;
+  onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status">>) => void;
 };
 
-function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   return (
     <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
       <Table>
@@ -374,14 +375,14 @@ function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: 
         <TableBody>
           {rows.length === 0 ? (
             <TableRow><TableCell colSpan={20} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
-          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} />)}
+          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} />)}
         </TableBody>
       </Table>
     </div>
   );
 }
 
-function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   const groups = useMemo(() => {
     const map = new Map<string, { ws: WS | null; rows: Row[] }>();
     for (const r of rows) {
@@ -428,7 +429,7 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { r
               </TableRow>
             </TableHeader>
             <TableBody>
-              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} hideClientCol />)}
+              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} hideClientCol />)}
             </TableBody>
           </Table>
         </div>
