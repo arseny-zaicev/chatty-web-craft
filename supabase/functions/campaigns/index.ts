@@ -669,6 +669,7 @@ serve(async (req) => {
     if (action === "blast") return await blastCampaign(admin, auth.user.id, body);
     if (action === "upsert_template") return await upsertTemplate(admin, auth.user.id, body);
     if (action === "sync_templates") return await syncTemplates(admin, auth.user.id, body);
+    if (action === "sync_templates_all") return await syncTemplatesAll(admin, auth.user.id, body);
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
