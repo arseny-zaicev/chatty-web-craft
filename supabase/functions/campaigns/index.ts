@@ -439,6 +439,7 @@ async function processQueue(admin: any) {
     }).eq("id", id);
   }
 
+  return json({ ok: true, processed: (due ?? []).length, sent, failed });
 }
 
 async function blastCampaign(admin: any, requesterId: string, body: any) {
