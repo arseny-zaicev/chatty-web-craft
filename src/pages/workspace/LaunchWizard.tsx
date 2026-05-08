@@ -16,11 +16,14 @@ import { toast } from "sonner";
 import {
   fetchLaunchEssentials, fetchConversationsLite,
   groupLogicalTemplates, parseCsv, detectColumns, applyMapping,
-  geoFromPhone, buildCampaignName, renderTemplateBody,
+  geoFromPhone, buildCampaignName, renderTemplateBody, groupNumbersByCountry,
   loadMapping, saveMapping, listSavedAudiences, saveAudience, deleteSavedAudience,
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
 import type { WorkspaceContext } from "./WorkspaceLayout";
+
+const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
+
 
 const launchKeys = {
   essentials: (wid?: string) => ["launch", "essentials", wid ?? "all"] as const,
