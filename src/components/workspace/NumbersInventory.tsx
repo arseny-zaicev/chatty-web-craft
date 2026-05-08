@@ -312,3 +312,51 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="space-y-1"><label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>{children}</div>
 );
+
+const WebhookUrlRow = ({
+  numberId: _numberId,
+  connected,
+  onMarkConnected,
+}: {
+  numberId: string;
+  connected: boolean;
+  onMarkConnected: () => void;
+}) => {
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Webhook URL copied");
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error("Copy failed - select and copy manually");
+    }
+  };
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-2 space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Inbound webhook URL</span>
+        <button
+          type="button"
+          onClick={onMarkConnected}
+          className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+        >
+          {connected ? "Mark as not connected" : "Mark as connected"}
+        </button>
+      </div>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 text-[11px] px-2 py-1.5 rounded bg-background border border-border break-all font-mono">
+          {url}
+        </code>
+        <Button size="sm" variant="outline" onClick={copy} className="shrink-0">
+          {copied ? <><Check className="w-3.5 h-3.5 mr-1" />Copied</> : <><Copy className="w-3.5 h-3.5 mr-1" />Copy</>}
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Paste this into the Gupshup app - Callback URL. Then click "Mark as connected" so this number counts as ready.
+      </p>
+    </div>
+  );
+};
