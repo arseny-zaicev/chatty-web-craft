@@ -732,34 +732,11 @@ function AddNumberDrawer({
             </Select>
           </Field>
 
-          <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
-            <div>
-              <div className="text-sm font-medium">Warming</div>
-              <div className="text-xs text-muted-foreground">Mark this number as currently warming up.</div>
-            </div>
-            <Switch checked={isWarming} onCheckedChange={setIsWarming} />
-          </div>
-
           {editing && (
-            <Field label="Status">
-              <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">draft</SelectItem>
-                  <SelectItem value="warming">warming</SelectItem>
-                  <SelectItem value="ready">ready</SelectItem>
-                  <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
-                  <SelectItem value="banned">banned</SelectItem>
-                  <SelectItem value="inactive">inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              {(editing.status === "restricted" || editing.status === "banned") && status !== "restricted" && status !== "banned" && (
-                <div className="text-[10px] text-emerald-700 mt-1">Saving will mark this number as unbanned now.</div>
-              )}
-              {editing.status !== "restricted" && editing.status !== "banned" && (status === "restricted" || status === "banned") && (
-                <div className="text-[10px] text-amber-700 mt-1">Saving will start a 30-day ban countdown.</div>
-              )}
-            </Field>
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              <div className="font-medium text-foreground mb-1">Status (auto)</div>
+              Derived from connection: <span className="font-mono">{editing.status}</span>. Restricted / banned states are set automatically from Gupshup sync. Unassigned numbers are marked <span className="font-mono">inactive</span>.
+            </div>
           )}
 
           <Field label="Use for">
