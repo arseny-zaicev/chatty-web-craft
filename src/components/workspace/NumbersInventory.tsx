@@ -273,6 +273,17 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   </Field>
                 </div>
 
+                {/* Webhook URL - copy & paste into Gupshup manually */}
+                <WebhookUrlRow
+                  numberId={n.id}
+                  connected={draft.webhook_connected}
+                  onMarkConnected={async () => {
+                    update(n.id, { webhook_connected: !draft.webhook_connected });
+                    await supabase.from("whatsapp_numbers").update({ webhook_connected: !draft.webhook_connected }).eq("id", n.id);
+                    await qc.invalidateQueries({ queryKey: ["numbers-inventory", workspaceId] });
+                  }}
+                />
+
                 {/* Technical / advanced (collapsed by default) */}
                 <details className="text-[11px] text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground select-none">Technical setup (phone, app id, API key, BM)</summary>
@@ -283,10 +294,6 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     <Field label="Gupshup app name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} placeholder="01Ashik02" /></Field>
                     <Field label="Partner / source"><Input value={draft.partner_source ?? ""} onChange={(e) => update(n.id, { partner_source: e.target.value })} /></Field>
                     <Field label="BM name"><Input value={draft.bm_name ?? ""} onChange={(e) => update(n.id, { bm_name: e.target.value })} /></Field>
-                  </div>
-                  <div className="mt-2 break-all">
-                    Inbound webhook URL (paste into Gupshup if auto-connect fails):{" "}
-                    <code className="px-1 py-0.5 rounded bg-muted">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
                   </div>
                 </details>
 
