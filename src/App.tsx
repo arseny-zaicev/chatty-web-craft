@@ -31,7 +31,7 @@ const Demo = lazy(() => import("./pages/Demo"));
 const BMAccess = lazy(() => import("./pages/BMAccess"));
 const CRM = lazy(() => import("./pages/CRM"));
 const Pipeline = lazy(() => import("./pages/Pipeline"));
-const Campaigns = lazy(() => import("./pages/Campaigns"));
+
 const WorkspaceLayout = lazy(() => import("./pages/workspace/WorkspaceLayout"));
 const WorkspaceSection = lazy(() => import("./pages/workspace/WorkspaceSection"));
 const WorkspaceOverview = lazy(() => import("./pages/workspace/WorkspaceOverview"));
