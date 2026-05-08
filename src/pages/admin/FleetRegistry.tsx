@@ -204,6 +204,19 @@ export default function FleetRegistry() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
   });
 
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("whatsapp_numbers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Number deleted");
+      await qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+      await qc.invalidateQueries({ queryKey: ["numbers-inventory"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+
   if (!authChecked || isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
