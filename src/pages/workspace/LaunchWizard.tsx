@@ -661,24 +661,6 @@ export default function LaunchWizard() {
               </div>
             )}
           </Step>
-
-          {/* Step 7: Preview */}
-          <Step n={7} icon={Eye} title="Rendered preview">
-            {!activeLogical?.body ? (
-              <p className="text-sm text-muted-foreground">No template body to preview.</p>
-            ) : previewSamples.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Add recipients to preview the rendered message.</p>
-            ) : (
-              <div className="space-y-2">
-                {previewSamples.map((s, i) => (
-                  <div key={i} className="rounded-md border border-border bg-card/30 p-3">
-                    <div className="text-xs text-muted-foreground mb-1.5">To +{s.phone}</div>
-                    <div className="text-sm whitespace-pre-wrap">{s.body}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Step>
         </div>
 
         {/* SIDEBAR */}
