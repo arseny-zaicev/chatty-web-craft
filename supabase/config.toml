@@ -23,3 +23,12 @@ verify_jwt = false
 
 [functions.register-calendly-webhook]
 verify_jwt = false
+
+[functions.campaigns]
+verify_jwt = false
+
+[functions.send-whatsapp]
+verify_jwt = false
+
+[functions.gupshup-set-callback]
+verify_jwt = false
