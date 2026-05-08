@@ -66,21 +66,24 @@ const AdminPanel = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const guard = (currentUser: User | null) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        navigate("/admin-auth");
-      } else if (currentUser.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        supabase.auth.signOut();
-        navigate("/admin-auth");
-        toast.error("Access denied. Admin only.");
+    let mounted = true;
+    const check = async () => {
+      const { evaluateAdminAccess } = await import("@/lib/adminGuard");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setUser(session?.user ?? null);
+      const r = await evaluateAdminAccess();
+      if (!mounted) return;
+      if (r.state === "redirect") {
+        if (r.reason === "not-admin") toast.error("Access denied. Admin only.");
+        navigate(r.to);
       } else {
         setAuthChecked(true);
       }
     };
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => guard(s?.user ?? null));
-    supabase.auth.getSession().then(({ data: { session } }) => guard(session?.user ?? null));
-    return () => subscription.unsubscribe();
+    check();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { check(); });
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, [navigate]);
 
   const { data: workspaces, isLoading: wsLoading, refetch } = useQuery({
