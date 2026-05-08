@@ -63,41 +63,61 @@ export function WorkspaceSidebar() {
         </SidebarGroup>
 
         {slug && slug !== "new" && (
-          <SidebarGroup>
-            <SidebarGroupLabel>{!collapsed && "Sections"}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {tabs.map((t) => (
-                  <SidebarMenuItem key={t.key}>
-                    <SidebarMenuButton asChild tooltip={t.label}>
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel>{!collapsed && "Operations"}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {opsTabs.map((t) => (
+                    <SidebarMenuItem key={t.key}>
+                      <SidebarMenuButton asChild tooltip={t.label}>
+                        <NavLink
+                          to={`/ws/${slug}/${t.key}`}
+                          end={t.key === "overview"}
+                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
+                        >
+                          <t.icon className="w-4 h-4" />
+                          {!collapsed && <span>{t.label}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Launch campaign">
                       <NavLink
-                        to={`/ws/${slug}/${t.key}`}
-                        className={({ isActive }) =>
-                          `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`
-                        }
+                        to={`/ws/${slug}/launch`}
+                        className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
                       >
-                        <t.icon className="w-4 h-4" />
-                        {!collapsed && <span>{t.label}</span>}
+                        <Rocket className="w-4 h-4" />
+                        {!collapsed && <span>Launch</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Launch campaign">
-                    <NavLink
-                      to={`/ws/${slug}/launch`}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`
-                      }
-                    >
-                      <Rocket className="w-4 h-4" />
-                      {!collapsed && <span>Launch</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupLabel>{!collapsed && "Setup"}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {setupTabs.map((t) => (
+                    <SidebarMenuItem key={t.key}>
+                      <SidebarMenuButton asChild tooltip={t.label}>
+                        <NavLink
+                          to={`/ws/${slug}/${t.key}`}
+                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
+                        >
+                          <t.icon className="w-4 h-4" />
+                          {!collapsed && <span>{t.label}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
         )}
       </SidebarContent>
     </Sidebar>
