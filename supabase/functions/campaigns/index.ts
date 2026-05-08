@@ -320,47 +320,70 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
   return json({ ok: true, fetched: templates.length, upserted, warning: syncWarning });
 }
 
-async function sendTemplate(admin: any, recipient: any) {
-  const campaign = recipient.campaigns;
-  const template = campaign?.message_templates;
-  const number = campaign?.whatsapp_numbers;
-  if (!campaign || !template || !number) throw new Error("Missing campaign data");
-
-  const perNumberKey = number.provider_api_key && !String(number.provider_api_key).startsWith("sk_") ? number.provider_api_key : null;
-  const globalKey = Deno.env.get("GUPSHUP_API_KEY");
-  const configuredToken = perNumberKey || globalKey;
-  if (!configuredToken) throw new Error("GUPSHUP_API_KEY not configured");
-  const apiKey = await resolveGupshupSendToken(number.provider_app_id, configuredToken);
-
-  const variableNames = Array.isArray(template.variables) ? template.variables : [];
-  const params = variableNames.map((key: string) => String(recipient.variables?.[key] ?? ""));
+async function postGupshupTemplate({
+  apiKey, source, destination, srcName, templateId, params,
+}: { apiKey: string; source: string; destination: string; srcName: string | null; templateId: string; params: string[] }) {
   const form = new URLSearchParams();
   form.set("channel", "whatsapp");
-  form.set("source", number.phone_number);
-  form.set("destination", recipient.contact_phone);
-  form.set(
-    "message",
-    JSON.stringify({
-      type: "template",
-      template: { id: template.provider_template_id || template.name, params },
-    }),
-  );
-  if (number.provider_app_id) form.set("src.name", number.provider_app_id);
-
+  form.set("source", source);
+  form.set("destination", destination);
+  form.set("message", JSON.stringify({ type: "template", template: { id: templateId, params } }));
+  if (srcName) form.set("src.name", srcName);
   const res = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
     method: "POST",
     headers: { apikey: apiKey, "Content-Type": "application/x-www-form-urlencoded" },
     body: form.toString(),
   });
   const payload = await res.json().catch(() => ({}));
-  if (!res.ok || payload.status === "error") throw new Error(JSON.stringify(payload).slice(0, 500));
+  return { res, payload };
+}
+
+async function sendTemplate(_admin: any, recipient: any) {
+  const campaign = recipient.campaigns;
+  const template = campaign?.message_templates;
+  const number = campaign?.whatsapp_numbers;
+  if (!campaign || !template || !number) throw new Error("Missing campaign data");
+
+  // Mirror inbox send path: use the stored per-number key as-is. Do NOT discard
+  // by "sk_" prefix - keys minted in the app's own Gupshup Settings -> API Keys
+  // can carry that prefix and still be valid app keys. Never silently fall back
+  // to the global env key (would send from a different number).
+  const storedKey = (number.provider_api_key || "").toString().trim();
+  if (!storedKey) throw new Error("This WhatsApp number has no per-number API key");
+
+  const source = String(number.phone_number || "").replace(/[^\d]/g, "");
+  const destination = String(recipient.contact_phone || "").replace(/[^\d]/g, "");
+  const srcName = number.display_name ?? null;
+
+  const variableNames = Array.isArray(template.variables) ? template.variables : [];
+  const params = variableNames.map((key: string) => String(recipient.variables?.[key] ?? ""));
+  const templateId = template.provider_template_id || template.name;
+
+  // First attempt: stored key directly (same as inbox)
+  let { res, payload } = await postGupshupTemplate({
+    apiKey: storedKey, source, destination, srcName, templateId, params,
+  });
+
+  // Only on 401/403 with an sk_-prefixed key + app id, try partner-exchange retry (same as inbox)
+  if ((res.status === 401 || res.status === 403) && storedKey.startsWith("sk_") && number.provider_app_id) {
+    const exchanged = await getGupshupAppToken(number.provider_app_id, storedKey);
+    if (exchanged.token) {
+      ({ res, payload } = await postGupshupTemplate({
+        apiKey: exchanged.token, source, destination, srcName, templateId, params,
+      }));
+    }
+  }
+
+  if (!res.ok || payload.status === "error") {
+    throw new Error(JSON.stringify({ http_status: res.status, src_name: srcName, source, destination, body: payload }).slice(0, 800));
+  }
   return payload;
 }
 
 async function processQueue(admin: any) {
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id, provider_api_key), message_templates(name, language, variables, provider_template_id))")
+    .select("id, user_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(name, language, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", new Date().toISOString())
     .eq("campaigns.status", "running")
