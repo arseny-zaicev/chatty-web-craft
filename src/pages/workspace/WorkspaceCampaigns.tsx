@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Megaphone, Rocket, Loader2, ChevronRight, ChevronDown, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { crmKeys, fetchCampaignBase } from "@/lib/crmData";
+import { fetchCampaignSummaries } from "@/lib/launchData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -30,19 +30,38 @@ const fetchRecipients = async (campaignId: string) => {
   return (data ?? []) as RecipientRow[];
 };
 
+const fetchCampaignMeta = async (numberIds: string[], templateIds: string[]) => {
+  const numbers = new Map<string, { id: string; phone_number: string; label: string | null }>();
+  const templates = new Map<string, { id: string; name: string }>();
+  if (numberIds.length > 0) {
+    const { data } = await supabase.from("whatsapp_numbers").select("id, phone_number, label").in("id", numberIds);
+    (data ?? []).forEach((n: any) => numbers.set(n.id, n));
+  }
+  if (templateIds.length > 0) {
+    const { data } = await supabase.from("message_templates").select("id, name").in("id", templateIds);
+    (data ?? []).forEach((t: any) => templates.set(t.id, t));
+  }
+  return { numbers, templates };
+};
+
 export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId: string; slug: string }) {
-  const { data, isLoading, isFetching, refetch } = useQuery({
-    queryKey: crmKeys.campaigns(workspaceId),
-    queryFn: () => fetchCampaignBase(workspaceId),
+  const { data: campaigns = [], isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["campaigns", "summaries", workspaceId],
+    queryFn: () => fetchCampaignSummaries(workspaceId),
+    staleTime: 30_000,
   });
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const campaigns = data?.campaigns ?? [];
-  const numbers = data?.numbers ?? [];
-  const templates = data?.templates ?? [];
-
-  const numberById = useMemo(() => new Map(numbers.map((n) => [n.id, n])), [numbers]);
-  const templateById = useMemo(() => new Map(templates.map((t: any) => [t.id, t])), [templates]);
+  const numberIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.whatsapp_number_id).filter(Boolean))) as string[], [campaigns]);
+  const templateIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.template_id).filter(Boolean))) as string[], [campaigns]);
+  const { data: meta } = useQuery({
+    queryKey: ["campaigns", "meta", workspaceId, numberIds.join(","), templateIds.join(",")],
+    queryFn: () => fetchCampaignMeta(numberIds, templateIds),
+    enabled: campaigns.length > 0,
+    staleTime: 60_000,
+  });
+  const numberById = meta?.numbers ?? new Map();
+  const templateById = meta?.templates ?? new Map();
 
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
