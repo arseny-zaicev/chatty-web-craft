@@ -228,25 +228,6 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     </Badge>
                   )}
                   <div className="ml-auto flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!draft.provider_app_id}
-                      onClick={async () => {
-                        const t = toast.loading("Registering webhook...");
-                        const { data, error } = await supabase.functions.invoke("gupshup-set-callback", { body: { number_id: n.id } });
-                        toast.dismiss(t);
-                        if (error || !data?.ok) {
-                          toast.error("Auto-set failed - paste the webhook URL into Gupshup manually.", { duration: 6000 });
-                        } else {
-                          toast.success("Webhook connected");
-                          await supabase.from("whatsapp_numbers").update({ webhook_connected: true }).eq("id", n.id);
-                          await qc.invalidateQueries({ queryKey: ["numbers-inventory", workspaceId] });
-                        }
-                      }}
-                    >
-                      Connect webhook
-                    </Button>
                     {dirty && (
                       <Button size="sm" onClick={() => save.mutate(n.id)} disabled={save.isPending}>
                         <Save className="w-3.5 h-3.5 mr-1" />Save
