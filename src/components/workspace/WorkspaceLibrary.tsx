@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Folder, FolderOpen, Star, Search, Plus, Trash2, Link2, MessageSquare,
-  Loader2, Copy, ChevronDown, ChevronRight, Settings2, Pencil,
+  Loader2, Copy, ChevronDown, ChevronRight, Settings2, Pencil, Sparkles,
 } from "lucide-react";
 import {
   BUILTIN_FIELDS, LibraryField, SavedReply,
@@ -21,6 +21,21 @@ type Draft = Partial<SavedReply> & { url?: string };
 
 /** Detect a URL in a snippet body so a snippet can act as a "link". */
 const looksLikeUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
+
+/** Starter pack — seeded once on user request. Premium minimal: only what's actually used. */
+const STARTER_PACK: { title: string; body: string; folder: string; is_favorite?: boolean }[] = [
+  // Links — placeholders the operator fills in once
+  { title: "Website",       body: "{website_url}",     folder: "Links", is_favorite: true },
+  { title: "Book a call",   body: "{booking_url}",     folder: "Links", is_favorite: true },
+  { title: "Pricing",       body: "{pricing_url}",     folder: "Links" },
+  { title: "Case study",    body: "{case_study_url}",  folder: "Links" },
+  // Greetings
+  { title: "Intro",         body: "Hi! Thanks for reaching out — happy to help. What are you looking for?", folder: "Greetings" },
+  { title: "Quick reply",   body: "Got it, one moment please.", folder: "Greetings" },
+  // Follow-ups
+  { title: "Soft nudge",    body: "Just checking in — did you get a chance to look at this?", folder: "Follow-ups" },
+  { title: "Send booking",  body: "Easiest is to grab a slot here: {booking_url}", folder: "Follow-ups" },
+];
 
 export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
