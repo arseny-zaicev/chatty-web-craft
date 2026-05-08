@@ -66,7 +66,7 @@ const BAN_DURATION_DAYS = 30;
 type WS = { id: string; name: string; slug: string };
 
 const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
-  const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: templates }, { data: lastEvents }, { data: recipients }, { data: campaignsData }, { data: outMsgs }, { data: convs }] =
+  const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: templates }, { data: lastEvents }, { data: recipients }, { data: campaignsData }, { data: convs }, { data: outMsgs }] =
     await Promise.all([
       supabase.from("whatsapp_numbers").select("*"),
       supabase.from("workspaces").select("id, name, slug").eq("is_active", true).order("name"),
