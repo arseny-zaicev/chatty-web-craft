@@ -46,6 +46,29 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [sending, setSending] = useState(false);
   const [lastSendDebug, setLastSendDebug] = useState<Record<string, unknown> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const prevActiveIdRef = useRef<string | null>(null);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
+    if (behavior === "smooth") {
+      // noop - we already snapped; keep API simple
+    }
+  };
+
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom < 80;
+    stickToBottomRef.current = atBottom;
+    setShowJumpToLatest(!atBottom);
+  };
 
   const { data: baseData, isLoading } = useQuery({
     queryKey: crmKeys.base(workspaceId),
