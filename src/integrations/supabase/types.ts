@@ -827,6 +827,7 @@ export type Database = {
       }
       whatsapp_numbers: {
         Row: {
+          assigned_ref: string | null
           bm_name: string | null
           connected_in_gupshup: boolean
           connected_in_iskra: boolean
@@ -835,10 +836,14 @@ export type Database = {
           display_name: string | null
           id: string
           is_active: boolean
+          is_warming: boolean
           label: string | null
+          messaging_limit: string | null
           notes: string | null
           partner_source: string | null
           phone_number: string
+          profile_avatar: string | null
+          provided_by: string | null
           provider: string
           provider_api_key: string | null
           provider_app_id: string | null
@@ -851,6 +856,7 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          assigned_ref?: string | null
           bm_name?: string | null
           connected_in_gupshup?: boolean
           connected_in_iskra?: boolean
@@ -859,10 +865,14 @@ export type Database = {
           display_name?: string | null
           id?: string
           is_active?: boolean
+          is_warming?: boolean
           label?: string | null
+          messaging_limit?: string | null
           notes?: string | null
           partner_source?: string | null
           phone_number: string
+          profile_avatar?: string | null
+          provided_by?: string | null
           provider?: string
           provider_api_key?: string | null
           provider_app_id?: string | null
@@ -875,6 +885,7 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          assigned_ref?: string | null
           bm_name?: string | null
           connected_in_gupshup?: boolean
           connected_in_iskra?: boolean
@@ -883,10 +894,14 @@ export type Database = {
           display_name?: string | null
           id?: string
           is_active?: boolean
+          is_warming?: boolean
           label?: string | null
+          messaging_limit?: string | null
           notes?: string | null
           partner_source?: string | null
           phone_number?: string
+          profile_avatar?: string | null
+          provided_by?: string | null
           provider?: string
           provider_api_key?: string | null
           provider_app_id?: string | null
