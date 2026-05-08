@@ -308,14 +308,14 @@ function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: 
         <TableBody>
           {rows.length === 0 ? (
             <TableRow><TableCell colSpan={20} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
-          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} />)}
+          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} />)}
         </TableBody>
       </Table>
     </div>
   );
 }
 
-function GroupedByClient({ rows, workspaces, onReassign }: { rows: Row[]; workspaces: WS[]; onReassign: (id: string, workspaceId: string | null) => void }) {
+function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   const groups = useMemo(() => {
     const map = new Map<string, { ws: WS | null; rows: Row[] }>();
     for (const r of rows) {
