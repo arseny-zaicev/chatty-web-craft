@@ -172,7 +172,7 @@ serve(async (req) => {
     form.set("message", JSON.stringify({ type: "text", text }));
     if (number.display_name) form.set("src.name", number.display_name);
 
-    const gsRes = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+    const gsRes = await fetch(GUPSHUP_SEND_ENDPOINT, {
       method: "POST",
       headers: {
         apikey: GUPSHUP_API_KEY,
@@ -188,10 +188,13 @@ serve(async (req) => {
     const accepted = gsRes.ok && !!providerMessageId && gsStatus !== "error";
 
     const debug = {
+      function_version: FUNCTION_VERSION,
+      request_path: GUPSHUP_SEND_ENDPOINT,
       src_name: number.display_name ?? null,
       source,
       destination,
       key_type: keyType,
+      stored_key_type: storedKeyType,
       partner_exchange: exchangeDebug,
       http_status: gsRes.status,
       provider_status: gsStatus ?? null,
