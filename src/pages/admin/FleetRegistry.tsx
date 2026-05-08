@@ -509,7 +509,7 @@ function TruncCell({ value, max = 140 }: { value: string | null; max?: number })
   return <span className="font-mono text-[11px] text-muted-foreground truncate inline-block align-middle" style={{ maxWidth: max }} title={value}>{value}</span>;
 }
 
-function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
+function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
@@ -540,11 +540,11 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientC
       <TableCell className="text-xs">{r.usage_type}</TableCell>
       <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
-      <TableCell><Badge variant="outline" className={`text-[10px] ${statusTone[r.status]}`}>{r.status}</Badge></TableCell>
       <TableCell>
-        {r.display_name_approved
-          ? <Badge variant="outline" className={`text-[10px] ${statusTone.ready}`} title={r.display_name_checked_at ? `Confirmed ${formatDistanceToNow(new Date(r.display_name_checked_at), { addSuffix: true })}` : ""}>approved</Badge>
-          : <Badge variant="outline" className={`text-[10px] ${statusTone.warming}`}>pending</Badge>}
+        <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
+      </TableCell>
+      <TableCell>
+        <InlineDnSelect value={r.display_name_status} checkedAt={r.display_name_checked_at} onChange={(v) => onQuickPatch(r, { display_name_status: v })} />
       </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
