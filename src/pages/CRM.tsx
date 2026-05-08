@@ -249,8 +249,25 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [activeId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    // On conversation switch: snap to bottom instantly, reset stickiness.
+    if (prevActiveIdRef.current !== activeId) {
+      prevActiveIdRef.current = activeId;
+      stickToBottomRef.current = true;
+      setShowJumpToLatest(false);
+      requestAnimationFrame(() => {
+        const el = messagesScrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+      return;
+    }
+    // New message arrived: only auto-scroll if user is already near bottom.
+    if (stickToBottomRef.current) {
+      const el = messagesScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    } else {
+      setShowJumpToLatest(true);
+    }
+  }, [messages.length, activeId]);
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {
