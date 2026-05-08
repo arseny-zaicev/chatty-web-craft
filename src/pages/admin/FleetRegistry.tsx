@@ -48,9 +48,8 @@ type Row = {
   workspace_slug: string;
   templates_total: number;
   templates_approved: number;
-  last_inbound: string | null;
-  last_outbound: string | null;
-  last_error: string | null;
+  last_campaign_at: string | null;
+  last_campaign_name: string | null;
   total_sent: number;
   total_errors: number;
   errors_since_unban: number;
@@ -67,15 +66,18 @@ const BAN_DURATION_DAYS = 30;
 type WS = { id: string; name: string; slug: string };
 
 const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
-  const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: templates }, { data: convs }, { data: lastEvents }] =
+  const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: templates }, { data: lastEvents }, { data: recipients }, { data: campaignsData }, { data: convs }, { data: outMsgs }] =
     await Promise.all([
       supabase.from("whatsapp_numbers").select("*"),
       supabase.from("workspaces").select("id, name, slug").eq("is_active", true).order("name"),
       supabase.from("message_templates").select("whatsapp_number_id, status"),
-      supabase.from("conversations").select("whatsapp_number_id, last_message_at"),
       supabase.from("whatsapp_message_events")
         .select("whatsapp_number_id, event_type, error_message, received_at")
         .order("received_at", { ascending: false }).limit(20000),
+      supabase.from("campaign_recipients").select("whatsapp_number_id, status, sent_at"),
+      supabase.from("campaigns").select("id, name, whatsapp_number_id, scheduled_start_at, created_at"),
+      supabase.from("conversations").select("id, whatsapp_number_id"),
+      supabase.from("messages").select("conversation_id, direction"),
     ]);
   if (nErr) throw nErr; if (wErr) throw wErr;
 
@@ -88,29 +90,50 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
     if (t.status === "approved") cur.approved += 1;
     tpl.set(t.whatsapp_number_id, cur);
   }
-  const lastInbound = new Map<string, string>();
-  for (const c of convs ?? []) {
-    if (!c.whatsapp_number_id || !c.last_message_at) continue;
-    const cur = lastInbound.get(c.whatsapp_number_id);
-    if (!cur || c.last_message_at > cur) lastInbound.set(c.whatsapp_number_id, c.last_message_at);
+
+  // outbound messages per number (via conversation)
+  const convToNum = new Map<string, string>();
+  for (const c of (convs ?? []) as Array<{ id: string; whatsapp_number_id: string | null }>) {
+    if (c.whatsapp_number_id) convToNum.set(c.id, c.whatsapp_number_id);
   }
-  const lastOutbound = new Map<string, string>();
-  const lastError = new Map<string, string>();
   const totalSent = new Map<string, number>();
   const totalErrors = new Map<string, number>();
-  for (const e of lastEvents ?? []) {
-    if (!e.whatsapp_number_id) continue;
-    const isSent = e.event_type === "sent" || e.event_type === "enqueued" || e.event_type === "delivered";
-    const isError = e.event_type === "failed" || e.event_type === "error";
-    if (isSent) {
-      totalSent.set(e.whatsapp_number_id, (totalSent.get(e.whatsapp_number_id) ?? 0) + 1);
-      if (!lastOutbound.has(e.whatsapp_number_id)) lastOutbound.set(e.whatsapp_number_id, e.received_at);
+  for (const m of (outMsgs ?? []) as Array<{ conversation_id: string; direction: string }>) {
+    if (m.direction !== "outbound") continue;
+    const nid = convToNum.get(m.conversation_id);
+    if (!nid) continue;
+    totalSent.set(nid, (totalSent.get(nid) ?? 0) + 1);
+  }
+  // campaign recipients sent/failed
+  for (const r of (recipients ?? []) as Array<{ whatsapp_number_id: string | null; status: string }>) {
+    if (!r.whatsapp_number_id) continue;
+    if (r.status === "sent" || r.status === "delivered" || r.status === "read") {
+      totalSent.set(r.whatsapp_number_id, (totalSent.get(r.whatsapp_number_id) ?? 0) + 1);
     }
-    if (isError) {
-      totalErrors.set(e.whatsapp_number_id, (totalErrors.get(e.whatsapp_number_id) ?? 0) + 1);
-      if (e.error_message && !lastError.has(e.whatsapp_number_id)) lastError.set(e.whatsapp_number_id, e.error_message);
+    if (r.status === "failed") {
+      totalErrors.set(r.whatsapp_number_id, (totalErrors.get(r.whatsapp_number_id) ?? 0) + 1);
     }
   }
+  // webhook failed events
+  for (const e of lastEvents ?? []) {
+    if (!e.whatsapp_number_id) continue;
+    if (e.event_type === "failed" || e.event_type === "error") {
+      totalErrors.set(e.whatsapp_number_id, (totalErrors.get(e.whatsapp_number_id) ?? 0) + 1);
+    }
+  }
+  // last campaign per number
+  const lastCampaignAt = new Map<string, string>();
+  const lastCampaignName = new Map<string, string>();
+  for (const c of (campaignsData ?? []) as Array<{ name: string; whatsapp_number_id: string | null; scheduled_start_at: string | null; created_at: string }>) {
+    if (!c.whatsapp_number_id) continue;
+    const ts = c.scheduled_start_at ?? c.created_at;
+    const cur = lastCampaignAt.get(c.whatsapp_number_id);
+    if (!cur || ts > cur) {
+      lastCampaignAt.set(c.whatsapp_number_id, ts);
+      lastCampaignName.set(c.whatsapp_number_id, c.name);
+    }
+  }
+
 
   const rows: Row[] = (numbers ?? []).map((n: Record<string, unknown>) => {
     const ws = n.workspace_id ? wsMap.get(n.workspace_id as string) : null;
@@ -149,9 +172,8 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       workspace_slug: ws?.slug ?? "",
       templates_total: t.total,
       templates_approved: t.approved,
-      last_inbound: lastInbound.get(n.id as string) ?? null,
-      last_outbound: lastOutbound.get(n.id as string) ?? null,
-      last_error: lastError.get(n.id as string) ?? null,
+      last_campaign_at: lastCampaignAt.get(n.id as string) ?? null,
+      last_campaign_name: lastCampaignName.get(n.id as string) ?? null,
       total_sent: totalSent.get(n.id as string) ?? 0,
       total_errors: totalErrors.get(n.id as string) ?? 0,
       errors_since_unban: errorsSinceUnban,
@@ -489,9 +511,7 @@ function FleetHeaders({ showClient }: { showClient: boolean }) {
       <TableHead>Sent</TableHead>
       <TableHead>Errors</TableHead>
       <TableHead>Ban</TableHead>
-      <TableHead>Last in</TableHead>
-      <TableHead>Last out</TableHead>
-      <TableHead>Last error</TableHead>
+      <TableHead>Last campaign</TableHead>
       <TableHead></TableHead>
     </>
   );
@@ -558,9 +578,7 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
         ) : null}
       </TableCell>
       <TableCell className="text-xs whitespace-nowrap"><BanCell r={r} /></TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_inbound ? formatDistanceToNow(new Date(r.last_inbound), { addSuffix: true }) : "—"}</TableCell>
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_outbound ? formatDistanceToNow(new Date(r.last_outbound), { addSuffix: true }) : "—"}</TableCell>
-      <TableCell className="text-xs text-red-600 max-w-[180px] truncate" title={r.last_error ?? ""}>{r.last_error ?? "—"}</TableCell>
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap" title={r.last_campaign_name ?? ""}>{r.last_campaign_at ? formatDistanceToNow(new Date(r.last_campaign_at), { addSuffix: true }) : "—"}</TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(r)} title="Edit">
