@@ -29,34 +29,78 @@ serve(async (req) => {
 
     const callbackUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-webhook`;
 
-    // Try multiple Gupshup endpoints (account type varies)
-    const endpoints = [
-      { url: `https://api.gupshup.io/sm/api/v1/app/${number.provider_app_id}/callback`, method: "PUT" },
-      { url: `https://api.gupshup.io/wa/app/${number.provider_app_id}/callback/inbound`, method: "PUT" },
-    ];
-    const attempts: Array<{ url: string; status: number; body: string }> = [];
+    const isPartnerKey = apiKey.startsWith("sk_");
+    const attempts: Array<{ url: string; method: string; status: number; body: string; auth: string }> = [];
     let success = false;
-    for (const ep of endpoints) {
-      const form = new URLSearchParams();
-      form.set("callbackUrl", callbackUrl);
-      const res = await fetch(ep.url, {
-        method: ep.method,
-        headers: { apikey: apiKey, "Content-Type": "application/x-www-form-urlencoded" },
-        body: form.toString(),
-      });
-      const text = await res.text();
-      attempts.push({ url: ep.url, status: res.status, body: text.slice(0, 300) });
-      if (res.ok) { success = true; break; }
+
+    const tryEndpoint = async (url: string, method: string, headers: Record<string, string>, body: string, authLabel: string) => {
+      try {
+        const res = await fetch(url, { method, headers, body });
+        const text = await res.text();
+        attempts.push({ url, method, status: res.status, body: text.slice(0, 300), auth: authLabel });
+        return res.ok;
+      } catch (e) {
+        attempts.push({ url, method, status: 0, body: e instanceof Error ? e.message : "fetch error", auth: authLabel });
+        return false;
+      }
+    };
+
+    const form = () => {
+      const f = new URLSearchParams();
+      f.set("callbackUrl", callbackUrl);
+      return f.toString();
+    };
+
+    // 1) Partner API (works with sk_ partner tokens). Needs partner login token, not the sk_ directly.
+    //    Try the partner-app endpoint first using the sk_ as Authorization (some accounts accept it).
+    if (isPartnerKey) {
+      const partnerUrl = `https://partner.gupshup.io/partner/app/${number.provider_app_id}/callbackUrl`;
+      success = await tryEndpoint(
+        partnerUrl,
+        "PUT",
+        { Authorization: apiKey, "Content-Type": "application/x-www-form-urlencoded" },
+        form(),
+        "partner sk_",
+      );
+    }
+
+    // 2) Standard app apikey endpoint
+    if (!success) {
+      success = await tryEndpoint(
+        `https://api.gupshup.io/sm/api/v1/app/${number.provider_app_id}/callback`,
+        "PUT",
+        { apikey: apiKey, "Content-Type": "application/x-www-form-urlencoded" },
+        form(),
+        "app apikey",
+      );
+    }
+
+    // 3) Try with global app key fallback if per-number key failed
+    const globalKey = Deno.env.get("GUPSHUP_API_KEY");
+    if (!success && globalKey && globalKey !== apiKey) {
+      success = await tryEndpoint(
+        `https://api.gupshup.io/sm/api/v1/app/${number.provider_app_id}/callback`,
+        "PUT",
+        { apikey: globalKey, "Content-Type": "application/x-www-form-urlencoded" },
+        form(),
+        "global apikey",
+      );
     }
 
     if (success) {
       await admin.from("whatsapp_numbers").update({ connected_in_gupshup: true }).eq("id", number_id);
     }
 
-    return new Response(JSON.stringify({ ok: success, callbackUrl, attempts }), {
-      status: success ? 200 : 502,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Return 200 even on failure so the client can show actionable details (avoids generic 502 in browser)
+    return new Response(
+      JSON.stringify({
+        ok: success,
+        callbackUrl,
+        manualInstructions: success ? null : "Auto-registration failed. In Gupshup app dashboard, open Settings → Callback URL and paste the callbackUrl above. Enable inbound message events.",
+        attempts,
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "unknown";
     return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
