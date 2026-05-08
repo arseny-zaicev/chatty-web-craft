@@ -843,6 +843,45 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_library_fields: {
+        Row: {
+          created_at: string
+          id: string
+          is_builtin: boolean
+          key: string
+          label: string
+          position: number
+          type: string
+          updated_at: string
+          value: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_builtin?: boolean
+          key: string
+          label: string
+          position?: number
+          type?: string
+          updated_at?: string
+          value?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_builtin?: boolean
+          key?: string
+          label?: string
+          position?: number
+          type?: string
+          updated_at?: string
+          value?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_members: {
         Row: {
           created_at: string
@@ -874,6 +913,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      workspace_saved_replies: {
+        Row: {
+          body: string
+          created_at: string
+          folder: string | null
+          id: string
+          is_favorite: boolean
+          last_used_at: string | null
+          position: number
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          folder?: string | null
+          id?: string
+          is_favorite?: boolean
+          last_used_at?: string | null
+          position?: number
+          tags?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          folder?: string | null
+          id?: string
+          is_favorite?: boolean
+          last_used_at?: string | null
+          position?: number
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       workspaces: {
         Row: {
