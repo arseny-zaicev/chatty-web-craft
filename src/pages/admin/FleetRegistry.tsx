@@ -650,13 +650,13 @@ function AddNumberDrawer({
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("draft");
-  const [dnApproved, setDnApproved] = useState(false);
+  
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft"); setDnApproved(false);
+    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
   };
 
   useEffect(() => {
@@ -675,7 +675,7 @@ function AddNumberDrawer({
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
       setStatus(editing.status);
-      setDnApproved(editing.display_name_approved);
+      
     } else {
       reset();
     }
@@ -703,13 +703,8 @@ function AddNumberDrawer({
         restrictionPatch.restricted_at = null;
       }
 
-      // Display name: track when admin last confirmed
-      const dnPatch: Record<string, unknown> = {
-        display_name_approved: dnApproved,
-      };
-      if (editing?.display_name_approved !== dnApproved) {
-        dnPatch.display_name_checked_at = new Date().toISOString();
-      }
+      // Display name status is edited inline from the table - no patch needed here.
+      const dnPatch: Record<string, unknown> = {};
 
       const payload = {
         phone_number: cleanPhone,
@@ -848,16 +843,8 @@ function AddNumberDrawer({
             )}
           </Field>
 
-          <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
-            <div>
-              <div className="text-sm font-medium">Display name approved by Meta</div>
-              <div className="text-xs text-muted-foreground">
-                Manual flag - check Gupshup app dashboard. {editing?.display_name_checked_at
-                  ? `Last confirmed ${formatDistanceToNow(new Date(editing.display_name_checked_at), { addSuffix: true })}.`
-                  : "Not confirmed yet."}
-              </div>
-            </div>
-            <Switch checked={dnApproved} onCheckedChange={setDnApproved} />
+          <div className="text-[11px] text-muted-foreground italic">
+            Status & Display Name approval can also be edited inline from the Fleet table.
           </div>
 
           <Field label="Use for">
