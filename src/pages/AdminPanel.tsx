@@ -25,6 +25,7 @@ const ADMIN_EMAIL = "arseny@iskra.ae";
 type Section =
   | "companies.portfolio"
   | "companies.fleet"
+  | "companies.analytics"
   | "forms.submissions"
   | "forms.analytics"
   | "site.analytics";
@@ -42,6 +43,7 @@ const NAV: NavGroup[] = [
     items: [
       { id: "companies.portfolio", label: "Portfolio", icon: LayoutDashboard },
       { id: "companies.fleet", label: "Fleet · Numbers", icon: Phone, external: "/admin/fleet" },
+      { id: "companies.analytics", label: "Fleet analytics", icon: BarChart3, external: "/admin/analytics" },
     ],
   },
   {
