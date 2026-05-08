@@ -439,8 +439,84 @@ async function processQueue(admin: any) {
     }).eq("id", id);
   }
 
-  return json({ ok: true, processed: (due ?? []).length, sent, failed });
 }
+
+async function blastCampaign(admin: any, requesterId: string, body: any) {
+  const campaignId = String(body.campaign_id || "");
+  if (!uuidRegex.test(campaignId)) return json({ error: "campaign_id required" }, 400);
+
+  const { data: campaign } = await admin
+    .from("campaigns")
+    .select("id, user_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(name, language, variables, provider_template_id)")
+    .eq("id", campaignId)
+    .maybeSingle();
+  if (!campaign) return json({ error: "Campaign not found" }, 404);
+  if (!(await canAccessUser(admin, requesterId, campaign.user_id))) return json({ error: "Forbidden" }, 403);
+
+  const { data: recipients, error: recipErr } = await admin
+    .from("campaign_recipients")
+    .select("id, user_id, conversation_id, contact_phone, contact_name, variables, campaign_id")
+    .eq("campaign_id", campaignId)
+    .in("status", ["pending", "scheduled"])
+    .limit(1000);
+  if (recipErr) return json({ error: recipErr.message }, 500);
+  if (!recipients?.length) return json({ ok: true, processed: 0, note: "no scheduled recipients" });
+
+  // Lock all
+  const ids = recipients.map((r: any) => r.id);
+  await admin.from("campaign_recipients").update({ status: "sending" }).in("id", ids);
+
+  const t0 = Date.now();
+  const results = await Promise.allSettled(
+    recipients.map(async (r: any) => {
+      const tStart = Date.now();
+      try {
+        const gsBody = await sendTemplate(admin, { ...r, campaigns: campaign });
+        const tEnd = Date.now();
+        const providerId = gsBody.messageId || null;
+        await admin.from("campaign_recipients").update({
+          status: "sent",
+          sent_at: new Date(tEnd).toISOString(),
+          provider_message_id: providerId,
+        }).eq("id", r.id);
+        return { id: r.id, phone: r.contact_phone, ok: true, ms: tEnd - tStart, offset_ms: tStart - t0, end_offset_ms: tEnd - t0, providerId };
+      } catch (err) {
+        const tEnd = Date.now();
+        const msg = err instanceof Error ? err.message : "send failed";
+        await admin.from("campaign_recipients").update({ status: "failed", error_message: msg.slice(0, 500) }).eq("id", r.id);
+        return { id: r.id, phone: r.contact_phone, ok: false, ms: tEnd - tStart, offset_ms: tStart - t0, end_offset_ms: tEnd - t0, error: msg.slice(0, 300) };
+      }
+    }),
+  );
+  const tTotal = Date.now() - t0;
+
+  const flat = results.map((r: any) => r.status === "fulfilled" ? r.value : { ok: false, error: String(r.reason).slice(0, 300) });
+  const sent = flat.filter((r: any) => r.ok).length;
+  const failed = flat.length - sent;
+
+  await admin.from("campaigns").update({
+    sent_count: sent,
+    failed_count: failed,
+    status: "completed",
+  }).eq("id", campaignId);
+
+  // Timing summary
+  const okTimes = flat.filter((r: any) => r.ok).map((r: any) => r.ms);
+  const sortedEnd = flat.map((r: any) => r.end_offset_ms ?? 0).sort((a, b) => a - b);
+  const summary = {
+    total: flat.length,
+    sent,
+    failed,
+    total_wallclock_ms: tTotal,
+    per_send_ms_avg: okTimes.length ? Math.round(okTimes.reduce((a, b) => a + b, 0) / okTimes.length) : null,
+    per_send_ms_min: okTimes.length ? Math.min(...okTimes) : null,
+    per_send_ms_max: okTimes.length ? Math.max(...okTimes) : null,
+    p50_finish_ms: sortedEnd[Math.floor(sortedEnd.length * 0.5)] ?? null,
+    p95_finish_ms: sortedEnd[Math.floor(sortedEnd.length * 0.95)] ?? null,
+    p100_finish_ms: sortedEnd[sortedEnd.length - 1] ?? null,
+  };
+
+  return json({ ok: true, summary, results: flat });
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
