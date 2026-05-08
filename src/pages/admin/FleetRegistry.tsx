@@ -582,9 +582,9 @@ function AddNumberDrawer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Phone className="w-4 h-4 text-primary" />Add WhatsApp number</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Phone className="w-4 h-4 text-primary" />{editing ? "Edit WhatsApp number" : "Add WhatsApp number"}</DialogTitle>
           <DialogDescription>
-            Numbers are managed centrally in Fleet. Save as Unassigned now and allocate later, or pick a client below.
+            {editing ? "Update fields and save. Allocation, credentials and metadata can all be changed here." : "Numbers are managed centrally in Fleet. Save as Unassigned now and allocate later, or pick a client below."}
           </DialogDescription>
         </DialogHeader>
 
