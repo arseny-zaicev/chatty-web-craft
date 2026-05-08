@@ -2,7 +2,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
-  Inbox, KanbanSquare, Megaphone, Rocket, BarChart3, BookOpen, Settings as SettingsIcon,
+  Inbox, Megaphone, Rocket,
   Phone, FileText, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, Clock, Loader2,
   Globe, ExternalLink,
 } from "lucide-react";
