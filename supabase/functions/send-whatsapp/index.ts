@@ -89,12 +89,43 @@ serve(async (req) => {
       });
     }
 
-    // Prefer per-number app key when it looks like an app apikey (not a partner sk_ token).
-    // Partner sk_ tokens don't work with /wa/api/v1/msg directly, so fall back to global GUPSHUP_API_KEY.
-    const perNumberKey = number.provider_api_key && !number.provider_api_key.startsWith("sk_")
-      ? number.provider_api_key
-      : null;
-    const GUPSHUP_API_KEY = perNumberKey || Deno.env.get("GUPSHUP_API_KEY");
+    // Resolve which apikey to use:
+    // 1) per-number app apikey (not sk_) → use directly
+    // 2) per-number partner sk_ token → exchange for app token via Partner API
+    // 3) otherwise → global GUPSHUP_API_KEY (only correct if it belongs to THIS app)
+    let GUPSHUP_API_KEY: string | null = null;
+    let keyType: "per-number-app" | "partner-exchanged" | "global" | "none" = "none";
+    let exchangeDebug: unknown = null;
+
+    if (number.provider_api_key && !number.provider_api_key.startsWith("sk_")) {
+      GUPSHUP_API_KEY = number.provider_api_key;
+      keyType = "per-number-app";
+    } else if (number.provider_api_key?.startsWith("sk_") && number.provider_app_id) {
+      // Exchange partner token for app-scoped token
+      try {
+        const exRes = await fetch(
+          `https://partner.gupshup.io/partner/app/${number.provider_app_id}/token`,
+          { method: "GET", headers: { Authorization: number.provider_api_key } },
+        );
+        const exBody = await exRes.json().catch(() => ({}));
+        exchangeDebug = { status: exRes.status, body: exBody };
+        const token = (exBody as Record<string, unknown>)?.token as
+          | { token?: string }
+          | string
+          | undefined;
+        const appToken = typeof token === "string" ? token : token?.token;
+        if (exRes.ok && appToken) {
+          GUPSHUP_API_KEY = appToken;
+          keyType = "partner-exchanged";
+        }
+      } catch (e) {
+        exchangeDebug = { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+    if (!GUPSHUP_API_KEY) {
+      GUPSHUP_API_KEY = Deno.env.get("GUPSHUP_API_KEY") ?? null;
+      if (GUPSHUP_API_KEY) keyType = "global";
+    }
     if (!GUPSHUP_API_KEY) {
       return new Response(JSON.stringify({ error: "No Gupshup API key available for this number" }), {
         status: 500,
@@ -123,30 +154,36 @@ serve(async (req) => {
       body: form.toString(),
     });
     const gsBody = await gsRes.json().catch(() => ({} as Record<string, unknown>));
-    console.log("Gupshup send response", gsRes.status, JSON.stringify(gsBody), "src.name=", number.display_name, "src=", source, "dst=", destination, "keyType=", perNumberKey ? "per-number" : "global");
+    console.log("Gupshup send response", gsRes.status, JSON.stringify(gsBody), "src.name=", number.display_name, "src=", source, "dst=", destination, "keyType=", keyType);
 
     const providerMessageId = (gsBody as Record<string, unknown>).messageId as string | undefined;
     const gsStatus = (gsBody as Record<string, unknown>).status as string | undefined;
     const accepted = gsRes.ok && !!providerMessageId && gsStatus !== "error";
 
+    const debug = {
+      src_name: number.display_name ?? null,
+      source,
+      destination,
+      key_type: keyType,
+      partner_exchange: exchangeDebug,
+      http_status: gsRes.status,
+      provider_status: gsStatus ?? null,
+      provider_message: (gsBody as Record<string, unknown>).message ?? null,
+      provider_message_id: providerMessageId ?? null,
+      provider_body: gsBody,
+    };
+
     if (!accepted) {
-      // Persist failed message for visibility
       await admin.from("messages").insert({
         user_id: conv.user_id,
         conversation_id: conv.id,
         direction: "outbound",
         body: text,
         status: "failed",
-        metadata: { gupshup_response: gsBody, http_status: gsRes.status },
+        metadata: { gupshup_response: gsBody, http_status: gsRes.status, debug },
       });
       return new Response(
-        JSON.stringify({
-          error: "Gupshup did not accept the message",
-          http_status: gsRes.status,
-          provider_status: gsStatus ?? null,
-          provider_message: (gsBody as Record<string, unknown>).message ?? null,
-          details: gsBody,
-        }),
+        JSON.stringify({ error: "Gupshup did not accept the message", debug }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -160,7 +197,7 @@ serve(async (req) => {
         body: text,
         status: "sent",
         provider_message_id: providerMessageId,
-        metadata: { gupshup_response: gsBody },
+        metadata: { gupshup_response: gsBody, debug },
       })
       .select("id, created_at")
       .single();
@@ -174,7 +211,7 @@ serve(async (req) => {
       .eq("id", conv.id);
 
     return new Response(
-      JSON.stringify({ ok: true, message_id: inserted?.id, provider_message_id: providerMessageId }),
+      JSON.stringify({ ok: true, message_id: inserted?.id, provider_message_id: providerMessageId, debug }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: unknown) {

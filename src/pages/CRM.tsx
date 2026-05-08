@@ -44,6 +44,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [lastSendDebug, setLastSendDebug] = useState<Record<string, unknown> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: baseData, isLoading } = useQuery({
@@ -65,18 +66,20 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
         body: { conversation_id: activeId, text: draft.trim() },
       });
       if (error) {
-        // Try to extract provider error body from the function response
         let detail = error.message;
         const ctx = (error as { context?: Response }).context;
         if (ctx && typeof ctx.json === "function") {
           try {
             const body = await ctx.json();
-            detail = body?.provider_message || body?.error || JSON.stringify(body);
+            if (body?.debug) setLastSendDebug(body.debug);
+            detail = body?.debug?.provider_message || body?.debug?.provider_status || body?.error || JSON.stringify(body);
           } catch { /* ignore */ }
         }
-        throw new Error(detail);
+        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
       }
-      if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+      const d = data as { error?: string; debug?: Record<string, unknown> };
+      if (d?.debug) setLastSendDebug(d.debug);
+      if (d?.error) throw new Error(d.error);
       setDraft("");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send";
@@ -602,6 +605,23 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     </Button>
                   </div>
+                  {lastSendDebug && (
+                    <div className="mt-2 rounded border border-border bg-muted/40 p-2 text-[11px] font-mono leading-tight text-muted-foreground overflow-auto max-h-48">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-foreground">Last send debug</span>
+                        <button className="underline" onClick={() => setLastSendDebug(null)}>clear</button>
+                      </div>
+                      <div>src.name: <span className="text-foreground">{String(lastSendDebug.src_name)}</span></div>
+                      <div>source: <span className="text-foreground">{String(lastSendDebug.source)}</span></div>
+                      <div>destination: <span className="text-foreground">{String(lastSendDebug.destination)}</span></div>
+                      <div>key_type: <span className="text-foreground">{String(lastSendDebug.key_type)}</span></div>
+                      <div>http_status: <span className="text-foreground">{String(lastSendDebug.http_status)}</span></div>
+                      <div>provider_status: <span className="text-foreground">{String(lastSendDebug.provider_status)}</span></div>
+                      <div>provider_message_id: <span className="text-foreground">{String(lastSendDebug.provider_message_id)}</span></div>
+                      <div>provider_message: <span className="text-foreground">{String(lastSendDebug.provider_message)}</span></div>
+                      <pre className="mt-1 whitespace-pre-wrap break-all">{JSON.stringify(lastSendDebug.provider_body, null, 2)}</pre>
+                    </div>
+                  )}
                 </div>
               </>
             )}
