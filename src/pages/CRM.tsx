@@ -375,7 +375,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                     }`}
                     title={`+${n.phone_number}`}
                   >
-                    {n.display_name ?? `+${n.phone_number}`}
+                    {friendlySenderLabel(n)}
                   </button>
                 ))}
                 <button
