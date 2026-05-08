@@ -255,6 +255,32 @@ export default function FleetRegistry() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
 
+  // Inline quick edits (status, DN status) without opening the drawer
+  const quickPatch = useMutation({
+    mutationFn: async ({ row, patch }: { row: Row; patch: Partial<Pick<Row, "status" | "display_name_status">> }) => {
+      const update: Record<string, unknown> = { ...patch };
+      // 30-day ban countdown logic for inline status changes
+      if (patch.status) {
+        const wasBanned = row.status === "restricted" || row.status === "banned";
+        const isBanned = patch.status === "restricted" || patch.status === "banned";
+        if (!wasBanned && isBanned) update.restricted_at = new Date().toISOString();
+        else if (wasBanned && !isBanned) {
+          update.unrestricted_at = new Date().toISOString();
+          update.restricted_at = null;
+        }
+      }
+      if (patch.display_name_status && patch.display_name_status !== row.display_name_status) {
+        update.display_name_checked_at = new Date().toISOString();
+      }
+      const { error } = await supabase.from("whatsapp_numbers").update(update).eq("id", row.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
+  });
+
   if (!authChecked || isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
