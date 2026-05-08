@@ -1,12 +1,11 @@
-import { Link, Outlet, useNavigate, useParams } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WorkspaceSidebar } from "@/components/workspace/WorkspaceSidebar";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
