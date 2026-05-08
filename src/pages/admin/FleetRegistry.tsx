@@ -483,8 +483,8 @@ function ReassignInline({ value, workspaces, onChange }: { value: string | null;
 
 // Add Number drawer ---------------------------------------------------------
 function AddNumberDrawer({
-  open, onOpenChange, workspaces, onCreated,
-}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; onCreated: () => Promise<void> | void }) {
+  open, onOpenChange, workspaces, editing, onCreated,
+}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; editing?: Row | null; onCreated: () => Promise<void> | void }) {
   const [phone, setPhone] = useState("");
   const [appName, setAppName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -506,6 +506,27 @@ function AddNumberDrawer({
     setProvidedBy(""); setAssignedRef("");
   };
 
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setPhone(editing.phone_number || "");
+      setAppName(editing.label || "");
+      setDisplayName(editing.display_name || "");
+      setProfileAvatar((editing.profile_avatar as "man" | "woman") || "");
+      setAppId(editing.provider_app_id || "");
+      setApiKey(editing.provider_api_key || "");
+      setWabaId(editing.provider_waba_id || "");
+      setMessagingLimit(editing.messaging_limit || "");
+      setWorkspaceId(editing.workspace_id ?? "__unassigned__");
+      setIsWarming(editing.is_warming);
+      setUsage(editing.usage_type);
+      setProvidedBy(editing.provided_by || "");
+      setAssignedRef(editing.assigned_ref || "");
+    } else {
+      reset();
+    }
+  }, [open, editing]);
+
   const create = useMutation({
     mutationFn: async () => {
       const cleanPhone = phone.replace(/[^\d]/g, "");
@@ -513,14 +534,8 @@ function AddNumberDrawer({
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sign in required");
 
-      const { data: existing } = await supabase.from("whatsapp_numbers")
-        .select("id").eq("phone_number", cleanPhone).maybeSingle();
-      if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
-
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
-      const { error } = await supabase.from("whatsapp_numbers").insert({
-        user_id: auth.user.id,
-        workspace_id: targetWs,
+      const payload = {
         phone_number: cleanPhone,
         label: appName || null,
         display_name: displayName || appName || null,
@@ -534,12 +549,28 @@ function AddNumberDrawer({
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
-        status: isWarming ? "warming" : "draft",
-      });
-      if (error) throw error;
+      };
+
+      if (editing) {
+        const { error } = await supabase.from("whatsapp_numbers")
+          .update({ ...payload, workspace_id: targetWs })
+          .eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { data: existing } = await supabase.from("whatsapp_numbers")
+          .select("id").eq("phone_number", cleanPhone).maybeSingle();
+        if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
+        const { error } = await supabase.from("whatsapp_numbers").insert({
+          ...payload,
+          user_id: auth.user.id,
+          workspace_id: targetWs,
+          status: isWarming ? "warming" : "draft",
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: async () => {
-      toast.success("Number added to Fleet");
+      toast.success(editing ? "Number updated" : "Number added to Fleet");
       reset();
       onOpenChange(false);
       await onCreated();
