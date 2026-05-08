@@ -518,6 +518,7 @@ async function blastCampaign(admin: any, requesterId: string, body: any) {
   };
 
   return json({ ok: true, summary, results: flat });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
