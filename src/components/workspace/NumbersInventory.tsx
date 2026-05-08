@@ -227,18 +227,21 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   </div>
                 </div>
 
-                <div className="text-[11px] text-muted-foreground break-all">
-                  Inbound webhook URL (paste into Gupshup app → Callback URL if auto-set fails):
-                  <code className="ml-1 px-1 py-0.5 rounded bg-muted">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
-                </div>
+                <details className="text-[11px] text-muted-foreground">
+                  <summary className="cursor-pointer hover:text-foreground select-none">Show inbound webhook URL (advanced)</summary>
+                  <div className="mt-1 break-all">
+                    Paste this into the Gupshup app → Callback URL if auto-configure fails:
+                    <code className="ml-1 px-1 py-0.5 rounded bg-muted">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
+                  </div>
+                </details>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <Field label="Label"><Input value={draft.label ?? ""} onChange={(e) => update(n.id, { label: e.target.value })} /></Field>
+                  <Field label="Country / sender label"><Input value={draft.label ?? ""} onChange={(e) => update(n.id, { label: e.target.value })} placeholder="UAE main" /></Field>
                   <Field label="Partner / Source"><Input value={draft.partner_source ?? ""} onChange={(e) => update(n.id, { partner_source: e.target.value })} placeholder="Gupshup, 360dialog, etc." /></Field>
                   <Field label="BM name"><Input value={draft.bm_name ?? ""} onChange={(e) => update(n.id, { bm_name: e.target.value })} placeholder="Business Manager" /></Field>
-                  <Field label="Display name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} /></Field>
+                  <Field label="Gupshup app name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} placeholder="01Ashik02" /></Field>
                   <Field label="Phone (digits)"><Input value={draft.phone_number} onChange={(e) => update(n.id, { phone_number: e.target.value.replace(/[^\d]/g, "") })} /></Field>
-                  <Field label="App ID"><Input value={draft.provider_app_id ?? ""} onChange={(e) => update(n.id, { provider_app_id: e.target.value })} /></Field>
+                  <Field label="Gupshup app ID"><Input value={draft.provider_app_id ?? ""} onChange={(e) => update(n.id, { provider_app_id: e.target.value })} /></Field>
                   <Field label="API key (per-number)"><Input value={draft.provider_api_key ?? ""} onChange={(e) => update(n.id, { provider_api_key: e.target.value })} placeholder="leave blank to use global key" /></Field>
                   <div className="flex items-end">
                     <Toggle label="Active (sending allowed)" checked={draft.is_active} onChange={(v) => update(n.id, { is_active: v })} />
