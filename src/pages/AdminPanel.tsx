@@ -6,23 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
-  Loader2,
-  LogOut,
-  Plus,
-  Sparkles,
-  Building2,
-  Rocket,
-  Inbox,
-  KanbanSquare,
-  Megaphone,
-  FileText,
-  Activity,
-  ArrowRight,
+  Loader2, LogOut, Plus, Sparkles, Building2, Rocket, Inbox, KanbanSquare, Megaphone, FileText,
+  Activity, ArrowRight, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, BarChart3,
+  Phone, LayoutDashboard, Clock,
 } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
-import { fetchWorkspaces, workspaceKeys } from "@/lib/workspaces";
+import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
+import { fetchPortfolioSnapshot, portfolioKeys, type PortfolioSnapshot } from "@/lib/portfolioMetrics";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNow } from "date-fns";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
