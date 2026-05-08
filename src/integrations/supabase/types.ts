@@ -785,6 +785,7 @@ export type Database = {
           bm_name: string | null
           connected_in_gupshup: boolean
           connected_in_iskra: boolean
+          country_code: string | null
           created_at: string
           display_name: string | null
           id: string
@@ -797,14 +798,18 @@ export type Database = {
           provider_api_key: string | null
           provider_app_id: string | null
           provider_waba_id: string | null
+          status: Database["public"]["Enums"]["whatsapp_number_status"]
           updated_at: string
+          usage_type: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id: string
+          webhook_connected: boolean
           workspace_id: string
         }
         Insert: {
           bm_name?: string | null
           connected_in_gupshup?: boolean
           connected_in_iskra?: boolean
+          country_code?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
@@ -817,14 +822,18 @@ export type Database = {
           provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
+          status?: Database["public"]["Enums"]["whatsapp_number_status"]
           updated_at?: string
+          usage_type?: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id: string
+          webhook_connected?: boolean
           workspace_id: string
         }
         Update: {
           bm_name?: string | null
           connected_in_gupshup?: boolean
           connected_in_iskra?: boolean
+          country_code?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
@@ -837,8 +846,11 @@ export type Database = {
           provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
+          status?: Database["public"]["Enums"]["whatsapp_number_status"]
           updated_at?: string
+          usage_type?: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id?: string
+          webhook_connected?: boolean
           workspace_id?: string
         }
         Relationships: []
@@ -1052,6 +1064,14 @@ export type Database = {
         | "meeting_booked"
         | "started"
       template_category: "marketing" | "utility" | "authentication"
+      whatsapp_number_status:
+        | "draft"
+        | "ready"
+        | "warming"
+        | "restricted"
+        | "banned"
+        | "inactive"
+      whatsapp_number_usage: "marketing" | "utility" | "both"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1214,6 +1234,15 @@ export const Constants = {
         "started",
       ],
       template_category: ["marketing", "utility", "authentication"],
+      whatsapp_number_status: [
+        "draft",
+        "ready",
+        "warming",
+        "restricted",
+        "banned",
+        "inactive",
+      ],
+      whatsapp_number_usage: ["marketing", "utility", "both"],
     },
   },
 } as const

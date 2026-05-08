@@ -34,7 +34,9 @@ export async function fetchLaunchEssentials(workspaceId?: string) {
   let numbersQuery = supabase
     .from("whatsapp_numbers")
     .select("id, phone_number, display_name, label, workspace_id, is_active, provider_api_key, provider_app_id")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    // Exclude numbers that should not be picked up by Launch
+    .not("status", "in", "(restricted,banned,inactive)");
   let templatesQuery = supabase
     .from("message_templates")
     .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, buttons, provider_template_id, synced_at")
