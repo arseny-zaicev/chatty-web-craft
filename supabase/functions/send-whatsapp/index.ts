@@ -154,30 +154,36 @@ serve(async (req) => {
       body: form.toString(),
     });
     const gsBody = await gsRes.json().catch(() => ({} as Record<string, unknown>));
-    console.log("Gupshup send response", gsRes.status, JSON.stringify(gsBody), "src.name=", number.display_name, "src=", source, "dst=", destination, "keyType=", perNumberKey ? "per-number" : "global");
+    console.log("Gupshup send response", gsRes.status, JSON.stringify(gsBody), "src.name=", number.display_name, "src=", source, "dst=", destination, "keyType=", keyType);
 
     const providerMessageId = (gsBody as Record<string, unknown>).messageId as string | undefined;
     const gsStatus = (gsBody as Record<string, unknown>).status as string | undefined;
     const accepted = gsRes.ok && !!providerMessageId && gsStatus !== "error";
 
+    const debug = {
+      src_name: number.display_name ?? null,
+      source,
+      destination,
+      key_type: keyType,
+      partner_exchange: exchangeDebug,
+      http_status: gsRes.status,
+      provider_status: gsStatus ?? null,
+      provider_message: (gsBody as Record<string, unknown>).message ?? null,
+      provider_message_id: providerMessageId ?? null,
+      provider_body: gsBody,
+    };
+
     if (!accepted) {
-      // Persist failed message for visibility
       await admin.from("messages").insert({
         user_id: conv.user_id,
         conversation_id: conv.id,
         direction: "outbound",
         body: text,
         status: "failed",
-        metadata: { gupshup_response: gsBody, http_status: gsRes.status },
+        metadata: { gupshup_response: gsBody, http_status: gsRes.status, debug },
       });
       return new Response(
-        JSON.stringify({
-          error: "Gupshup did not accept the message",
-          http_status: gsRes.status,
-          provider_status: gsStatus ?? null,
-          provider_message: (gsBody as Record<string, unknown>).message ?? null,
-          details: gsBody,
-        }),
+        JSON.stringify({ error: "Gupshup did not accept the message", debug }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -191,7 +197,7 @@ serve(async (req) => {
         body: text,
         status: "sent",
         provider_message_id: providerMessageId,
-        metadata: { gupshup_response: gsBody },
+        metadata: { gupshup_response: gsBody, debug },
       })
       .select("id, created_at")
       .single();
@@ -205,7 +211,7 @@ serve(async (req) => {
       .eq("id", conv.id);
 
     return new Response(
-      JSON.stringify({ ok: true, message_id: inserted?.id, provider_message_id: providerMessageId }),
+      JSON.stringify({ ok: true, message_id: inserted?.id, provider_message_id: providerMessageId, debug }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: unknown) {
