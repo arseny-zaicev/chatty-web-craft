@@ -206,6 +206,20 @@ serve(async (req) => {
           exchangeDebug = { error: e instanceof Error ? e.message : String(e) };
         }
       }
+
+      if ((gsRes.status === 401 || gsRes.status === 403) && fallbackApiKey && fallbackApiKey !== storedApiKey) {
+        const fallbackSend = await sendTextMessage({
+          apiKey: fallbackApiKey,
+          source,
+          destination,
+          text,
+          srcName: number.display_name ?? null,
+        });
+        gsRes = fallbackSend.response;
+        gsBody = fallbackSend.body as Record<string, unknown>;
+        keyType = "global";
+        sendAttempts.push({ key_type: keyType, http_status: gsRes.status, provider_body: gsBody });
+      }
     } else if (fallbackApiKey) {
       const fallbackSend = await sendTextMessage({
         apiKey: fallbackApiKey,
