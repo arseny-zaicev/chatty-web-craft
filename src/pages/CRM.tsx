@@ -64,7 +64,18 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
       const { data, error } = await supabase.functions.invoke("send-whatsapp", {
         body: { conversation_id: activeId, text: draft.trim() },
       });
-      if (error) throw error;
+      if (error) {
+        // Try to extract provider error body from the function response
+        let detail = error.message;
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === "function") {
+          try {
+            const body = await ctx.json();
+            detail = body?.provider_message || body?.error || JSON.stringify(body);
+          } catch { /* ignore */ }
+        }
+        throw new Error(detail);
+      }
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
       setDraft("");
     } catch (err) {
