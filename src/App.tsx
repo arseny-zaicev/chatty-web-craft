@@ -98,7 +98,7 @@ const App = () => (
                 <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />
                 <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
                 <Route path=":slug/library" element={<WorkspaceSection section="library" />} />
-                <Route path=":slug/reporting" element={<WorkspaceReporting />} />
+                <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
                 <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
               </Route>
