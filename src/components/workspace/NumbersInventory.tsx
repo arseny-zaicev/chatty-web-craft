@@ -200,12 +200,36 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     {running.length > 0 && (
                       <span className="text-[11px] text-muted-foreground">campaigns: {running.map((r) => r.campaign_name).join(", ")}</span>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!draft.provider_app_id}
+                      onClick={async () => {
+                        const t = toast.loading("Registering Gupshup callback...");
+                        const { data, error } = await supabase.functions.invoke("gupshup-set-callback", { body: { number_id: n.id } });
+                        toast.dismiss(t);
+                        if (error || !data?.ok) {
+                          toast.error("Could not auto-set callback. Set manually in Gupshup app settings.");
+                          console.warn("set-callback result", data, error);
+                        } else {
+                          toast.success("Gupshup callback set");
+                          await qc.invalidateQueries({ queryKey: ["numbers-inventory", workspaceId] });
+                        }
+                      }}
+                    >
+                      Set Gupshup callback
+                    </Button>
                     {dirty && (
                       <Button size="sm" onClick={() => save.mutate(n.id)} disabled={save.isPending}>
                         <Save className="w-3.5 h-3.5 mr-1" />Save
                       </Button>
                     )}
                   </div>
+                </div>
+
+                <div className="text-[11px] text-muted-foreground break-all">
+                  Inbound webhook URL (paste into Gupshup app → Callback URL if auto-set fails):
+                  <code className="ml-1 px-1 py-0.5 rounded bg-muted">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
                 </div>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
