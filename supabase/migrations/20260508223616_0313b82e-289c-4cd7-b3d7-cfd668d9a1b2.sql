@@ -1,0 +1,3 @@
+ALTER TABLE public.whatsapp_numbers
+ADD COLUMN IF NOT EXISTS restricted_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS unrestricted_at TIMESTAMPTZ;

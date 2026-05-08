@@ -51,7 +51,14 @@ type Row = {
   last_inbound: string | null;
   last_outbound: string | null;
   last_error: string | null;
+  total_sent: number;
+  total_errors: number;
+  errors_since_unban: number;
+  restricted_at: string | null;
+  unrestricted_at: string | null;
 };
+
+const BAN_DURATION_DAYS = 30;
 
 type WS = { id: string; name: string; slug: string };
 
@@ -64,7 +71,7 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       supabase.from("conversations").select("whatsapp_number_id, last_message_at"),
       supabase.from("whatsapp_message_events")
         .select("whatsapp_number_id, event_type, error_message, received_at")
-        .order("received_at", { ascending: false }).limit(2000),
+        .order("received_at", { ascending: false }).limit(20000),
     ]);
   if (nErr) throw nErr; if (wErr) throw wErr;
 
@@ -85,19 +92,34 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
   }
   const lastOutbound = new Map<string, string>();
   const lastError = new Map<string, string>();
+  const totalSent = new Map<string, number>();
+  const totalErrors = new Map<string, number>();
   for (const e of lastEvents ?? []) {
     if (!e.whatsapp_number_id) continue;
-    if ((e.event_type === "sent" || e.event_type === "enqueued" || e.event_type === "delivered") && !lastOutbound.has(e.whatsapp_number_id)) {
-      lastOutbound.set(e.whatsapp_number_id, e.received_at);
+    const isSent = e.event_type === "sent" || e.event_type === "enqueued" || e.event_type === "delivered";
+    const isError = e.event_type === "failed" || e.event_type === "error";
+    if (isSent) {
+      totalSent.set(e.whatsapp_number_id, (totalSent.get(e.whatsapp_number_id) ?? 0) + 1);
+      if (!lastOutbound.has(e.whatsapp_number_id)) lastOutbound.set(e.whatsapp_number_id, e.received_at);
     }
-    if ((e.event_type === "failed" || e.event_type === "error") && e.error_message && !lastError.has(e.whatsapp_number_id)) {
-      lastError.set(e.whatsapp_number_id, e.error_message);
+    if (isError) {
+      totalErrors.set(e.whatsapp_number_id, (totalErrors.get(e.whatsapp_number_id) ?? 0) + 1);
+      if (e.error_message && !lastError.has(e.whatsapp_number_id)) lastError.set(e.whatsapp_number_id, e.error_message);
     }
   }
 
   const rows: Row[] = (numbers ?? []).map((n: Record<string, unknown>) => {
     const ws = n.workspace_id ? wsMap.get(n.workspace_id as string) : null;
     const t = tpl.get(n.id as string) ?? { total: 0, approved: 0 };
+    const unrestrictedAt = (n.unrestricted_at as string) ?? null;
+    let errorsSinceUnban = 0;
+    if (unrestrictedAt) {
+      for (const e of lastEvents ?? []) {
+        if (e.whatsapp_number_id !== n.id) continue;
+        if (e.received_at < unrestrictedAt) break; // ordered desc
+        if (e.event_type === "failed" || e.event_type === "error") errorsSinceUnban += 1;
+      }
+    }
     return {
       id: n.id as string,
       phone_number: n.phone_number as string,
@@ -126,6 +148,11 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       last_inbound: lastInbound.get(n.id as string) ?? null,
       last_outbound: lastOutbound.get(n.id as string) ?? null,
       last_error: lastError.get(n.id as string) ?? null,
+      total_sent: totalSent.get(n.id as string) ?? 0,
+      total_errors: totalErrors.get(n.id as string) ?? 0,
+      errors_since_unban: errorsSinceUnban,
+      restricted_at: (n.restricted_at as string) ?? null,
+      unrestricted_at: unrestrictedAt,
     };
   });
 
@@ -371,6 +398,34 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { r
   );
 }
 
+function BanCell({ r }: { r: Row }) {
+  const isBanned = r.status === "restricted" || r.status === "banned";
+  if (isBanned && r.restricted_at) {
+    const startedMs = new Date(r.restricted_at).getTime();
+    const elapsedDays = Math.floor((Date.now() - startedMs) / 86400000);
+    const remaining = Math.max(0, BAN_DURATION_DAYS - elapsedDays);
+    return (
+      <div className="flex flex-col leading-tight">
+        <span className="text-red-700 font-medium">Unban in {remaining}d</span>
+        <span className="text-[10px] text-muted-foreground">restricted {elapsedDays}d ago</span>
+      </div>
+    );
+  }
+  if (isBanned) {
+    return <span className="text-red-700 font-medium">Restricted</span>;
+  }
+  if (r.unrestricted_at) {
+    const days = Math.floor((Date.now() - new Date(r.unrestricted_at).getTime()) / 86400000);
+    return (
+      <div className="flex flex-col leading-tight">
+        <span className="text-emerald-700">Clean {days}d</span>
+        <span className="text-[10px] text-muted-foreground">since unban</span>
+      </div>
+    );
+  }
+  return <span className="text-muted-foreground">—</span>;
+}
+
 function FleetHeaders({ showClient }: { showClient: boolean }) {
   return (
     <>
@@ -391,6 +446,9 @@ function FleetHeaders({ showClient }: { showClient: boolean }) {
       <TableHead>Auth</TableHead>
       <TableHead>Webhook</TableHead>
       <TableHead>Templates</TableHead>
+      <TableHead>Sent</TableHead>
+      <TableHead>Errors</TableHead>
+      <TableHead>Ban</TableHead>
       <TableHead>Last in</TableHead>
       <TableHead>Last out</TableHead>
       <TableHead>Last error</TableHead>
@@ -445,6 +503,14 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientC
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
+      <TableCell className="text-xs font-medium tabular-nums">{r.total_sent.toLocaleString()}</TableCell>
+      <TableCell className="text-xs tabular-nums">
+        {r.total_errors > 0 ? <span className="text-red-600 font-medium">{r.total_errors.toLocaleString()}</span> : <span className="text-muted-foreground">0</span>}
+        {r.unrestricted_at && r.errors_since_unban > 0 ? (
+          <span className="text-[10px] text-amber-700 ml-1" title="Errors since unban">({r.errors_since_unban} since unban)</span>
+        ) : null}
+      </TableCell>
+      <TableCell className="text-xs whitespace-nowrap"><BanCell r={r} /></TableCell>
       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_inbound ? formatDistanceToNow(new Date(r.last_inbound), { addSuffix: true }) : "—"}</TableCell>
       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_outbound ? formatDistanceToNow(new Date(r.last_outbound), { addSuffix: true }) : "—"}</TableCell>
       <TableCell className="text-xs text-red-600 max-w-[180px] truncate" title={r.last_error ?? ""}>{r.last_error ?? "—"}</TableCell>
@@ -498,12 +564,13 @@ function AddNumberDrawer({
   const [usage, setUsage] = useState<Usage>("both");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
+  const [status, setStatus] = useState<Status>("draft");
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setIsWarming(false); setUsage("both");
-    setProvidedBy(""); setAssignedRef("");
+    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
   };
 
   useEffect(() => {
@@ -522,6 +589,7 @@ function AddNumberDrawer({
       setUsage(editing.usage_type);
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
+      setStatus(editing.status);
     } else {
       reset();
     }
@@ -535,6 +603,18 @@ function AddNumberDrawer({
       if (!auth.user) throw new Error("Sign in required");
 
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
+      const nextStatus: Status = editing ? status : (isWarming ? "warming" : "draft");
+      const wasBanned = editing && (editing.status === "restricted" || editing.status === "banned");
+      const isBanned = nextStatus === "restricted" || nextStatus === "banned";
+
+      const restrictionPatch: Record<string, string | null> = {};
+      if (!wasBanned && isBanned) {
+        restrictionPatch.restricted_at = new Date().toISOString();
+      } else if (wasBanned && !isBanned) {
+        restrictionPatch.unrestricted_at = new Date().toISOString();
+        restrictionPatch.restricted_at = null;
+      }
+
       const payload = {
         phone_number: cleanPhone,
         label: appName || null,
@@ -553,7 +633,7 @@ function AddNumberDrawer({
 
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
-          .update({ ...payload, workspace_id: targetWs })
+          .update({ ...payload, workspace_id: targetWs, status: nextStatus, ...restrictionPatch })
           .eq("id", editing.id);
         if (error) throw error;
       } else {
@@ -564,7 +644,7 @@ function AddNumberDrawer({
           ...payload,
           user_id: auth.user.id,
           workspace_id: targetWs,
-          status: isWarming ? "warming" : "draft",
+          status: nextStatus,
         });
         if (error) throw error;
       }
@@ -652,6 +732,28 @@ function AddNumberDrawer({
             </div>
             <Switch checked={isWarming} onCheckedChange={setIsWarming} />
           </div>
+
+          {editing && (
+            <Field label="Status">
+              <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">draft</SelectItem>
+                  <SelectItem value="warming">warming</SelectItem>
+                  <SelectItem value="ready">ready</SelectItem>
+                  <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
+                  <SelectItem value="banned">banned</SelectItem>
+                  <SelectItem value="inactive">inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              {(editing.status === "restricted" || editing.status === "banned") && status !== "restricted" && status !== "banned" && (
+                <div className="text-[10px] text-emerald-700 mt-1">Saving will mark this number as unbanned now.</div>
+              )}
+              {editing.status !== "restricted" && editing.status !== "banned" && (status === "restricted" || status === "banned") && (
+                <div className="text-[10px] text-amber-700 mt-1">Saving will start a 30-day ban countdown.</div>
+              )}
+            </Field>
+          )}
 
           <Field label="Use for">
             <Select value={usage} onValueChange={(v) => setUsage(v as Usage)}>
