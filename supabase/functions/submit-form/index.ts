@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTelegramNotification, sendTelegramPhoto, sendTelegramDocument, escapeHtml } from "../_shared/telegram.ts";
+import { sendTelegramNotification, escapeHtml } from "../_shared/telegram.ts";
+import { sendSlackMessage, SLACK_BOOKINGS_CHANNEL } from "../_shared/slack.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -267,26 +268,25 @@ Deno.serve(async (req) => {
 
       await sendTelegramNotification(lines.join("\n"));
 
-      // Send screenshots from bm-screenshots bucket if present
-      const screenshotPaths = (dataObj.screenshot_paths as unknown);
-      if (Array.isArray(screenshotPaths) && screenshotPaths.length > 0) {
-        for (const p of screenshotPaths.slice(0, 5)) {
-          if (typeof p !== "string") continue;
-          const { data: signed, error: signErr } = await adminClient
-            .storage
-            .from("bm-screenshots")
-            .createSignedUrl(p, 60 * 60 * 24);
-          if (signErr || !signed?.signedUrl) {
-            console.error("Signed URL failed", signErr);
-            continue;
-          }
-          const isPdf = p.toLowerCase().endsWith(".pdf");
-          if (isPdf) {
-            await sendTelegramDocument(signed.signedUrl, `📎 ${escapeHtml(p.split("/").pop() || p)}`);
-          } else {
-            await sendTelegramPhoto(signed.signedUrl, `🖼 ${escapeHtml(p.split("/").pop() || p)}`);
+      // Slack notification (plain text mirror)
+      try {
+        const slackLines = [
+          `:new: *New ${body.form_type} submission*`,
+          body.contact_name ? `• Name: ${body.contact_name}` : null,
+          body.contact_email ? `• Email: ${body.contact_email}` : null,
+          body.contact_phone ? `• Phone: ${body.contact_phone}` : null,
+          body.contact_company ? `• Company: ${body.contact_company}` : null,
+          body.contact_website ? `• Website: ${body.contact_website}` : null,
+        ].filter(Boolean);
+        if (answerLines.length > 0) {
+          slackLines.push("", "*Answers:*");
+          for (const l of answerLines.slice(0, 20)) {
+            slackLines.push(l.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"));
           }
         }
+        await sendSlackMessage(SLACK_BOOKINGS_CHANNEL, slackLines.join("\n"));
+      } catch (e) {
+        console.error("Slack notify failed", e);
       }
     } catch (e) {
       console.error("Telegram notify failed", e);
