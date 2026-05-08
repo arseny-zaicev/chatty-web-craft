@@ -447,6 +447,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                             {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true })}
                           </div>
                         )}
+                      </button>
 
                       {/* hover actions */}
                       <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1 bg-card/95 border border-border rounded-md shadow-sm px-1 py-0.5">
