@@ -605,6 +605,23 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     </Button>
                   </div>
+                  {lastSendDebug && (
+                    <div className="mt-2 rounded border border-border bg-muted/40 p-2 text-[11px] font-mono leading-tight text-muted-foreground overflow-auto max-h-48">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-foreground">Last send debug</span>
+                        <button className="underline" onClick={() => setLastSendDebug(null)}>clear</button>
+                      </div>
+                      <div>src.name: <span className="text-foreground">{String(lastSendDebug.src_name)}</span></div>
+                      <div>source: <span className="text-foreground">{String(lastSendDebug.source)}</span></div>
+                      <div>destination: <span className="text-foreground">{String(lastSendDebug.destination)}</span></div>
+                      <div>key_type: <span className="text-foreground">{String(lastSendDebug.key_type)}</span></div>
+                      <div>http_status: <span className="text-foreground">{String(lastSendDebug.http_status)}</span></div>
+                      <div>provider_status: <span className="text-foreground">{String(lastSendDebug.provider_status)}</span></div>
+                      <div>provider_message_id: <span className="text-foreground">{String(lastSendDebug.provider_message_id)}</span></div>
+                      <div>provider_message: <span className="text-foreground">{String(lastSendDebug.provider_message)}</span></div>
+                      <pre className="mt-1 whitespace-pre-wrap break-all">{JSON.stringify(lastSendDebug.provider_body, null, 2)}</pre>
+                    </div>
+                  )}
                 </div>
               </>
             )}
