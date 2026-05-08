@@ -241,11 +241,16 @@ export default function LaunchWizard() {
 
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
-    if (!activeLogical) return [];
-    return mappedRecipients.slice(0, 3).map((r) => ({
-      phone: r.phone,
-      body: renderTemplateBody(activeLogical.body, variableNames, r.variables),
-    }));
+    if (!activeLogical) return [] as Array<{ phone: string; body: string; missing: string[] }>;
+    return mappedRecipients.slice(0, 3).map((r) => {
+      const vals = r.variables ?? {};
+      const missing = variableNames.filter((v) => !String(vals[v] ?? "").trim());
+      return {
+        phone: r.phone,
+        body: renderTemplateBody(activeLogical.body, variableNames, vals),
+        missing,
+      };
+    });
   }, [mappedRecipients, activeLogical, variableNames]);
 
   // ----- Launch -----
