@@ -362,7 +362,7 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { r
               </TableRow>
             </TableHeader>
             <TableBody>
-              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} hideClientCol />)}
+              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} hideClientCol />)}
             </TableBody>
           </Table>
         </div>
