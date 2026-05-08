@@ -102,7 +102,6 @@ export const BMAccessForm = () => {
       });
 
       if (error) throw error;
-      analytics.trackStepComplete(2);
       analytics.trackFormSubmit();
       setSubmitted(true);
     } catch (err) {
