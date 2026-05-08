@@ -95,10 +95,15 @@ export async function fetchPipelineBase(workspaceId?: string) {
 }
 
 export async function fetchCampaignBase(workspaceId?: string) {
+  // Lightweight: numbers + templates + recent campaigns. Conversations fetched lazily via fetchConversationsForCsv.
+  let numbersQuery = supabase
+    .from("whatsapp_numbers")
+    .select("id, phone_number, display_name, workspace_id, is_active, provider_api_key, provider_app_id");
   let templatesQuery = supabase
     .from("message_templates")
-    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, buttons, quality, namespace, external_id, variables, synced_at, created_at, provider_template_id")
-    .order("created_at", { ascending: false });
+    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, synced_at, provider_template_id")
+    .order("created_at", { ascending: false })
+    .limit(200);
   let campaignsQuery = supabase
     .from("campaigns")
     .select("id, name, status, delay_min_seconds, delay_max_seconds, total_recipients, sent_count, failed_count, created_at, whatsapp_number_id, template_id, workspace_id")
@@ -106,18 +111,32 @@ export async function fetchCampaignBase(workspaceId?: string) {
     .limit(25);
 
   if (workspaceId) {
+    numbersQuery = numbersQuery.eq("workspace_id", workspaceId);
     templatesQuery = templatesQuery.eq("workspace_id", workspaceId);
     campaignsQuery = campaignsQuery.eq("workspace_id", workspaceId);
   }
 
-  const [crmBase, { data: templates, error: templatesError }, { data: campaigns, error: campaignsError }] =
-    await Promise.all([
-      fetchCrmBase(workspaceId),
-      templatesQuery,
-      campaignsQuery,
-    ]);
+  const [numbersRes, templatesRes, campaignsRes] = await Promise.all([numbersQuery, templatesQuery, campaignsQuery]);
+  if (numbersRes.error) throw numbersRes.error;
+  if (templatesRes.error) throw templatesRes.error;
+  if (campaignsRes.error) throw campaignsRes.error;
 
-  if (templatesError) throw templatesError;
-  if (campaignsError) throw campaignsError;
-  return { ...crmBase, templates: templates ?? [], campaigns: campaigns ?? [] };
+  return {
+    numbers: (numbersRes.data ?? []) as WhatsAppNumber[],
+    templates: templatesRes.data ?? [],
+    campaigns: campaignsRes.data ?? [],
+    conversations: [] as Conversation[],
+  };
+}
+
+export async function fetchConversationsForCsv(workspaceId?: string, limit = 200) {
+  let q = supabase
+    .from("conversations")
+    .select("id, contact_phone, contact_name, last_message_at, whatsapp_number_id, workspace_id")
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (workspaceId) q = q.eq("workspace_id", workspaceId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data ?? [];
 }
