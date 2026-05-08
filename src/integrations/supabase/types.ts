@@ -780,6 +780,51 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_message_events: {
+        Row: {
+          campaign_recipient_id: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          event_type: string
+          id: string
+          message_id: string | null
+          provider_message_id: string | null
+          raw: Json
+          received_at: string
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          campaign_recipient_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          message_id?: string | null
+          provider_message_id?: string | null
+          raw?: Json
+          received_at?: string
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          campaign_recipient_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          message_id?: string | null
+          provider_message_id?: string | null
+          raw?: Json
+          received_at?: string
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_numbers: {
         Row: {
           bm_name: string | null
@@ -1051,7 +1096,13 @@ export type Database = {
         | "scheduled"
       form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access"
       message_direction: "inbound" | "outbound"
-      message_status: "queued" | "sent" | "delivered" | "read" | "failed"
+      message_status:
+        | "queued"
+        | "sent"
+        | "delivered"
+        | "read"
+        | "failed"
+        | "deleted"
       stage_type: "open" | "won" | "lost"
       submission_status:
         | "new"
@@ -1220,7 +1271,14 @@ export const Constants = {
       ],
       form_type: ["qualification", "seller_leads", "demo_request", "bm_access"],
       message_direction: ["inbound", "outbound"],
-      message_status: ["queued", "sent", "delivered", "read", "failed"],
+      message_status: [
+        "queued",
+        "sent",
+        "delivered",
+        "read",
+        "failed",
+        "deleted",
+      ],
       stage_type: ["open", "won", "lost"],
       submission_status: [
         "new",
