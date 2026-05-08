@@ -478,7 +478,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            c.unread_count > 0 ? markRead(c) : markUnread(c);
+                            if (c.unread_count > 0) {
+                              markRead(c);
+                            } else {
+                              markUnread(c);
+                            }
                           }}
                           title={c.unread_count > 0 ? "Mark as read" : "Mark as unread"}
                           className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary"
