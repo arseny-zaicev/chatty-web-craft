@@ -17,6 +17,8 @@ import {
   Pin,
   CheckCheck,
   ArrowLeft,
+  Paperclip,
+  Mic,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
@@ -648,8 +650,8 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   )}
                 </div>
 
-                <div className="shrink-0 max-h-[45%] overflow-hidden border-t border-border px-4 py-3 bg-card/30 flex flex-col">
-                  <div className="flex items-end gap-2">
+                <div className="shrink-0 max-h-[45%] overflow-hidden border-t border-border px-4 py-3 bg-card/30 flex flex-col gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <ComposerInsertButton
                       workspaceId={workspaceId}
                       disabled={sending}
@@ -660,6 +662,30 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         });
                       }}
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 gap-1.5 px-2.5 rounded-md text-xs font-medium text-muted-foreground"
+                      disabled
+                      title="Attach photo, video or file (coming soon)"
+                    >
+                      <Paperclip className="w-3.5 h-3.5" />
+                      Attach
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 gap-1.5 px-2.5 rounded-md text-xs font-medium text-muted-foreground"
+                      disabled
+                      title="Record voice note (coming soon)"
+                    >
+                      <Mic className="w-3.5 h-3.5" />
+                      Voice
+                    </Button>
+                  </div>
+                  <div className="flex items-end gap-2">
                     <Textarea
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
