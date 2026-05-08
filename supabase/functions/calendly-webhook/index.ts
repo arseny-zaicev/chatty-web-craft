@@ -78,20 +78,7 @@ Deno.serve(async (req) => {
       console.error("Telegram notify failed", e);
     }
 
-    // Slack notification
-    try {
-      const isCancel = event === "invitee.canceled";
-      const slackLines = [
-        isCancel ? ":x: *Meeting canceled*" : ":calendar: *Meeting booked*",
-        name ? `• Name: ${name}` : null,
-        invitee ? `• Email: ${invitee}` : null,
-        startTime ? `• Time: ${startTime}` : null,
-        eventUri ? `• Link: ${eventUri}` : null,
-      ].filter(Boolean).join("\n");
-      await sendSlackMessage(SLACK_BOOKINGS_CHANNEL, slackLines);
-    } catch (e) {
-      console.error("Slack notify failed", e);
-    }
+    // Slack booking notifications are handled by external automation; skipped here.
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
