@@ -30,11 +30,11 @@ async function handleInbound(payload: Record<string, unknown>) {
   }
 
   // Lookup by destination, OR fallback to single active number when destination is missing
-  let number: { id: string; user_id: string } | null = null;
+  let number: { id: string; user_id: string; workspace_id: string } | null = null;
   if (destination) {
     const { data } = await supabase
       .from("whatsapp_numbers")
-      .select("id, user_id")
+      .select("id, user_id, workspace_id")
       .eq("phone_number", destination)
       .maybeSingle();
     number = data;
@@ -42,7 +42,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   if (!number) {
     const { data: numbers } = await supabase
       .from("whatsapp_numbers")
-      .select("id, user_id")
+      .select("id, user_id, workspace_id")
       .eq("is_active", true);
     if (numbers && numbers.length === 1) {
       number = numbers[0];
@@ -89,6 +89,7 @@ async function handleInbound(payload: Record<string, unknown>) {
       .from("conversations")
       .insert({
         user_id: number.user_id,
+        workspace_id: number.workspace_id,
         whatsapp_number_id: number.id,
         contact_phone: source,
         contact_name: contactName,
