@@ -83,6 +83,8 @@ const App = () => (
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
+              <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
+              <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
               <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
