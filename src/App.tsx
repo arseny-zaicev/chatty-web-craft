@@ -23,6 +23,7 @@ const AISeoReport = lazy(() => import("./pages/AISeoReport"));
 const AdminAuth = lazy(() => import("./pages/AdminAuth"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 const FleetRegistry = lazy(() => import("./pages/admin/FleetRegistry"));
+const FleetAnalytics = lazy(() => import("./pages/admin/FleetAnalytics"));
 const AdminMfaSetup = lazy(() => import("./pages/admin/AdminMfaSetup"));
 const AdminMfaVerify = lazy(() => import("./pages/admin/AdminMfaVerify"));
 const Apply = lazy(() => import("./pages/Apply"));
@@ -83,6 +84,7 @@ const App = () => (
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
+              <Route path="/admin/analytics" element={<FleetAnalytics />} />
               <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
               <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
               <Route path="/apply" element={<Apply />} />

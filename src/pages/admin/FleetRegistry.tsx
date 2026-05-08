@@ -56,6 +56,8 @@ type Row = {
   errors_since_unban: number;
   restricted_at: string | null;
   unrestricted_at: string | null;
+  display_name_approved: boolean;
+  display_name_checked_at: string | null;
 };
 
 const BAN_DURATION_DAYS = 30;
@@ -153,6 +155,8 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       errors_since_unban: errorsSinceUnban,
       restricted_at: (n.restricted_at as string) ?? null,
       unrestricted_at: unrestrictedAt,
+      display_name_approved: Boolean(n.display_name_approved),
+      display_name_checked_at: (n.display_name_checked_at as string) ?? null,
     };
   });
 
@@ -448,6 +452,7 @@ function FleetHeaders({ showClient }: { showClient: boolean }) {
       <TableHead>Provided by</TableHead>
       <TableHead>Country</TableHead>
       <TableHead>Status</TableHead>
+      <TableHead title="Display name approved by Meta">DN</TableHead>
       <TableHead>Auth</TableHead>
       <TableHead>Webhook</TableHead>
       <TableHead>Templates</TableHead>
@@ -505,6 +510,11 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientC
       <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${statusTone[r.status]}`}>{r.status}</Badge></TableCell>
+      <TableCell>
+        {r.display_name_approved
+          ? <Badge variant="outline" className={`text-[10px] ${statusTone.ready}`} title={r.display_name_checked_at ? `Confirmed ${formatDistanceToNow(new Date(r.display_name_checked_at), { addSuffix: true })}` : ""}>approved</Badge>
+          : <Badge variant="outline" className={`text-[10px] ${statusTone.warming}`}>pending</Badge>}
+      </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
@@ -568,12 +578,14 @@ function AddNumberDrawer({
   const [usage, setUsage] = useState<Usage>("both");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
+  const [status, setStatus] = useState<Status>("draft");
+  const [dnApproved, setDnApproved] = useState(false);
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
-    setProvidedBy(""); setAssignedRef("");
+    setProvidedBy(""); setAssignedRef(""); setStatus("draft"); setDnApproved(false);
   };
 
   useEffect(() => {
@@ -591,6 +603,8 @@ function AddNumberDrawer({
       setUsage(editing.usage_type);
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
+      setStatus(editing.status);
+      setDnApproved(editing.display_name_approved);
     } else {
       reset();
     }
@@ -605,15 +619,26 @@ function AddNumberDrawer({
 
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
 
-      // Status is derived automatically:
-      // - preserve restricted/banned (only Gupshup sync flips these)
-      // - no workspace -> inactive
-      // - otherwise -> ready
-      const currentStatus: Status | undefined = editing?.status;
-      const preserveBanned = currentStatus === "restricted" || currentStatus === "banned";
-      const nextStatus: Status = preserveBanned
-        ? currentStatus!
-        : (targetWs ? "ready" : "inactive");
+      // Status: smart default for new entries, manual override always wins.
+      // We can't auto-detect ban/restriction yet (no Gupshup Partner API wired),
+      // so admin must flip restricted/banned manually.
+      const wasBanned = editing && (editing.status === "restricted" || editing.status === "banned");
+      const isBanned = status === "restricted" || status === "banned";
+      const restrictionPatch: Record<string, string | null> = {};
+      if (!wasBanned && isBanned) {
+        restrictionPatch.restricted_at = new Date().toISOString();
+      } else if (wasBanned && !isBanned) {
+        restrictionPatch.unrestricted_at = new Date().toISOString();
+        restrictionPatch.restricted_at = null;
+      }
+
+      // Display name: track when admin last confirmed
+      const dnPatch: Record<string, unknown> = {
+        display_name_approved: dnApproved,
+      };
+      if (editing?.display_name_approved !== dnApproved) {
+        dnPatch.display_name_checked_at = new Date().toISOString();
+      }
 
       const payload = {
         phone_number: cleanPhone,
@@ -628,22 +653,26 @@ function AddNumberDrawer({
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
+        ...dnPatch,
       };
 
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
-          .update({ ...payload, workspace_id: targetWs, status: nextStatus })
+          .update({ ...payload, workspace_id: targetWs, status, ...restrictionPatch })
           .eq("id", editing.id);
         if (error) throw error;
       } else {
         const { data: existing } = await supabase.from("whatsapp_numbers")
           .select("id").eq("phone_number", cleanPhone).maybeSingle();
         if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
+        const initialStatus: Status = targetWs ? status : "inactive";
         const { error } = await supabase.from("whatsapp_numbers").insert({
           ...payload,
           user_id: auth.user.id,
           workspace_id: targetWs,
-          status: nextStatus,
+          status: initialStatus,
+          ...(initialStatus === "restricted" || initialStatus === "banned"
+            ? { restricted_at: new Date().toISOString() } : {}),
         });
         if (error) throw error;
       }
@@ -728,12 +757,37 @@ function AddNumberDrawer({
             </Select>
           </Field>
 
-          {editing && (
-            <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              <div className="font-medium text-foreground mb-1">Status (auto)</div>
-              Derived from connection: <span className="font-mono">{editing.status}</span>. Restricted / banned states are set automatically from Gupshup sync. Unassigned numbers are marked <span className="font-mono">inactive</span>.
+          <Field label="Status (manual - Gupshup auto-sync not yet wired)">
+            <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">draft</SelectItem>
+                <SelectItem value="warming">warming</SelectItem>
+                <SelectItem value="ready">ready</SelectItem>
+                <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
+                <SelectItem value="banned">banned</SelectItem>
+                <SelectItem value="inactive">inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            {editing && (editing.status === "restricted" || editing.status === "banned") && status !== "restricted" && status !== "banned" && (
+              <div className="text-[10px] text-emerald-700 mt-1">Saving will mark this number as unbanned now.</div>
+            )}
+            {editing && editing.status !== "restricted" && editing.status !== "banned" && (status === "restricted" || status === "banned") && (
+              <div className="text-[10px] text-amber-700 mt-1">Saving will start a 30-day ban countdown.</div>
+            )}
+          </Field>
+
+          <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
+            <div>
+              <div className="text-sm font-medium">Display name approved by Meta</div>
+              <div className="text-xs text-muted-foreground">
+                Manual flag - check Gupshup app dashboard. {editing?.display_name_checked_at
+                  ? `Last confirmed ${formatDistanceToNow(new Date(editing.display_name_checked_at), { addSuffix: true })}.`
+                  : "Not confirmed yet."}
+              </div>
             </div>
-          )}
+            <Switch checked={dnApproved} onCheckedChange={setDnApproved} />
+          </div>
 
           <Field label="Use for">
             <Select value={usage} onValueChange={(v) => setUsage(v as Usage)}>
