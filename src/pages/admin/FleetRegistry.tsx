@@ -613,15 +613,26 @@ function AddNumberDrawer({
 
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
 
-      // Status is derived automatically:
-      // - preserve restricted/banned (only Gupshup sync flips these)
-      // - no workspace -> inactive
-      // - otherwise -> ready
-      const currentStatus: Status | undefined = editing?.status;
-      const preserveBanned = currentStatus === "restricted" || currentStatus === "banned";
-      const nextStatus: Status = preserveBanned
-        ? currentStatus!
-        : (targetWs ? "ready" : "inactive");
+      // Status: smart default for new entries, manual override always wins.
+      // We can't auto-detect ban/restriction yet (no Gupshup Partner API wired),
+      // so admin must flip restricted/banned manually.
+      const wasBanned = editing && (editing.status === "restricted" || editing.status === "banned");
+      const isBanned = status === "restricted" || status === "banned";
+      const restrictionPatch: Record<string, string | null> = {};
+      if (!wasBanned && isBanned) {
+        restrictionPatch.restricted_at = new Date().toISOString();
+      } else if (wasBanned && !isBanned) {
+        restrictionPatch.unrestricted_at = new Date().toISOString();
+        restrictionPatch.restricted_at = null;
+      }
+
+      // Display name: track when admin last confirmed
+      const dnPatch: Record<string, unknown> = {
+        display_name_approved: dnApproved,
+      };
+      if (editing?.display_name_approved !== dnApproved) {
+        dnPatch.display_name_checked_at = new Date().toISOString();
+      }
 
       const payload = {
         phone_number: cleanPhone,
@@ -636,22 +647,26 @@ function AddNumberDrawer({
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
+        ...dnPatch,
       };
 
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
-          .update({ ...payload, workspace_id: targetWs, status: nextStatus })
+          .update({ ...payload, workspace_id: targetWs, status, ...restrictionPatch })
           .eq("id", editing.id);
         if (error) throw error;
       } else {
         const { data: existing } = await supabase.from("whatsapp_numbers")
           .select("id").eq("phone_number", cleanPhone).maybeSingle();
         if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
+        const initialStatus: Status = targetWs ? status : "inactive";
         const { error } = await supabase.from("whatsapp_numbers").insert({
           ...payload,
           user_id: auth.user.id,
           workspace_id: targetWs,
-          status: nextStatus,
+          status: initialStatus,
+          ...(initialStatus === "restricted" || initialStatus === "banned"
+            ? { restricted_at: new Date().toISOString() } : {}),
         });
         if (error) throw error;
       }
