@@ -56,9 +56,11 @@ type Row = {
   errors_since_unban: number;
   restricted_at: string | null;
   unrestricted_at: string | null;
-  display_name_approved: boolean;
+  display_name_status: DnStatus;
   display_name_checked_at: string | null;
 };
+
+type DnStatus = "pending" | "approved" | "rejected";
 
 const BAN_DURATION_DAYS = 30;
 
@@ -155,7 +157,7 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       errors_since_unban: errorsSinceUnban,
       restricted_at: (n.restricted_at as string) ?? null,
       unrestricted_at: unrestrictedAt,
-      display_name_approved: Boolean(n.display_name_approved),
+      display_name_status: ((n.display_name_status as DnStatus) ?? "pending"),
       display_name_checked_at: (n.display_name_checked_at as string) ?? null,
     };
   });
@@ -253,6 +255,32 @@ export default function FleetRegistry() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
 
+  // Inline quick edits (status, DN status) without opening the drawer
+  const quickPatch = useMutation({
+    mutationFn: async ({ row, patch }: { row: Row; patch: Partial<Pick<Row, "status" | "display_name_status">> }) => {
+      const update: Record<string, unknown> = { ...patch };
+      // 30-day ban countdown logic for inline status changes
+      if (patch.status) {
+        const wasBanned = row.status === "restricted" || row.status === "banned";
+        const isBanned = patch.status === "restricted" || patch.status === "banned";
+        if (!wasBanned && isBanned) update.restricted_at = new Date().toISOString();
+        else if (wasBanned && !isBanned) {
+          update.unrestricted_at = new Date().toISOString();
+          update.restricted_at = null;
+        }
+      }
+      if (patch.display_name_status && patch.display_name_status !== row.display_name_status) {
+        update.display_name_checked_at = new Date().toISOString();
+      }
+      const { error } = await supabase.from("whatsapp_numbers").update(update).eq("id", row.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
+  });
+
   if (!authChecked || isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -299,11 +327,13 @@ export default function FleetRegistry() {
           <GroupedByClient rows={filtered} workspaces={workspaces}
             onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
             onEdit={setEditing}
+            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
             onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         ) : (
           <FleetTable rows={filtered} workspaces={workspaces}
             onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
             onEdit={setEditing}
+            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
             onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         )}
       </main>
@@ -330,9 +360,10 @@ type RowActions = {
   onReassign: (id: string, workspaceId: string | null) => void;
   onEdit: (r: Row) => void;
   onDelete: (id: string) => void;
+  onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status">>) => void;
 };
 
-function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   return (
     <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
       <Table>
@@ -344,14 +375,14 @@ function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: 
         <TableBody>
           {rows.length === 0 ? (
             <TableRow><TableCell colSpan={20} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
-          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} />)}
+          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} />)}
         </TableBody>
       </Table>
     </div>
   );
 }
 
-function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   const groups = useMemo(() => {
     const map = new Map<string, { ws: WS | null; rows: Row[] }>();
     for (const r of rows) {
@@ -398,7 +429,7 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { r
               </TableRow>
             </TableHeader>
             <TableBody>
-              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} hideClientCol />)}
+              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} hideClientCol />)}
             </TableBody>
           </Table>
         </div>
@@ -478,7 +509,7 @@ function TruncCell({ value, max = 140 }: { value: string | null; max?: number })
   return <span className="font-mono text-[11px] text-muted-foreground truncate inline-block align-middle" style={{ maxWidth: max }} title={value}>{value}</span>;
 }
 
-function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
+function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
@@ -509,11 +540,11 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientC
       <TableCell className="text-xs">{r.usage_type}</TableCell>
       <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
-      <TableCell><Badge variant="outline" className={`text-[10px] ${statusTone[r.status]}`}>{r.status}</Badge></TableCell>
       <TableCell>
-        {r.display_name_approved
-          ? <Badge variant="outline" className={`text-[10px] ${statusTone.ready}`} title={r.display_name_checked_at ? `Confirmed ${formatDistanceToNow(new Date(r.display_name_checked_at), { addSuffix: true })}` : ""}>approved</Badge>
-          : <Badge variant="outline" className={`text-[10px] ${statusTone.warming}`}>pending</Badge>}
+        <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
+      </TableCell>
+      <TableCell>
+        <InlineDnSelect value={r.display_name_status} checkedAt={r.display_name_checked_at} onChange={(v) => onQuickPatch(r, { display_name_status: v })} />
       </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
@@ -562,6 +593,46 @@ function ReassignInline({ value, workspaces, onChange }: { value: string | null;
   );
 }
 
+const dnTone: Record<DnStatus, string> = {
+  approved: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+  pending: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  rejected: "bg-red-500/15 text-red-700 border-red-500/30",
+};
+
+function InlineStatusSelect({ value, onChange }: { value: Status; onChange: (v: Status) => void }) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as Status)}>
+      <SelectTrigger className={`h-6 px-2 text-[10px] w-[110px] border ${statusTone[value]}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="draft">draft</SelectItem>
+        <SelectItem value="warming">warming</SelectItem>
+        <SelectItem value="ready">ready</SelectItem>
+        <SelectItem value="restricted">restricted</SelectItem>
+        <SelectItem value="banned">banned</SelectItem>
+        <SelectItem value="inactive">inactive</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function InlineDnSelect({ value, checkedAt, onChange }: { value: DnStatus; checkedAt: string | null; onChange: (v: DnStatus) => void }) {
+  const title = checkedAt ? `Last checked ${formatDistanceToNow(new Date(checkedAt), { addSuffix: true })}` : "Not yet checked";
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as DnStatus)}>
+      <SelectTrigger className={`h-6 px-2 text-[10px] w-[100px] border ${dnTone[value]}`} title={title}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="pending">pending</SelectItem>
+        <SelectItem value="approved">approved</SelectItem>
+        <SelectItem value="rejected">rejected</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 // Add Number drawer ---------------------------------------------------------
 function AddNumberDrawer({
   open, onOpenChange, workspaces, editing, onCreated,
@@ -579,13 +650,13 @@ function AddNumberDrawer({
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("draft");
-  const [dnApproved, setDnApproved] = useState(false);
+  
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft"); setDnApproved(false);
+    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
   };
 
   useEffect(() => {
@@ -604,7 +675,7 @@ function AddNumberDrawer({
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
       setStatus(editing.status);
-      setDnApproved(editing.display_name_approved);
+      
     } else {
       reset();
     }
@@ -632,13 +703,8 @@ function AddNumberDrawer({
         restrictionPatch.restricted_at = null;
       }
 
-      // Display name: track when admin last confirmed
-      const dnPatch: Record<string, unknown> = {
-        display_name_approved: dnApproved,
-      };
-      if (editing?.display_name_approved !== dnApproved) {
-        dnPatch.display_name_checked_at = new Date().toISOString();
-      }
+      // Display name status is edited inline from the table - no patch needed here.
+      const dnPatch: Record<string, unknown> = {};
 
       const payload = {
         phone_number: cleanPhone,
@@ -777,16 +843,8 @@ function AddNumberDrawer({
             )}
           </Field>
 
-          <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
-            <div>
-              <div className="text-sm font-medium">Display name approved by Meta</div>
-              <div className="text-xs text-muted-foreground">
-                Manual flag - check Gupshup app dashboard. {editing?.display_name_checked_at
-                  ? `Last confirmed ${formatDistanceToNow(new Date(editing.display_name_checked_at), { addSuffix: true })}.`
-                  : "Not confirmed yet."}
-              </div>
-            </div>
-            <Switch checked={dnApproved} onCheckedChange={setDnApproved} />
+          <div className="text-[11px] text-muted-foreground italic">
+            Status & Display Name approval can also be edited inline from the Fleet table.
           </div>
 
           <Field label="Use for">
