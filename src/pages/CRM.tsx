@@ -513,9 +513,16 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
               </div>
             ) : (
               <>
-                <div className="h-16 px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
+                <div className="h-16 px-4 sm:px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
+                    <button
+                      onClick={() => setActiveId(null)}
+                      className="lg:hidden p-1.5 -ml-1 rounded hover:bg-muted text-muted-foreground"
+                      title="Back to conversations"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
                       {(active.contact_name ?? active.contact_phone).slice(0, 1).toUpperCase()}
                     </div>
                     <div className="min-w-0">
