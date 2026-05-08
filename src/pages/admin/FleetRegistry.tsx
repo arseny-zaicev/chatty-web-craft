@@ -398,6 +398,34 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { r
   );
 }
 
+function BanCell({ r }: { r: Row }) {
+  const isBanned = r.status === "restricted" || r.status === "banned";
+  if (isBanned && r.restricted_at) {
+    const startedMs = new Date(r.restricted_at).getTime();
+    const elapsedDays = Math.floor((Date.now() - startedMs) / 86400000);
+    const remaining = Math.max(0, BAN_DURATION_DAYS - elapsedDays);
+    return (
+      <div className="flex flex-col leading-tight">
+        <span className="text-red-700 font-medium">Unban in {remaining}d</span>
+        <span className="text-[10px] text-muted-foreground">restricted {elapsedDays}d ago</span>
+      </div>
+    );
+  }
+  if (isBanned) {
+    return <span className="text-red-700 font-medium">Restricted</span>;
+  }
+  if (r.unrestricted_at) {
+    const days = Math.floor((Date.now() - new Date(r.unrestricted_at).getTime()) / 86400000);
+    return (
+      <div className="flex flex-col leading-tight">
+        <span className="text-emerald-700">Clean {days}d</span>
+        <span className="text-[10px] text-muted-foreground">since unban</span>
+      </div>
+    );
+  }
+  return <span className="text-muted-foreground">—</span>;
+}
+
 function FleetHeaders({ showClient }: { showClient: boolean }) {
   return (
     <>
