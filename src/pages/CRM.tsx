@@ -647,6 +647,16 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
                 <div className="shrink-0 max-h-[45%] overflow-hidden border-t border-border px-4 py-3 bg-card/30 flex flex-col">
                   <div className="flex items-end gap-2">
+                    <ComposerInsertButton
+                      workspaceId={workspaceId}
+                      disabled={sending}
+                      onInsert={(text) => {
+                        setDraft((d) => {
+                          const sep = d && !d.endsWith("\n") && !d.endsWith(" ") ? " " : "";
+                          return d + sep + text;
+                        });
+                      }}
+                    />
                     <Textarea
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
