@@ -1,96 +1,268 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, Play, RefreshCw, Rocket, Users, FileText, Phone, Clock } from "lucide-react";
+import {
+  ArrowLeft, Loader2, Play, RefreshCw, Rocket, Users, FileText, Phone, Clock, Zap, Timer,
+  Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { crmKeys, fetchCampaignBase, fetchConversationsForCsv } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import {
+  fetchLaunchEssentials, fetchConversationsLite,
+  groupLogicalTemplates, parseCsv, detectColumns, applyMapping,
+  geoFromPhone, buildCampaignName, renderTemplateBody,
+  loadMapping, saveMapping, listSavedAudiences, saveAudience, deleteSavedAudience,
+  type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
+} from "@/lib/launchData";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
-type Recipient = { phone: string; name?: string; variables?: Record<string, string>; conversation_id?: string };
+const launchKeys = {
+  essentials: (wid?: string) => ["launch", "essentials", wid ?? "all"] as const,
+  chats: (wid?: string) => ["launch", "chats", wid ?? "all"] as const,
+};
 
-const parseRecipients = (raw: string): Recipient[] => {
-  const rows = raw.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
-  if (rows.length === 0) return [];
-  const first = rows[0].split(",").map((c) => c.trim().toLowerCase());
-  const hasHeader = first.some((c) => ["phone", "contact_phone", "name", "contact_name"].includes(c));
-  const headers = hasHeader ? first : ["phone", "name"];
-  const dataRows = hasHeader ? rows.slice(1) : rows;
-  return dataRows.map((row) => {
-    const cols = row.split(",").map((c) => c.trim());
-    const item: Recipient = { phone: "", variables: {} };
-    headers.forEach((h, idx) => {
-      const value = cols[idx] ?? "";
-      if (h === "phone" || h === "contact_phone") item.phone = value;
-      else if (h === "name" || h === "contact_name") item.name = value;
-      else if (value) item.variables![h] = value;
-    });
-    return item;
-  }).filter((r) => r.phone.replace(/[^\d]/g, "").length >= 8);
+const TYPE_PRESETS: Record<CampaignType, { label: string; mode: "Blast" | "Utility"; delayMin: number; delayMax: number; perNumber: number; routing: boolean; templateCategory: "marketing" | "utility" }> = {
+  marketing: { label: "Marketing Blast", mode: "Blast", delayMin: 0, delayMax: 0, perNumber: 1000, routing: false, templateCategory: "marketing" },
+  utility: { label: "Utility Paced", mode: "Utility", delayMin: 30, delayMax: 90, perNumber: 200, routing: true, templateCategory: "utility" },
 };
 
 export default function LaunchWizard() {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const qc = useQueryClient();
-  const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: crmKeys.campaigns(workspace?.id), queryFn: () => fetchCampaignBase(workspace?.id), enabled: Boolean(workspace) });
+
+  const { data, isLoading } = useQuery({
+    queryKey: launchKeys.essentials(workspace?.id),
+    queryFn: () => fetchLaunchEssentials(workspace?.id),
+    enabled: Boolean(workspace),
+    staleTime: 60_000,
+  });
 
   const numbers = data?.numbers ?? [];
   const templates = data?.templates ?? [];
-  const conversations = data?.conversations ?? [];
+  const logicalTemplates = useMemo(() => groupLogicalTemplates(templates), [templates]);
 
-  const [campaignName, setCampaignName] = useState("");
-  const [csv, setCsv] = useState("phone,name\n");
-  const [templateId, setTemplateId] = useState("");
+  // ----- State -----
+  const [type, setType] = useState<CampaignType>("marketing");
+  const preset = TYPE_PRESETS[type];
+
+  const [logicalKey, setLogicalKey] = useState<string>("");
   const [numberIds, setNumberIds] = useState<string[]>([]);
-  const [perNumberQuota, setPerNumberQuota] = useState(200);
-  const [delayMin, setDelayMin] = useState(30);
-  const [delayMax, setDelayMax] = useState(90);
+  const [csv, setCsv] = useState("phone,name\n");
+  const [audienceSource, setAudienceSource] = useState<"paste" | "upload" | "chats" | "saved">("paste");
 
-  const recipients = useMemo(() => parseRecipients(csv), [csv]);
-  const activeTemplate = templates.find((t: any) => t.id === templateId);
+  const [icp, setIcp] = useState("");
+  const [cta, setCta] = useState("");
+  const [campaignName, setCampaignName] = useState("");
+  const [nameDirty, setNameDirty] = useState(false);
+
+  const [delayMin, setDelayMin] = useState(preset.delayMin);
+  const [delayMax, setDelayMax] = useState(preset.delayMax);
+  const [perNumberQuota, setPerNumberQuota] = useState(preset.perNumber);
+  const [routing, setRouting] = useState(preset.routing);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  // When type changes, reset defaults (unless user dirty-edited)
+  const typeAppliedRef = useRef<CampaignType>("marketing");
+  useEffect(() => {
+    if (typeAppliedRef.current === type) return;
+    typeAppliedRef.current = type;
+    setDelayMin(preset.delayMin);
+    setDelayMax(preset.delayMax);
+    setPerNumberQuota(preset.perNumber);
+    setRouting(preset.routing);
+    // For Marketing default to single number
+    if (!preset.routing && numberIds.length > 1) setNumberIds(numberIds.slice(0, 1));
+  }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filter logical templates by type category
+  const visibleLogical = useMemo(
+    () => logicalTemplates.filter((t) => t.category === preset.templateCategory),
+    [logicalTemplates, preset.templateCategory],
+  );
+
+  const activeLogical: LogicalTemplate | undefined = visibleLogical.find((t) => t.key === logicalKey);
+
+  // Auto-pick first logical when none selected or current invalid for type
+  useEffect(() => {
+    if (!activeLogical && visibleLogical.length > 0) setLogicalKey(visibleLogical[0].key);
+    if (logicalKey && !visibleLogical.find((t) => t.key === logicalKey)) {
+      setLogicalKey(visibleLogical[0]?.key ?? "");
+    }
+  }, [visibleLogical, logicalKey, activeLogical]);
+
+  // Load saved mapping for workspace+logical
+  useEffect(() => {
+    if (!workspace || !logicalKey) return;
+    const saved = loadMapping(workspace.id, logicalKey);
+    setMapping(saved);
+  }, [workspace, logicalKey]);
+
+  // ----- Audience parsing & mapping -----
+  const recipients = useMemo(() => parseCsv(csv), [csv]);
+  const columns = useMemo(() => detectColumns(recipients), [recipients]);
+  const variableNames = activeLogical?.variables ?? [];
+
+  // Auto-map variables by name match
+  useEffect(() => {
+    if (!variableNames.length) return;
+    setMapping((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const v of variableNames) {
+        if (next[v]) continue;
+        const lower = v.toLowerCase();
+        const match = columns.find((c) => c.toLowerCase() === lower);
+        if (match) { next[v] = match; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [variableNames, columns]);
+
+  const mappedRecipients = useMemo(
+    () => applyMapping(recipients, mapping, variableNames),
+    [recipients, mapping, variableNames],
+  );
+
+  // ----- Number selection: auto-pick first active when none -----
+  useEffect(() => {
+    if (numberIds.length === 0 && numbers.length > 0) setNumberIds([numbers[0].id]);
+  }, [numbers]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const activeNumbers = numbers.filter((n) => numberIds.includes(n.id));
-  const isUtility = (activeTemplate as any)?.category === "utility";
 
+  // ----- Logical template resolution per number -----
+  const resolution = useMemo(() => {
+    if (!activeLogical) return { ok: [] as Array<{ numberId: string; template: Template }>, missing: [] as string[] };
+    const ok: Array<{ numberId: string; template: Template }> = [];
+    const missing: string[] = [];
+    for (const n of activeNumbers) {
+      const variant = activeLogical.variantByNumber.get(n.id);
+      if (variant) ok.push({ numberId: n.id, template: variant });
+      else missing.push(n.id);
+    }
+    return { ok, missing };
+  }, [activeLogical, activeNumbers]);
+
+  // ----- Auto name -----
+  useEffect(() => {
+    if (nameDirty) return;
+    const primaryNumber = activeNumbers[0];
+    setCampaignName(buildCampaignName({
+      geo: primaryNumber ? geoFromPhone(primaryNumber.phone_number) : "--",
+      icp,
+      templateLabel: activeLogical?.label,
+      cta,
+      mode: preset.mode,
+      count: recipients.length,
+    }));
+  }, [activeNumbers, icp, activeLogical, cta, preset.mode, recipients.length, nameDirty]);
+
+  // ----- Lazy chats -----
+  const chatsQuery = useQuery({
+    queryKey: launchKeys.chats(workspace?.id),
+    queryFn: () => fetchConversationsLite(workspace?.id, 500),
+    enabled: Boolean(workspace) && audienceSource === "chats",
+    staleTime: 30_000,
+  });
+
+  const useCurrentChats = () => {
+    const list = chatsQuery.data ?? [];
+    setCsv(["phone,name,conversation_id", ...list.map((c) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
+  };
+
+  // ----- Saved audiences -----
+  const [savedList, setSavedList] = useState<SavedAudience[]>([]);
+  useEffect(() => { if (workspace) setSavedList(listSavedAudiences(workspace.id)); }, [workspace]);
+  const [saveAudName, setSaveAudName] = useState("");
+
+  // ----- Toggles -----
+  const toggleNumber = (id: string) => {
+    setNumberIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (!routing) return [id]; // single-number mode
+      return [...prev, id];
+    });
+  };
+
+  // ----- ETA -----
   const eta = useMemo(() => {
     const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
-    const avgDelay = isUtility ? 90 : (delayMin + delayMax) / 2;
-    const seconds = perNumber * avgDelay;
+    const avgDelay = type === "marketing" ? Math.max(1, (delayMin + delayMax) / 2) : (delayMin + delayMax) / 2;
+    const seconds = Math.round(perNumber * avgDelay);
     if (seconds < 60) return `${seconds}s`;
     if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
     return `${(seconds / 3600).toFixed(1)}h`;
-  }, [recipients.length, activeNumbers.length, delayMin, delayMax, isUtility]);
+  }, [recipients.length, activeNumbers.length, delayMin, delayMax, type]);
 
-  const toggleNumber = (id: string) => setNumberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // ----- Preview samples -----
+  const previewSamples = useMemo(() => {
+    if (!activeLogical) return [];
+    return mappedRecipients.slice(0, 3).map((r) => ({
+      phone: r.phone,
+      body: renderTemplateBody(activeLogical.body, variableNames, r.variables),
+    }));
+  }, [mappedRecipients, activeLogical, variableNames]);
 
+  // ----- Launch -----
   const launch = useMutation({
     mutationFn: async () => {
       if (!campaignName.trim()) throw new Error("Name the campaign");
-      if (!templateId) throw new Error("Pick an approved template");
+      if (!activeLogical) throw new Error("Pick a logical template");
       if (numberIds.length === 0) throw new Error("Select at least one sending number");
-      if (recipients.length === 0) throw new Error("Add recipients (CSV)");
-      const primary = numberIds[0];
-      const { data: res, error } = await supabase.functions.invoke("campaigns", {
-        body: {
-          action: "launch",
-          name: campaignName.trim(),
-          whatsapp_number_id: primary,
-          template_id: templateId,
-          delay_min_seconds: isUtility ? 90 : delayMin,
-          delay_max_seconds: isUtility ? 120 : delayMax,
-          recipients,
-        },
-      });
-      if (error) throw error;
-      if ((res as { error?: string })?.error) throw new Error((res as { error: string }).error);
-      return res;
+      if (recipients.length === 0) throw new Error("Add recipients");
+      if (resolution.missing.length > 0) throw new Error("Some numbers don't have an approved variant of this template");
+
+      // Distribute recipients across numbers
+      const buckets = new Map<string, Recipient[]>();
+      const targets = resolution.ok;
+      if (targets.length === 1) {
+        buckets.set(targets[0].numberId, mappedRecipients);
+      } else {
+        targets.forEach((t) => buckets.set(t.numberId, []));
+        mappedRecipients.forEach((r, i) => {
+          const t = targets[i % targets.length];
+          buckets.get(t.numberId)!.push(r);
+        });
+      }
+
+      const results: Array<{ ok: boolean; numberId: string; res?: any; error?: string }> = [];
+      for (const t of targets) {
+        const list = buckets.get(t.numberId) ?? [];
+        if (list.length === 0) continue;
+        const subname = targets.length > 1
+          ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
+          : campaignName;
+        const { data: res, error } = await supabase.functions.invoke("campaigns", {
+          body: {
+            action: "launch",
+            name: subname,
+            whatsapp_number_id: t.numberId,
+            template_id: t.template.id,
+            delay_min_seconds: delayMin,
+            delay_max_seconds: delayMax,
+            recipients: list,
+          },
+        });
+        if (error) results.push({ ok: false, numberId: t.numberId, error: error.message });
+        else if ((res as any)?.error) results.push({ ok: false, numberId: t.numberId, error: (res as any).error });
+        else results.push({ ok: true, numberId: t.numberId, res });
+      }
+      // Persist mapping for next time
+      if (workspace && activeLogical) saveMapping(workspace.id, activeLogical.key, mapping);
+      return results;
     },
-    onSuccess: async () => {
-      toast.success("Campaign scheduled");
-      await qc.invalidateQueries({ queryKey: crmKeys.campaigns(workspace?.id) });
+    onSuccess: async (results) => {
+      const ok = results.filter((r) => r.ok).length;
+      const failed = results.length - ok;
+      if (failed === 0) toast.success(`Launched ${ok} campaign${ok === 1 ? "" : "s"}`);
+      else toast.error(`Launched ${ok}, failed ${failed}: ${results.find((r) => !r.ok)?.error ?? ""}`);
+      qc.invalidateQueries({ queryKey: ["crm", "campaigns"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Launch failed"),
   });
@@ -98,107 +270,350 @@ export default function LaunchWizard() {
   const sync = useMutation({
     mutationFn: async () => {
       if (numbers.length === 0) throw new Error("Add a number first");
+      const targetNumberId = numberIds[0] || numbers[0].id;
       const { data: res, error } = await supabase.functions.invoke("campaigns", {
-        body: { action: "sync_templates", whatsapp_number_id: numberIds[0] || numbers[0].id },
+        body: { action: "sync_templates", whatsapp_number_id: targetNumberId },
       });
       if (error) throw error;
       return res as { fetched: number; upserted: number };
     },
-    onSuccess: async (r) => { toast.success(`Synced ${r.upserted}/${r.fetched}`); await qc.invalidateQueries({ queryKey: crmKeys.campaigns(workspace?.id) }); },
+    onSuccess: async (r) => {
+      toast.success(`Synced ${r.upserted}/${r.fetched}`);
+      await qc.invalidateQueries({ queryKey: launchKeys.essentials(workspace?.id) });
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Sync failed"),
   });
-
-  const loadChats = async () => {
-    const list = conversations.length > 0 ? conversations : await fetchConversationsForCsv(workspace?.id);
-    setCsv(["phone,name,conversation_id", ...list.map((c: any) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
-  };
 
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
-    <div className="p-4 grid lg:grid-cols-[1fr_320px] gap-4 max-w-[1400px]">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" /><h2 className="font-display text-xl">Launch campaign</h2></div>
-          {workspace && <Button asChild variant="ghost" size="sm"><Link to={`/ws/${workspace.slug}/campaigns`}><ArrowLeft className="w-4 h-4 mr-1" />Back to campaigns</Link></Button>}
+    <div className="h-full overflow-y-auto">
+      <div className="p-4 grid lg:grid-cols-[1fr_320px] gap-4 max-w-[1400px] mx-auto pb-32">
+        {/* MAIN COLUMN */}
+        <div className="space-y-4 min-w-0">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Rocket className="w-5 h-5 text-primary" />
+              <h2 className="font-display text-xl">Launch campaign</h2>
+            </div>
+            {workspace && (
+              <Button asChild variant="ghost" size="sm">
+                <Link to={`/ws/${workspace.slug}/campaigns`}><ArrowLeft className="w-4 h-4 mr-1" />Back to campaigns</Link>
+              </Button>
+            )}
+          </div>
+
+          {/* Step 1: Campaign type */}
+          <Step n={1} icon={Zap} title="Campaign type">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(Object.keys(TYPE_PRESETS) as CampaignType[]).map((k) => {
+                const p = TYPE_PRESETS[k];
+                const active = type === k;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setType(k)}
+                    className={`text-left rounded-md border p-3 transition ${active ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}
+                  >
+                    <div className="flex items-center gap-2 font-medium text-sm">
+                      {k === "marketing" ? <Zap className="w-4 h-4 text-primary" /> : <Timer className="w-4 h-4 text-amber-500" />}
+                      {p.label}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {k === "marketing"
+                        ? "0/0 delay, single number, send as fast as possible."
+                        : "30-90s delay, distribute across numbers, paced."}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </Step>
+
+          {/* Step 2: Logical template */}
+          <Step n={2} icon={FileText} title="Template" right={
+            <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${sync.isPending ? "animate-spin" : ""}`} />Sync Gupshup
+            </Button>
+          }>
+            {visibleLogical.length === 0 ? (
+              <div className="text-sm text-muted-foreground rounded-md border border-dashed border-border p-3">
+                No approved {preset.templateCategory} templates. Sync from Gupshup or create one.
+              </div>
+            ) : (
+              <>
+                <Select value={logicalKey} onValueChange={setLogicalKey}>
+                  <SelectTrigger><SelectValue placeholder="Pick a logical template" /></SelectTrigger>
+                  <SelectContent>
+                    {visibleLogical.map((t) => (
+                      <SelectItem key={t.key} value={t.key}>
+                        <span className="inline-flex items-center gap-2">
+                          <span>{t.label}</span>
+                          <span className="text-xs text-muted-foreground">({t.variants.length} variant{t.variants.length === 1 ? "" : "s"})</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {activeLogical && (
+                  <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
+                    <div>Variants: {activeLogical.variants.map((v) => v.name).join(", ")}</div>
+                    {activeLogical.variables.length > 0 && (
+                      <div>Variables: {activeLogical.variables.map((v) => `{${v}}`).join(" ")}</div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </Step>
+
+          {/* Step 3: Sending numbers */}
+          <Step n={3} icon={Phone} title={`Sending number${routing ? "s" : ""}`}>
+            {numbers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No numbers in this workspace.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-2">
+                {numbers.map((n) => {
+                  const selected = numberIds.includes(n.id);
+                  const hasVariant = activeLogical?.variantByNumber.has(n.id);
+                  return (
+                    <label
+                      key={n.id}
+                      className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
+                    >
+                      <input
+                        type={routing ? "checkbox" : "radio"}
+                        name="number-pick"
+                        checked={selected}
+                        onChange={() => toggleNumber(n.id)}
+                      />
+                      <span className="truncate flex-1">{n.label ?? `+${n.phone_number}`}</span>
+                      {activeLogical && (
+                        hasVariant
+                          ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">variant ok</Badge>
+                          : <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">no variant</Badge>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {resolution.missing.length > 0 && (
+              <div className="mt-2 text-xs text-amber-600 flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                Selected numbers without an approved variant of this template will block launch. Sync templates or pick another template.
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
+              <Field label="Min delay (s)"><Input type="number" min={0} value={delayMin} onChange={(e) => setDelayMin(Number(e.target.value))} /></Field>
+              <Field label="Max delay (s)"><Input type="number" min={delayMin} value={delayMax} onChange={(e) => setDelayMax(Number(e.target.value))} /></Field>
+            </div>
+          </Step>
+
+          {/* Step 4: Audience */}
+          <Step n={4} icon={Users} title="Audience">
+            <Tabs value={audienceSource} onValueChange={(v) => setAudienceSource(v as any)}>
+              <TabsList className="grid grid-cols-4 w-full">
+                <TabsTrigger value="paste"><FileText className="w-3.5 h-3.5 mr-1" />Paste</TabsTrigger>
+                <TabsTrigger value="upload"><Upload className="w-3.5 h-3.5 mr-1" />Upload</TabsTrigger>
+                <TabsTrigger value="chats"><MessagesSquare className="w-3.5 h-3.5 mr-1" />Chats</TabsTrigger>
+                <TabsTrigger value="saved"><Bookmark className="w-3.5 h-3.5 mr-1" />Saved</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="paste" className="mt-3">
+                <Textarea rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} placeholder="phone,name&#10;971500000000,Arseny" />
+              </TabsContent>
+
+              <TabsContent value="upload" className="mt-3">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="block text-sm w-full"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const text = await file.text();
+                    setCsv(text);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-2">CSV with header row: phone, name, then any custom variable columns.</p>
+              </TabsContent>
+
+              <TabsContent value="chats" className="mt-3 space-y-2">
+                {chatsQuery.isLoading ? (
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading current chats...</div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={useCurrentChats}>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1" />Use current chats ({chatsQuery.data?.length ?? 0})
+                  </Button>
+                )}
+              </TabsContent>
+
+              <TabsContent value="saved" className="mt-3 space-y-2">
+                {savedList.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No saved audiences yet. Save one from the current parsed list below.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {savedList.map((a) => (
+                      <div key={a.id} className="flex items-center gap-2 rounded-md border border-border p-2 text-sm">
+                        <Bookmark className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="flex-1 truncate">{a.name}</span>
+                        <span className="text-xs text-muted-foreground">{a.count}</span>
+                        <Button variant="ghost" size="sm" onClick={() => setCsv(a.csv)}>Load</Button>
+                        <Button variant="ghost" size="icon" onClick={() => { deleteSavedAudience(workspace!.id, a.id); setSavedList(listSavedAudiences(workspace!.id)); }}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            <div className="flex items-center justify-between flex-wrap gap-2 mt-3 text-xs text-muted-foreground">
+              <span>{recipients.length} valid recipients · {columns.length} columns detected</span>
+              {recipients.length > 0 && workspace && (
+                <div className="flex items-center gap-1">
+                  <Input className="h-7 w-44 text-xs" placeholder="Audience name" value={saveAudName} onChange={(e) => setSaveAudName(e.target.value)} />
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    saveAudience(workspace.id, saveAudName || `Audience ${savedList.length + 1}`, csv, recipients.length);
+                    setSavedList(listSavedAudiences(workspace.id));
+                    setSaveAudName("");
+                    toast.success("Audience saved");
+                  }}>
+                    <Save className="w-3.5 h-3.5 mr-1" />Save
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Step>
+
+          {/* Step 5: Variable mapping */}
+          {variableNames.length > 0 && (
+            <Step n={5} icon={FileText} title="Variable mapping">
+              <div className="space-y-2">
+                {variableNames.map((v) => {
+                  const current = mapping[v] ?? "";
+                  const isStatic = current.startsWith("__static:");
+                  return (
+                    <div key={v} className="flex items-center gap-2 text-sm">
+                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{`{${v}}`}</span>
+                      <span className="text-xs text-muted-foreground">→</span>
+                      <Select value={isStatic ? "__static__" : current || "__none__"} onValueChange={(val) => {
+                        setMapping((prev) => {
+                          const next = { ...prev };
+                          if (val === "__none__") delete next[v];
+                          else if (val === "__static__") next[v] = "__static:";
+                          else next[v] = val;
+                          return next;
+                        });
+                      }}>
+                        <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick column" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— unset —</SelectItem>
+                          {columns.map((c) => <SelectItem key={c} value={c}>column: {c}</SelectItem>)}
+                          <SelectItem value="__static__">static value...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isStatic && (
+                        <Input
+                          className="h-8 flex-1"
+                          placeholder="Static value"
+                          value={current.slice("__static:".length)}
+                          onChange={(e) => setMapping((prev) => ({ ...prev, [v]: `__static:${e.target.value}` }))}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template for this workspace.</p>
+              </div>
+            </Step>
+          )}
+
+          {/* Step 6: Naming */}
+          <Step n={6} icon={Bookmark} title="Campaign name & tags">
+            <div className="grid sm:grid-cols-2 gap-2">
+              <Field label="ICP / Offer">
+                <Input value={icp} onChange={(e) => setIcp(e.target.value)} placeholder="GTM Professionals" />
+              </Field>
+              <Field label="CTA">
+                <Input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="Demo CTA" />
+              </Field>
+            </div>
+            <div className="mt-2">
+              <Field label="Generated name (editable)">
+                <Input value={campaignName} onChange={(e) => { setCampaignName(e.target.value); setNameDirty(true); }} />
+              </Field>
+              {nameDirty && (
+                <button className="text-xs text-primary underline mt-1" onClick={() => setNameDirty(false)}>
+                  Reset to auto-generated
+                </button>
+              )}
+            </div>
+          </Step>
+
+          {/* Step 7: Preview */}
+          <Step n={7} icon={Eye} title="Rendered preview">
+            {!activeLogical?.body ? (
+              <p className="text-sm text-muted-foreground">No template body to preview.</p>
+            ) : previewSamples.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Add recipients to preview the rendered message.</p>
+            ) : (
+              <div className="space-y-2">
+                {previewSamples.map((s, i) => (
+                  <div key={i} className="rounded-md border border-border bg-card/30 p-3">
+                    <div className="text-xs text-muted-foreground mb-1.5">To +{s.phone}</div>
+                    <div className="text-sm whitespace-pre-wrap">{s.body}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Step>
         </div>
 
-        <Step n={1} icon={Rocket} title="Campaign name">
-          <Input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} placeholder={`${workspace?.name ?? "Client"} - Spring promo`} />
-        </Step>
-
-        <Step n={2} icon={Users} title="Audience">
-          <div className="flex flex-wrap gap-2 mb-2">
-            <Button variant="outline" size="sm" onClick={loadChats}><RefreshCw className="w-4 h-4 mr-1" />Use current chats ({conversations.length})</Button>
-            <span className="text-sm text-muted-foreground self-center">{recipients.length} valid recipients parsed</span>
-          </div>
-          <Textarea rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} placeholder="phone,name&#10;971500000000,Arseny" />
-        </Step>
-
-        <Step n={3} icon={FileText} title="Template">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger><SelectValue placeholder="Pick approved template" /></SelectTrigger>
-                <SelectContent>
-                  {templates.map((t: any) => {
-                    const status = t.status || "pending";
-                    const dot = status === "approved" ? "bg-emerald-500" : status === "rejected" ? "bg-red-500" : status === "paused" ? "bg-amber-500" : "bg-yellow-400 animate-pulse";
-                    return <SelectItem key={t.id} value={t.id}><span className="inline-flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full ${dot}`} /><span>{t.name} · {t.language}</span><span className="text-xs text-muted-foreground">({status}{t.category ? ` · ${t.category}` : ""})</span></span></SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} title="Refresh"><RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} /></Button>
-            <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>{sync.isPending ? "Syncing..." : "Sync Gupshup"}</Button>
-          </div>
-          {activeTemplate && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Category: <span className="font-medium">{(activeTemplate as any).category ?? "marketing"}</span>
-              {isUtility && " - utility templates send with throttled ~90s delay"}
-            </p>
-          )}
-        </Step>
-
-        <Step n={4} icon={Phone} title="Sending numbers">
-          {numbers.length === 0 ? <p className="text-sm text-muted-foreground">No numbers in this workspace yet.</p> : (
-            <div className="grid sm:grid-cols-2 gap-2">
-              {numbers.map((n) => (
-                <label key={n.id} className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer ${numberIds.includes(n.id) ? "border-primary bg-primary/5" : "border-border"}`}>
-                  <input type="checkbox" checked={numberIds.includes(n.id)} onChange={() => toggleNumber(n.id)} />
-                  <span className="text-sm truncate">{n.display_name ?? `+${n.phone_number}`}</span>
-                </label>
-              ))}
+        {/* SIDEBAR */}
+        <aside className="rounded-lg border border-border bg-card/40 p-4 space-y-3 lg:sticky lg:top-4 self-start">
+          <div className="font-display text-lg flex items-center gap-2"><Clock className="w-4 h-4 text-primary" />Review</div>
+          <Row label="Type" value={preset.label} />
+          <Row label="Workspace" value={workspace?.name ?? "-"} />
+          <Row label="Template" value={activeLogical?.label ?? "-"} />
+          <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
+          <Row label="Recipients" value={recipients.length} />
+          <Row label="Per number" value={activeNumbers.length ? Math.ceil(recipients.length / activeNumbers.length) : "-"} />
+          <Row label="Speed" value={delayMin === 0 && delayMax === 0 ? "Blast" : `${delayMin}-${delayMax}s`} />
+          <Row label="ETA" value={eta} />
+          {resolution.missing.length > 0 && (
+            <div className="text-xs text-amber-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {resolution.missing.length} number(s) missing template variant.
             </div>
           )}
-          <div className="grid grid-cols-3 gap-2 mt-3">
-            <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
-            <Field label={isUtility ? "Min (locked 90)" : "Min delay (s)"}><Input type="number" min={5} value={isUtility ? 90 : delayMin} onChange={(e) => setDelayMin(Number(e.target.value))} disabled={isUtility} /></Field>
-            <Field label={isUtility ? "Max (locked 120)" : "Max delay (s)"}><Input type="number" min={delayMin} value={isUtility ? 120 : delayMax} onChange={(e) => setDelayMax(Number(e.target.value))} disabled={isUtility} /></Field>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">Auto-distributes recipients across selected numbers, ~{perNumberQuota}/number max.</p>
-        </Step>
+          <Button
+            className="w-full"
+            onClick={() => launch.mutate()}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0}
+          >
+            <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
+          </Button>
+          <p className="text-[11px] text-muted-foreground">
+            {resolution.ok.length > 1 ? `Will create ${resolution.ok.length} sub-campaigns, one per number.` : "Single campaign."}
+          </p>
+        </aside>
       </div>
-
-      <aside className="rounded-lg border border-border bg-card/40 p-4 space-y-3 lg:sticky lg:top-4 self-start">
-        <div className="font-display text-lg flex items-center gap-2"><Clock className="w-4 h-4 text-primary" />Review</div>
-        <Row label="Workspace" value={workspace?.name ?? "-"} />
-        <Row label="Recipients" value={recipients.length} />
-        <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
-        <Row label="Per number" value={activeNumbers.length ? Math.ceil(recipients.length / activeNumbers.length) : "-"} />
-        <Row label="Template" value={activeTemplate?.name ?? "-"} />
-        <Row label="Speed" value={isUtility ? "Throttled (~90s)" : `${delayMin}-${delayMax}s`} />
-        <Row label="ETA" value={eta} />
-        <Button className="w-full" onClick={() => launch.mutate()} disabled={launch.isPending}><Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}</Button>
-        <p className="text-[11px] text-muted-foreground">Scheduling and recurrence coming next.</p>
-      </aside>
     </div>
   );
 }
 
-const Step = ({ n, icon: Icon, title, children }: { n: number; icon: any; title: string; children: React.ReactNode }) => (
+const Step = ({ n, icon: Icon, title, right, children }: { n: number; icon: any; title: string; right?: React.ReactNode; children: React.ReactNode }) => (
   <section className="rounded-lg border border-border bg-card/30 p-4 space-y-3">
-    <div className="flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">{n}</span><Icon className="w-4 h-4 text-muted-foreground" /><h3 className="font-medium">{title}</h3></div>
+    <div className="flex items-center gap-2">
+      <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">{n}</span>
+      <Icon className="w-4 h-4 text-muted-foreground" />
+      <h3 className="font-medium flex-1">{title}</h3>
+      {right}
+    </div>
     {children}
   </section>
 );
