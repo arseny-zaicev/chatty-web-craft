@@ -442,17 +442,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         <div className="text-xs text-muted-foreground truncate">
                           {c.last_message_text || "-"}
                         </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <div className="text-[10px] text-muted-foreground/70 truncate">
-                            {num ? `via ${num.display_name ?? "WhatsApp"} (+${num.phone_number})` : ""}
+                        {c.last_message_at && (
+                          <div className="text-[10px] text-muted-foreground/70 mt-1">
+                            {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true })}
                           </div>
-                          {c.last_message_at && (
-                            <div className="text-[10px] text-muted-foreground/70 shrink-0">
-                              {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true })}
-                            </div>
-                          )}
-                        </div>
-                      </button>
+                        )}
 
                       {/* hover actions */}
                       <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1 bg-card/95 border border-border rounded-md shadow-sm px-1 py-0.5">
