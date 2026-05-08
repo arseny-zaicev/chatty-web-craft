@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendTelegramNotification, escapeHtml } from "../_shared/telegram.ts";
+import { sendSlackMessage, SLACK_BOOKINGS_CHANNEL } from "../_shared/slack.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +76,21 @@ Deno.serve(async (req) => {
       await sendTelegramNotification(lines.join("\n"));
     } catch (e) {
       console.error("Telegram notify failed", e);
+    }
+
+    // Slack notification
+    try {
+      const isCancel = event === "invitee.canceled";
+      const slackLines = [
+        isCancel ? ":x: *Meeting canceled*" : ":calendar: *Meeting booked*",
+        name ? `• Name: ${name}` : null,
+        invitee ? `• Email: ${invitee}` : null,
+        startTime ? `• Time: ${startTime}` : null,
+        eventUri ? `• Link: ${eventUri}` : null,
+      ].filter(Boolean).join("\n");
+      await sendSlackMessage(SLACK_BOOKINGS_CHANNEL, slackLines);
+    } catch (e) {
+      console.error("Slack notify failed", e);
     }
 
     return new Response(JSON.stringify({ ok: true }), {
