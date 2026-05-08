@@ -848,7 +848,7 @@ export type Database = {
           usage_type: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id: string
           webhook_connected: boolean
-          workspace_id: string
+          workspace_id: string | null
         }
         Insert: {
           bm_name?: string | null
@@ -872,7 +872,7 @@ export type Database = {
           usage_type?: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id: string
           webhook_connected?: boolean
-          workspace_id: string
+          workspace_id?: string | null
         }
         Update: {
           bm_name?: string | null
@@ -896,7 +896,7 @@ export type Database = {
           usage_type?: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id?: string
           webhook_connected?: boolean
-          workspace_id?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }
