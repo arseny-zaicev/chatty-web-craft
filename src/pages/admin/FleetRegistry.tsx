@@ -712,7 +712,11 @@ function AddNumberDrawer({
                 <SelectContent>
                   <SelectItem value="250">250 / day</SelectItem>
                   <SelectItem value="1000">1 000 / day</SelectItem>
+                  <SelectItem value="2000">2 000 / day</SelectItem>
+                  <SelectItem value="5000">5 000 / day</SelectItem>
                   <SelectItem value="10000">10 000 / day</SelectItem>
+                  <SelectItem value="20000">20 000 / day</SelectItem>
+                  <SelectItem value="50000">50 000 / day</SelectItem>
                   <SelectItem value="100000">100 000 / day</SelectItem>
                   <SelectItem value="unlimited">Unlimited</SelectItem>
                 </SelectContent>
