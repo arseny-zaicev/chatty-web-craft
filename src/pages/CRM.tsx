@@ -104,6 +104,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
       if (d?.debug) setLastSendDebug(d.debug);
       if (d?.error) throw new Error(d.error);
       setDraft("");
+      stickToBottomRef.current = true;
+      requestAnimationFrame(() => {
+        const el = messagesScrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send";
       toast.error(msg);
