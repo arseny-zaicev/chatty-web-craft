@@ -51,7 +51,14 @@ type Row = {
   last_inbound: string | null;
   last_outbound: string | null;
   last_error: string | null;
+  total_sent: number;
+  total_errors: number;
+  errors_since_unban: number;
+  restricted_at: string | null;
+  unrestricted_at: string | null;
 };
+
+const BAN_DURATION_DAYS = 30;
 
 type WS = { id: string; name: string; slug: string };
 
