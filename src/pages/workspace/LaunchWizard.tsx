@@ -324,7 +324,7 @@ export default function LaunchWizard() {
                     <div className="text-xs text-muted-foreground mt-1">
                       {k === "marketing"
                         ? "0/0 delay, single number, send as fast as possible."
-                        : "30-90s delay, distribute across numbers, paced."}
+                        : "Randomized 60-120s delay per number, distribute across numbers."}
                     </div>
                   </button>
                 );
@@ -408,8 +408,14 @@ export default function LaunchWizard() {
             )}
             <div className="grid grid-cols-3 gap-2 mt-3">
               <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
-              <Field label="Min delay (s)"><Input type="number" min={0} value={delayMin} onChange={(e) => setDelayMin(Number(e.target.value))} /></Field>
-              <Field label="Max delay (s)"><Input type="number" min={delayMin} value={delayMax} onChange={(e) => setDelayMax(Number(e.target.value))} /></Field>
+              <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
+                <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
+                  onChange={(e) => setDelayMin(Math.max(type === "utility" ? UTILITY_MIN_DELAY : 0, Number(e.target.value)))} />
+              </Field>
+              <Field label="Max delay (s)">
+                <Input type="number" min={delayMin} value={delayMax}
+                  onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
+              </Field>
             </div>
           </Step>
 
