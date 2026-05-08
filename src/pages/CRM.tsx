@@ -615,6 +615,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       <div>source: <span className="text-foreground">{String(lastSendDebug.source)}</span></div>
                       <div>destination: <span className="text-foreground">{String(lastSendDebug.destination)}</span></div>
                       <div>key_type: <span className="text-foreground">{String(lastSendDebug.key_type)}</span></div>
+                      <div>stored_key_type: <span className="text-foreground">{String(lastSendDebug.stored_key_type)}</span></div>
+                      <div>request_path: <span className="text-foreground">{String(lastSendDebug.request_path)}</span></div>
+                      <div>function_version: <span className="text-foreground">{String(lastSendDebug.function_version)}</span></div>
                       <div>http_status: <span className="text-foreground">{String(lastSendDebug.http_status)}</span></div>
                       <div>provider_status: <span className="text-foreground">{String(lastSendDebug.provider_status)}</span></div>
                       <div>provider_message_id: <span className="text-foreground">{String(lastSendDebug.provider_message_id)}</span></div>
