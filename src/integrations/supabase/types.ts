@@ -848,7 +848,9 @@ export type Database = {
           provider_api_key: string | null
           provider_app_id: string | null
           provider_waba_id: string | null
+          restricted_at: string | null
           status: Database["public"]["Enums"]["whatsapp_number_status"]
+          unrestricted_at: string | null
           updated_at: string
           usage_type: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id: string
@@ -877,7 +879,9 @@ export type Database = {
           provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
+          restricted_at?: string | null
           status?: Database["public"]["Enums"]["whatsapp_number_status"]
+          unrestricted_at?: string | null
           updated_at?: string
           usage_type?: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id: string
@@ -906,7 +910,9 @@ export type Database = {
           provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
+          restricted_at?: string | null
           status?: Database["public"]["Enums"]["whatsapp_number_status"]
+          unrestricted_at?: string | null
           updated_at?: string
           usage_type?: Database["public"]["Enums"]["whatsapp_number_usage"]
           user_id?: string
