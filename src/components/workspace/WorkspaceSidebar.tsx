@@ -1,6 +1,6 @@
 import { NavLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus, BookOpen } from "lucide-react";
+import { Building2, LayoutDashboard, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus, BookOpen, BarChart3, Settings as SettingsIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -14,13 +14,16 @@ import {
 } from "@/components/ui/sidebar";
 import { fetchWorkspaces, workspaceKeys } from "@/lib/workspaces";
 
-const tabs = [
+const opsTabs = [
+  { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
-  { key: "library", label: "Library", icon: BookOpen },
-  { key: "templates", label: "Templates", icon: FileText },
-  { key: "numbers", label: "Numbers", icon: Phone },
   { key: "campaigns", label: "Campaigns", icon: Megaphone },
+  { key: "reporting", label: "Reporting", icon: BarChart3 },
+  { key: "library", label: "Library", icon: BookOpen },
+];
+const setupTabs = [
+  { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export function WorkspaceSidebar() {
@@ -60,41 +63,61 @@ export function WorkspaceSidebar() {
         </SidebarGroup>
 
         {slug && slug !== "new" && (
-          <SidebarGroup>
-            <SidebarGroupLabel>{!collapsed && "Sections"}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {tabs.map((t) => (
-                  <SidebarMenuItem key={t.key}>
-                    <SidebarMenuButton asChild tooltip={t.label}>
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel>{!collapsed && "Operations"}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {opsTabs.map((t) => (
+                    <SidebarMenuItem key={t.key}>
+                      <SidebarMenuButton asChild tooltip={t.label}>
+                        <NavLink
+                          to={`/ws/${slug}/${t.key}`}
+                          end={t.key === "overview"}
+                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
+                        >
+                          <t.icon className="w-4 h-4" />
+                          {!collapsed && <span>{t.label}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Launch campaign">
                       <NavLink
-                        to={`/ws/${slug}/${t.key}`}
-                        className={({ isActive }) =>
-                          `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`
-                        }
+                        to={`/ws/${slug}/launch`}
+                        className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
                       >
-                        <t.icon className="w-4 h-4" />
-                        {!collapsed && <span>{t.label}</span>}
+                        <Rocket className="w-4 h-4" />
+                        {!collapsed && <span>Launch</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Launch campaign">
-                    <NavLink
-                      to={`/ws/${slug}/launch`}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`
-                      }
-                    >
-                      <Rocket className="w-4 h-4" />
-                      {!collapsed && <span>Launch</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupLabel>{!collapsed && "Setup"}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {setupTabs.map((t) => (
+                    <SidebarMenuItem key={t.key}>
+                      <SidebarMenuButton asChild tooltip={t.label}>
+                        <NavLink
+                          to={`/ws/${slug}/${t.key}`}
+                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
+                        >
+                          <t.icon className="w-4 h-4" />
+                          {!collapsed && <span>{t.label}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
         )}
       </SidebarContent>
     </Sidebar>

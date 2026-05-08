@@ -34,7 +34,7 @@ export default function NewClient() {
     onSuccess: async (d) => {
       toast.success("Client added");
       await qc.invalidateQueries({ queryKey: workspaceKeys.list });
-      navigate(`/ws/${d.slug}/inbox`);
+      navigate(`/ws/${d.slug}/overview`);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not create client"),
   });
