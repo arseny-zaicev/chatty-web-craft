@@ -178,16 +178,21 @@ export default function FleetRegistry() {
   const [editing, setEditing] = useState<Row | null>(null);
 
   useEffect(() => {
-    const guard = (u: User | null) => {
-      if (!u) { navigate("/admin-auth"); return; }
-      if (u.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        supabase.auth.signOut(); navigate("/admin-auth"); toast.error("Admin only"); return;
+    let mounted = true;
+    const check = async () => {
+      const { evaluateAdminAccess } = await import("@/lib/adminGuard");
+      const r = await evaluateAdminAccess();
+      if (!mounted) return;
+      if (r.state === "redirect") {
+        if (r.reason === "not-admin") toast.error("Admin only");
+        navigate(r.to);
+      } else {
+        setAuthChecked(true);
       }
-      setAuthChecked(true);
     };
-    supabase.auth.getSession().then(({ data: { session } }) => guard(session?.user ?? null));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => guard(s?.user ?? null));
-    return () => subscription.unsubscribe();
+    check();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { check(); });
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, [navigate]);
 
   const { data, isLoading } = useQuery({
