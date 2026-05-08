@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon,
+  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { User } from "@supabase/supabase-js";
@@ -148,6 +148,7 @@ export default function FleetRegistry() {
   const qc = useQueryClient();
   const [authChecked, setAuthChecked] = useState(false);
   const [adderOpen, setAdderOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
 
   useEffect(() => {
     const guard = (u: User | null) => {
@@ -203,6 +204,19 @@ export default function FleetRegistry() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
   });
 
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("whatsapp_numbers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Number deleted");
+      await qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+      await qc.invalidateQueries({ queryKey: ["numbers-inventory"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+
   if (!authChecked || isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -246,13 +260,20 @@ export default function FleetRegistry() {
         </div>
 
         {view === "by-client" ? (
-          <GroupedByClient rows={filtered} workspaces={workspaces} onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })} />
+          <GroupedByClient rows={filtered} workspaces={workspaces}
+            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
+            onEdit={setEditing}
+            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         ) : (
-          <FleetTable rows={filtered} workspaces={workspaces} onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })} />
+          <FleetTable rows={filtered} workspaces={workspaces}
+            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
+            onEdit={setEditing}
+            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
         )}
       </main>
 
-      <AddNumberDrawer open={adderOpen} onOpenChange={setAdderOpen} workspaces={workspaces}
+      <AddNumberDrawer open={adderOpen || !!editing} onOpenChange={(v) => { if (!v) { setAdderOpen(false); setEditing(null); } else setAdderOpen(true); }} workspaces={workspaces}
+        editing={editing}
         onCreated={async () => { await qc.invalidateQueries({ queryKey: ["fleet-registry"] }); }} />
     </div>
   );
@@ -269,7 +290,13 @@ const FilterSelect = ({ value, onChange, options, placeholder }: { value: string
   </Select>
 );
 
-function FleetTable({ rows, workspaces, onReassign }: { rows: Row[]; workspaces: WS[]; onReassign: (id: string, workspaceId: string | null) => void }) {
+type RowActions = {
+  onReassign: (id: string, workspaceId: string | null) => void;
+  onEdit: (r: Row) => void;
+  onDelete: (id: string) => void;
+};
+
+function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   return (
     <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
       <Table>
@@ -281,14 +308,14 @@ function FleetTable({ rows, workspaces, onReassign }: { rows: Row[]; workspaces:
         <TableBody>
           {rows.length === 0 ? (
             <TableRow><TableCell colSpan={20} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
-          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} />)}
+          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} />)}
         </TableBody>
       </Table>
     </div>
   );
 }
 
-function GroupedByClient({ rows, workspaces, onReassign }: { rows: Row[]; workspaces: WS[]; onReassign: (id: string, workspaceId: string | null) => void }) {
+function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   const groups = useMemo(() => {
     const map = new Map<string, { ws: WS | null; rows: Row[] }>();
     for (const r of rows) {
@@ -335,7 +362,7 @@ function GroupedByClient({ rows, workspaces, onReassign }: { rows: Row[]; worksp
               </TableRow>
             </TableHeader>
             <TableBody>
-              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} hideClientCol />)}
+              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} hideClientCol />)}
             </TableBody>
           </Table>
         </div>
@@ -383,7 +410,7 @@ function TruncCell({ value, max = 140 }: { value: string | null; max?: number })
   return <span className="font-mono text-[11px] text-muted-foreground truncate inline-block align-middle" style={{ maxWidth: max }} title={value}>{value}</span>;
 }
 
-function FleetRowView({ r, workspaces, onReassign, hideClientCol }: { r: Row; workspaces: WS[]; onReassign: (id: string, workspaceId: string | null) => void; hideClientCol?: boolean }) {
+function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
@@ -422,11 +449,21 @@ function FleetRowView({ r, workspaces, onReassign, hideClientCol }: { r: Row; wo
       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_outbound ? formatDistanceToNow(new Date(r.last_outbound), { addSuffix: true }) : "—"}</TableCell>
       <TableCell className="text-xs text-red-600 max-w-[180px] truncate" title={r.last_error ?? ""}>{r.last_error ?? "—"}</TableCell>
       <TableCell>
-        {r.workspace_slug ? (
-          <Button asChild size="sm" variant="ghost"><Link to={`/ws/${r.workspace_slug}/settings`}><ExternalLink className="w-3.5 h-3.5" /></Link></Button>
-        ) : (
-          <ReassignInline value={r.workspace_id} workspaces={workspaces} onChange={(wid) => onReassign(r.id, wid)} />
-        )}
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(r)} title="Edit">
+            <Pencil className="w-3.5 h-3.5" />
+          </Button>
+          {r.workspace_slug ? (
+            <Button asChild size="icon" variant="ghost" className="h-7 w-7" title="Open client">
+              <Link to={`/ws/${r.workspace_slug}/settings`}><ExternalLink className="w-3.5 h-3.5" /></Link>
+            </Button>
+          ) : (
+            <ReassignInline value={r.workspace_id} workspaces={workspaces} onChange={(wid) => onReassign(r.id, wid)} />
+          )}
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => onDelete(r.id)} title="Delete">
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -446,8 +483,8 @@ function ReassignInline({ value, workspaces, onChange }: { value: string | null;
 
 // Add Number drawer ---------------------------------------------------------
 function AddNumberDrawer({
-  open, onOpenChange, workspaces, onCreated,
-}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; onCreated: () => Promise<void> | void }) {
+  open, onOpenChange, workspaces, editing, onCreated,
+}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; editing?: Row | null; onCreated: () => Promise<void> | void }) {
   const [phone, setPhone] = useState("");
   const [appName, setAppName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -469,6 +506,27 @@ function AddNumberDrawer({
     setProvidedBy(""); setAssignedRef("");
   };
 
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setPhone(editing.phone_number || "");
+      setAppName(editing.label || "");
+      setDisplayName(editing.display_name || "");
+      setProfileAvatar((editing.profile_avatar as "man" | "woman") || "");
+      setAppId(editing.provider_app_id || "");
+      setApiKey(editing.provider_api_key || "");
+      setWabaId(editing.provider_waba_id || "");
+      setMessagingLimit(editing.messaging_limit || "");
+      setWorkspaceId(editing.workspace_id ?? "__unassigned__");
+      setIsWarming(editing.is_warming);
+      setUsage(editing.usage_type);
+      setProvidedBy(editing.provided_by || "");
+      setAssignedRef(editing.assigned_ref || "");
+    } else {
+      reset();
+    }
+  }, [open, editing]);
+
   const create = useMutation({
     mutationFn: async () => {
       const cleanPhone = phone.replace(/[^\d]/g, "");
@@ -476,14 +534,8 @@ function AddNumberDrawer({
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sign in required");
 
-      const { data: existing } = await supabase.from("whatsapp_numbers")
-        .select("id").eq("phone_number", cleanPhone).maybeSingle();
-      if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
-
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
-      const { error } = await supabase.from("whatsapp_numbers").insert({
-        user_id: auth.user.id,
-        workspace_id: targetWs,
+      const payload = {
         phone_number: cleanPhone,
         label: appName || null,
         display_name: displayName || appName || null,
@@ -497,12 +549,28 @@ function AddNumberDrawer({
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
-        status: isWarming ? "warming" : "draft",
-      });
-      if (error) throw error;
+      };
+
+      if (editing) {
+        const { error } = await supabase.from("whatsapp_numbers")
+          .update({ ...payload, workspace_id: targetWs })
+          .eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { data: existing } = await supabase.from("whatsapp_numbers")
+          .select("id").eq("phone_number", cleanPhone).maybeSingle();
+        if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
+        const { error } = await supabase.from("whatsapp_numbers").insert({
+          ...payload,
+          user_id: auth.user.id,
+          workspace_id: targetWs,
+          status: isWarming ? "warming" : "draft",
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: async () => {
-      toast.success("Number added to Fleet");
+      toast.success(editing ? "Number updated" : "Number added to Fleet");
       reset();
       onOpenChange(false);
       await onCreated();
@@ -514,9 +582,9 @@ function AddNumberDrawer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Phone className="w-4 h-4 text-primary" />Add WhatsApp number</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Phone className="w-4 h-4 text-primary" />{editing ? "Edit WhatsApp number" : "Add WhatsApp number"}</DialogTitle>
           <DialogDescription>
-            Numbers are managed centrally in Fleet. Save as Unassigned now and allocate later, or pick a client below.
+            {editing ? "Update fields and save. Allocation, credentials and metadata can all be changed here." : "Numbers are managed centrally in Fleet. Save as Unassigned now and allocate later, or pick a client below."}
           </DialogDescription>
         </DialogHeader>
 
