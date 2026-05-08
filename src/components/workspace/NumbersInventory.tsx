@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, AlertTriangle, XCircle, Phone, Plus, RefreshCw, Save, Loader2, Ban } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Phone, Plus, RefreshCw, Save, Loader2, Ban, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -228,25 +228,6 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     </Badge>
                   )}
                   <div className="ml-auto flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!draft.provider_app_id}
-                      onClick={async () => {
-                        const t = toast.loading("Registering webhook...");
-                        const { data, error } = await supabase.functions.invoke("gupshup-set-callback", { body: { number_id: n.id } });
-                        toast.dismiss(t);
-                        if (error || !data?.ok) {
-                          toast.error("Auto-set failed - paste the webhook URL into Gupshup manually.", { duration: 6000 });
-                        } else {
-                          toast.success("Webhook connected");
-                          await supabase.from("whatsapp_numbers").update({ webhook_connected: true }).eq("id", n.id);
-                          await qc.invalidateQueries({ queryKey: ["numbers-inventory", workspaceId] });
-                        }
-                      }}
-                    >
-                      Connect webhook
-                    </Button>
                     {dirty && (
                       <Button size="sm" onClick={() => save.mutate(n.id)} disabled={save.isPending}>
                         <Save className="w-3.5 h-3.5 mr-1" />Save
@@ -292,6 +273,17 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   </Field>
                 </div>
 
+                {/* Webhook URL - copy & paste into Gupshup manually */}
+                <WebhookUrlRow
+                  numberId={n.id}
+                  connected={draft.webhook_connected}
+                  onMarkConnected={async () => {
+                    update(n.id, { webhook_connected: !draft.webhook_connected });
+                    await supabase.from("whatsapp_numbers").update({ webhook_connected: !draft.webhook_connected }).eq("id", n.id);
+                    await qc.invalidateQueries({ queryKey: ["numbers-inventory", workspaceId] });
+                  }}
+                />
+
                 {/* Technical / advanced (collapsed by default) */}
                 <details className="text-[11px] text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground select-none">Technical setup (phone, app id, API key, BM)</summary>
@@ -302,10 +294,6 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     <Field label="Gupshup app name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} placeholder="01Ashik02" /></Field>
                     <Field label="Partner / source"><Input value={draft.partner_source ?? ""} onChange={(e) => update(n.id, { partner_source: e.target.value })} /></Field>
                     <Field label="BM name"><Input value={draft.bm_name ?? ""} onChange={(e) => update(n.id, { bm_name: e.target.value })} /></Field>
-                  </div>
-                  <div className="mt-2 break-all">
-                    Inbound webhook URL (paste into Gupshup if auto-connect fails):{" "}
-                    <code className="px-1 py-0.5 rounded bg-muted">{`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`}</code>
                   </div>
                 </details>
 
@@ -324,3 +312,51 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="space-y-1"><label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>{children}</div>
 );
+
+const WebhookUrlRow = ({
+  numberId: _numberId,
+  connected,
+  onMarkConnected,
+}: {
+  numberId: string;
+  connected: boolean;
+  onMarkConnected: () => void;
+}) => {
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Webhook URL copied");
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error("Copy failed - select and copy manually");
+    }
+  };
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-2 space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Inbound webhook URL</span>
+        <button
+          type="button"
+          onClick={onMarkConnected}
+          className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+        >
+          {connected ? "Mark as not connected" : "Mark as connected"}
+        </button>
+      </div>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 text-[11px] px-2 py-1.5 rounded bg-background border border-border break-all font-mono">
+          {url}
+        </code>
+        <Button size="sm" variant="outline" onClick={copy} className="shrink-0">
+          {copied ? <><Check className="w-3.5 h-3.5 mr-1" />Copied</> : <><Copy className="w-3.5 h-3.5 mr-1" />Copy</>}
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Paste this into the Gupshup app - Callback URL. Then click "Mark as connected" so this number counts as ready.
+      </p>
+    </div>
+  );
+};
