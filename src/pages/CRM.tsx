@@ -341,7 +341,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
         <div className="flex-1 flex min-h-0">
           {/* Left: conversation list */}
-          <aside className="w-[340px] border-r border-border flex flex-col bg-card/20">
+          <aside
+            className={`${
+              active ? "hidden lg:flex" : "flex"
+            } w-full lg:w-[300px] xl:w-[340px] lg:shrink-0 border-r border-border flex-col bg-card/20`}
+          >
             <div className="p-3 space-y-2 border-b border-border">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
