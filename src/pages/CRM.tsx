@@ -341,11 +341,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
         <div className="flex-1 flex min-h-0">
           {/* Left: conversation list */}
-          <aside
-            className={`${
-              active ? "hidden lg:flex" : "flex"
-            } w-full lg:w-[300px] xl:w-[340px] lg:shrink-0 border-r border-border flex-col bg-card/20`}
-          >
+          <aside className="w-[260px] xl:w-[320px] shrink-0 border-r border-border flex flex-col bg-card/20">
             <div className="p-3 space-y-2 border-b border-border">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -446,16 +442,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         <div className="text-xs text-muted-foreground truncate">
                           {c.last_message_text || "-"}
                         </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <div className="text-[10px] text-muted-foreground/70 truncate">
-                            {num ? `via ${num.display_name ?? "WhatsApp"} (+${num.phone_number})` : ""}
+                        {c.last_message_at && (
+                          <div className="text-[10px] text-muted-foreground/70 mt-1">
+                            {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true })}
                           </div>
-                          {c.last_message_at && (
-                            <div className="text-[10px] text-muted-foreground/70 shrink-0">
-                              {formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true })}
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </button>
 
                       {/* hover actions */}
@@ -503,7 +494,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
           </aside>
 
           {/* Right: chat window */}
-          <section className={`${active ? "flex" : "hidden lg:flex"} flex-1 flex-col min-w-0`}>
+          <section className="flex-1 flex flex-col min-w-0">
             {!active ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
