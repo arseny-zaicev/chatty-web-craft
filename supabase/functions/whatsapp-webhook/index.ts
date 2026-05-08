@@ -30,30 +30,52 @@ async function handleInbound(payload: Record<string, unknown>) {
     return;
   }
 
-  // Prefer the Gupshup app name because inbound webhooks often omit destination.
-  // Never guess by "single active number" - that silently attaches messages to the wrong sender.
+  // Deterministic match order:
+  //   1. provider_app_id == Gupshup app name (the only stable, unique identifier we control)
+  //   2. phone_number == webhook destination (when provider_app_id is missing on the row)
+  // We never match by display_name: it is human-editable, often duplicated across numbers,
+  // and was the source of silent misrouting at >1 number.
   let number: { id: string; user_id: string; workspace_id: string; phone_number: string; display_name: string | null; provider_app_id: string | null } | null = null;
+  let matchStrategy: "provider_app_id" | "phone_number" | null = null;
+
   if (appName) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("whatsapp_numbers")
       .select("id, user_id, workspace_id, phone_number, display_name, provider_app_id")
-      .or(`display_name.eq.${appName},provider_app_id.eq.${appName}`)
-      .maybeSingle();
-    number = data;
+      .eq("provider_app_id", appName)
+      .limit(2);
+    if (error) {
+      console.error("provider_app_id lookup failed", error);
+    } else if (data && data.length === 1) {
+      number = data[0];
+      matchStrategy = "provider_app_id";
+    } else if (data && data.length > 1) {
+      console.error("Ambiguous provider_app_id - multiple numbers share the same Gupshup app id", { appName, count: data.length });
+      return; // refuse to guess
+    }
   }
   if (!number && destination) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("whatsapp_numbers")
       .select("id, user_id, workspace_id, phone_number, display_name, provider_app_id")
       .eq("phone_number", destination)
-      .maybeSingle();
-    number = data;
+      .limit(2);
+    if (error) {
+      console.error("phone_number lookup failed", error);
+    } else if (data && data.length === 1) {
+      number = data[0];
+      matchStrategy = "phone_number";
+    } else if (data && data.length > 1) {
+      console.error("Ambiguous phone_number - duplicate rows for same number", { destination, count: data.length });
+      return;
+    }
   }
   if (!number) {
     console.warn("No matching whatsapp_number for inbound webhook", { appName, destination, source });
     return;
   }
   console.log("Matched inbound whatsapp_number", {
+    matchStrategy,
     appName,
     destination,
     source,

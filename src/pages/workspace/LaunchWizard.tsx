@@ -314,15 +314,21 @@ export default function LaunchWizard() {
   const sync = useMutation({
     mutationFn: async () => {
       if (numbers.length === 0) throw new Error("Add a number first");
-      const targetNumberId = numberIds[0] || numbers[0].id;
+      // Bulk: sync templates for every active number in this workspace.
+      // Per-number failures are isolated and reported by the edge function.
       const { data: res, error } = await supabase.functions.invoke("campaigns", {
-        body: { action: "sync_templates", whatsapp_number_id: targetNumberId },
+        body: { action: "sync_templates_all", workspace_id: workspace?.id },
       });
       if (error) throw error;
-      return res as { fetched: number; upserted: number };
+      return res as { totals: { numbers: number; fetched: number; upserted: number; failed: number }; results: Array<{ whatsapp_number_id: string; ok?: boolean; error?: string }> };
     },
     onSuccess: async (r) => {
-      toast.success(`Synced ${r.upserted}/${r.fetched}`);
+      const t = r?.totals ?? { numbers: 0, fetched: 0, upserted: 0, failed: 0 };
+      if (t.failed > 0) {
+        toast.warning(`Synced ${t.upserted}/${t.fetched} across ${t.numbers - t.failed}/${t.numbers} numbers (${t.failed} failed)`);
+      } else {
+        toast.success(`Synced ${t.upserted}/${t.fetched} across ${t.numbers} number${t.numbers === 1 ? "" : "s"}`);
+      }
       await qc.invalidateQueries({ queryKey: launchKeys.essentials(workspace?.id) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Sync failed"),

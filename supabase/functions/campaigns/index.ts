@@ -313,11 +313,56 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
           raw: t,
           synced_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,name,language" },
+        { onConflict: "whatsapp_number_id,name,language" },
       );
     if (!upsertError) upserted++;
   }
   return json({ ok: true, fetched: templates.length, upserted, warning: syncWarning });
+}
+
+// Bulk sync: iterate every active number in the workspace (or for the requester if no workspace).
+// Per-number failures are isolated and reported; one bad number never aborts the rest.
+async function syncTemplatesAll(admin: any, requesterId: string, body: any) {
+  const workspaceId = body.workspace_id ? String(body.workspace_id) : null;
+  let q = admin
+    .from("whatsapp_numbers")
+    .select("id, user_id, workspace_id, provider_app_id")
+    .eq("is_active", true)
+    .not("provider_app_id", "is", null);
+  if (workspaceId) {
+    if (!uuidRegex.test(workspaceId)) return json({ error: "Invalid workspace_id" }, 400);
+    q = q.eq("workspace_id", workspaceId);
+  } else {
+    q = q.eq("user_id", requesterId);
+  }
+  const { data: nums, error } = await q;
+  if (error) return json({ error: error.message }, 500);
+  const list = nums ?? [];
+  if (list.length === 0) return json({ ok: true, results: [], totals: { numbers: 0, fetched: 0, upserted: 0, failed: 0 } });
+
+  const results: any[] = [];
+  let totalFetched = 0, totalUpserted = 0, failed = 0;
+  for (const n of list) {
+    try {
+      const r = await syncTemplates(admin, requesterId, { whatsapp_number_id: n.id });
+      const payload = await r.json();
+      if (payload?.ok) {
+        totalFetched += Number(payload.fetched || 0);
+        totalUpserted += Number(payload.upserted || 0);
+      } else {
+        failed++;
+      }
+      results.push({ whatsapp_number_id: n.id, ...payload });
+    } catch (e) {
+      failed++;
+      results.push({ whatsapp_number_id: n.id, ok: false, error: e instanceof Error ? e.message : "unknown" });
+    }
+  }
+  return json({
+    ok: true,
+    results,
+    totals: { numbers: list.length, fetched: totalFetched, upserted: totalUpserted, failed },
+  });
 }
 
 async function postGupshupTemplate({
@@ -624,6 +669,7 @@ serve(async (req) => {
     if (action === "blast") return await blastCampaign(admin, auth.user.id, body);
     if (action === "upsert_template") return await upsertTemplate(admin, auth.user.id, body);
     if (action === "sync_templates") return await syncTemplates(admin, auth.user.id, body);
+    if (action === "sync_templates_all") return await syncTemplatesAll(admin, auth.user.id, body);
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
