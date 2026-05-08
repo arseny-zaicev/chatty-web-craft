@@ -56,9 +56,11 @@ type Row = {
   errors_since_unban: number;
   restricted_at: string | null;
   unrestricted_at: string | null;
-  display_name_approved: boolean;
+  display_name_status: DnStatus;
   display_name_checked_at: string | null;
 };
+
+type DnStatus = "pending" | "approved" | "rejected";
 
 const BAN_DURATION_DAYS = 30;
 
@@ -155,7 +157,7 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       errors_since_unban: errorsSinceUnban,
       restricted_at: (n.restricted_at as string) ?? null,
       unrestricted_at: unrestrictedAt,
-      display_name_approved: Boolean(n.display_name_approved),
+      display_name_status: ((n.display_name_status as DnStatus) ?? "pending"),
       display_name_checked_at: (n.display_name_checked_at as string) ?? null,
     };
   });
