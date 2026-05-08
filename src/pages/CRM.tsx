@@ -17,6 +17,8 @@ import {
   Pin,
   CheckCheck,
   ArrowLeft,
+  Paperclip,
+  Mic,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
