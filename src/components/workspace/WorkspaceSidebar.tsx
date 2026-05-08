@@ -1,6 +1,6 @@
 import { NavLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, LayoutDashboard, Inbox, KanbanSquare, FileText, Megaphone, Phone, Rocket, Loader2, Plus, BookOpen, BarChart3, Settings as SettingsIcon } from "lucide-react";
+import { Building2, LayoutDashboard, Inbox, KanbanSquare, Megaphone, Rocket, Loader2, Plus, BookOpen, Settings as SettingsIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
