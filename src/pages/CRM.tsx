@@ -16,6 +16,7 @@ import {
   Star,
   Pin,
   CheckCheck,
+  ArrowLeft,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
@@ -340,7 +341,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
         <div className="flex-1 flex min-h-0">
           {/* Left: conversation list */}
-          <aside className="w-[340px] border-r border-border flex flex-col bg-card/20">
+          <aside
+            className={`${
+              active ? "hidden lg:flex" : "flex"
+            } w-full lg:w-[300px] xl:w-[340px] lg:shrink-0 border-r border-border flex-col bg-card/20`}
+          >
             <div className="p-3 space-y-2 border-b border-border">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -498,7 +503,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
           </aside>
 
           {/* Right: chat window */}
-          <section className="flex-1 flex flex-col min-w-0">
+          <section className={`${active ? "flex" : "hidden lg:flex"} flex-1 flex-col min-w-0`}>
             {!active ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
@@ -508,9 +513,16 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
               </div>
             ) : (
               <>
-                <div className="h-16 px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
+                <div className="h-16 px-4 sm:px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
+                    <button
+                      onClick={() => setActiveId(null)}
+                      className="lg:hidden p-1.5 -ml-1 rounded hover:bg-muted text-muted-foreground"
+                      title="Back to conversations"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
                       {(active.contact_name ?? active.contact_phone).slice(0, 1).toUpperCase()}
                     </div>
                     <div className="min-w-0">
@@ -528,7 +540,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {activeNumber && (
-                      <div className="text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                      <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1">
                         <Phone className="w-3 h-3" />
                         Sending from {activeNumber.display_name ?? "WhatsApp"} (+{activeNumber.phone_number})
                       </div>
