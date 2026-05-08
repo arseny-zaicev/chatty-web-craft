@@ -111,21 +111,41 @@ const TabBtn = ({ active, onClick, icon, children }: { active: boolean; onClick:
   <Button variant={active ? "default" : "ghost"} size="sm" onClick={onClick} className="gap-2">{icon}{children}</Button>
 );
 
-function WorkspacesDashboard({ workspaces, isLoading, onRefetch }: { workspaces: { id: string; name: string; slug: string; color: string }[]; isLoading: boolean; onRefetch: () => void }) {
+function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[]; isLoading: boolean; onRefetch: () => void }) {
+  const { data: snapshot } = useQuery<PortfolioSnapshot>({
+    queryKey: portfolioKeys.snapshot,
+    queryFn: fetchPortfolioSnapshot,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
   if (isLoading) {
     return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
+  const t = snapshot?.totals;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-2xl font-display font-bold">Clients (workspaces)</h2>
-          <p className="text-sm text-muted-foreground">One workspace per client. Open it to manage their inbox, pipeline and campaigns.</p>
+          <h2 className="text-2xl font-display font-bold">Portfolio</h2>
+          <p className="text-sm text-muted-foreground">All clients at a glance. Open any folder to manage their inbox, launches and reporting.</p>
         </div>
         <Button asChild>
           <Link to="/ws/new"><Plus className="h-4 w-4 mr-2" />New client</Link>
         </Button>
+      </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        <Kpi icon={Building2} label="Clients" value={t?.clients ?? workspaces.length} />
+        <Kpi icon={Megaphone} label="Active campaigns" value={t?.active_campaigns ?? 0} />
+        <Kpi icon={MessageSquare} label="Unread replies" value={t?.unread_replies ?? 0} accent={t && t.unread_replies > 0 ? "text-emerald-500" : undefined} />
+        <Kpi icon={Send} label="Delivered today" value={t?.delivered_today ?? 0} />
+        <Kpi icon={MessageSquare} label="Replies today" value={t?.replies_today ?? 0} />
+        <Kpi icon={Calendar} label="Booked today" value={t?.booked_calls_today ?? 0} />
+        <Kpi icon={AlertTriangle} label="Issues" value={t?.issues ?? 0} accent={t && t.issues > 0 ? "text-amber-500" : undefined} />
       </div>
 
       {workspaces.length === 0 ? (
@@ -138,30 +158,8 @@ function WorkspacesDashboard({ workspaces, isLoading, onRefetch }: { workspaces:
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {workspaces.map((w) => (
-            <Card key={w.id} className="group hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ background: w.color }} />
-                  <CardTitle className="text-lg truncate">{w.name}</CardTitle>
-                </div>
-                <CardDescription className="text-xs">/{w.slug}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <QuickLink to={`/ws/${w.slug}/inbox`} icon={<Inbox className="h-3.5 w-3.5" />} label="Inbox" />
-                  <QuickLink to={`/ws/${w.slug}/pipeline`} icon={<KanbanSquare className="h-3.5 w-3.5" />} label="Pipeline" />
-                  <QuickLink to={`/ws/${w.slug}/campaigns`} icon={<Megaphone className="h-3.5 w-3.5" />} label="Campaigns" />
-                  <QuickLink to={`/ws/${w.slug}/launch`} icon={<Rocket className="h-3.5 w-3.5" />} label="Launch" primary />
-                </div>
-                <Button asChild variant="ghost" size="sm" className="w-full justify-between mt-1">
-                  <Link to={`/ws/${w.slug}/inbox`}>Open workspace<ArrowRight className="h-4 w-4" /></Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-
-          <Card className="border-dashed flex items-center justify-center hover:border-primary/50 transition-colors min-h-[200px]">
+          {workspaces.map((w) => <ClientCard key={w.id} ws={w} m={snapshot?.byWorkspace[w.id]} />)}
+          <Card className="border-dashed flex items-center justify-center hover:border-primary/50 transition-colors min-h-[260px]">
             <Button asChild variant="ghost" className="h-auto flex-col gap-2 py-8">
               <Link to="/ws/new">
                 <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"><Plus className="h-5 w-5" /></div>
@@ -175,8 +173,68 @@ function WorkspacesDashboard({ workspaces, isLoading, onRefetch }: { workspaces:
   );
 }
 
+const HEALTH_META = {
+  healthy: { label: "Healthy", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", icon: CheckCircle2 },
+  attention: { label: "Attention", cls: "bg-amber-500/10 text-amber-500 border-amber-500/30", icon: AlertTriangle },
+  blocked: { label: "Blocked", cls: "bg-red-500/10 text-red-500 border-red-500/30", icon: AlertTriangle },
+} as const;
+
+function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspace"][string] | undefined }) {
+  const H = HEALTH_META[m?.health ?? "healthy"];
+  return (
+    <Card className="group hover:border-primary/50 transition-colors flex flex-col">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ background: ws.color }} />
+            <CardTitle className="text-base truncate">{ws.name}</CardTitle>
+          </div>
+          <Badge variant="outline" className={`text-[10px] ${H.cls}`}><H.icon className="w-3 h-3 mr-1" />{H.label}</Badge>
+        </div>
+        <CardDescription className="text-xs">/{ws.slug}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 flex-1 flex flex-col">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <MiniStat label="Unread" value={m?.unread_replies ?? 0} highlight={(m?.unread_replies ?? 0) > 0} />
+          <MiniStat label="Active" value={m?.active_campaigns ?? 0} />
+          <MiniStat label="Numbers" value={m ? `${m.numbers_ready}/${m.numbers_total}` : "—"} />
+          <MiniStat label="Sent today" value={m?.delivered_today ?? 0} />
+          <MiniStat label="Replies today" value={m?.replies_today ?? 0} />
+          <MiniStat label="Last" value={m?.last_activity ? formatDistanceToNow(new Date(m.last_activity), { addSuffix: false }) : "—"} small />
+        </div>
+        {m?.next_launch && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="w-3 h-3" />Next launch: {new Date(m.next_launch).toLocaleString()}</div>
+        )}
+        <div className="grid grid-cols-4 gap-1.5 mt-auto">
+          <QuickLink to={`/ws/${ws.slug}/overview`} icon={<LayoutDashboard className="h-3 w-3" />} label="Overview" />
+          <QuickLink to={`/ws/${ws.slug}/inbox`} icon={<Inbox className="h-3 w-3" />} label="Inbox" />
+          <QuickLink to={`/ws/${ws.slug}/launch`} icon={<Rocket className="h-3 w-3" />} label="Launch" primary />
+          <QuickLink to={`/ws/${ws.slug}/reporting`} icon={<BarChart3 className="h-3 w-3" />} label="Reports" />
+        </div>
+        <Button asChild variant="ghost" size="sm" className="w-full justify-between">
+          <Link to={`/ws/${ws.slug}/overview`}>Open workspace<ArrowRight className="h-4 w-4" /></Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+const Kpi = ({ icon: Icon, label, value, accent }: { icon: any; label: string; value: number | string; accent?: string }) => (
+  <div className="rounded-lg border border-border bg-card/30 p-3">
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon className="w-3.5 h-3.5" />{label}</div>
+    <div className={`text-2xl font-display font-semibold mt-1 ${accent ?? ""}`}>{value}</div>
+  </div>
+);
+
+const MiniStat = ({ label, value, highlight, small }: { label: string; value: number | string; highlight?: boolean; small?: boolean }) => (
+  <div className="rounded-md border border-border bg-card/40 py-1.5">
+    <div className={`font-display font-semibold ${small ? "text-xs" : "text-base"} ${highlight ? "text-emerald-500" : ""}`}>{value}</div>
+    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+  </div>
+);
+
 const QuickLink = ({ to, icon, label, primary }: { to: string; icon: React.ReactNode; label: string; primary?: boolean }) => (
-  <Button asChild variant={primary ? "default" : "outline"} size="sm" className="gap-1.5 h-8 text-xs justify-start">
+  <Button asChild variant={primary ? "default" : "outline"} size="sm" className="gap-1 h-7 text-[10px] justify-center px-1.5">
     <Link to={to}>{icon}{label}</Link>
   </Button>
 );
