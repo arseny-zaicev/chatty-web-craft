@@ -418,6 +418,9 @@ function FleetHeaders({ showClient }: { showClient: boolean }) {
       <TableHead>Auth</TableHead>
       <TableHead>Webhook</TableHead>
       <TableHead>Templates</TableHead>
+      <TableHead>Sent</TableHead>
+      <TableHead>Errors</TableHead>
+      <TableHead>Ban</TableHead>
       <TableHead>Last in</TableHead>
       <TableHead>Last out</TableHead>
       <TableHead>Last error</TableHead>
