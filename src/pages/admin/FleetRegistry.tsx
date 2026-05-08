@@ -71,7 +71,7 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       supabase.from("conversations").select("whatsapp_number_id, last_message_at"),
       supabase.from("whatsapp_message_events")
         .select("whatsapp_number_id, event_type, error_message, received_at")
-        .order("received_at", { ascending: false }).limit(2000),
+        .order("received_at", { ascending: false }).limit(20000),
     ]);
   if (nErr) throw nErr; if (wErr) throw wErr;
 
