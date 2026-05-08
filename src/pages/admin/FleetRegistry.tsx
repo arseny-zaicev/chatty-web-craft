@@ -570,7 +570,7 @@ function AddNumberDrawer({
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setIsWarming(false); setUsage("both");
-    setProvidedBy(""); setAssignedRef("");
+    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
   };
 
   useEffect(() => {
@@ -589,6 +589,7 @@ function AddNumberDrawer({
       setUsage(editing.usage_type);
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
+      setStatus(editing.status);
     } else {
       reset();
     }
@@ -602,6 +603,18 @@ function AddNumberDrawer({
       if (!auth.user) throw new Error("Sign in required");
 
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
+      const nextStatus: Status = editing ? status : (isWarming ? "warming" : "draft");
+      const wasBanned = editing && (editing.status === "restricted" || editing.status === "banned");
+      const isBanned = nextStatus === "restricted" || nextStatus === "banned";
+
+      const restrictionPatch: Record<string, string | null> = {};
+      if (!wasBanned && isBanned) {
+        restrictionPatch.restricted_at = new Date().toISOString();
+      } else if (wasBanned && !isBanned) {
+        restrictionPatch.unrestricted_at = new Date().toISOString();
+        restrictionPatch.restricted_at = null;
+      }
+
       const payload = {
         phone_number: cleanPhone,
         label: appName || null,
@@ -620,7 +633,7 @@ function AddNumberDrawer({
 
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
-          .update({ ...payload, workspace_id: targetWs })
+          .update({ ...payload, workspace_id: targetWs, status: nextStatus, ...restrictionPatch })
           .eq("id", editing.id);
         if (error) throw error;
       } else {
@@ -631,7 +644,7 @@ function AddNumberDrawer({
           ...payload,
           user_id: auth.user.id,
           workspace_id: targetWs,
-          status: isWarming ? "warming" : "draft",
+          status: nextStatus,
         });
         if (error) throw error;
       }
