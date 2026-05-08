@@ -452,6 +452,7 @@ function FleetHeaders({ showClient }: { showClient: boolean }) {
       <TableHead>Provided by</TableHead>
       <TableHead>Country</TableHead>
       <TableHead>Status</TableHead>
+      <TableHead title="Display name approved by Meta">DN</TableHead>
       <TableHead>Auth</TableHead>
       <TableHead>Webhook</TableHead>
       <TableHead>Templates</TableHead>
@@ -509,6 +510,11 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientC
       <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${statusTone[r.status]}`}>{r.status}</Badge></TableCell>
+      <TableCell>
+        {r.display_name_approved
+          ? <Badge variant="outline" className={`text-[10px] ${statusTone.ready}`} title={r.display_name_checked_at ? `Confirmed ${formatDistanceToNow(new Date(r.display_name_checked_at), { addSuffix: true })}` : ""}>approved</Badge>
+          : <Badge variant="outline" className={`text-[10px] ${statusTone.warming}`}>pending</Badge>}
+      </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
