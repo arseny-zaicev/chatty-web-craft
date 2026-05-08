@@ -47,7 +47,6 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     { data: campaigns },
     { data: msgsToday },
     { data: nextLaunches },
-    { data: bookedToday },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
     supabase.from("conversations").select("id, workspace_id, unread_count, last_message_at"),
@@ -55,8 +54,8 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     supabase.from("campaigns").select("workspace_id, status, scheduled_start_at").in("status", ["scheduled", "running", "paused", "draft"]),
     supabase.from("messages").select("conversation_id, direction, created_at, status").gte("created_at", today),
     supabase.from("campaigns").select("workspace_id, scheduled_start_at").in("status", ["scheduled", "draft"]).gte("scheduled_start_at", new Date().toISOString()).order("scheduled_start_at", { ascending: true }),
-    supabase.from("form_submissions").select("id, created_at").eq("form_type", "booking" as never).gte("created_at", today),
   ]);
+  const bookedToday: { id: string }[] = [];
 
   const byWorkspace: Record<string, WorkspaceMetrics> = {};
   const ensure = (id: string): WorkspaceMetrics => {
