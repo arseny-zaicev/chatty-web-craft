@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, MessageSquare, Link2, Type, AlignLeft, Star } from "lucide-react";
+import { Folder, Search, MessageSquare, Link2, Type, AlignLeft, Star } from "lucide-react";
 import {
   expandTemplate, fetchLibraryFields, fetchSavedReplies, libraryKeys,
 } from "@/lib/workspaceLibrary";
@@ -49,8 +49,16 @@ export default function ComposerInsertButton({ workspaceId, onInsert, disabled }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0" disabled={disabled} title="Insert from Library">
-          <Plus className="w-4 h-4" />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-10 shrink-0 gap-1.5 px-2.5 rounded-md text-xs font-medium"
+          disabled={disabled}
+          title="Insert from Library"
+        >
+          <Folder className="w-3.5 h-3.5" />
+          Library
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" side="top" className="w-[360px] p-0">
