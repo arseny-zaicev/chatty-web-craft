@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, AlertTriangle, XCircle, Phone, Plus, RefreshCw, Save, Loader2, Ban, Copy, Check } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Phone, RefreshCw, Save, Loader2, Ban, Copy, Check, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
