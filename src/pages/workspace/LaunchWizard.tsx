@@ -603,13 +603,23 @@ export default function LaunchWizard() {
           )}
 
           {/* Step 6: Naming */}
-          <Step n={6} icon={Bookmark} title="Campaign name & tags">
+          <Step n={6} icon={Bookmark} title="Campaign name">
             <div className="grid sm:grid-cols-2 gap-2">
-              <Field label="ICP / Offer">
-                <Input value={icp} onChange={(e) => setIcp(e.target.value)} placeholder="GTM Professionals" />
+              <Field label="Audience">
+                <Input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="GTM Professionals" />
               </Field>
               <Field label="CTA">
-                <Input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="Demo CTA" />
+                <div className="flex gap-2">
+                  <Select value={ctaPreset} onValueChange={setCtaPreset}>
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CTA_PRESETS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {ctaPreset === "Other" && (
+                    <Input className="flex-1" value={ctaCustom} onChange={(e) => setCtaCustom(e.target.value)} placeholder="Custom CTA" />
+                  )}
+                </div>
               </Field>
             </div>
             <div className="mt-2">
@@ -621,7 +631,35 @@ export default function LaunchWizard() {
                   Reset to auto-generated
                 </button>
               )}
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Format: YYYY-MM-DD | COUNTRY | AUDIENCE | TEMPLATE | CTA
+              </p>
             </div>
+          </Step>
+
+          {/* Step 7: Preview */}
+          <Step n={7} icon={Eye} title="Rendered preview">
+            {!activeLogical?.body ? (
+              <p className="text-sm text-muted-foreground">No template body to preview.</p>
+            ) : previewSamples.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Add recipients to preview the rendered message.</p>
+            ) : (
+              <div className="space-y-2">
+                {previewSamples.map((s, i) => (
+                  <div key={i} className="rounded-md border border-border bg-card/30 p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-xs text-muted-foreground">To +{s.phone}</div>
+                      {s.missing.length > 0 && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">
+                          <AlertTriangle className="w-3 h-3 mr-1" />Missing: {s.missing.join(", ")}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap">{s.body}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Step>
 
           {/* Step 7: Preview */}
