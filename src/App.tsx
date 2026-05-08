@@ -23,6 +23,8 @@ const AISeoReport = lazy(() => import("./pages/AISeoReport"));
 const AdminAuth = lazy(() => import("./pages/AdminAuth"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 const FleetRegistry = lazy(() => import("./pages/admin/FleetRegistry"));
+const AdminMfaSetup = lazy(() => import("./pages/admin/AdminMfaSetup"));
+const AdminMfaVerify = lazy(() => import("./pages/admin/AdminMfaVerify"));
 const Apply = lazy(() => import("./pages/Apply"));
 const SellerLeadsApply = lazy(() => import("./pages/SellerLeadsApply"));
 const WhatsAppApply = lazy(() => import("./pages/WhatsAppApply"));
