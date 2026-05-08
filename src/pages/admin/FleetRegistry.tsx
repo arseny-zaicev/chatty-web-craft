@@ -155,6 +155,8 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       errors_since_unban: errorsSinceUnban,
       restricted_at: (n.restricted_at as string) ?? null,
       unrestricted_at: unrestrictedAt,
+      display_name_approved: Boolean(n.display_name_approved),
+      display_name_checked_at: (n.display_name_checked_at as string) ?? null,
     };
   });
 
