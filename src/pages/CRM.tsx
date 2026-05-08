@@ -16,6 +16,7 @@ import {
   Star,
   Pin,
   CheckCheck,
+  ArrowLeft,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
