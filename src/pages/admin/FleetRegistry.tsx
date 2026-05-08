@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon,
 } from "lucide-react";
@@ -418,52 +419,55 @@ function AddNumberDrawer({
   open, onOpenChange, workspaces, onCreated,
 }: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; onCreated: () => Promise<void> | void }) {
   const [phone, setPhone] = useState("");
-  const [label, setLabel] = useState("");
-  const [country, setCountry] = useState("");
-  const [partner, setPartner] = useState("");
   const [appName, setAppName] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [profileAvatar, setProfileAvatar] = useState<"man" | "woman" | "">("");
   const [appId, setAppId] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [usage, setUsage] = useState<Usage>("both");
+  const [wabaId, setWabaId] = useState("");
+  const [messagingLimit, setMessagingLimit] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("__unassigned__");
-  const [notes, setNotes] = useState("");
+  const [isWarming, setIsWarming] = useState(false);
+  const [usage, setUsage] = useState<Usage>("both");
+  const [providedBy, setProvidedBy] = useState("");
+  const [assignedRef, setAssignedRef] = useState("");
 
   const reset = () => {
-    setPhone(""); setLabel(""); setCountry(""); setPartner("");
-    setAppName(""); setAppId(""); setApiKey("");
-    setUsage("both"); setWorkspaceId("__unassigned__"); setNotes("");
+    setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
+    setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
+    setWorkspaceId("__unassigned__"); setIsWarming(false); setUsage("both");
+    setProvidedBy(""); setAssignedRef("");
   };
 
   const create = useMutation({
-    mutationFn: async (mode: "unassigned" | "assign") => {
+    mutationFn: async () => {
       const cleanPhone = phone.replace(/[^\d]/g, "");
       if (!cleanPhone) throw new Error("Phone is required");
-      if (mode === "assign" && workspaceId === "__unassigned__") {
-        throw new Error("Pick a client to assign, or use Save as unassigned.");
-      }
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sign in required");
 
       const { data: existing } = await supabase.from("whatsapp_numbers")
-        .select("id, workspace_id").eq("phone_number", cleanPhone).maybeSingle();
-      if (existing) {
-        throw new Error(`+${cleanPhone} already exists in Fleet. Reassign it instead of duplicating.`);
-      }
+        .select("id").eq("phone_number", cleanPhone).maybeSingle();
+      if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
 
-      const targetWs = mode === "assign" ? workspaceId : (workspaceId === "__unassigned__" ? null : workspaceId);
+      const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
       const { error } = await supabase.from("whatsapp_numbers").insert({
         user_id: auth.user.id,
         workspace_id: targetWs,
         phone_number: cleanPhone,
-        label: label || null,
-        display_name: appName || label || null,
-        country_code: country.toUpperCase() || geoFromPhone(cleanPhone) || null,
-        partner_source: partner || null,
+        label: appName || null,
+        display_name: displayName || appName || null,
+        country_code: geoFromPhone(cleanPhone) || null,
         provider_app_id: appId || null,
         provider_api_key: apiKey || null,
+        provider_waba_id: wabaId || null,
+        profile_avatar: profileAvatar || null,
+        messaging_limit: messagingLimit || null,
+        is_warming: isWarming,
+        provided_by: providedBy || null,
+        assigned_ref: assignedRef || null,
         usage_type: usage,
-        notes: notes || null,
-        status: "draft",
+        status: isWarming ? "warming" : "draft",
       });
       if (error) throw error;
     },
@@ -477,86 +481,110 @@ function AddNumberDrawer({
   });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-lg w-full overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2"><Phone className="w-4 h-4 text-primary" />Add WhatsApp number</SheetTitle>
-          <SheetDescription>
-            Numbers are managed centrally in Fleet. You can save as Unassigned now and allocate to a client later.
-          </SheetDescription>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Phone className="w-4 h-4 text-primary" />Add WhatsApp number</DialogTitle>
+          <DialogDescription>
+            Numbers are managed centrally in Fleet. Save as Unassigned now and allocate later, or pick a client below.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <Section title="Identity">
-            <Field label="Phone (digits only)" required>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))} placeholder="971500000000" />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Country / sender label">
-                <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="UAE main" />
-              </Field>
-              <Field label="Country code">
-                <Input value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} placeholder="US / UK / AE" maxLength={4} />
-              </Field>
+        <div className="space-y-4 py-2">
+          <Field label="Phone (digits only)" required>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))} placeholder="971500000000" />
+          </Field>
+
+          <Field label="App name">
+            <Input value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="01Ashik02" />
+          </Field>
+
+          <Field label="Display name">
+            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Iskra Sales" />
+          </Field>
+
+          <Field label="Profile picture">
+            <div className="flex gap-2">
+              <Button type="button" variant={profileAvatar === "man" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => setProfileAvatar("man")}>Man</Button>
+              <Button type="button" variant={profileAvatar === "woman" ? "default" : "outline"} size="sm" className="flex-1" onClick={() => setProfileAvatar("woman")}>Woman</Button>
             </div>
-          </Section>
+          </Field>
 
-          <Section title="Allocation">
-            <Field label="Allocate to client">
-              <Select value={workspaceId} onValueChange={setWorkspaceId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__unassigned__">Unassigned (stock / warming / future client)</SelectItem>
-                  {workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="App ID">
+              <Input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="uuid" />
             </Field>
-            <Field label="Use for">
-              <Select value={usage} onValueChange={(v) => setUsage(v as Usage)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="marketing">Marketing</SelectItem>
-                  <SelectItem value="utility">Utility</SelectItem>
-                  <SelectItem value="both">Both</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </Section>
-
-          <Section title="Provider setup (Gupshup)">
-            <Field label="Partner / source">
-              <Input value={partner} onChange={(e) => setPartner(e.target.value)} placeholder="e.g. internal / partner X" />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Gupshup app name">
-                <Input value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="01Ashik02" />
-              </Field>
-              <Field label="App ID">
-                <Input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="uuid" />
-              </Field>
-            </div>
             <Field label="API key">
-              <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="leave blank to use global key" />
+              <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk_..." />
             </Field>
-          </Section>
+          </div>
 
-          <Section title="Notes">
-            <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes - history, who set it up, warming plan..." />
-          </Section>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="WABA ID">
+              <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
+            </Field>
+            <Field label="Messaging limit">
+              <Select value={messagingLimit} onValueChange={setMessagingLimit}>
+                <SelectTrigger><SelectValue placeholder="Tier" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="250">250 / day</SelectItem>
+                  <SelectItem value="1000">1 000 / day</SelectItem>
+                  <SelectItem value="10000">10 000 / day</SelectItem>
+                  <SelectItem value="100000">100 000 / day</SelectItem>
+                  <SelectItem value="unlimited">Unlimited</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+
+          <Field label="Allocate to client">
+            <Select value={workspaceId} onValueChange={setWorkspaceId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__unassigned__">Unassigned (stock / warming / future client)</SelectItem>
+                {workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
+            <div>
+              <div className="text-sm font-medium">Warming</div>
+              <div className="text-xs text-muted-foreground">Mark this number as currently warming up.</div>
+            </div>
+            <Switch checked={isWarming} onCheckedChange={setIsWarming} />
+          </div>
+
+          <Field label="Use for">
+            <Select value={usage} onValueChange={(v) => setUsage(v as Usage)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="marketing">Marketing</SelectItem>
+                <SelectItem value="utility">Utility</SelectItem>
+                <SelectItem value="both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Provided by">
+              <Input value={providedBy} onChange={(e) => setProvidedBy(e.target.value)} placeholder="Kartik" />
+            </Field>
+            <Field label="Ref">
+              <Input value={assignedRef} onChange={(e) => setAssignedRef(e.target.value)} placeholder="Nitish" />
+            </Field>
+          </div>
         </div>
 
-        <SheetFooter className="gap-2 sm:gap-2 flex-row sm:flex-row sm:justify-end">
+        <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button variant="outline" onClick={() => create.mutate("unassigned")} disabled={create.isPending}>
-            Save as unassigned
-          </Button>
-          <Button onClick={() => create.mutate("assign")} disabled={create.isPending || workspaceId === "__unassigned__"}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
-            Save and assign
+            Save
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
