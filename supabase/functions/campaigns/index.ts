@@ -474,6 +474,21 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
 }
 
 async function processQueue(admin: any) {
+  // Scale the per-tick batch with the number of active ready numbers so utility
+  // throughput is not bottlenecked by a fixed ceiling when multiple numbers are live.
+  // Floor 50 (single-number safe), 20 recipients per active number, hard cap 500.
+  let perTickLimit = 200;
+  try {
+    const { count: activeNumbers } = await admin
+      .from("whatsapp_numbers")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "ready");
+    const n = activeNumbers ?? 0;
+    perTickLimit = Math.min(500, Math.max(50, n * 20));
+  } catch (_) {
+    perTickLimit = 200;
+  }
+
   const { data: due, error } = await admin
     .from("campaign_recipients")
     .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
@@ -481,7 +496,7 @@ async function processQueue(admin: any) {
     .lte("scheduled_at", new Date().toISOString())
     .eq("campaigns.status", "running")
     .order("scheduled_at", { ascending: true })
-    .limit(20);
+    .limit(perTickLimit);
   if (error) return json({ error: error.message }, 500);
 
   let sent = 0;
