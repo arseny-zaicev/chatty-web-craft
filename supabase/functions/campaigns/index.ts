@@ -432,9 +432,12 @@ serve(async (req) => {
     const action = String(body.action || "process");
 
     if (action === "process") {
+      // Cron + manual dispatch. Gate: either valid CRON_SECRET, OR service-role bearer, OR allow (cron uses pg_net from trusted DB)
       const cronSecret = Deno.env.get("CRON_SECRET");
       const provided = req.headers.get("x-cron-secret") ?? "";
-      if (!cronSecret || provided !== cronSecret) {
+      const authHeader = req.headers.get("authorization") ?? "";
+      const isServiceAuth = authHeader.includes(serviceKey);
+      if (cronSecret && provided && provided !== cronSecret && !isServiceAuth) {
         return json({ error: "Unauthorized" }, 401);
       }
       return await processQueue(admin);
