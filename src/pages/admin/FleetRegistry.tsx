@@ -92,19 +92,34 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
   }
   const lastOutbound = new Map<string, string>();
   const lastError = new Map<string, string>();
+  const totalSent = new Map<string, number>();
+  const totalErrors = new Map<string, number>();
   for (const e of lastEvents ?? []) {
     if (!e.whatsapp_number_id) continue;
-    if ((e.event_type === "sent" || e.event_type === "enqueued" || e.event_type === "delivered") && !lastOutbound.has(e.whatsapp_number_id)) {
-      lastOutbound.set(e.whatsapp_number_id, e.received_at);
+    const isSent = e.event_type === "sent" || e.event_type === "enqueued" || e.event_type === "delivered";
+    const isError = e.event_type === "failed" || e.event_type === "error";
+    if (isSent) {
+      totalSent.set(e.whatsapp_number_id, (totalSent.get(e.whatsapp_number_id) ?? 0) + 1);
+      if (!lastOutbound.has(e.whatsapp_number_id)) lastOutbound.set(e.whatsapp_number_id, e.received_at);
     }
-    if ((e.event_type === "failed" || e.event_type === "error") && e.error_message && !lastError.has(e.whatsapp_number_id)) {
-      lastError.set(e.whatsapp_number_id, e.error_message);
+    if (isError) {
+      totalErrors.set(e.whatsapp_number_id, (totalErrors.get(e.whatsapp_number_id) ?? 0) + 1);
+      if (e.error_message && !lastError.has(e.whatsapp_number_id)) lastError.set(e.whatsapp_number_id, e.error_message);
     }
   }
 
   const rows: Row[] = (numbers ?? []).map((n: Record<string, unknown>) => {
     const ws = n.workspace_id ? wsMap.get(n.workspace_id as string) : null;
     const t = tpl.get(n.id as string) ?? { total: 0, approved: 0 };
+    const unrestrictedAt = (n.unrestricted_at as string) ?? null;
+    let errorsSinceUnban = 0;
+    if (unrestrictedAt) {
+      for (const e of lastEvents ?? []) {
+        if (e.whatsapp_number_id !== n.id) continue;
+        if (e.received_at < unrestrictedAt) break; // ordered desc
+        if (e.event_type === "failed" || e.event_type === "error") errorsSinceUnban += 1;
+      }
+    }
     return {
       id: n.id as string,
       phone_number: n.phone_number as string,
@@ -133,6 +148,11 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       last_inbound: lastInbound.get(n.id as string) ?? null,
       last_outbound: lastOutbound.get(n.id as string) ?? null,
       last_error: lastError.get(n.id as string) ?? null,
+      total_sent: totalSent.get(n.id as string) ?? 0,
+      total_errors: totalErrors.get(n.id as string) ?? 0,
+      errors_since_unban: errorsSinceUnban,
+      restricted_at: (n.restricted_at as string) ?? null,
+      unrestricted_at: unrestrictedAt,
     };
   });
 
