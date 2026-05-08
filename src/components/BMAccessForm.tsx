@@ -25,7 +25,8 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-const STEP_NAMES = ["Welcome", "BM Details"];
+const STEP_NAMES = ["Welcome", "Phone", "Has BM", "BM Age", "Verified", "Ran Ads"];
+const PHONE_RE = /^[\+]?[\d\s\-\(\)]{10,20}$/;
 
 export const BMAccessForm = () => {
   const [step, setStep] = useState<Step>(0);
@@ -35,13 +36,39 @@ export const BMAccessForm = () => {
 
   const analytics = useFormAnalytics({
     formType: "bm_access",
-    totalSteps: 2,
+    totalSteps: STEP_NAMES.length,
     stepNames: STEP_NAMES,
   });
 
+  // Step 1: Welcome
   useEffect(() => {
-    analytics.trackStepView(step + 1);
+    if (step === 0) analytics.trackStepView(1);
+    if (step === 1) analytics.trackStepView(2);
   }, [step, analytics]);
+
+  // Track per-question views/completions when user fills BM Details
+  useEffect(() => {
+    if (step !== 1) return;
+    if (data.contact_phone && PHONE_RE.test(data.contact_phone.trim())) {
+      analytics.trackStepComplete(2);
+      analytics.trackStepView(3);
+    }
+    if (data.has_bm) {
+      analytics.trackStepComplete(3);
+      analytics.trackStepView(4);
+    }
+    if (data.bm_age) {
+      analytics.trackStepComplete(4);
+      analytics.trackStepView(5);
+    }
+    if (data.is_verified) {
+      analytics.trackStepComplete(5);
+      analytics.trackStepView(6);
+    }
+    if (data.ran_ads) {
+      analytics.trackStepComplete(6);
+    }
+  }, [step, data, analytics]);
 
   const update = (key: keyof FormData, value: string) =>
     setData((d) => ({ ...d, [key]: value }));
