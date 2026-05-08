@@ -194,25 +194,96 @@ async function handleInbound(payload: Record<string, unknown>) {
 
 async function handleStatus(payload: Record<string, unknown>) {
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
-  const providerMessageId = (inner.gsId as string) ?? (inner.id as string) ?? null;
-  const status = (payload.type as string) ?? (inner.type as string) ?? null;
-  if (!providerMessageId || !status) return;
+  // Gupshup status payloads: type at top level may be "message-event"; the actual
+  // event name (sent/enqueued/delivered/read/failed/deleted) sits in payload.type.
+  const innerType = (inner.type as string) ?? null;
+  const topType = (payload.type as string) ?? null;
+  const eventType = (innerType ?? topType ?? "").toLowerCase();
+  const providerMessageId =
+    (inner.gsId as string) ??
+    (inner.id as string) ??
+    ((payload.payload as Record<string, unknown>)?.id as string) ??
+    null;
 
-  const map: Record<string, string> = {
+  const map: Record<string, "queued" | "sent" | "delivered" | "read" | "failed" | "deleted"> = {
     sent: "sent",
     enqueued: "queued",
+    queued: "queued",
     delivered: "delivered",
     read: "read",
     failed: "failed",
-    "message-event": status,
+    error: "failed",
+    deleted: "deleted",
   };
-  const mapped = map[status] ?? status;
-  if (!["queued", "sent", "delivered", "read", "failed"].includes(mapped)) return;
+  const mapped = map[eventType];
 
-  await supabase
-    .from("messages")
-    .update({ status: mapped })
-    .eq("provider_message_id", providerMessageId);
+  // Look up message + recipient (if any) so we can backfill links on the event row.
+  let messageRow: { id: string; user_id: string; conversation_id: string } | null = null;
+  let convRow: { workspace_id: string; whatsapp_number_id: string } | null = null;
+  let recipientId: string | null = null;
+  if (providerMessageId) {
+    const { data: m } = await supabase
+      .from("messages")
+      .select("id, user_id, conversation_id")
+      .eq("provider_message_id", providerMessageId)
+      .maybeSingle();
+    messageRow = m ?? null;
+    if (messageRow) {
+      const { data: c } = await supabase
+        .from("conversations")
+        .select("workspace_id, whatsapp_number_id")
+        .eq("id", messageRow.conversation_id)
+        .maybeSingle();
+      convRow = c ?? null;
+    }
+    const { data: r } = await supabase
+      .from("campaign_recipients")
+      .select("id")
+      .eq("provider_message_id", providerMessageId)
+      .maybeSingle();
+    recipientId = r?.id ?? null;
+  }
+
+  // Extract provider error if present (Gupshup uses payload.payload.code / reason).
+  const errPayload = (inner.payload ?? {}) as Record<string, unknown>;
+  const errorCode =
+    (errPayload.code as string | number | undefined)?.toString() ??
+    (inner.code as string | number | undefined)?.toString() ??
+    null;
+  const errorMessage =
+    (errPayload.reason as string) ??
+    (errPayload.message as string) ??
+    (inner.reason as string) ??
+    null;
+
+  // Always persist the raw event for forensic visibility.
+  await supabase.from("whatsapp_message_events").insert({
+    event_type: eventType || "unknown",
+    provider_message_id: providerMessageId,
+    workspace_id: convRow?.workspace_id ?? null,
+    whatsapp_number_id: convRow?.whatsapp_number_id ?? null,
+    message_id: messageRow?.id ?? null,
+    campaign_recipient_id: recipientId,
+    error_code: errorCode,
+    error_message: errorMessage,
+    raw: payload,
+  });
+
+  if (mapped && messageRow) {
+    await supabase
+      .from("messages")
+      .update({ status: mapped })
+      .eq("id", messageRow.id);
+  }
+
+  // Propagate terminal states to the campaign recipient too.
+  if (recipientId && (mapped === "failed" || mapped === "delivered" || mapped === "sent")) {
+    const recipientStatus = mapped === "failed" ? "failed" : "sent";
+    await supabase
+      .from("campaign_recipients")
+      .update({ status: recipientStatus, error_message: errorMessage ?? undefined })
+      .eq("id", recipientId);
+  }
 }
 
 serve(async (req) => {
