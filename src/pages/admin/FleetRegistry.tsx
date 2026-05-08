@@ -271,27 +271,16 @@ const FilterSelect = ({ value, onChange, options, placeholder }: { value: string
 
 function FleetTable({ rows, workspaces, onReassign }: { rows: Row[]; workspaces: WS[]; onReassign: (id: string, workspaceId: string | null) => void }) {
   return (
-    <div className="rounded-lg border border-border bg-card/30 overflow-hidden">
+    <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Phone</TableHead>
-            <TableHead>Client</TableHead>
-            <TableHead>Country</TableHead>
-            <TableHead>Use</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Auth</TableHead>
-            <TableHead>Webhook</TableHead>
-            <TableHead>Templates</TableHead>
-            <TableHead>Last in</TableHead>
-            <TableHead>Last out</TableHead>
-            <TableHead>Last error</TableHead>
-            <TableHead></TableHead>
+            <FleetHeaders showClient />
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
-            <TableRow><TableCell colSpan={12} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={20} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
           ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} />)}
         </TableBody>
       </Table>
@@ -322,7 +311,7 @@ function GroupedByClient({ rows, workspaces, onReassign }: { rows: Row[]; worksp
   return (
     <div className="space-y-4">
       {groups.map(([key, g]) => (
-        <div key={key} className="rounded-lg border border-border bg-card/30 overflow-hidden">
+        <div key={key} className="rounded-lg border border-border bg-card/30 overflow-x-auto">
           <div className="px-4 py-2 border-b border-border bg-muted/30 flex items-center gap-2 text-sm">
             {g.ws ? (
               <>
@@ -342,16 +331,7 @@ function GroupedByClient({ rows, workspaces, onReassign }: { rows: Row[]; worksp
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Phone</TableHead>
-                <TableHead>Country</TableHead>
-                <TableHead>Use</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Auth</TableHead>
-                <TableHead>Webhook</TableHead>
-                <TableHead>Templates</TableHead>
-                <TableHead>Last in</TableHead>
-                <TableHead>Allocate</TableHead>
-                <TableHead></TableHead>
+                <FleetHeaders showClient={false} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -364,12 +344,59 @@ function GroupedByClient({ rows, workspaces, onReassign }: { rows: Row[]; worksp
   );
 }
 
+function FleetHeaders({ showClient }: { showClient: boolean }) {
+  return (
+    <>
+      <TableHead>Phone</TableHead>
+      <TableHead>App name</TableHead>
+      <TableHead>Display name</TableHead>
+      <TableHead>Avatar</TableHead>
+      <TableHead>App ID</TableHead>
+      <TableHead>API key</TableHead>
+      <TableHead>WABA ID</TableHead>
+      <TableHead>Limit</TableHead>
+      {showClient && <TableHead>Client</TableHead>}
+      <TableHead>Warm</TableHead>
+      <TableHead>Use</TableHead>
+      <TableHead>Provided by</TableHead>
+      <TableHead>Country</TableHead>
+      <TableHead>Status</TableHead>
+      <TableHead>Auth</TableHead>
+      <TableHead>Webhook</TableHead>
+      <TableHead>Templates</TableHead>
+      <TableHead>Last in</TableHead>
+      <TableHead>Last out</TableHead>
+      <TableHead>Last error</TableHead>
+      <TableHead></TableHead>
+    </>
+  );
+}
+
+function MaskedCell({ value }: { value: string | null }) {
+  if (!value) return <span className="text-muted-foreground">—</span>;
+  const tail = value.length > 4 ? value.slice(-4) : value;
+  return <span className="font-mono text-[11px] text-muted-foreground" title={value}>••••{tail}</span>;
+}
+
+function TruncCell({ value, max = 140 }: { value: string | null; max?: number }) {
+  if (!value) return <span className="text-muted-foreground">—</span>;
+  return <span className="font-mono text-[11px] text-muted-foreground truncate inline-block align-middle" style={{ maxWidth: max }} title={value}>{value}</span>;
+}
+
 function FleetRowView({ r, workspaces, onReassign, hideClientCol }: { r: Row; workspaces: WS[]; onReassign: (id: string, workspaceId: string | null) => void; hideClientCol?: boolean }) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
+  const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
   return (
     <TableRow>
-      <TableCell className="font-mono text-xs">+{r.phone_number}{r.label ? <div className="text-[10px] text-muted-foreground">{r.label}</div> : null}</TableCell>
+      <TableCell className="font-mono text-xs whitespace-nowrap">+{r.phone_number}</TableCell>
+      <TableCell className="text-xs">{r.label ?? <span className="text-muted-foreground">—</span>}</TableCell>
+      <TableCell className="text-xs">{r.display_name ?? <span className="text-muted-foreground">—</span>}</TableCell>
+      <TableCell className="text-xs capitalize">{r.profile_avatar ?? <span className="text-muted-foreground">—</span>}</TableCell>
+      <TableCell><TruncCell value={r.provider_app_id} max={120} /></TableCell>
+      <TableCell><MaskedCell value={r.provider_api_key} /></TableCell>
+      <TableCell><TruncCell value={r.provider_waba_id} max={120} /></TableCell>
+      <TableCell className="text-xs">{r.messaging_limit ?? <span className="text-muted-foreground">—</span>}</TableCell>
       {!hideClientCol && (
         <TableCell className="text-xs">
           {r.workspace_id ? (
@@ -379,30 +406,21 @@ function FleetRowView({ r, workspaces, onReassign, hideClientCol }: { r: Row; wo
           )}
         </TableCell>
       )}
-      <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
+      <TableCell>
+        {r.is_warming
+          ? <Badge variant="outline" className={`text-[10px] ${statusTone.warming}`}>warming</Badge>
+          : <span className="text-xs text-muted-foreground">—</span>}
+      </TableCell>
       <TableCell className="text-xs">{r.usage_type}</TableCell>
+      <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
+      <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${statusTone[r.status]}`}>{r.status}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
-      <TableCell className="text-xs text-muted-foreground">{r.last_inbound ? formatDistanceToNow(new Date(r.last_inbound), { addSuffix: true }) : "—"}</TableCell>
-      {!hideClientCol && (
-        <TableCell className="text-xs text-muted-foreground">{r.last_outbound ? formatDistanceToNow(new Date(r.last_outbound), { addSuffix: true }) : "—"}</TableCell>
-      )}
-      {!hideClientCol && (
-        <TableCell className="text-xs text-red-600 max-w-[180px] truncate" title={r.last_error ?? ""}>{r.last_error ?? "—"}</TableCell>
-      )}
-      {hideClientCol && (
-        <TableCell>
-          <Select value={r.workspace_id ?? "__unassigned__"} onValueChange={(v) => onReassign(r.id, v === "__unassigned__" ? null : v)}>
-            <SelectTrigger className="h-7 text-xs w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__unassigned__">Unassigned</SelectItem>
-              {workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </TableCell>
-      )}
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_inbound ? formatDistanceToNow(new Date(r.last_inbound), { addSuffix: true }) : "—"}</TableCell>
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{r.last_outbound ? formatDistanceToNow(new Date(r.last_outbound), { addSuffix: true }) : "—"}</TableCell>
+      <TableCell className="text-xs text-red-600 max-w-[180px] truncate" title={r.last_error ?? ""}>{r.last_error ?? "—"}</TableCell>
       <TableCell>
         {r.workspace_slug ? (
           <Button asChild size="sm" variant="ghost"><Link to={`/ws/${r.workspace_slug}/settings`}><ExternalLink className="w-3.5 h-3.5" /></Link></Button>
