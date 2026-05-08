@@ -503,7 +503,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
           </aside>
 
           {/* Right: chat window */}
-          <section className="flex-1 flex flex-col min-w-0">
+          <section className={`${active ? "flex" : "hidden lg:flex"} flex-1 flex-col min-w-0`}>
             {!active ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
