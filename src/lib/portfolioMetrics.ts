@@ -50,7 +50,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     { data: bookedToday },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
-    supabase.from("conversations").select("workspace_id, unread_count, last_message_at"),
+    supabase.from("conversations").select("id, workspace_id, unread_count, last_message_at"),
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
     supabase.from("campaigns").select("workspace_id, status, scheduled_start_at").in("status", ["scheduled", "running", "paused", "draft"]),
     supabase.from("messages").select("conversation_id, direction, created_at, status").gte("created_at", today),
