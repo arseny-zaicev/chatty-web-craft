@@ -58,7 +58,7 @@ export const crmKeys = {
 };
 
 export async function fetchCrmBase(workspaceId?: string) {
-  let numbersQuery = supabase.from("whatsapp_numbers").select("id, phone_number, display_name, workspace_id, is_active, provider_api_key, provider_app_id");
+  let numbersQuery = supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, workspace_id, is_active, provider_api_key, provider_app_id");
   let conversationsQuery = supabase
     .from("conversations")
     .select(
@@ -108,7 +108,7 @@ export async function fetchCampaignBase(workspaceId?: string) {
   // Lightweight: numbers + templates + recent campaigns. Conversations fetched lazily via fetchConversationsForCsv.
   let numbersQuery = supabase
     .from("whatsapp_numbers")
-    .select("id, phone_number, display_name, workspace_id, is_active, provider_api_key, provider_app_id");
+    .select("id, phone_number, display_name, label, workspace_id, is_active, provider_api_key, provider_app_id");
   let templatesQuery = supabase
     .from("message_templates")
     .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, synced_at, provider_template_id, buttons, quality, namespace, external_id, created_at")
