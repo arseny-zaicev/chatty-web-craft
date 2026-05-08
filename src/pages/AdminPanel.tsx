@@ -6,26 +6,63 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
-  Loader2, LogOut, Plus, Sparkles, Building2, Rocket, Inbox, KanbanSquare, Megaphone, FileText,
+  Loader2, LogOut, Plus, Sparkles, Building2, Rocket, Inbox, Megaphone, FileText,
   Activity, ArrowRight, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, BarChart3,
-  Phone, LayoutDashboard, Clock,
+  Phone, LayoutDashboard, Clock, Globe, Users,
 } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
+import { SiteAnalytics } from "@/components/admin/SiteAnalytics";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
 import { fetchPortfolioSnapshot, portfolioKeys, type PortfolioSnapshot } from "@/lib/portfolioMetrics";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
-type Tab = "workspaces" | "submissions" | "analytics";
+type Section =
+  | "companies.portfolio"
+  | "companies.fleet"
+  | "forms.submissions"
+  | "forms.analytics"
+  | "site.analytics";
+
+type NavGroup = {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: { id: Section; label: string; icon: React.ComponentType<{ className?: string }>; external?: string }[];
+};
+
+const NAV: NavGroup[] = [
+  {
+    id: "companies", label: "Companies", icon: Building2,
+    items: [
+      { id: "companies.portfolio", label: "Portfolio", icon: LayoutDashboard },
+      { id: "companies.fleet", label: "Fleet · Numbers", icon: Phone, external: "/admin/fleet" },
+    ],
+  },
+  {
+    id: "forms", label: "Forms & Applicants", icon: FileText,
+    items: [
+      { id: "forms.submissions", label: "Submissions", icon: Users },
+      { id: "forms.analytics", label: "Form analytics", icon: Activity },
+    ],
+  },
+  {
+    id: "site", label: "Site", icon: Globe,
+    items: [
+      { id: "site.analytics", label: "Site analytics", icon: BarChart3 },
+    ],
+  },
+];
 
 const AdminPanel = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("workspaces");
+  const [section, setSection] = useState<Section>("companies.portfolio");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,8 +78,7 @@ const AdminPanel = () => {
         setAuthChecked(true);
       }
     };
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => guard(session?.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => guard(s?.user ?? null));
     supabase.auth.getSession().then(({ data: { session } }) => guard(session?.user ?? null));
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -68,51 +104,76 @@ const AdminPanel = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-20">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="border-b bg-card/60 backdrop-blur sticky top-0 z-20">
+        <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-iskra-emerald to-iskra-emerald/70 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
-              <span className="font-display text-lg font-bold tracking-tight">ISKRA</span>
+              <span className="font-display text-base font-semibold tracking-tight">ISKRA</span>
             </Link>
-            <div className="w-px h-6 bg-border" />
-            <div>
-              <h1 className="text-base font-display font-bold leading-tight">Admin</h1>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
+            <div className="w-px h-5 bg-border" />
+            <div className="text-xs">
+              <div className="font-medium">Admin console</div>
+              <div className="text-muted-foreground">{user?.email}</div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm"><Link to="/admin/fleet"><Phone className="h-4 w-4 mr-2" />Fleet</Link></Button>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />Sign out
-            </Button>
-          </div>
-        </div>
-        <div className="container mx-auto px-4">
-          <div className="flex items-center gap-1 border-t pt-2 pb-2">
-            <TabBtn active={activeTab === "workspaces"} onClick={() => setActiveTab("workspaces")} icon={<Building2 className="h-4 w-4" />}>Workspaces</TabBtn>
-            <TabBtn active={activeTab === "submissions"} onClick={() => setActiveTab("submissions")} icon={<FileText className="h-4 w-4" />}>Submissions</TabBtn>
-            <TabBtn active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")} icon={<Activity className="h-4 w-4" />}>Form Analytics</TabBtn>
-          </div>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />Sign out
+          </Button>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        {activeTab === "submissions" && <AdminSubmissions />}
-        {activeTab === "analytics" && <FormAnalyticsDashboard />}
-        {activeTab === "workspaces" && (
-          <WorkspacesDashboard workspaces={workspaces ?? []} isLoading={wsLoading} onRefetch={() => refetch()} />
-        )}
-      </main>
+      <div className="container mx-auto px-6 py-8 grid grid-cols-12 gap-8">
+        <aside className="col-span-12 md:col-span-3 lg:col-span-2">
+          <nav className="space-y-6 sticky top-24">
+            {NAV.map((group) => (
+              <div key={group.id}>
+                <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70 px-2 mb-2 flex items-center gap-1.5">
+                  <group.icon className="w-3 h-3" />{group.label}
+                </div>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const active = section === item.id;
+                    const className = cn(
+                      "w-full flex items-center gap-2 text-sm px-2 py-1.5 rounded-md transition-colors",
+                      active
+                        ? "bg-foreground/[0.06] text-foreground font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
+                    );
+                    if (item.external) {
+                      return (
+                        <Link key={item.id} to={item.external} className={className}>
+                          <item.icon className="w-3.5 h-3.5" />{item.label}
+                          <ArrowRight className="w-3 h-3 ml-auto opacity-50" />
+                        </Link>
+                      );
+                    }
+                    return (
+                      <button key={item.id} onClick={() => setSection(item.id)} className={className}>
+                        <item.icon className="w-3.5 h-3.5" />{item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        <main className="col-span-12 md:col-span-9 lg:col-span-10 min-w-0">
+          {section === "companies.portfolio" && (
+            <WorkspacesDashboard workspaces={workspaces ?? []} isLoading={wsLoading} onRefetch={() => refetch()} />
+          )}
+          {section === "forms.submissions" && <AdminSubmissions />}
+          {section === "forms.analytics" && <FormAnalyticsDashboard />}
+          {section === "site.analytics" && <SiteAnalytics />}
+        </main>
+      </div>
     </div>
   );
 };
-
-const TabBtn = ({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) => (
-  <Button variant={active ? "default" : "ghost"} size="sm" onClick={onClick} className="gap-2">{icon}{children}</Button>
-);
 
 function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[]; isLoading: boolean; onRefetch: () => void }) {
   const { data: snapshot } = useQuery<PortfolioSnapshot>({
@@ -129,8 +190,8 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
   const t = snapshot?.totals;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-8">
+      <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-display font-bold">Portfolio</h2>
           <p className="text-sm text-muted-foreground">All clients at a glance. Open any folder to manage their inbox, launches and reporting.</p>
@@ -140,7 +201,6 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
         </Button>
       </div>
 
-      {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <Kpi icon={Building2} label="Clients" value={t?.clients ?? workspaces.length} />
         <Kpi icon={Megaphone} label="Active campaigns" value={t?.active_campaigns ?? 0} />
@@ -222,7 +282,7 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
   );
 }
 
-const Kpi = ({ icon: Icon, label, value, accent }: { icon: any; label: string; value: number | string; accent?: string }) => (
+const Kpi = ({ icon: Icon, label, value, accent }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number | string; accent?: string }) => (
   <div className="rounded-lg border border-border bg-card/30 p-3">
     <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon className="w-3.5 h-3.5" />{label}</div>
     <div className={`text-2xl font-display font-semibold mt-1 ${accent ?? ""}`}>{value}</div>
