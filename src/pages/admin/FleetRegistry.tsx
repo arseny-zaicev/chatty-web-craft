@@ -56,6 +56,8 @@ type Row = {
   errors_since_unban: number;
   restricted_at: string | null;
   unrestricted_at: string | null;
+  display_name_approved: boolean;
+  display_name_checked_at: string | null;
 };
 
 const BAN_DURATION_DAYS = 30;
