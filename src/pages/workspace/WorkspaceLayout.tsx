@@ -44,7 +44,7 @@ export default function WorkspaceLayout() {
   const workspace = data?.find((w) => w.slug === slug);
 
   useEffect(() => {
-    if (!slug && data && data.length > 0) navigate(`/ws/${data[0].slug}/inbox`, { replace: true });
+    if (!slug && data && data.length > 0) navigate(`/ws/${data[0].slug}/overview`, { replace: true });
   }, [slug, data, navigate]);
 
   if (!authChecked) {
