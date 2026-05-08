@@ -608,17 +608,16 @@ function AddNumberDrawer({
       if (!auth.user) throw new Error("Sign in required");
 
       const targetWs = workspaceId === "__unassigned__" ? null : workspaceId;
-      const nextStatus: Status = editing ? status : (isWarming ? "warming" : "draft");
-      const wasBanned = editing && (editing.status === "restricted" || editing.status === "banned");
-      const isBanned = nextStatus === "restricted" || nextStatus === "banned";
 
-      const restrictionPatch: Record<string, string | null> = {};
-      if (!wasBanned && isBanned) {
-        restrictionPatch.restricted_at = new Date().toISOString();
-      } else if (wasBanned && !isBanned) {
-        restrictionPatch.unrestricted_at = new Date().toISOString();
-        restrictionPatch.restricted_at = null;
-      }
+      // Status is derived automatically:
+      // - preserve restricted/banned (only Gupshup sync flips these)
+      // - no workspace -> inactive
+      // - otherwise -> ready
+      const currentStatus: Status | undefined = editing?.status;
+      const preserveBanned = currentStatus === "restricted" || currentStatus === "banned";
+      const nextStatus: Status = preserveBanned
+        ? currentStatus!
+        : (targetWs ? "ready" : "inactive");
 
       const payload = {
         phone_number: cleanPhone,
@@ -630,7 +629,6 @@ function AddNumberDrawer({
         provider_waba_id: wabaId || null,
         profile_avatar: profileAvatar || null,
         messaging_limit: messagingLimit || null,
-        is_warming: isWarming,
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
@@ -638,7 +636,7 @@ function AddNumberDrawer({
 
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
-          .update({ ...payload, workspace_id: targetWs, status: nextStatus, ...restrictionPatch })
+          .update({ ...payload, workspace_id: targetWs, status: nextStatus })
           .eq("id", editing.id);
         if (error) throw error;
       } else {
