@@ -101,7 +101,7 @@ export async function fetchCampaignBase(workspaceId?: string) {
     .select("id, phone_number, display_name, workspace_id, is_active, provider_api_key, provider_app_id");
   let templatesQuery = supabase
     .from("message_templates")
-    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, synced_at, provider_template_id")
+    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, synced_at, provider_template_id, buttons, quality, namespace, external_id, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
   let campaignsQuery = supabase
