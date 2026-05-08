@@ -35,6 +35,12 @@ type Row = {
   is_active: boolean;
   provider_app_id: string | null;
   provider_api_key: string | null;
+  provider_waba_id: string | null;
+  profile_avatar: string | null;
+  messaging_limit: string | null;
+  is_warming: boolean;
+  provided_by: string | null;
+  assigned_ref: string | null;
   partner_source: string | null;
   notes: string | null;
   workspace_id: string | null;
