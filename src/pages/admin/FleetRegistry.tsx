@@ -48,9 +48,8 @@ type Row = {
   workspace_slug: string;
   templates_total: number;
   templates_approved: number;
-  last_inbound: string | null;
-  last_outbound: string | null;
-  last_error: string | null;
+  last_campaign_at: string | null;
+  last_campaign_name: string | null;
   total_sent: number;
   total_errors: number;
   errors_since_unban: number;
