@@ -35,7 +35,7 @@ const Campaigns = lazy(() => import("./pages/Campaigns"));
 const WorkspaceLayout = lazy(() => import("./pages/workspace/WorkspaceLayout"));
 const WorkspaceSection = lazy(() => import("./pages/workspace/WorkspaceSection"));
 const WorkspaceOverview = lazy(() => import("./pages/workspace/WorkspaceOverview"));
-const WorkspaceReporting = lazy(() => import("./pages/workspace/WorkspaceReporting"));
+
 const WorkspaceSettings = lazy(() => import("./pages/workspace/WorkspaceSettings"));
 const LaunchWizard = lazy(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazy(() => import("./pages/workspace/NewClient"));
