@@ -148,6 +148,7 @@ export default function FleetRegistry() {
   const qc = useQueryClient();
   const [authChecked, setAuthChecked] = useState(false);
   const [adderOpen, setAdderOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
 
   useEffect(() => {
     const guard = (u: User | null) => {
