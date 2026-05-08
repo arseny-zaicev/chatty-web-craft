@@ -41,6 +41,14 @@ export default function WorkspaceLayout() {
 
 
   const workspace = data?.find((w) => w.slug === slug);
+  const location = useLocation();
+  const sectionLabel = useMemo(() => {
+    const parts = location.pathname.split("/").filter(Boolean); // ["ws", slug, section?]
+    const seg = parts[2];
+    if (!seg || seg === "overview") return "Overview";
+    const map: Record<string, string> = { inbox: "Inbox", pipeline: "Pipeline", campaigns: "Campaigns", launch: "Launch", library: "Library", settings: "Settings" };
+    return map[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!slug && data && data.length > 0) navigate(`/ws/${data[0].slug}/overview`, { replace: true });
