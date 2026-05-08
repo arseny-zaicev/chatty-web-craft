@@ -138,10 +138,43 @@ export default function LaunchWizard() {
     [recipients, mapping, variableNames],
   );
 
-  // ----- Number selection: auto-pick first active when none -----
+  // ----- Sender pools (numbers grouped by country) -----
+  const pools = useMemo(() => groupNumbersByCountry(numbers), [numbers]);
+
+  // Default pool to the largest available
   useEffect(() => {
-    if (numberIds.length === 0 && numbers.length > 0) setNumberIds([numbers[0].id]);
-  }, [numbers]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!poolCountry && pools.length > 0) setPoolCountry(pools[0].country);
+    if (poolCountry && !pools.find((p) => p.country === poolCountry)) {
+      setPoolCountry(pools[0]?.country ?? "");
+    }
+  }, [pools, poolCountry]);
+
+  const activePool = pools.find((p) => p.country === poolCountry);
+  const poolNumbers = activePool?.numbers ?? [];
+
+  // "Ready" = number has an approved variant for the chosen logical template (if any)
+  const readyInPool = useMemo(() => {
+    if (!activeLogical) return poolNumbers;
+    return poolNumbers.filter((n) => activeLogical.variantByNumber.has(n.id));
+  }, [poolNumbers, activeLogical]);
+
+  // Auto-fill numberIds based on mode + pool
+  useEffect(() => {
+    if (poolNumbers.length === 0) return;
+    if (type === "utility") {
+      // Utility: use ALL ready numbers in pool
+      const ids = readyInPool.map((n) => n.id);
+      setNumberIds(ids.length ? ids : [poolNumbers[0].id]);
+    } else {
+      // Marketing: single sender — keep current if still in pool & ready, else first ready/first
+      setNumberIds((prev) => {
+        const stillValid = prev.find((id) => poolNumbers.some((n) => n.id === id));
+        if (stillValid) return [stillValid];
+        const firstReady = readyInPool[0] ?? poolNumbers[0];
+        return [firstReady.id];
+      });
+    }
+  }, [type, poolCountry, readyInPool.length, poolNumbers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeNumbers = numbers.filter((n) => numberIds.includes(n.id));
 
@@ -158,19 +191,16 @@ export default function LaunchWizard() {
     return { ok, missing };
   }, [activeLogical, activeNumbers]);
 
-  // ----- Auto name -----
+  // ----- Auto name (date | country | audience | template | cta) -----
   useEffect(() => {
     if (nameDirty) return;
-    const primaryNumber = activeNumbers[0];
     setCampaignName(buildCampaignName({
-      geo: primaryNumber ? geoFromPhone(primaryNumber.phone_number) : "--",
-      icp,
+      geo: poolCountry || "--",
+      audience,
       templateLabel: activeLogical?.label,
       cta,
-      mode: preset.mode,
-      count: recipients.length,
     }));
-  }, [activeNumbers, icp, activeLogical, cta, preset.mode, recipients.length, nameDirty]);
+  }, [poolCountry, audience, activeLogical, cta, nameDirty]);
 
   // ----- Lazy chats -----
   const chatsQuery = useQuery({
