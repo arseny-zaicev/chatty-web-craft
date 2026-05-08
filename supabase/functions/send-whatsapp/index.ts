@@ -6,6 +6,33 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const FUNCTION_VERSION = "send-whatsapp-inbox-debug-2026-05-08-1";
+const GUPSHUP_SEND_ENDPOINT = "https://api.gupshup.io/wa/api/v1/msg";
+
+async function readJson(res: Response) {
+  return await res.json().catch(() => ({} as Record<string, unknown>));
+}
+
+async function exchangePartnerToken(appId: string, partnerToken: string) {
+  const attempts = [
+    { label: "authorization", headers: { Authorization: partnerToken, accept: "application/json" } },
+    { label: "token", headers: { token: partnerToken, accept: "application/json" } },
+  ];
+  const results: Array<{ label: string; status: number; body: unknown }> = [];
+  for (const attempt of attempts) {
+    const res = await fetch(`https://partner.gupshup.io/partner/app/${encodeURIComponent(appId)}/token/`, {
+      method: "GET",
+      headers: attempt.headers,
+    });
+    const body = await readJson(res);
+    results.push({ label: attempt.label, status: res.status, body });
+    const tokenValue = (body as Record<string, unknown>)?.token as { token?: string } | string | undefined;
+    const appToken = typeof tokenValue === "string" ? tokenValue : tokenValue?.token;
+    if (res.ok && appToken) return { token: appToken, attempts: results };
+  }
+  return { token: "", attempts: results };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -37,7 +64,7 @@ serve(async (req) => {
     const body = await req.json();
     const { conversation_id, text } = body as { conversation_id?: string; text?: string };
     if (!conversation_id || !text || typeof text !== "string" || text.trim().length === 0) {
-      return new Response(JSON.stringify({ error: "conversation_id and text required" }), {
+      return new Response(JSON.stringify({ error: "conversation_id and text required", function_version: FUNCTION_VERSION }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -96,35 +123,35 @@ serve(async (req) => {
     let GUPSHUP_API_KEY: string | null = null;
     let keyType: "per-number-app" | "partner-exchanged" | "global" | "none" = "none";
     let exchangeDebug: unknown = null;
+    const storedKeyType = number.provider_api_key
+      ? String(number.provider_api_key).startsWith("sk_") ? "partner" : "app"
+      : "none";
 
     if (number.provider_api_key && !number.provider_api_key.startsWith("sk_")) {
       GUPSHUP_API_KEY = number.provider_api_key;
       keyType = "per-number-app";
     } else if (number.provider_api_key?.startsWith("sk_") && number.provider_app_id) {
-      // Exchange partner token for app-scoped token
       try {
-        const exRes = await fetch(
-          `https://partner.gupshup.io/partner/app/${number.provider_app_id}/token`,
-          { method: "GET", headers: { Authorization: number.provider_api_key } },
-        );
-        const exBody = await exRes.json().catch(() => ({}));
-        exchangeDebug = { status: exRes.status, body: exBody };
-        const token = (exBody as Record<string, unknown>)?.token as
-          | { token?: string }
-          | string
-          | undefined;
-        const appToken = typeof token === "string" ? token : token?.token;
-        if (exRes.ok && appToken) {
-          GUPSHUP_API_KEY = appToken;
+        const exchanged = await exchangePartnerToken(number.provider_app_id, number.provider_api_key);
+        exchangeDebug = exchanged.attempts;
+        if (exchanged.token) {
+          GUPSHUP_API_KEY = exchanged.token;
           keyType = "partner-exchanged";
         }
       } catch (e) {
         exchangeDebug = { error: e instanceof Error ? e.message : String(e) };
       }
     }
-    if (!GUPSHUP_API_KEY) {
+    if (!GUPSHUP_API_KEY && storedKeyType !== "partner") {
       GUPSHUP_API_KEY = Deno.env.get("GUPSHUP_API_KEY") ?? null;
       if (GUPSHUP_API_KEY) keyType = "global";
+    }
+    if (!GUPSHUP_API_KEY && storedKeyType === "partner") {
+      const debug = { function_version: FUNCTION_VERSION, src_name: number.display_name ?? null, key_type: "partner-exchange-failed", stored_key_type: storedKeyType, partner_exchange: exchangeDebug };
+      return new Response(JSON.stringify({ error: "Stored partner key could not be exchanged for an app send token", debug }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
     if (!GUPSHUP_API_KEY) {
       return new Response(JSON.stringify({ error: "No Gupshup API key available for this number" }), {
@@ -145,7 +172,7 @@ serve(async (req) => {
     form.set("message", JSON.stringify({ type: "text", text }));
     if (number.display_name) form.set("src.name", number.display_name);
 
-    const gsRes = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+    const gsRes = await fetch(GUPSHUP_SEND_ENDPOINT, {
       method: "POST",
       headers: {
         apikey: GUPSHUP_API_KEY,
@@ -161,10 +188,13 @@ serve(async (req) => {
     const accepted = gsRes.ok && !!providerMessageId && gsStatus !== "error";
 
     const debug = {
+      function_version: FUNCTION_VERSION,
+      request_path: GUPSHUP_SEND_ENDPOINT,
       src_name: number.display_name ?? null,
       source,
       destination,
       key_type: keyType,
+      stored_key_type: storedKeyType,
       partner_exchange: exchangeDebug,
       http_status: gsRes.status,
       provider_status: gsStatus ?? null,
