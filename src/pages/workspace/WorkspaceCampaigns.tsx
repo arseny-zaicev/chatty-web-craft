@@ -17,12 +17,12 @@ const statusTone: Record<string, string> = {
   failed: "bg-red-500/15 text-red-600 border-red-500/30",
 };
 
-type RecipientRow = { id: string; status: string; sent_at: string | null; delivered_at: string | null; read_at: string | null; replied_at: string | null; failed_reason: string | null; contact_phone: string };
+type RecipientRow = { id: string; status: string; sent_at: string | null; error_message: string | null; contact_phone: string };
 
 const fetchRecipients = async (campaignId: string) => {
   const { data, error } = await supabase
     .from("campaign_recipients")
-    .select("id, status, sent_at, delivered_at, read_at, replied_at, failed_reason, contact_phone")
+    .select("id, status, sent_at, error_message, contact_phone")
     .eq("campaign_id", campaignId)
     .order("sent_at", { ascending: false, nullsFirst: false })
     .limit(500);
