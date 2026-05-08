@@ -14,7 +14,7 @@ import {
   Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import type { User } from "@supabase/supabase-js";
+
 import { toast } from "sonner";
 import { geoFromPhone } from "@/lib/launchData";
 
