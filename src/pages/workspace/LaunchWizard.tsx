@@ -57,12 +57,15 @@ export default function LaunchWizard() {
   const preset = TYPE_PRESETS[type];
 
   const [logicalKey, setLogicalKey] = useState<string>("");
+  const [poolCountry, setPoolCountry] = useState<string>("");
   const [numberIds, setNumberIds] = useState<string[]>([]);
   const [csv, setCsv] = useState("phone,name\n");
   const [audienceSource, setAudienceSource] = useState<"paste" | "upload" | "chats" | "saved">("paste");
 
-  const [icp, setIcp] = useState("");
-  const [cta, setCta] = useState("");
+  const [audience, setAudience] = useState("");
+  const [ctaPreset, setCtaPreset] = useState<string>("Call");
+  const [ctaCustom, setCtaCustom] = useState("");
+  const cta = ctaPreset === "Other" ? ctaCustom : ctaPreset;
   const [campaignName, setCampaignName] = useState("");
   const [nameDirty, setNameDirty] = useState(false);
 
@@ -71,6 +74,7 @@ export default function LaunchWizard() {
   const [perNumberQuota, setPerNumberQuota] = useState(preset.perNumber);
   const [routing, setRouting] = useState(preset.routing);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+
 
   // When type changes, reset defaults (unless user dirty-edited)
   const typeAppliedRef = useRef<CampaignType>("marketing");
