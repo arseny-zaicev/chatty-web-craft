@@ -3,8 +3,18 @@ import type { Tables } from "@/integrations/supabase/types";
 
 export type WhatsAppNumber = Pick<
   Tables<"whatsapp_numbers">,
-  "id" | "phone_number" | "display_name" | "workspace_id" | "is_active" | "provider_api_key" | "provider_app_id"
+  "id" | "phone_number" | "display_name" | "label" | "workspace_id" | "is_active" | "provider_api_key" | "provider_app_id"
 >;
+
+/** Friendly, human-facing sender label for use in normal chat UI.
+ * Never exposes the technical Gupshup app name (display_name).
+ * Order: explicit label -> +phone. */
+export const friendlySenderLabel = (n: Pick<WhatsAppNumber, "label" | "phone_number"> | null | undefined) => {
+  if (!n) return "WhatsApp";
+  const l = n.label?.trim();
+  if (l) return l;
+  return `+${n.phone_number}`;
+};
 
 export type Conversation = Pick<
   Tables<"conversations">,
