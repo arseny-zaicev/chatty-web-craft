@@ -83,9 +83,12 @@ const AdminPanel = () => {
               <p className="text-xs text-muted-foreground">{user?.email}</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />Sign out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm"><Link to="/admin/fleet"><Phone className="h-4 w-4 mr-2" />Fleet</Link></Button>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />Sign out
+            </Button>
+          </div>
         </div>
         <div className="container mx-auto px-4">
           <div className="flex items-center gap-1 border-t pt-2 pb-2">
