@@ -483,7 +483,6 @@ function FleetHeaders({ showClient }: { showClient: boolean }) {
       <TableHead>Provided by</TableHead>
       <TableHead>Country</TableHead>
       <TableHead>Status</TableHead>
-      <TableHead title="Display name approved by Meta">DN</TableHead>
       <TableHead>Auth</TableHead>
       <TableHead>Webhook</TableHead>
       <TableHead>Templates</TableHead>
