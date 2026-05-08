@@ -324,12 +324,11 @@ async function postGupshupTemplate({
   apiKey, source, destination, srcName, templateId, params,
 }: { apiKey: string; source: string; destination: string; srcName: string | null; templateId: string; params: string[] }) {
   const form = new URLSearchParams();
-  form.set("channel", "whatsapp");
   form.set("source", source);
   form.set("destination", destination);
-  form.set("message", JSON.stringify({ type: "template", template: { id: templateId, params } }));
+  form.set("template", JSON.stringify({ id: templateId, params }));
   if (srcName) form.set("src.name", srcName);
-  const res = await fetch("https://api.gupshup.io/wa/api/v1/msg", {
+  const res = await fetch("https://api.gupshup.io/wa/api/v1/template/msg", {
     method: "POST",
     headers: { apikey: apiKey, "Content-Type": "application/x-www-form-urlencoded" },
     body: form.toString(),
