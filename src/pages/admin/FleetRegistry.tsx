@@ -503,10 +503,10 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, hideClientC
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
-      <TableCell className="text-xs font-medium tabular-nums">{r.total_sent.toLocaleString()}</TableCell>
+      <TableCell className="text-xs font-medium tabular-nums">{(r.total_sent ?? 0).toLocaleString()}</TableCell>
       <TableCell className="text-xs tabular-nums">
-        {r.total_errors > 0 ? <span className="text-red-600 font-medium">{r.total_errors.toLocaleString()}</span> : <span className="text-muted-foreground">0</span>}
-        {r.unrestricted_at && r.errors_since_unban > 0 ? (
+        {(r.total_errors ?? 0) > 0 ? <span className="text-red-600 font-medium">{(r.total_errors ?? 0).toLocaleString()}</span> : <span className="text-muted-foreground">0</span>}
+        {r.unrestricted_at && (r.errors_since_unban ?? 0) > 0 ? (
           <span className="text-[10px] text-amber-700 ml-1" title="Errors since unban">({r.errors_since_unban} since unban)</span>
         ) : null}
       </TableCell>
