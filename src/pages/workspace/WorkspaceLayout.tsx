@@ -73,7 +73,7 @@ export default function WorkspaceLayout() {
                 <h1 className="font-display text-sm truncate">{workspace?.name ?? (slug === "new" ? "New client" : "Workspaces")}</h1>
               </div>
             </header>
-            <main className="flex-1 min-h-0 overflow-auto">
+            <main className="flex-1 min-h-0 overflow-hidden">
               {isLoading ? (
                 <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
               ) : (
