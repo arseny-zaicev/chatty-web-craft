@@ -105,6 +105,25 @@ async function handleInbound(payload: Record<string, unknown>) {
     conversationId = created.id;
   }
 
+  // Try to link this reply back to a campaign recipient (most recent sent/delivered to this contact on this number)
+  const { data: recipient } = await supabase
+    .from("campaign_recipients")
+    .select("id, campaign_id, status")
+    .eq("whatsapp_number_id", number.id)
+    .eq("contact_phone", source)
+    .in("status", ["sent", "scheduled", "sending", "pending"])
+    .order("sent_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (recipient) {
+    await supabase
+      .from("campaign_recipients")
+      .update({ status: "replied", conversation_id: conversationId })
+      .eq("id", recipient.id);
+    console.log("Linked inbound reply to campaign_recipient", recipient.id);
+  }
+
   // Insert message
   await supabase.from("messages").insert({
     user_id: number.user_id,
@@ -115,7 +134,11 @@ async function handleInbound(payload: Record<string, unknown>) {
     media_type: mediaUrl ? messageType : null,
     status: "delivered",
     provider_message_id: providerMessageId,
-    metadata: payload as Record<string, unknown>,
+    metadata: {
+      ...(payload as Record<string, unknown>),
+      campaign_recipient_id: recipient?.id ?? null,
+      campaign_id: recipient?.campaign_id ?? null,
+    },
   });
 
   // Apply automations: inbound_any + inbound_keyword + button_click
