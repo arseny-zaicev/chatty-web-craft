@@ -69,16 +69,23 @@ export default function WorkspaceLayout() {
         <div className="h-screen flex w-full bg-background text-foreground overflow-hidden">
           <WorkspaceSidebar />
           <div className="flex-1 flex flex-col min-w-0 min-h-0 h-screen">
-            <header className="h-12 shrink-0 px-3 border-b border-border flex items-center gap-3 bg-card/40">
+            <header className="h-12 shrink-0 px-3 border-b border-border flex items-center gap-2 bg-card/40">
               <SidebarTrigger />
-              <Button asChild variant="ghost" size="sm" className="gap-1 h-8 px-2">
-                <Link to="/admin"><ArrowLeft className="w-4 h-4" />Admin</Link>
-              </Button>
-              <div className="w-px h-5 bg-border" />
-              <div className="flex items-center gap-2 min-w-0">
-                {workspace && <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: workspace.color }} />}
-                <h1 className="font-display text-sm truncate">{workspace?.name ?? (slug === "new" ? "New client" : "Workspaces")}</h1>
-              </div>
+              <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm min-w-0">
+                <Link to="/admin" className="text-muted-foreground hover:text-foreground transition-colors">Clients</Link>
+                {workspace && (
+                  <>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <Link to={`/ws/${workspace.slug}/overview`} className="flex items-center gap-1.5 min-w-0 hover:text-foreground transition-colors text-muted-foreground">
+                      <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: workspace.color }} />
+                      <span className="truncate">{workspace.name}</span>
+                    </Link>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="font-display truncate text-foreground">{sectionLabel}</span>
+                  </>
+                )}
+                {!workspace && <span className="font-display truncate ml-1">{slug === "new" ? "New client" : "Workspaces"}</span>}
+              </nav>
             </header>
             <main className="flex-1 min-h-0 overflow-hidden">
               {isLoading ? (
