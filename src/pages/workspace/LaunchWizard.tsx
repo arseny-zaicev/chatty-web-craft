@@ -16,11 +16,14 @@ import { toast } from "sonner";
 import {
   fetchLaunchEssentials, fetchConversationsLite,
   groupLogicalTemplates, parseCsv, detectColumns, applyMapping,
-  geoFromPhone, buildCampaignName, renderTemplateBody,
+  geoFromPhone, buildCampaignName, renderTemplateBody, groupNumbersByCountry,
   loadMapping, saveMapping, listSavedAudiences, saveAudience, deleteSavedAudience,
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
 import type { WorkspaceContext } from "./WorkspaceLayout";
+
+const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
+
 
 const launchKeys = {
   essentials: (wid?: string) => ["launch", "essentials", wid ?? "all"] as const,
@@ -54,12 +57,15 @@ export default function LaunchWizard() {
   const preset = TYPE_PRESETS[type];
 
   const [logicalKey, setLogicalKey] = useState<string>("");
+  const [poolCountry, setPoolCountry] = useState<string>("");
   const [numberIds, setNumberIds] = useState<string[]>([]);
   const [csv, setCsv] = useState("phone,name\n");
   const [audienceSource, setAudienceSource] = useState<"paste" | "upload" | "chats" | "saved">("paste");
 
-  const [icp, setIcp] = useState("");
-  const [cta, setCta] = useState("");
+  const [audience, setAudience] = useState("");
+  const [ctaPreset, setCtaPreset] = useState<string>("Call");
+  const [ctaCustom, setCtaCustom] = useState("");
+  const cta = ctaPreset === "Other" ? ctaCustom : ctaPreset;
   const [campaignName, setCampaignName] = useState("");
   const [nameDirty, setNameDirty] = useState(false);
 
@@ -68,6 +74,7 @@ export default function LaunchWizard() {
   const [perNumberQuota, setPerNumberQuota] = useState(preset.perNumber);
   const [routing, setRouting] = useState(preset.routing);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+
 
   // When type changes, reset defaults (unless user dirty-edited)
   const typeAppliedRef = useRef<CampaignType>("marketing");
@@ -131,10 +138,43 @@ export default function LaunchWizard() {
     [recipients, mapping, variableNames],
   );
 
-  // ----- Number selection: auto-pick first active when none -----
+  // ----- Sender pools (numbers grouped by country) -----
+  const pools = useMemo(() => groupNumbersByCountry(numbers), [numbers]);
+
+  // Default pool to the largest available
   useEffect(() => {
-    if (numberIds.length === 0 && numbers.length > 0) setNumberIds([numbers[0].id]);
-  }, [numbers]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!poolCountry && pools.length > 0) setPoolCountry(pools[0].country);
+    if (poolCountry && !pools.find((p) => p.country === poolCountry)) {
+      setPoolCountry(pools[0]?.country ?? "");
+    }
+  }, [pools, poolCountry]);
+
+  const activePool = pools.find((p) => p.country === poolCountry);
+  const poolNumbers = activePool?.numbers ?? [];
+
+  // "Ready" = number has an approved variant for the chosen logical template (if any)
+  const readyInPool = useMemo(() => {
+    if (!activeLogical) return poolNumbers;
+    return poolNumbers.filter((n) => activeLogical.variantByNumber.has(n.id));
+  }, [poolNumbers, activeLogical]);
+
+  // Auto-fill numberIds based on mode + pool
+  useEffect(() => {
+    if (poolNumbers.length === 0) return;
+    if (type === "utility") {
+      // Utility: use ALL ready numbers in pool
+      const ids = readyInPool.map((n) => n.id);
+      setNumberIds(ids.length ? ids : [poolNumbers[0].id]);
+    } else {
+      // Marketing: single sender — keep current if still in pool & ready, else first ready/first
+      setNumberIds((prev) => {
+        const stillValid = prev.find((id) => poolNumbers.some((n) => n.id === id));
+        if (stillValid) return [stillValid];
+        const firstReady = readyInPool[0] ?? poolNumbers[0];
+        return [firstReady.id];
+      });
+    }
+  }, [type, poolCountry, readyInPool.length, poolNumbers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeNumbers = numbers.filter((n) => numberIds.includes(n.id));
 
@@ -151,19 +191,16 @@ export default function LaunchWizard() {
     return { ok, missing };
   }, [activeLogical, activeNumbers]);
 
-  // ----- Auto name -----
+  // ----- Auto name (date | country | audience | template | cta) -----
   useEffect(() => {
     if (nameDirty) return;
-    const primaryNumber = activeNumbers[0];
     setCampaignName(buildCampaignName({
-      geo: primaryNumber ? geoFromPhone(primaryNumber.phone_number) : "--",
-      icp,
+      geo: poolCountry || "--",
+      audience,
       templateLabel: activeLogical?.label,
       cta,
-      mode: preset.mode,
-      count: recipients.length,
     }));
-  }, [activeNumbers, icp, activeLogical, cta, preset.mode, recipients.length, nameDirty]);
+  }, [poolCountry, audience, activeLogical, cta, nameDirty]);
 
   // ----- Lazy chats -----
   const chatsQuery = useQuery({
@@ -204,11 +241,16 @@ export default function LaunchWizard() {
 
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
-    if (!activeLogical) return [];
-    return mappedRecipients.slice(0, 3).map((r) => ({
-      phone: r.phone,
-      body: renderTemplateBody(activeLogical.body, variableNames, r.variables),
-    }));
+    if (!activeLogical) return [] as Array<{ phone: string; body: string; missing: string[] }>;
+    return mappedRecipients.slice(0, 3).map((r) => {
+      const vals = r.variables ?? {};
+      const missing = variableNames.filter((v) => !String(vals[v] ?? "").trim());
+      return {
+        phone: r.phone,
+        body: renderTemplateBody(activeLogical.body, variableNames, vals),
+        missing,
+      };
+    });
   }, [mappedRecipients, activeLogical, variableNames]);
 
   // ----- Launch -----
@@ -369,43 +411,68 @@ export default function LaunchWizard() {
             )}
           </Step>
 
-          {/* Step 3: Sending numbers */}
-          <Step n={3} icon={Phone} title={`Sending number${routing ? "s" : ""}`}>
-            {numbers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No numbers in this workspace.</p>
+          {/* Step 3: Sender pool */}
+          <Step n={3} icon={Phone} title="Sender pool">
+            {pools.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active numbers in this workspace.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-2">
-                {numbers.map((n) => {
-                  const selected = numberIds.includes(n.id);
-                  const hasVariant = activeLogical?.variantByNumber.has(n.id);
-                  return (
-                    <label
-                      key={n.id}
-                      className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
-                    >
-                      <input
-                        type={routing ? "checkbox" : "radio"}
-                        name="number-pick"
-                        checked={selected}
-                        onChange={() => toggleNumber(n.id)}
-                      />
-                      <span className="truncate flex-1">{n.label ?? `+${n.phone_number}`}</span>
-                      {activeLogical && (
-                        hasVariant
-                          ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">variant ok</Badge>
-                          : <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">no variant</Badge>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Country pool</span>
+                  <Select value={poolCountry} onValueChange={setPoolCountry}>
+                    <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {pools.map((p) => (
+                        <SelectItem key={p.country} value={p.country}>
+                          {p.country} · {p.numbers.length} number{p.numbers.length === 1 ? "" : "s"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="outline" className="text-[11px]">
+                    {readyInPool.length} ready of {poolNumbers.length}
+                  </Badge>
+                  <Badge variant="outline" className="text-[11px] border-primary/30 text-primary">
+                    {type === "utility" ? "Utility · distribute across pool" : "Marketing · single sender"}
+                  </Badge>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-2 mt-3">
+                  {poolNumbers.map((n) => {
+                    const selected = numberIds.includes(n.id);
+                    const hasVariant = activeLogical?.variantByNumber.has(n.id);
+                    const inputType = type === "utility" ? "checkbox" : "radio";
+                    return (
+                      <label
+                        key={n.id}
+                        className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
+                      >
+                        <input
+                          type={inputType}
+                          name="number-pick"
+                          checked={selected}
+                          onChange={() => toggleNumber(n.id)}
+                        />
+                        <span className="truncate flex-1">{n.label ?? `+${n.phone_number}`}</span>
+                        {activeLogical && (
+                          hasVariant
+                            ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">ready</Badge>
+                            : <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">no variant</Badge>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
             )}
+
             {resolution.missing.length > 0 && (
               <div className="mt-2 text-xs text-amber-600 flex items-start gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                Selected numbers without an approved variant of this template will block launch. Sync templates or pick another template.
+                {resolution.missing.length} selected number(s) lack an approved variant of this template. Launch is blocked until resolved.
               </div>
             )}
+
             <div className="grid grid-cols-3 gap-2 mt-3">
               <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
               <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
@@ -541,13 +608,23 @@ export default function LaunchWizard() {
           )}
 
           {/* Step 6: Naming */}
-          <Step n={6} icon={Bookmark} title="Campaign name & tags">
+          <Step n={6} icon={Bookmark} title="Campaign name">
             <div className="grid sm:grid-cols-2 gap-2">
-              <Field label="ICP / Offer">
-                <Input value={icp} onChange={(e) => setIcp(e.target.value)} placeholder="GTM Professionals" />
+              <Field label="Audience">
+                <Input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="GTM Professionals" />
               </Field>
               <Field label="CTA">
-                <Input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="Demo CTA" />
+                <div className="flex gap-2">
+                  <Select value={ctaPreset} onValueChange={setCtaPreset}>
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CTA_PRESETS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {ctaPreset === "Other" && (
+                    <Input className="flex-1" value={ctaCustom} onChange={(e) => setCtaCustom(e.target.value)} placeholder="Custom CTA" />
+                  )}
+                </div>
               </Field>
             </div>
             <div className="mt-2">
@@ -559,6 +636,9 @@ export default function LaunchWizard() {
                   Reset to auto-generated
                 </button>
               )}
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Format: YYYY-MM-DD | COUNTRY | AUDIENCE | TEMPLATE | CTA
+              </p>
             </div>
           </Step>
 
@@ -572,7 +652,14 @@ export default function LaunchWizard() {
               <div className="space-y-2">
                 {previewSamples.map((s, i) => (
                   <div key={i} className="rounded-md border border-border bg-card/30 p-3">
-                    <div className="text-xs text-muted-foreground mb-1.5">To +{s.phone}</div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-xs text-muted-foreground">To +{s.phone}</div>
+                      {s.missing.length > 0 && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">
+                          <AlertTriangle className="w-3 h-3 mr-1" />Missing: {s.missing.join(", ")}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-sm whitespace-pre-wrap">{s.body}</div>
                   </div>
                 ))}
@@ -586,6 +673,7 @@ export default function LaunchWizard() {
           <div className="font-display text-lg flex items-center gap-2"><Clock className="w-4 h-4 text-primary" />Review</div>
           <Row label="Type" value={preset.label} />
           <Row label="Workspace" value={workspace?.name ?? "-"} />
+          <Row label="Pool" value={poolCountry ? `${poolCountry} · ${readyInPool.length}/${poolNumbers.length} ready` : "-"} />
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
