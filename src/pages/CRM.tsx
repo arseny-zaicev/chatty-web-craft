@@ -310,7 +310,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
         <meta name="robots" content="noindex,nofollow" />
       </Helmet>
 
-      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-background text-foreground`}>
+      <div className={`${embedded ? "h-full" : "h-screen"} min-h-0 overflow-hidden flex flex-col bg-background text-foreground`}>
         {!embedded && <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
           <div className="flex items-center gap-3">
             <MessageSquare className="w-5 h-5 text-primary" />
@@ -339,10 +339,10 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
           </div>
         </header>}
 
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 min-h-0 overflow-hidden flex">
           {/* Left: conversation list */}
-          <aside className="w-[260px] xl:w-[320px] shrink-0 border-r border-border flex flex-col bg-card/20">
-            <div className="p-3 space-y-2 border-b border-border">
+          <aside className="w-[260px] xl:w-[320px] shrink-0 min-h-0 overflow-hidden border-r border-border flex flex-col bg-card/20">
+            <div className="shrink-0 p-3 space-y-2 border-b border-border">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -392,7 +392,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {isLoading ? (
                 <div className="p-6 flex justify-center">
                   <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -494,9 +494,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
           </aside>
 
           {/* Right: chat window */}
-          <section className="flex-1 flex flex-col min-w-0">
+          <section className="flex-1 min-h-0 overflow-hidden flex flex-col min-w-0">
             {!active ? (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="flex-1 min-h-0 flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
                   <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">Select a conversation to view messages</p>
@@ -504,7 +504,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
               </div>
             ) : (
               <>
-                <div className="h-16 px-4 sm:px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
+                <div className="h-16 shrink-0 px-4 sm:px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
                   <div className="flex items-center gap-3 min-w-0">
                     <button
                       onClick={() => setActiveId(null)}
@@ -580,7 +580,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                 <div
                   ref={messagesScrollRef}
                   onScroll={handleMessagesScroll}
-                  className="flex-1 overflow-y-auto px-6 py-6 space-y-3 bg-background overscroll-contain relative"
+                  className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-3 bg-background overscroll-contain relative"
                 >
                   {loadingMessages ? (
                     <div className="flex justify-center pt-8">
@@ -640,7 +640,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   )}
                 </div>
 
-                <div className="border-t border-border px-4 py-3 bg-card/30">
+                <div className="shrink-0 max-h-[45%] overflow-hidden border-t border-border px-4 py-3 bg-card/30 flex flex-col">
                   <div className="flex items-end gap-2">
                     <Textarea
                       value={draft}
@@ -666,7 +666,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                     </Button>
                   </div>
                   {lastSendDebug && (
-                    <div className="mt-2 rounded border border-border bg-muted/40 p-2 text-[11px] font-mono leading-tight text-muted-foreground overflow-auto max-h-48">
+                    <div className="mt-2 min-h-0 rounded border border-border bg-muted/40 p-2 text-[11px] font-mono leading-tight text-muted-foreground overflow-auto max-h-28">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-foreground">Last send debug</span>
                         <button className="underline" onClick={() => setLastSendDebug(null)}>clear</button>
