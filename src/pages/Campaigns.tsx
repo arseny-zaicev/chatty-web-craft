@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, Megaphone, Play, Plus, RefreshCw, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { crmKeys, fetchCampaignBase } from "@/lib/crmData";
+import { crmKeys, fetchCampaignBase, fetchConversationsForCsv } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -182,8 +182,13 @@ const Campaigns = ({ workspaceId, embedded = false }: { workspaceId?: string; em
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Sync failed"),
   });
-  const loadChats = () => {
-    setCsv(["phone,name,conversation_id", ...conversations.map((c) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
+  const loadChats = async () => {
+    try {
+      const list = conversations.length > 0 ? conversations : await fetchConversationsForCsv(workspaceId);
+      setCsv(["phone,name,conversation_id", ...list.map((c: any) => `${c.contact_phone},${c.contact_name ?? ""},${c.id}`)].join("\n"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load chats");
+    }
   };
 
   const toneClass = (tone: "ok" | "warn" | "bad") =>
