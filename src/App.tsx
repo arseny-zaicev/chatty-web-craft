@@ -78,11 +78,9 @@ const queryClient = new QueryClient({
 });
 
 const RouteFallback = () => (
-  <main className="min-h-screen bg-background flex items-center justify-center px-6">
-    <div className="flex items-center gap-3 rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
-      Loading secure admin area...
-    </div>
+  <main className="min-h-screen bg-background flex items-center justify-center px-6" aria-busy="true">
+    <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
+    <span className="sr-only">Loading…</span>
   </main>
 );
 
