@@ -71,12 +71,30 @@ const tone = (t: "ok" | "warn" | "bad" | "muted") =>
   : "bg-muted text-muted-foreground border-border";
 
 const STATUS_TONE: Record<NumberStatus, "ok" | "warn" | "bad" | "muted"> = {
+  active: "ok",
   ready: "ok",
+  stock: "muted",
   warming: "warn",
-  draft: "muted",
   restricted: "bad",
   banned: "bad",
+  draft: "muted",
   inactive: "muted",
+};
+
+const STATUS_OPTIONS: Array<[NumberStatus, string]> = [
+  ["active", "Active"],
+  ["ready", "Ready"],
+  ["stock", "Stock"],
+  ["warming", "Warming"],
+  ["restricted", "Restricted (30 days)"],
+  ["banned", "Banned"],
+];
+
+const statusLabel = (s: NumberStatus): string => {
+  const found = STATUS_OPTIONS.find(([v]) => v === s);
+  if (found) return found[1];
+  if (s === "draft" || s === "inactive") return "Stock";
+  return s;
 };
 
 type Readiness = { ready: boolean; reasons: string[] };
