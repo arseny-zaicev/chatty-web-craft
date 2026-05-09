@@ -81,6 +81,7 @@ const FleetRegistry = lazyWithRetry(() => import("./pages/admin/FleetRegistry"))
 const FleetAnalytics = lazyWithRetry(() => import("./pages/admin/FleetAnalytics"));
 const AdminMfaSetup = lazyWithRetry(() => import("./pages/admin/AdminMfaSetup"));
 const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"));
+const OpsLive = lazyWithRetry(() => import("./pages/admin/OpsLive"));
 const Apply = lazyWithRetry(() => import("./pages/Apply"));
 const SellerLeadsApply = lazyWithRetry(() => import("./pages/SellerLeadsApply"));
 const WhatsAppApply = lazyWithRetry(() => import("./pages/WhatsAppApply"));
@@ -162,6 +163,7 @@ const App = () => (
               <Route path="/admin/analytics" element={<FleetAnalytics />} />
               <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
               <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
+              <Route path="/admin/ops-live" element={<OpsLive />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
               <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
