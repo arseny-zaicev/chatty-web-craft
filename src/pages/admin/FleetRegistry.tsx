@@ -321,10 +321,11 @@ export default function FleetRegistry() {
     },
     onMutate: async ({ row, patch }) => {
       await qc.cancelQueries({ queryKey: ["fleet-registry"] });
-      const prev = qc.getQueriesData<Row[]>({ queryKey: ["fleet-registry"] });
-      qc.setQueriesData<Row[]>({ queryKey: ["fleet-registry"] }, (old) =>
-        old?.map((r) => (r.id === row.id ? { ...r, ...patch } : r)) ?? old,
-      );
+      const prev = qc.getQueriesData<{ rows: Row[]; workspaces: WS[] }>({ queryKey: ["fleet-registry"] });
+      qc.setQueriesData<{ rows: Row[]; workspaces: WS[] }>({ queryKey: ["fleet-registry"] }, (old) => {
+        if (!old || !Array.isArray(old.rows)) return old;
+        return { ...old, rows: old.rows.map((r) => (r.id === row.id ? { ...r, ...patch } : r)) };
+      });
       return { prev };
     },
     onSuccess: () => {
@@ -705,6 +706,7 @@ function AddNumberDrawer({
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
+  const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
   
 
   const reset = () => {
@@ -712,6 +714,7 @@ function AddNumberDrawer({
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
     setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
+    setWebhookConnected(false);
   };
 
   useEffect(() => {
@@ -731,6 +734,7 @@ function AddNumberDrawer({
       setAssignedRef(editing.assigned_ref || "");
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
+      setWebhookConnected(Boolean(editing.webhook_connected));
     } else {
       reset();
     }
@@ -779,6 +783,7 @@ function AddNumberDrawer({
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
+        webhook_connected: webhookConnected,
         ...dnPatch,
       };
 
@@ -881,6 +886,17 @@ function AddNumberDrawer({
 
           <Field label="Webhook URL">
             <CopyableField value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`} />
+            <div className="flex items-center justify-between mt-2 px-1">
+              <div className="text-[11px] text-muted-foreground">
+                Pasted into Gupshup callback URL?
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] ${webhookConnected ? "text-emerald-700 font-medium" : "text-muted-foreground"}`}>
+                  {webhookConnected ? "connected" : "not connected"}
+                </span>
+                <Switch checked={webhookConnected} onCheckedChange={setWebhookConnected} />
+              </div>
+            </div>
           </Field>
 
           <Field label="WABA ID">
