@@ -1410,6 +1410,7 @@ export type Database = {
           color: string
           created_at: string
           id: string
+          internal_code: string | null
           is_active: boolean
           name: string
           owner_user_id: string
@@ -1421,6 +1422,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          internal_code?: string | null
           is_active?: boolean
           name: string
           owner_user_id: string
@@ -1432,6 +1434,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          internal_code?: string | null
           is_active?: boolean
           name?: string
           owner_user_id?: string
