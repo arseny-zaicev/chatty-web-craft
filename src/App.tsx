@@ -1,4 +1,15 @@
-import { lazy, Suspense, type ComponentType } from "react";
+import { Component, lazy, Suspense, type ComponentType, type ErrorInfo, type ReactNode } from "react";
+
+const isDynamicImportError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Failed to fetch dynamically imported module") || message.includes("Importing a module script failed");
+};
+
+const recoverFromStaleChunk = () => {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem("__lovable_chunk_reload__");
+  window.location.reload();
+};
 
 // Retry dynamic imports once and reload on stale chunks (fixes "Failed to fetch dynamically imported module" after deploys/HMR)
 const lazyWithRetry = <T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) =>
@@ -14,7 +25,7 @@ const lazyWithRetry = <T extends ComponentType<any>>(factory: () => Promise<{ de
         if (typeof window !== "undefined") sessionStorage.removeItem(key);
         return mod;
       } catch (err2) {
-        if (typeof window !== "undefined" && !sessionStorage.getItem(key)) {
+        if (typeof window !== "undefined" && isDynamicImportError(err2) && !sessionStorage.getItem(key)) {
           sessionStorage.setItem(key, "1");
           window.location.reload();
         }
@@ -22,6 +33,28 @@ const lazyWithRetry = <T extends ComponentType<any>>(factory: () => Promise<{ de
       }
     }
   });
+
+class ChunkErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
+  state = { error: null as unknown };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+
+  componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    console.error(error, errorInfo);
+  }
+
+  render() {
+    if (this.state.error && isDynamicImportError(this.state.error)) {
+      return <IskraLoader message="Refreshing workspace…" />;
+    }
+
+    if (this.state.error) throw this.state.error;
+
+    return this.props.children;
+  }
+}
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
