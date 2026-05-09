@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     if (action === "verify") {
       const body = await req.json().catch(() => ({}));
       const token = String(body?.token ?? "").trim();
-      if (!token || token.length < 16 || token.length > 128) {
+      if (!token || token.length < 6 || token.length > 128) {
         return jsonResponse({ valid: false, error: "Invalid token" }, 400);
       }
       const { data, error } = await admin
