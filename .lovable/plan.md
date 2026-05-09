@@ -1,87 +1,103 @@
-# Prep Profiles for Audience Data
+## Что строим
 
-Internal-only system that enforces a defined "shape" on every audience batch before it can be launched. Clients never see any of this.
+Большой блок: **Smart Scheduling + Notifications + Roadmap**. Разбиваю на 4 этапа, каждый можно мерджить отдельно.
 
-## 1. Database schema (migration)
+---
 
-New tables (all RLS: `is_workspace_manager` only):
+### Этап 1 - Scheduling UI + дни запуска
 
-**`audience_prep_profiles`**
-- `workspace_id`, `user_id`
-- `name`, `description`
-- `campaign_type` ('marketing' | 'utility')
-- `template_label` (logical name, e.g. "demo_booking_v2") - free text
-- `required_fields` jsonb (string[]) - source columns that MUST exist & be non-empty
-- `optional_fields` jsonb (string[])
-- `derived_variables` jsonb - array of `{ key: "var_1", strategy: "field"|"template"|"static", source?: string, template?: string, fallback?: string }` where `template` supports `{field_name}` placeholders
-- `invalid_rules` jsonb - array of `{ field, rule: "non_empty"|"min_length"|"regex"|"phone", value? }`
-- `fallback_rules` jsonb - per-field fallback values
-- `quick_replies` jsonb (string[]) - optional button set
-- `sample_payload` jsonb - one example source row for preview
+В Launch Wizard добавляю секцию **Schedule**:
+- **Старт:** "Сейчас" / "Запланировать"
+- **Дни запуска:** мульти-выбор дней (можно несколько дат, не только одна) - кампания дробится на под-кампании по дням
+- **Окно отправки:** `from` - `to` (default 09:00-18:00), с возможностью сдвинуть до 22:00
+- **Часовой пояс получателя:** toggle "respect recipient timezone" (определяется по префиксу телефона через `geoFromPhone` + map страна→TZ)
+- Превью: "200 сообщений будут отправлены 12 May с 09:00 до 18:00 по локальному TZ получателя"
 
-**`audience_batches`** - add columns:
-- `prep_profile_id uuid` (nullable for legacy)
-- `is_launch_ready boolean default false`
-- `derived_variables_preview jsonb` - first 3 rendered samples
+DB: добавляю в `campaigns`:
+- `schedule_window_start time` (default 09:00)
+- `schedule_window_end time` (default 18:00)
+- `respect_recipient_tz boolean` (default true)
+- `scheduled_dates date[]` (массив дат для multi-day запуска)
 
-**`audience_rows`** - add column:
-- `derived_payload jsonb default '{}'` - rendered var_1..var_N for that row
+---
 
-## 2. Library (`src/lib/prepProfiles.ts`)
+### Этап 2 - Poisson scheduler (backend)
 
-- CRUD for profiles
-- `applyProfile(profile, row)` → `{ derivedPayload, errors[] }`
-- `renderTemplate(tpl, row, fallbacks)` - replaces `{field}` tokens, applies fallbacks
-- `validateRow(profile, row)` - returns invalid/valid + reason
+Меняю логику в `send-whatsapp` / `campaigns` edge функции.
 
-## 3. UI - Prep Profiles manager
+Вместо равномерных `delay_min/delay_max` между сообщениями:
+1. На момент старта кампании (или cron-тика) - **раз** генерируем `scheduled_at` для каждого `campaign_recipient`:
+   - Внутри окна `[window_start, window_end]` в TZ получателя
+   - Распределение **Poisson** (экспоненциальные интервалы, не равномерные) - выглядит как естественный человеческий паттерн
+   - **Шаффл по номерам:** не "сначала все с номера A, потом B", а перемешать так, чтобы в любую секунду слали 1-2 разных номера (round-robin внутри отсортированной по времени очереди)
+2. Cron каждую минуту берёт `campaign_recipients` где `scheduled_at <= now()` и `status='pending'` и шлёт.
 
-New page `/ws/:slug/data/profiles` (manager-only, restricted segment):
-- List profiles per workspace
-- Create/Edit dialog with sections:
-  - Basic (name, campaign type, template label)
-  - Required & optional source fields (chip input)
-  - Derived variables editor (rows with key + strategy + template/source + fallback)
-  - Invalid rules + fallback rules
-  - Quick replies (optional)
-  - Sample payload (key/value editor) + live "Sample rendered output" panel
+Технически - Postgres функция `schedule_campaign_recipients(campaign_id)` + edge cron каждую минуту.
 
-Add tab/link from `WorkspaceData.tsx` header.
+---
 
-## 4. Refactor `WorkspaceData.tsx` upload flow
+### Этап 3 - Slack + Google Calendar notifications
 
-Upload dialog becomes 3-step:
-1. **Pick Prep Profile** (required) + upload file
-2. **Mapping & Preview**: show detected phone column, mapped source fields, sample of 5 derived rows, totals (valid/invalid/duplicates), sample rendered message using profile.template_label + derived vars
-3. **Confirm & Save** - only saves if `validRows > 0`; sets `is_launch_ready = true` when 100% required fields present in valid rows
+**Slack:**
+- Connector уже подключён (`SLACK_API_KEY` в secrets)
+- На событие `campaign launched` - сообщение в канал (default `#campaigns` или настраиваемый)
+- На завершение кампании - сообщение со stats (sent / failed / read rate если есть)
+- Настройка канала: в Workspace Settings новое поле "Slack channel for campaign notifications" + кнопка "Test message"
+- Для будущих клиентов - в Settings можно будет добавить `client_slack_channel` (но пока пусто)
 
-Update `audienceData.ts.uploadBatch` to:
-- Accept `prepProfileId`
-- For each row, run `validateRow` + `applyProfile` and store `derived_payload` per row
-- Compute and store `derived_variables_preview` (first 3 samples)
-- Mark batch `is_launch_ready` based on validation
+**Google Calendar:**
+- Нужно подключить Google Calendar connector (попрошу одобрить)
+- На запуск - создаю event на дату запуска, `transparency=transparent` (без busy)
+- Title: `[Iskra] Launch: {campaign_name}` + описание со ссылкой на dashboard
 
-## 5. Launch wizard integration
+---
 
-In `LaunchWizard.tsx` Database tab:
-- Filter `dbBatchesQ` to `is_launch_ready = true`
-- For selected batch, show: Prep Profile name, template label, derived variable list with coverage % (rows where derived var resolved non-empty)
-- Auto-fill variable mapping from profile's `derived_variables` keys (skip manual mapping step)
-- Block "Launch" button if any required derived var has <100% coverage; show which one
+### Этап 4 - Roadmap / Vision page
 
-## 6. Visibility / access
+Новая страница `/ws/:slug/roadmap` (только admin), без публичного доступа:
+- Колонки kanban: **Idea / Planned / In Progress / Shipped**
+- Каждая карточка: title, description, tags (scheduling/notifications/ai/etc), priority, "why" поле
+- DB: таблица `roadmap_items` (workspace-scoped, RLS - только admin/owner)
+- Можно добавлять, перетаскивать между колонками, помечать shipped
+- На входе засеваю всё что обсуждали в чате (smart routing, A/B copy, stats page, slack reports, calendar, и т.д.)
 
-Already covered: `data` segment is restricted to manager-like roles. New `/data/profiles` route reuses the same guard. No client exposure anywhere.
+---
 
-## 7. Out of scope for this pass
+## Технический раздел
 
-- "Pull from Supabase" source - leave Upload as the only ingestion method, but design the profile layer so a future pull source can plug in
-- AI-suggested derived variables
+**Миграции:**
+1. `campaigns` + поля schedule
+2. `campaign_recipients.scheduled_at` уже есть
+3. Новая таблица `roadmap_items (id, workspace_id, title, description, status, tags[], priority, why, position, created_at)`
+4. Опционально: `workspaces.slack_channel_id`, `workspaces.gcal_calendar_id`
 
-## Files
+**Edge functions:**
+- `schedule-campaign` (новая) - генерит `scheduled_at` по Poisson
+- `process-campaign-queue` (новая, cron 1 min) - шлёт всё что `scheduled_at <= now()`
+- `notify-slack` хелпер (использует `_shared/slack.ts` который уже есть)
+- `notify-gcal` (новая, после connect Google Calendar)
 
-- migration: new SQL
-- create: `src/lib/prepProfiles.ts`, `src/pages/workspace/WorkspacePrepProfiles.tsx`, `src/components/workspace/PrepProfileDialog.tsx`, `src/components/workspace/UploadAudienceDialog.tsx` (extracted multi-step)
-- edit: `src/lib/audienceData.ts`, `src/pages/workspace/WorkspaceData.tsx`, `src/pages/workspace/LaunchWizard.tsx`, `src/pages/workspace/WorkspaceLayout.tsx` (route/restriction), `src/App.tsx` (route)
+**Frontend:**
+- `LaunchWizard`: новая секция Schedule
+- `WorkspaceSettings`: поле Slack channel + test
+- `pages/workspace/Roadmap.tsx` (новая)
+- роут `/ws/:slug/roadmap` в `App.tsx`
 
-Migration runs first; after approval I'll write the code in one pass.
+---
+
+## Порядок ship
+
+1. **Roadmap страница** (быстро, изолировано, сразу даст тебе место копить идеи) - 1 итерация
+2. **Scheduling UI + DB поля + дни запуска** - 1 итерация
+3. **Poisson scheduler backend + cron** - 1 итерация (требует тестов)
+4. **Slack notifications** (campaign launched + completed) - 1 итерация
+5. **Google Calendar** (после connect) - 1 итерация
+
+---
+
+## Что нужно от тебя
+
+1. **Стартуем с Roadmap** (быстрая победа + ты сразу засыпешь идеи), потом Scheduling? Или сначала Scheduling раз он критичнее для запусков?
+2. **Slack канал** - название канала (например `#iskra-campaigns`)? Создам код на отправку в этот канал, ты его подтвердишь.
+3. **Google Calendar** - подтверждаешь подключение connector'а? (попрошу авторизацию через Google)
+4. **Multi-day:** если ты выбрал 2 даты для одной аудитории в 200 контактов - делим 100/100 или дублируем 200/200? (думаю делим - дубликаты = бан)
