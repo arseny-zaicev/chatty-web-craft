@@ -64,6 +64,7 @@ const WorkspaceOverview = lazyWithRetry(() => import("./pages/workspace/Workspac
 const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/WorkspaceSettings"));
 const LaunchWizard = lazyWithRetry(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazyWithRetry(() => import("./pages/workspace/NewClient"));
+const WorkspacePrepProfiles = lazyWithRetry(() => import("./pages/workspace/WorkspacePrepProfiles"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const CustomCursor = lazyWithRetry(() => import("@/components/CustomCursor"));
 const CookieConsent = lazyWithRetry(() => import("@/components/CookieConsent"));
