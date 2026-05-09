@@ -272,24 +272,30 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(ws.name);
+  const [code, setCode] = useState(ws.internal_code ?? "");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { setName(ws.name); }, [ws.name]);
+  useEffect(() => { setName(ws.name); setCode(ws.internal_code ?? ""); }, [ws.name, ws.internal_code]);
 
   const saveName = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === ws.name) { setEditing(false); setName(ws.name); return; }
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim().toUpperCase().slice(0, 6);
+    if (!trimmedName) { setEditing(false); setName(ws.name); setCode(ws.internal_code ?? ""); return; }
+    if (trimmedName === ws.name && trimmedCode === (ws.internal_code ?? "")) { setEditing(false); return; }
     setSaving(true);
-    const { error } = await supabase.from("workspaces").update({ name: trimmed }).eq("id", ws.id);
+    const { error } = await supabase.from("workspaces").update({ name: trimmedName, internal_code: trimmedCode || null }).eq("id", ws.id);
     setSaving(false);
-    if (error) { toast.error(error.message); setName(ws.name); }
+    if (error) { toast.error(error.message); setName(ws.name); setCode(ws.internal_code ?? ""); }
     else { toast.success("Renamed"); }
     setEditing(false);
   };
 
+  const cancelEdit = () => { setEditing(false); setName(ws.name); setCode(ws.internal_code ?? ""); };
+
   const unread = m?.unread_replies ?? 0;
   const numbersActive = m?.numbers_active ?? 0;
   const numbersTotal = m?.numbers_total ?? 0;
+  const displayName = ws.internal_code ? `${ws.name}-${ws.internal_code}` : ws.name;
 
   return (
     <Card className="group hover:border-primary/50 transition-colors flex flex-col">
@@ -298,23 +304,35 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ background: ws.color }} />
             {editing ? (
-              <input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={saveName}
-                onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") { setEditing(false); setName(ws.name); } }}
-                disabled={saving}
-                className="text-base font-semibold bg-transparent border-b border-primary/40 focus:outline-none focus:border-primary px-0.5 min-w-0 flex-1"
-              />
+              <div className="flex items-center gap-1 min-w-0 flex-1">
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") cancelEdit(); }}
+                  disabled={saving}
+                  placeholder="Brand"
+                  className="text-base font-semibold bg-transparent border-b border-primary/40 focus:outline-none focus:border-primary px-0.5 min-w-0 flex-1"
+                />
+                <span className="text-base font-semibold text-muted-foreground">-</span>
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
+                  onBlur={saveName}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") cancelEdit(); }}
+                  disabled={saving}
+                  placeholder="CODE"
+                  className="text-base font-semibold bg-transparent border-b border-primary/40 focus:outline-none focus:border-primary px-0.5 w-16 uppercase tracking-wider"
+                />
+              </div>
             ) : (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
                 className="text-base font-semibold truncate text-left hover:text-primary transition-colors"
-                title="Click to rename"
+                title="Click to rename (Brand-CODE)"
               >
-                {ws.name}
+                {displayName}
               </button>
             )}
           </div>
