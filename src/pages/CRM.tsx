@@ -25,7 +25,7 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
-import { useQuery as useRQ } from "@tanstack/react-query";
+
 import { fetchWorkspaceMembers, memberDisplayName, workspaceMembersKey } from "@/lib/workspaceMembers";
 
 type Message = {
@@ -90,7 +90,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     return map;
   }, [numbers]);
 
-  const { data: members = [] } = useRQ({
+  const { data: members = [] } = useQuery({
     queryKey: workspaceMembersKey(workspaceId),
     queryFn: () => fetchWorkspaceMembers(workspaceId),
     enabled: !!workspaceId,
