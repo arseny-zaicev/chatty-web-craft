@@ -13,24 +13,24 @@ const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 type Status = "ok" | "warn" | "crit" | "idle";
 
 const ringByStatus: Record<Status, string> = {
-  ok: "shadow-[0_0_60px_-20px_hsl(152_80%_55%/0.55)] border-[hsl(152_60%_45%/0.35)]",
-  warn: "shadow-[0_0_60px_-20px_hsl(38_85%_55%/0.55)] border-[hsl(38_60%_50%/0.35)]",
-  crit: "shadow-[0_0_60px_-20px_hsl(0_85%_60%/0.6)] border-[hsl(0_70%_55%/0.4)]",
-  idle: "border-[hsl(42_25%_90%/0.08)]",
+  ok: "shadow-[0_8px_40px_-16px_hsl(152_65%_35%/0.35)] border-[hsl(152_65%_35%/0.35)]",
+  warn: "shadow-[0_8px_40px_-16px_hsl(38_70%_45%/0.35)] border-[hsl(38_70%_45%/0.35)]",
+  crit: "shadow-[0_8px_40px_-16px_hsl(0_70%_50%/0.35)] border-[hsl(0_70%_50%/0.4)]",
+  idle: "shadow-[0_2px_16px_hsl(38_30%_70%/0.15)] border-[hsl(38_30%_80%)]",
 };
 
 const dotByStatus: Record<Status, string> = {
-  ok: "bg-[hsl(152_70%_50%)] shadow-[0_0_14px_2px_hsl(152_80%_55%/0.7)]",
-  warn: "bg-[hsl(38_85%_55%)] shadow-[0_0_14px_2px_hsl(38_85%_55%/0.7)]",
-  crit: "bg-[hsl(0_85%_60%)] shadow-[0_0_14px_2px_hsl(0_85%_60%/0.7)]",
-  idle: "bg-[hsl(42_25%_90%/0.25)]",
+  ok: "bg-[hsl(152_65%_35%)] shadow-[0_0_10px_2px_hsl(152_70%_42%/0.4)]",
+  warn: "bg-[hsl(38_70%_45%)] shadow-[0_0_10px_2px_hsl(38_70%_45%/0.4)]",
+  crit: "bg-[hsl(0_70%_50%)] shadow-[0_0_10px_2px_hsl(0_70%_50%/0.4)]",
+  idle: "bg-[hsl(28_18%_40%/0.35)]",
 };
 
 const textByStatus: Record<Status, string> = {
-  ok: "text-[hsl(152_70%_60%)]",
-  warn: "text-[hsl(38_85%_65%)]",
-  crit: "text-[hsl(0_85%_70%)]",
-  idle: "text-[hsl(42_25%_90%/0.45)]",
+  ok: "text-[hsl(152_65%_30%)]",
+  warn: "text-[hsl(38_75%_38%)]",
+  crit: "text-[hsl(0_70%_45%)]",
+  idle: "text-[hsl(28_18%_40%/0.6)]",
 };
 
 function Panel({
@@ -39,42 +39,37 @@ function Panel({
   title,
   subtitle,
   status = "idle",
-  action,
 }: {
   children: ReactNode;
   className?: string;
   title?: string;
   subtitle?: string;
   status?: Status;
-  action?: ReactNode;
 }) {
   return (
     <div
       className={cn(
-        "relative rounded-3xl border bg-gradient-to-b from-[hsl(30_18%_14%/0.95)] to-[hsl(30_22%_9%/0.95)] backdrop-blur-sm overflow-hidden transition-all",
+        "relative rounded-2xl border bg-[hsl(42_40%_97%)] backdrop-blur-sm overflow-hidden flex flex-col transition-all",
         ringByStatus[status],
         className,
       )}
     >
-      {/* inner highlight */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(42_50%_85%/0.18)] to-transparent" />
-      {(title || action) && (
-        <div className="flex items-center justify-between gap-3 px-7 pt-6">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className={cn("h-2 w-2 rounded-full", dotByStatus[status])} />
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(42_30%_85%/0.55)] truncate">
+      {title && (
+        <div className="flex items-center justify-between gap-3 px-5 lg:px-6 pt-4 lg:pt-5 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className={cn("h-2 w-2 rounded-full shrink-0", dotByStatus[status])} />
+            <h3 className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(28_18%_30%)] truncate">
               {title}
             </h3>
             {subtitle && (
-              <span className="text-[10px] tracking-[0.18em] uppercase text-[hsl(42_30%_85%/0.3)] truncate">
+              <span className="text-[10px] tracking-[0.16em] uppercase text-[hsl(28_18%_40%/0.55)] truncate hidden sm:inline">
                 · {subtitle}
               </span>
             )}
           </div>
-          {action}
         </div>
       )}
-      <div className="p-7">{children}</div>
+      <div className="p-5 lg:p-6 flex-1 min-h-0">{children}</div>
     </div>
   );
 }
@@ -95,33 +90,36 @@ function KpiCard({
   hint?: string;
 }) {
   return (
-    <Panel status={status} className="overflow-hidden">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(42_30%_85%/0.55)]">
+    <Panel status={status}>
+      <div className="flex flex-col gap-2 lg:gap-3 h-full justify-between min-w-0">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <span className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-[0.2em] text-[hsl(28_18%_30%)] truncate">
             {label}
           </span>
-          <span className={cn("h-2 w-2 rounded-full", dotByStatus[status])} />
+          <span className={cn("h-2 w-2 rounded-full shrink-0", dotByStatus[status])} />
         </div>
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-baseline gap-2 min-w-0">
           <span
-            className="font-display text-[5rem] xl:text-[6.5rem] font-light tabular-nums leading-none text-[hsl(42_45%_94%)]"
-            style={{ letterSpacing: "-0.04em" }}
+            className="font-display font-light tabular-nums leading-none text-[hsl(28_22%_11%)] truncate"
+            style={{
+              letterSpacing: "-0.04em",
+              fontSize: "clamp(2.75rem, 6vw, 5.5rem)",
+            }}
           >
             {value}
           </span>
           {unit && (
-            <span className="text-2xl font-light text-[hsl(42_30%_85%/0.4)] tabular-nums">{unit}</span>
+            <span className="text-lg lg:text-2xl font-light text-[hsl(28_18%_40%/0.6)] tabular-nums">
+              {unit}
+            </span>
           )}
         </div>
-        <div className="flex items-center justify-between text-xs pt-1 border-t border-[hsl(42_25%_90%/0.06)]">
-          <span className={cn("font-medium tabular-nums uppercase tracking-wider text-[10px]", textByStatus[status])}>
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider gap-2 pt-2 border-t border-[hsl(38_25%_80%)]">
+          <span className={cn("font-medium tabular-nums truncate", textByStatus[status])}>
             {delta ?? "—"}
           </span>
           {hint && (
-            <span className="text-[10px] uppercase tracking-[0.2em] text-[hsl(42_30%_85%/0.3)]">
-              {hint}
-            </span>
+            <span className="tracking-[0.18em] text-[hsl(28_18%_40%/0.5)] truncate">{hint}</span>
           )}
         </div>
       </div>
@@ -131,12 +129,12 @@ function KpiCard({
 
 function HealthRow({ label, value, status }: { label: string; value: string; status: Status }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5 border-b border-[hsl(42_25%_90%/0.05)] last:border-0">
-      <div className="flex items-center gap-3 min-w-0">
-        <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotByStatus[status])} />
-        <span className="text-[15px] text-[hsl(42_45%_94%/0.85)] truncate">{label}</span>
+    <div className="flex items-center justify-between gap-3 py-2.5 lg:py-3 border-b border-[hsl(38_25%_80%/0.7)] last:border-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className={cn("h-2 w-2 rounded-full shrink-0", dotByStatus[status])} />
+        <span className="text-[13px] lg:text-sm text-[hsl(28_22%_18%)] truncate">{label}</span>
       </div>
-      <span className={cn("text-[15px] font-medium tabular-nums", textByStatus[status])}>
+      <span className={cn("text-[13px] lg:text-sm font-medium tabular-nums shrink-0", textByStatus[status])}>
         {value}
       </span>
     </div>
@@ -148,11 +146,7 @@ function formatTime(d: Date) {
 }
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
 export default function OpsLive() {
@@ -225,86 +219,78 @@ export default function OpsLive() {
   return (
     <div
       key={refreshKey}
-      className="min-h-screen w-full text-[hsl(42_45%_94%)] antialiased overflow-hidden relative"
+      className="min-h-screen w-full bg-background text-foreground antialiased relative overflow-x-hidden"
       style={{
-        background:
-          "radial-gradient(1200px 700px at 12% -10%, hsl(152 60% 22% / 0.35), transparent 60%), radial-gradient(900px 500px at 100% 5%, hsl(38 50% 35% / 0.18), transparent 60%), radial-gradient(800px 800px at 50% 110%, hsl(152 70% 30% / 0.18), transparent 70%), linear-gradient(180deg, hsl(28 22% 7%) 0%, hsl(28 22% 5%) 100%)",
+        backgroundImage:
+          "radial-gradient(1100px 600px at 12% -10%, hsl(152 70% 42% / 0.10), transparent 60%), radial-gradient(900px 500px at 100% 5%, hsl(38 50% 42% / 0.08), transparent 60%)",
       }}
     >
-      {/* Champagne grain overlay */}
+      {/* Subtle grain (matches LP brand) */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.06] mix-blend-overlay"
+        className="pointer-events-none absolute inset-0 opacity-[0.09] mix-blend-multiply"
         style={{
           backgroundImage:
-            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.86  0 0 0 0 0.65  0 0 0 0.7 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
-        }}
-      />
-      {/* Vignette */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, transparent 50%, hsl(28 22% 4% / 0.65) 100%)",
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.18  0 0 0 0 0.13  0 0 0 0 0.06  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
         }}
       />
 
-      <div className="relative z-10 flex flex-col h-screen p-6 xl:p-9 gap-6">
+      <div className="relative z-10 flex flex-col min-h-screen xl:h-screen p-4 sm:p-6 xl:p-8 gap-4 lg:gap-6">
         {/* Top bar */}
-        <header className="flex items-center justify-between gap-6 shrink-0">
-          <div className="flex items-center gap-5">
-            <div className="opacity-90">
-              <IskraLogo size={30} textClass="text-base" />
+        <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 shrink-0">
+          <div className="flex items-center gap-3 lg:gap-5 min-w-0">
+            <div className="shrink-0">
+              <IskraLogo size={28} textClass="text-base" />
             </div>
-            <div className="h-7 w-px bg-[hsl(42_30%_85%/0.12)]" />
-            <div className="flex items-center gap-2.5">
-              <Radio className="h-4 w-4 text-[hsl(152_70%_55%)] animate-pulse" />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[hsl(152_70%_70%)]">
+            <div className="hidden sm:block h-6 w-px bg-[hsl(38_25%_60%/0.5)]" />
+            <div className="hidden sm:flex items-center gap-2">
+              <Radio className="h-3.5 w-3.5 text-[hsl(152_65%_35%)] animate-pulse" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(152_65%_28%)]">
                 Live · Operations
               </span>
             </div>
-            <div className="h-7 w-px bg-[hsl(42_30%_85%/0.12)]" />
+            <div className="hidden md:block h-6 w-px bg-[hsl(38_25%_60%/0.5)]" />
             <h1
-              className="font-display text-2xl xl:text-[1.85rem] font-light text-[hsl(42_45%_94%)]"
+              className="font-display text-xl lg:text-2xl xl:text-[1.75rem] font-light text-[hsl(28_22%_11%)] truncate"
               style={{ letterSpacing: "-0.025em" }}
             >
               Mission Control
             </h1>
           </div>
 
-          <div className="flex items-center gap-7">
+          <div className="flex items-center gap-3 lg:gap-5">
             <div className="text-right leading-tight hidden md:block">
-              <div className="text-[9px] uppercase tracking-[0.28em] text-[hsl(42_30%_85%/0.4)]">
+              <div className="text-[9px] uppercase tracking-[0.24em] text-[hsl(28_18%_40%/0.7)]">
                 {formatDate(now)}
               </div>
               <div
-                className="font-display text-3xl xl:text-[2.25rem] font-light tabular-nums text-[hsl(42_45%_94%)]"
+                className="font-display text-2xl lg:text-3xl font-light tabular-nums text-[hsl(28_22%_11%)]"
                 style={{ letterSpacing: "-0.03em" }}
               >
                 {formatTime(now)}
               </div>
             </div>
-            <div className="text-right leading-tight hidden lg:block">
-              <div className="text-[9px] uppercase tracking-[0.28em] text-[hsl(42_30%_85%/0.4)]">
+            <div className="text-right leading-tight hidden xl:block">
+              <div className="text-[9px] uppercase tracking-[0.24em] text-[hsl(28_18%_40%/0.7)]">
                 Last update
               </div>
-              <div className="text-xs tabular-nums text-[hsl(42_30%_85%/0.65)]">
-                {formatTime(lastUpdated)} · next in {nextRefreshIn}
+              <div className="text-[11px] tabular-nums text-[hsl(28_18%_30%/0.8)]">
+                {formatTime(lastUpdated)} · next {nextRefreshIn}
               </div>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleManualRefresh}
-              className="border border-[hsl(42_30%_85%/0.12)] bg-[hsl(42_30%_85%/0.04)] hover:bg-[hsl(42_30%_85%/0.1)] text-[hsl(42_45%_94%)] rounded-full px-4"
+              className="border border-[hsl(38_25%_70%)] bg-[hsl(40_40%_98%)] hover:bg-[hsl(40_40%_94%)] text-[hsl(28_22%_15%)] rounded-full px-3 lg:px-4 h-8"
             >
-              <RefreshCw className={cn("h-3.5 w-3.5 mr-2", refreshing && "animate-spin")} />
-              Refresh
+              <RefreshCw className={cn("h-3.5 w-3.5 lg:mr-2", refreshing && "animate-spin")} />
+              <span className="hidden lg:inline">Refresh</span>
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleFullscreen}
-              className="border border-[hsl(42_30%_85%/0.12)] bg-[hsl(42_30%_85%/0.04)] hover:bg-[hsl(42_30%_85%/0.1)] text-[hsl(42_45%_94%)] rounded-full"
+              className="border border-[hsl(38_25%_70%)] bg-[hsl(40_40%_98%)] hover:bg-[hsl(40_40%_94%)] text-[hsl(28_22%_15%)] rounded-full h-8 w-8"
               aria-label="Toggle fullscreen"
             >
               <Maximize2 className="h-3.5 w-3.5" />
@@ -312,10 +298,10 @@ export default function OpsLive() {
           </div>
         </header>
 
-        {/* Main grid */}
-        <main className="grid flex-1 min-h-0 grid-cols-12 grid-rows-12 gap-6">
+        {/* Main grid — fixed grid only on xl+, stacks on smaller screens */}
+        <main className="flex-1 min-h-0 grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 xl:grid-rows-12">
           {/* Hero KPIs */}
-          <div className="col-span-12 row-span-5 grid grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="xl:col-span-12 xl:row-span-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 sm:col-span-2">
             <KpiCard label="Messages sent · 24h" value="—" hint="awaiting audit" />
             <KpiCard label="Reply rate · 24h" value="—" unit="%" hint="awaiting audit" />
             <KpiCard label="Positive leads · 24h" value="—" hint="awaiting audit" />
@@ -323,85 +309,73 @@ export default function OpsLive() {
           </div>
 
           {/* Fleet & system health */}
-          <Panel
-            title="Fleet & System Health"
-            className="col-span-12 xl:col-span-4 row-span-7"
-          >
-            <div className="flex flex-col">
+          <Panel title="Fleet & System Health" className="xl:col-span-4 xl:row-span-7 sm:col-span-2 xl:col-auto">
+            <div className="flex flex-col h-full">
               <HealthRow label="WhatsApp numbers — active" value="—" status="idle" />
               <HealthRow label="Numbers — restricted" value="—" status="idle" />
               <HealthRow label="Numbers — blocked" value="—" status="idle" />
               <HealthRow label="Gupshup API" value="—" status="idle" />
               <HealthRow label="Slack dispatch queue" value="—" status="idle" />
               <HealthRow label="Inbox watcher" value="—" status="idle" />
+              <p className="mt-auto pt-4 text-[10px] uppercase tracking-[0.18em] text-[hsl(28_18%_40%/0.5)]">
+                Indicators activate after data audit
+              </p>
             </div>
-            <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-[hsl(42_30%_85%/0.3)] leading-relaxed">
-              Indicators activate after data source confirmation
-            </p>
           </Panel>
 
           {/* Live activity */}
           <Panel
             title="Live Activity"
             subtitle="campaigns & top clients"
-            className="col-span-12 xl:col-span-5 row-span-7"
+            className="xl:col-span-5 xl:row-span-7"
           >
-            <div className="flex flex-col items-center justify-center text-center h-full min-h-[280px] gap-4">
+            <div className="flex flex-col items-center justify-center text-center h-full min-h-[200px] gap-3">
               <div className="relative">
-                <div className="absolute inset-0 blur-2xl bg-[hsl(152_70%_50%/0.15)] rounded-full" />
-                <Activity className="relative h-12 w-12 text-[hsl(152_70%_55%/0.55)]" />
+                <div className="absolute inset-0 blur-2xl bg-[hsl(152_70%_42%/0.18)] rounded-full" />
+                <Activity className="relative h-10 w-10 text-[hsl(152_65%_35%/0.7)]" />
               </div>
               <p
-                className="font-display text-lg font-light text-[hsl(42_45%_94%/0.7)]"
+                className="font-display text-base lg:text-lg font-light text-[hsl(28_22%_18%)]"
                 style={{ letterSpacing: "-0.02em" }}
               >
                 Live campaign progress
               </p>
-              <p className="text-[10px] uppercase tracking-[0.25em] text-[hsl(42_30%_85%/0.35)] max-w-[280px]">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-[hsl(28_18%_40%/0.55)] max-w-[260px]">
                 Wires up after the metrics audit
               </p>
             </div>
           </Panel>
 
           {/* Alerts */}
-          <Panel
-            title="Alerts & Incidents"
-            status="ok"
-            className="col-span-12 xl:col-span-3 row-span-7"
-          >
-            <div className="flex flex-col items-center justify-center text-center h-full min-h-[280px] gap-4">
+          <Panel title="Alerts & Incidents" status="ok" className="xl:col-span-3 xl:row-span-7">
+            <div className="flex flex-col items-center justify-center text-center h-full min-h-[220px] gap-3">
               <div className="relative">
-                <div className="absolute inset-0 blur-3xl bg-[hsl(152_80%_55%/0.25)] rounded-full" />
-                <CheckCircle2 className="relative h-14 w-14 text-[hsl(152_70%_55%)]" />
+                <div className="absolute inset-0 blur-3xl bg-[hsl(152_70%_42%/0.25)] rounded-full" />
+                <CheckCircle2 className="relative h-12 w-12 text-[hsl(152_65%_35%)]" />
               </div>
               <div
-                className="font-display text-2xl font-light text-[hsl(42_45%_94%)]"
+                className="font-display text-xl lg:text-2xl font-light text-[hsl(28_22%_11%)]"
                 style={{ letterSpacing: "-0.025em" }}
               >
                 All clear
               </div>
-              <p className="text-[10px] uppercase tracking-[0.25em] text-[hsl(42_30%_85%/0.35)] max-w-[220px]">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-[hsl(28_18%_40%/0.55)] max-w-[200px]">
                 Incidents will surface here
               </p>
-              <div className="mt-3 grid grid-cols-3 gap-2 w-full">
+              <div className="mt-2 grid grid-cols-3 gap-2 w-full">
                 {[
-                  { label: "Crit", v: 0, c: "text-[hsl(0_85%_70%)]" },
-                  { label: "Warn", v: 0, c: "text-[hsl(38_85%_65%)]" },
-                  { label: "Info", v: 0, c: "text-[hsl(200_70%_70%)]" },
+                  { label: "Crit", v: 0, c: "text-[hsl(0_70%_45%)]" },
+                  { label: "Warn", v: 0, c: "text-[hsl(38_75%_38%)]" },
+                  { label: "Info", v: 0, c: "text-[hsl(200_65%_38%)]" },
                 ].map((s) => (
                   <div
                     key={s.label}
-                    className="rounded-xl border border-[hsl(42_25%_90%/0.06)] bg-[hsl(42_30%_85%/0.02)] py-2.5 text-center"
+                    className="rounded-xl border border-[hsl(38_25%_80%)] bg-[hsl(40_40%_98%)] py-2 text-center"
                   >
-                    <div className="text-[9px] uppercase tracking-[0.2em] text-[hsl(42_30%_85%/0.4)]">
+                    <div className="text-[9px] uppercase tracking-[0.18em] text-[hsl(28_18%_40%/0.6)]">
                       {s.label}
                     </div>
-                    <div
-                      className={cn(
-                        "font-display text-xl font-light tabular-nums",
-                        s.c,
-                      )}
-                    >
+                    <div className={cn("font-display text-lg font-light tabular-nums", s.c)}>
                       {s.v}
                     </div>
                   </div>
@@ -412,7 +386,7 @@ export default function OpsLive() {
         </main>
 
         {/* Footer */}
-        <footer className="flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-[hsl(42_30%_85%/0.3)] shrink-0">
+        <footer className="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-[0.2em] text-[hsl(28_18%_40%/0.55)] shrink-0">
           <div>Pre-audit build · metric definitions to be locked</div>
           <div className="tabular-nums">Auto-refresh · 5 min</div>
         </footer>
