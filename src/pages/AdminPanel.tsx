@@ -343,6 +343,8 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
         <CardDescription className="text-xs">/{ws.slug}</CardDescription>
       </CardHeader>
 
+      <ClientSettingsRow ws={ws} />
+
       <CardContent className="space-y-3 flex-1 flex flex-col">
         {/* Headline metric: campaign info */}
         <div className="rounded-md border border-border bg-card/40 p-3">
