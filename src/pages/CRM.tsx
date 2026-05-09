@@ -90,6 +90,26 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     return map;
   }, [numbers]);
 
+  const { data: members = [] } = useRQ({
+    queryKey: workspaceMembersKey(workspaceId),
+    queryFn: () => fetchWorkspaceMembers(workspaceId),
+    enabled: !!workspaceId,
+  });
+  const memberById = useMemo(() => {
+    const m = new Map<string, (typeof members)[number]>();
+    members.forEach((x) => m.set(x.user_id, x));
+    return m;
+  }, [members]);
+
+  /** Mark current user as the active responder on a conversation. */
+  const touchResponder = async (conversationId: string) => {
+    if (!meId) return;
+    await supabase
+      .from("conversations")
+      .update({ active_responder_id: meId, active_responder_at: new Date().toISOString() })
+      .eq("id", conversationId);
+  };
+
   const handleSend = async () => {
     if (!activeId || !draft.trim() || sending) return;
     setSending(true);
