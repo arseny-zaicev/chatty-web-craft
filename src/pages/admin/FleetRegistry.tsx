@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2,
+  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2, Copy, Check,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -20,7 +20,7 @@ import { geoFromPhone } from "@/lib/launchData";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
-type Status = "draft" | "ready" | "warming" | "restricted" | "banned" | "inactive";
+type Status = "active" | "ready" | "stock" | "warming" | "restricted" | "banned" | "draft" | "inactive";
 type Usage = "marketing" | "utility" | "both";
 
 type Row = {
@@ -152,7 +152,7 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       phone_number: n.phone_number as string,
       display_name: (n.display_name as string) ?? null,
       label: (n.label as string) ?? null,
-      status: (n.status as Status) ?? "draft",
+      status: (n.status as Status) ?? "stock",
       usage_type: (n.usage_type as Usage) ?? "both",
       country_code: (n.country_code as string) ?? null,
       webhook_connected: Boolean(n.webhook_connected),
@@ -188,12 +188,32 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
 };
 
 const statusTone: Record<Status, string> = {
+  active: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
   ready: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+  stock: "bg-muted text-muted-foreground border-border",
   warming: "bg-amber-500/15 text-amber-700 border-amber-500/30",
-  draft: "bg-muted text-muted-foreground border-border",
-  inactive: "bg-muted text-muted-foreground border-border",
   restricted: "bg-red-500/15 text-red-700 border-red-500/30",
   banned: "bg-red-500/15 text-red-700 border-red-500/30",
+  draft: "bg-muted text-muted-foreground border-border",
+  inactive: "bg-muted text-muted-foreground border-border",
+};
+
+const STATUS_OPTIONS: Array<[Status, string]> = [
+  ["active", "Active"],
+  ["ready", "Ready"],
+  ["stock", "Stock"],
+  ["warming", "Warming"],
+  ["restricted", "Restricted (30 days)"],
+  ["banned", "Banned"],
+];
+
+const statusLabel = (s: Status): string => {
+  const found = STATUS_OPTIONS.find(([v]) => v === s);
+  if (found) return found[1];
+  // legacy values
+  if (s === "draft") return "Stock";
+  if (s === "inactive") return "Stock";
+  return s;
 };
 
 type ViewMode = "all" | "by-client" | "unassigned";
@@ -341,7 +361,7 @@ export default function FleetRegistry() {
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-8 w-56" placeholder="Search phone, label..." value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ["ready", "ready"], ["warming", "warming"], ["draft", "draft (stock)"], ["restricted", "restricted (30d)"], ["banned", "banned"], ["inactive", "inactive"]]} />
+          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ...STATUS_OPTIONS]} />
           <FilterSelect value={fUsage} onChange={setFUsage} placeholder="All use cases" options={[["all", "All use cases"], ["marketing", "marketing"], ["utility", "utility"], ["both", "both"]]} />
         </div>
 
@@ -622,16 +642,13 @@ const dnTone: Record<DnStatus, string> = {
 function InlineStatusSelect({ value, onChange }: { value: Status; onChange: (v: Status) => void }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as Status)}>
-      <SelectTrigger className={`h-6 px-2 text-[10px] w-[110px] border ${statusTone[value]}`}>
-        <SelectValue />
+      <SelectTrigger className={`h-6 px-2 text-[10px] w-[140px] border ${statusTone[value]}`}>
+        <span className="truncate">{statusLabel(value)}</span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="ready">ready</SelectItem>
-        <SelectItem value="warming">warming</SelectItem>
-        <SelectItem value="draft">draft (stock)</SelectItem>
-        <SelectItem value="restricted">restricted (30d)</SelectItem>
-        <SelectItem value="banned">banned</SelectItem>
-        <SelectItem value="inactive">inactive</SelectItem>
+        {STATUS_OPTIONS.map(([v, l]) => (
+          <SelectItem key={v} value={v}>{l}</SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
@@ -669,7 +686,7 @@ function AddNumberDrawer({
   const [usage, setUsage] = useState<Usage>("both");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
-  const [status, setStatus] = useState<Status>("draft");
+  const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   
 
@@ -677,7 +694,7 @@ function AddNumberDrawer({
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft"); setDnApproved(false);
+    setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
   };
 
   useEffect(() => {
@@ -695,7 +712,7 @@ function AddNumberDrawer({
       setUsage(editing.usage_type);
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
-      setStatus(editing.status);
+      setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
     } else {
       reset();
@@ -757,7 +774,7 @@ function AddNumberDrawer({
         const { data: existing } = await supabase.from("whatsapp_numbers")
           .select("id").eq("phone_number", cleanPhone).maybeSingle();
         if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
-        const initialStatus: Status = targetWs ? status : "inactive";
+        const initialStatus: Status = targetWs ? status : "stock";
         const { error } = await supabase.from("whatsapp_numbers").insert({
           ...payload,
           user_id: auth.user.id,
@@ -791,6 +808,23 @@ function AddNumberDrawer({
         <div className="space-y-4 py-2">
           <Field label="Phone (digits only)" required>
             <Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))} placeholder="971500000000" />
+          </Field>
+
+          <Field label="Messaging limit">
+            <Select value={messagingLimit} onValueChange={setMessagingLimit}>
+              <SelectTrigger><SelectValue placeholder="Tier" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="250">250 / day</SelectItem>
+                <SelectItem value="1000">1 000 / day</SelectItem>
+                <SelectItem value="2000">2 000 / day</SelectItem>
+                <SelectItem value="5000">5 000 / day</SelectItem>
+                <SelectItem value="10000">10 000 / day</SelectItem>
+                <SelectItem value="20000">20 000 / day</SelectItem>
+                <SelectItem value="50000">50 000 / day</SelectItem>
+                <SelectItem value="100000">100 000 / day</SelectItem>
+                <SelectItem value="unlimited">Unlimited</SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
 
           <Field label="App name">
@@ -828,27 +862,13 @@ function AddNumberDrawer({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="WABA ID">
-              <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
-            </Field>
-            <Field label="Messaging limit">
-              <Select value={messagingLimit} onValueChange={setMessagingLimit}>
-                <SelectTrigger><SelectValue placeholder="Tier" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="250">250 / day</SelectItem>
-                  <SelectItem value="1000">1 000 / day</SelectItem>
-                  <SelectItem value="2000">2 000 / day</SelectItem>
-                  <SelectItem value="5000">5 000 / day</SelectItem>
-                  <SelectItem value="10000">10 000 / day</SelectItem>
-                  <SelectItem value="20000">20 000 / day</SelectItem>
-                  <SelectItem value="50000">50 000 / day</SelectItem>
-                  <SelectItem value="100000">100 000 / day</SelectItem>
-                  <SelectItem value="unlimited">Unlimited</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
+          <Field label="Webhook URL">
+            <CopyableField value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`} />
+          </Field>
+
+          <Field label="WABA ID">
+            <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
+          </Field>
 
           <Field label="Allocate to client">
             <Select value={workspaceId} onValueChange={setWorkspaceId}>
@@ -864,12 +884,9 @@ function AddNumberDrawer({
             <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="ready">ready</SelectItem>
-                <SelectItem value="warming">warming</SelectItem>
-                <SelectItem value="draft">draft (stock)</SelectItem>
-                <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
-                <SelectItem value="banned">banned</SelectItem>
-                <SelectItem value="inactive">inactive</SelectItem>
+                {STATUS_OPTIONS.map(([v, l]) => (
+                  <SelectItem key={v} value={v}>{l}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {editing && (editing.status === "restricted" || editing.status === "banned") && status !== "restricted" && status !== "banned" && (
@@ -930,3 +947,27 @@ const Field = ({ label, required, children }: { label: string; required?: boolea
     {children}
   </div>
 );
+
+function CopyableField({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      toast.success("Webhook URL copied");
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <code className="flex-1 text-[11px] px-2 py-1.5 rounded bg-muted/40 border border-border break-all font-mono">
+        {value}
+      </code>
+      <Button type="button" size="sm" variant="outline" onClick={copy} className="shrink-0">
+        {copied ? <><Check className="w-3.5 h-3.5 mr-1" />Copied</> : <><Copy className="w-3.5 h-3.5 mr-1" />Copy</>}
+      </Button>
+    </div>
+  );
+}

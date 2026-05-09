@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { geoFromPhone } from "@/lib/launchData";
 
-type NumberStatus = "draft" | "ready" | "warming" | "restricted" | "banned" | "inactive";
+type NumberStatus = "active" | "ready" | "stock" | "warming" | "restricted" | "banned" | "draft" | "inactive";
 type NumberUsage = "marketing" | "utility" | "both";
 
 type NumberRow = {
@@ -71,12 +71,30 @@ const tone = (t: "ok" | "warn" | "bad" | "muted") =>
   : "bg-muted text-muted-foreground border-border";
 
 const STATUS_TONE: Record<NumberStatus, "ok" | "warn" | "bad" | "muted"> = {
+  active: "ok",
   ready: "ok",
+  stock: "muted",
   warming: "warn",
-  draft: "muted",
   restricted: "bad",
   banned: "bad",
+  draft: "muted",
   inactive: "muted",
+};
+
+const STATUS_OPTIONS: Array<[NumberStatus, string]> = [
+  ["active", "Active"],
+  ["ready", "Ready"],
+  ["stock", "Stock"],
+  ["warming", "Warming"],
+  ["restricted", "Restricted (30 days)"],
+  ["banned", "Banned"],
+];
+
+const statusLabel = (s: NumberStatus): string => {
+  const found = STATUS_OPTIONS.find(([v]) => v === s);
+  if (found) return found[1];
+  if (s === "draft" || s === "inactive") return "Stock";
+  return s;
 };
 
 type Readiness = { ready: boolean; reasons: string[] };
@@ -173,7 +191,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   <Badge variant="outline" className={tone("muted")}>{country || "--"}</Badge>
                   <Badge variant="outline" className={tone(STATUS_TONE[draft.status])}>
                     {draft.status === "banned" || draft.status === "restricted" ? <Ban className="w-3 h-3 mr-1 inline" /> : null}
-                    {draft.status}
+                    {statusLabel(draft.status)}
                   </Badge>
                   <Badge variant="outline" className={tone("muted")}>use: {draft.usage_type}</Badge>
                   <Badge variant="outline" className={tone(draft.provider_api_key ? "ok" : "warn")}>
@@ -216,15 +234,12 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     <Input value={draft.country_code ?? ""} onChange={(e) => update(n.id, { country_code: e.target.value.toUpperCase() })} placeholder="US / UK / AE" maxLength={4} />
                   </Field>
                   <Field label="Status">
-                    <Select value={draft.status} onValueChange={(v) => update(n.id, { status: v as NumberStatus })}>
+                    <Select value={(draft.status === "draft" || draft.status === "inactive") ? "stock" : draft.status} onValueChange={(v) => update(n.id, { status: v as NumberStatus })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="draft">draft</SelectItem>
-                        <SelectItem value="ready">ready</SelectItem>
-                        <SelectItem value="warming">warming</SelectItem>
-                        <SelectItem value="restricted">restricted</SelectItem>
-                        <SelectItem value="banned">banned</SelectItem>
-                        <SelectItem value="inactive">inactive</SelectItem>
+                        {STATUS_OPTIONS.map(([v, l]) => (
+                          <SelectItem key={v} value={v}>{l}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </Field>
