@@ -212,20 +212,6 @@ export default function OpsLive() {
       mounted = false;
     };
   }, [navigate, tokenParam]);
-        supabase.auth.getSession(),
-        evaluateAdminAccess(),
-      ]);
-      if (!mounted) return;
-      if (!session || r.state === "redirect") {
-        navigate(r.state === "redirect" ? r.to : "/admin-auth");
-        return;
-      }
-      setAuthChecked(true);
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [navigate]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
