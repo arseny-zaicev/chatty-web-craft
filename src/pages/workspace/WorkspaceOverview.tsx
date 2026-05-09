@@ -14,9 +14,11 @@ import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const HEALTH = {
-  healthy: { label: "Healthy", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", icon: CheckCircle2 },
+  running: { label: "Running", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", icon: CheckCircle2 },
+  scheduled: { label: "Scheduled", cls: "bg-sky-500/10 text-sky-500 border-sky-500/30", icon: CheckCircle2 },
+  idle: { label: "Ready", cls: "bg-muted text-muted-foreground border-border", icon: CheckCircle2 },
   attention: { label: "Attention", cls: "bg-amber-500/10 text-amber-500 border-amber-500/30", icon: AlertTriangle },
-  blocked: { label: "Blocked", cls: "bg-red-500/10 text-red-500 border-red-500/30", icon: AlertTriangle },
+  blocked: { label: "No active numbers", cls: "bg-red-500/10 text-red-500 border-red-500/30", icon: AlertTriangle },
 } as const;
 
 export default function WorkspaceOverview() {
@@ -108,7 +110,7 @@ export default function WorkspaceOverview() {
             {(() => {
               const infraIssue = data.numbers_total === 0 || (data.numbers_total > 0 && data.numbers_ready === 0);
               const inboxIssue = data.numbers_ready > 0 && data.unread_replies > 20;
-              const showAttention = canManage ? data.health !== "healthy" : inboxIssue;
+              const showAttention = canManage ? (data.health === "blocked" || data.health === "attention") : inboxIssue;
               if (!showAttention) return null;
               return (
                 <div className={`rounded-md border p-2.5 text-xs ${H.cls}`}>
