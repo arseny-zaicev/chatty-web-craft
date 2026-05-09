@@ -1,4 +1,25 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ComponentType } from "react";
+
+// Retry dynamic imports once and reload on stale chunks (fixes "Failed to fetch dynamically imported module" after deploys/HMR)
+const lazyWithRetry = <T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) =>
+  lazy(async () => {
+    try {
+      return await factory();
+    } catch (err) {
+      try {
+        return await factory();
+      } catch (err2) {
+        if (typeof window !== "undefined") {
+          const key = "__lovable_chunk_reload__";
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, "1");
+            window.location.reload();
+          }
+        }
+        throw err2;
+      }
+    }
+  });
 import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
