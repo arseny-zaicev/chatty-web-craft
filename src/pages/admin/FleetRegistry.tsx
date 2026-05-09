@@ -695,7 +695,7 @@ function AddNumberDrawer({
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
       setStatus(editing.status);
-      
+      setDnApproved(editing.display_name_status === "approved");
     } else {
       reset();
     }
