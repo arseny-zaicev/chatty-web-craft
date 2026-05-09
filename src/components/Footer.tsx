@@ -7,7 +7,7 @@ const footerLinks = [
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Results", href: "/#testimonials" },
   { label: "Pricing", href: "/#pricing" },
-  { label: "Client Login", href: "/client-auth", isPage: true },
+  { label: "Client Login", href: "/portal-auth", isPage: true },
 ];
 
 const legalLinks = [

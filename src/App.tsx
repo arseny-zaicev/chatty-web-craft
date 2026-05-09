@@ -34,11 +34,9 @@ const SellerLeads = lazyWithRetry(() => import("./pages/SellerLeads"));
 const BrandAssets = lazyWithRetry(() => import("./pages/BrandAssets"));
 const Privacy = lazyWithRetry(() => import("./pages/Privacy"));
 const Terms = lazyWithRetry(() => import("./pages/Terms"));
-const ClientAuth = lazyWithRetry(() => import("./pages/ClientAuth"));
-const ClientPortal = lazyWithRetry(() => import("./pages/ClientPortal"));
 const PortalAuth = lazyWithRetry(() => import("./pages/PortalAuth"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
-const ClientStats = lazyWithRetry(() => import("./pages/ClientStats"));
+
 const AISeoReport = lazyWithRetry(() => import("./pages/AISeoReport"));
 const AdminAuth = lazyWithRetry(() => import("./pages/AdminAuth"));
 const AdminPanel = lazyWithRetry(() => import("./pages/AdminPanel"));
@@ -88,7 +86,7 @@ const RouteFallback = () => (
 
 const SiteChrome = () => {
   const { pathname } = useLocation();
-  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname === "/admin-auth" || pathname === "/client-auth";
+  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname === "/admin-auth" || pathname === "/portal-auth";
 
   if (isAppArea) return null;
 
@@ -117,9 +115,9 @@ const App = () => (
               <Route path="/brand" element={<BrandAssets />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
-              <Route path="/client-auth" element={<ClientAuth />} />
-              <Route path="/client-portal" element={<ClientPortal />} />
-              <Route path="/client-stats" element={<ClientStats />} />
+              <Route path="/client-auth" element={<Navigate to="/portal-auth" replace />} />
+              <Route path="/client-portal" element={<Navigate to="/portal-auth" replace />} />
+              <Route path="/client-stats" element={<Navigate to="/portal-auth" replace />} />
               <Route path="/client-portal/ai-seo" element={<AISeoReport />} />
               <Route path="/portal-auth" element={<PortalAuth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
