@@ -63,6 +63,12 @@ const NAV: NavGroup[] = [
       { id: "site.analytics", label: "Site analytics", icon: BarChart3 },
     ],
   },
+  {
+    id: "internal", label: "Internal", icon: Wrench,
+    items: [
+      { id: "internal.roadmap", label: "Product roadmap", icon: MapIcon, external: "/admin/roadmap" },
+    ],
+  },
 ];
 
 const AdminPanel = () => {
