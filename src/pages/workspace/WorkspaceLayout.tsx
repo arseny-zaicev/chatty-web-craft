@@ -145,7 +145,7 @@ function RoleGuardedOutlet({ workspace }: { workspace?: Workspace }) {
   if (!workspace) return <Outlet context={{ workspace }} />;
   if (isLoading) return <WorkspaceMainFallback />;
   const seg = location.pathname.split("/").filter(Boolean)[2];
-  const restricted = seg === "library" || seg === "settings" || seg === "launch";
+  const restricted = seg === "library" || seg === "settings" || seg === "launch" || seg === "data";
   if (restricted && !isManagerLike(role)) {
     return <Navigate to={`/ws/${workspace.slug}/overview`} replace />;
   }
