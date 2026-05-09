@@ -792,10 +792,12 @@ const DealCard = ({
           </button>
         </div>
       </div>
-      {(deal.contact_name || phone) && (
-        <div className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
-          {phone && <Phone className="w-3 h-3" />}
-          {deal.contact_name || (phone ? `+${phone}` : "")}
+      {deal.contact_name && (
+        <div className="text-xs text-foreground/80 mt-1 truncate">{deal.contact_name}</div>
+      )}
+      {phone && (
+        <div className="text-[11px] text-muted-foreground mt-0.5 truncate flex items-center gap-1 font-mono">
+          <Phone className="w-3 h-3" />+{phone}
         </div>
       )}
       {deal.amount != null && (
