@@ -152,7 +152,7 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       phone_number: n.phone_number as string,
       display_name: (n.display_name as string) ?? null,
       label: (n.label as string) ?? null,
-      status: (n.status as Status) ?? "draft",
+      status: (n.status as Status) ?? "stock",
       usage_type: (n.usage_type as Usage) ?? "both",
       country_code: (n.country_code as string) ?? null,
       webhook_connected: Boolean(n.webhook_connected),
