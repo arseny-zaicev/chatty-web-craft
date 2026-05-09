@@ -87,9 +87,10 @@ export async function upsertPrepProfile(
     quick_replies: p.quick_replies ?? [],
     sample_payload: p.sample_payload ?? {},
   };
+  const tbl = supabase.from("audience_prep_profiles" as never) as any;
   const q = p.id
-    ? supabase.from("audience_prep_profiles" as never).update(payload).eq("id", p.id).select("*").single()
-    : supabase.from("audience_prep_profiles" as never).insert(payload).select("*").single();
+    ? tbl.update(payload).eq("id", p.id).select("*").single()
+    : tbl.insert(payload).select("*").single();
   const { data, error } = await q;
   if (error) throw error;
   return fromRow(data as Record<string, unknown>);
