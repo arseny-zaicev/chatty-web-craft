@@ -164,6 +164,7 @@ const App = () => (
               <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
               <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
               <Route path="/admin/ops-live" element={<OpsLive />} />
+              <Route path="/tv/:token" element={<OpsLive />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
               <Route path="/whatsapp/apply" element={<WhatsAppApply />} />
