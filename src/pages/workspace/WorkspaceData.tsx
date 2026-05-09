@@ -342,17 +342,28 @@ function PresetsSection({
           {creating && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Batch name *</label>
-                  <Input value={batchName} onChange={(e) => setBatchName(e.target.value)} disabled={!!createdBatchId} />
-                </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Country (optional)</label>
-                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE" disabled={!!createdBatchId} />
+                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE, US, ALL" disabled={!!createdBatchId} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Audience *</label>
+                  <Input value={batchAudience} onChange={(e) => onAudienceChange(e.target.value)} placeholder="e.g. cold leads Q2, no-shows, churned" disabled={!!createdBatchId} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground flex items-center justify-between">
+                    <span>Batch name *</span>
+                    <span className="text-[10px] text-muted-foreground/70">format: DATE | COUNTRY | AUDIENCE (auto-fills from fields above)</span>
+                  </label>
+                  <Input value={batchName} onChange={(e) => onBatchNameChange(e.target.value)} disabled={!!createdBatchId} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Campaign type</label>
                   <Input value={creating.campaignType} disabled />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Template variant</label>
+                  <Input value={creating.name} disabled />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-muted-foreground">Notes (optional)</label>
