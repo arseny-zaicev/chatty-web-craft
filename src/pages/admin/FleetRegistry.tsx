@@ -553,7 +553,9 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
       <TableCell className="text-xs">{r.label ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-28 truncate">{r.display_name ?? <span className="text-muted-foreground">—</span>}</span>
+          <span className="inline-block w-28 truncate">
+            {r.display_name ?? r.label ?? <span className="text-muted-foreground">—</span>}
+          </span>
           <InlineDnSelect value={r.display_name_status} checkedAt={r.display_name_checked_at} onChange={(v) => onQuickPatch(r, { display_name_status: v })} />
         </div>
       </TableCell>
