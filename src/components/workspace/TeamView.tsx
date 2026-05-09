@@ -242,6 +242,43 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create a shareable invite link</DialogTitle>
+            <DialogDescription>Anyone with this link can create their own account and join the workspace, up to the seat limit. Valid for 30 days.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Role</label>
+              <Select value={linkRole} onValueChange={(v) => setLinkRole(v as "manager" | "client")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manager">Manager - full access</SelectItem>
+                  <SelectItem value="client">Client - read-only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Seat limit (max teammates)</label>
+              <Input type="number" min={1} max={50} value={linkSeats} onChange={(e) => setLinkSeats(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkOpen(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                await createLink.mutateAsync();
+                setLinkOpen(false);
+              }}
+              disabled={createLink.isPending}
+            >
+              {createLink.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Generate link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
