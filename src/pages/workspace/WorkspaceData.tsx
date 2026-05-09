@@ -259,6 +259,7 @@ function PresetsSection({
         <h2 className="font-medium text-sm">Ingestion presets</h2>
         <Badge variant="outline" className="text-[10px]">primary workflow</Badge>
       </div>
+      <p className="text-xs text-muted-foreground mb-3">
         Pick a preset → create the empty batch → copy its prompt → run it in Codex with the raw data. Codex inserts validated rows into <code>public.audience_rows</code> under the batch_id, then refresh below and launch.
       </p>
 
