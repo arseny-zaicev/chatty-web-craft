@@ -64,6 +64,7 @@ const WorkspaceOverview = lazyWithRetry(() => import("./pages/workspace/Workspac
 const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/WorkspaceSettings"));
 const LaunchWizard = lazyWithRetry(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazyWithRetry(() => import("./pages/workspace/NewClient"));
+const Roadmap = lazyWithRetry(() => import("./pages/workspace/Roadmap"));
 const WorkspacePrepProfiles = lazyWithRetry(() => import("./pages/workspace/WorkspacePrepProfiles"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const CustomCursor = lazyWithRetry(() => import("@/components/CustomCursor"));
@@ -150,6 +151,7 @@ const App = () => (
                 <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
                 <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
+                <Route path=":slug/roadmap" element={<Roadmap />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

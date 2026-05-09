@@ -364,6 +364,10 @@ export type Database = {
           per_number_quota: number
           recurrence: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at: string | null
+          respect_recipient_tz: boolean
+          schedule_window_end: string
+          schedule_window_start: string
+          scheduled_dates: string[]
           scheduled_start_at: string | null
           sent_count: number
           status: Database["public"]["Enums"]["campaign_status"]
@@ -386,6 +390,10 @@ export type Database = {
           per_number_quota?: number
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
+          respect_recipient_tz?: boolean
+          schedule_window_end?: string
+          schedule_window_start?: string
+          scheduled_dates?: string[]
           scheduled_start_at?: string | null
           sent_count?: number
           status?: Database["public"]["Enums"]["campaign_status"]
@@ -408,6 +416,10 @@ export type Database = {
           per_number_quota?: number
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
+          respect_recipient_tz?: boolean
+          schedule_window_end?: string
+          schedule_window_start?: string
+          scheduled_dates?: string[]
           scheduled_start_at?: string | null
           sent_count?: number
           status?: Database["public"]["Enums"]["campaign_status"]
@@ -996,6 +1008,51 @@ export type Database = {
         }
         Relationships: []
       }
+      roadmap_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          position: number
+          priority: number
+          status: Database["public"]["Enums"]["roadmap_status"]
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+          why: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number
+          priority?: number
+          status?: Database["public"]["Enums"]["roadmap_status"]
+          tags?: string[]
+          title: string
+          updated_at?: string
+          user_id: string
+          why?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number
+          priority?: number
+          status?: Database["public"]["Enums"]["roadmap_status"]
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+          why?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       stage_automations: {
         Row: {
           created_at: string
@@ -1356,6 +1413,7 @@ export type Database = {
           is_active: boolean
           name: string
           owner_user_id: string
+          slack_channel_id: string | null
           slug: string
           updated_at: string
         }
@@ -1366,6 +1424,7 @@ export type Database = {
           is_active?: boolean
           name: string
           owner_user_id: string
+          slack_channel_id?: string | null
           slug: string
           updated_at?: string
         }
@@ -1376,6 +1435,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           owner_user_id?: string
+          slack_channel_id?: string | null
           slug?: string
           updated_at?: string
         }
@@ -1508,6 +1568,7 @@ export type Database = {
         | "read"
         | "failed"
         | "deleted"
+      roadmap_status: "idea" | "planned" | "in_progress" | "shipped"
       stage_type: "open" | "won" | "lost"
       submission_status:
         | "new"
@@ -1688,6 +1749,7 @@ export const Constants = {
         "failed",
         "deleted",
       ],
+      roadmap_status: ["idea", "planned", "in_progress", "shipped"],
       stage_type: ["open", "won", "lost"],
       submission_status: [
         "new",

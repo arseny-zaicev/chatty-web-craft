@@ -85,6 +85,14 @@ export default function LaunchWizard() {
   const [routing, setRouting] = useState(preset.routing);
   const [mapping, setMapping] = useState<Record<string, string>>({});
 
+  // ----- Scheduling -----
+  const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
+  const [scheduledDates, setScheduledDates] = useState<string[]>([]); // YYYY-MM-DD
+  const [windowStart, setWindowStart] = useState("09:00");
+  const [windowEnd, setWindowEnd] = useState("18:00");
+  const [respectTz, setRespectTz] = useState(true);
+  const [schedulerKind, setSchedulerKind] = useState<"uniform" | "poisson">("poisson");
+
 
   // When type changes, reset defaults (unless user dirty-edited)
   const typeAppliedRef = useRef<CampaignType>("marketing");
@@ -418,6 +426,7 @@ export default function LaunchWizard() {
           const subname = targets.length > 1
             ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
             : campaignName;
+          const bucketIndex = targets.indexOf(t);
           const { data: res, error } = await supabase.functions.invoke("campaigns", {
             body: {
               action: "launch",
@@ -427,6 +436,14 @@ export default function LaunchWizard() {
               delay_min_seconds: delayMin,
               delay_max_seconds: delayMax,
               recipients: list,
+              // Scheduling
+              scheduler_kind: schedulerKind,
+              scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
+              window_start: windowStart,
+              window_end: windowEnd,
+              respect_recipient_tz: respectTz,
+              bucket_index: bucketIndex,
+              bucket_count: targets.length,
             },
           });
           if (error) results.push({ ok: false, numberId: t.numberId, error: error.message, rowIds: bucketRowIds });
@@ -722,6 +739,68 @@ export default function LaunchWizard() {
                 <Input type="number" min={delayMin} value={delayMax}
                   onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
               </Field>
+            </div>
+
+            {/* Schedule */}
+            <div className="mt-4 rounded-md border border-border/60 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Schedule</div>
+                <Tabs value={scheduleMode} onValueChange={(v) => setScheduleMode(v as any)}>
+                  <TabsList className="h-7">
+                    <TabsTrigger value="now" className="text-xs px-2 py-0.5">Send now</TabsTrigger>
+                    <TabsTrigger value="scheduled" className="text-xs px-2 py-0.5">Pick days</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {scheduleMode === "scheduled" && (
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-1">Launch days (recipients are split evenly across selected days)</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input type="date" className="w-auto" min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && !scheduledDates.includes(v)) setScheduledDates([...scheduledDates, v].sort());
+                        e.target.value = "";
+                      }} />
+                    {scheduledDates.map((d) => (
+                      <Badge key={d} variant="secondary" className="gap-1 cursor-pointer" onClick={() => setScheduledDates(scheduledDates.filter((x) => x !== d))}>
+                        {d} ✕
+                      </Badge>
+                    ))}
+                    {scheduledDates.length === 0 && <span className="text-xs text-muted-foreground">Add at least one date</span>}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Field label="Window from"><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
+                <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+                <Field label="Scheduler">
+                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="poisson">Poisson (organic, jittered)</SelectItem>
+                      <SelectItem value="uniform">Uniform (fixed delays)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Recipient TZ">
+                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Respect (per phone)</SelectItem>
+                      <SelectItem value="no">Workspace TZ</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              <div className="text-[11px] text-muted-foreground">
+                {scheduleMode === "now"
+                  ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson-distributed inter-arrivals" : "Uniform delays"} within ${delayMin}-${delayMax}s.`
+                  : `${scheduledDates.length || 0} day(s) × window ${windowStart}-${windowEnd}${respectTz ? " (recipient local time)" : ""}. Cross-number stagger applied.`}
+              </div>
             </div>
           </Step>
 
