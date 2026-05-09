@@ -16,14 +16,7 @@ const ADMIN_EMAIL = "arseny@iskra.ae";
 
 export type WorkspaceContext = { workspace: Workspace };
 
-const WorkspaceMainFallback = () => (
-  <div className="h-full flex items-start justify-center p-10">
-    <div className="flex items-center gap-3 rounded-md border border-border bg-card/70 px-4 py-3 text-sm text-muted-foreground shadow-sm">
-      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-      Loading workspace...
-    </div>
-  </div>
-);
+const WorkspaceMainFallback = () => <IskraLoader fullscreen={false} />;
 
 export default function WorkspaceLayout() {
   const { slug } = useParams<{ slug?: string }>();
@@ -82,11 +75,7 @@ export default function WorkspaceLayout() {
   }, [slug, data, navigate]);
 
   if (!authChecked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <IskraLoader message="Opening your workspace…" />;
   }
 
   return (
