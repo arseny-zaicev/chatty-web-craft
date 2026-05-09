@@ -253,6 +253,7 @@ export async function uploadBatch(params: {
       prep_profile_id: profile?.id ?? null,
       is_launch_ready: isLaunchReady,
       derived_variables_preview: derivedPreview,
+      column_mapping: mapping,
     })
     .select("id")
     .single();
