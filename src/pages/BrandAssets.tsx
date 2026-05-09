@@ -163,9 +163,9 @@ const BrandAssets = () => {
   // Solid background variants (avatar / app icon style with rounded plate).
   const solidVariants = [
     { name: "Emerald Gradient", fg: "#ffffff", bg: "emerald-gradient" },
-    { name: "White on Dark", fg: "#ffffff", bg: "#0a0a0a" },
-    { name: "Black on White", fg: "#0a0a0a", bg: "#ffffff" },
-    { name: "Emerald on Cream", fg: "#1f8f5e", bg: "#f5f3ef" },
+    { name: "Emerald on Cream", fg: "#1F9166", bg: "#FBF9F4" },
+    { name: "Cream on Emerald", fg: "#FBF9F4", bg: "#1F9166" },
+    { name: "Gold on Ink", fg: "#A17E3F", bg: "#1B1612" },
   ];
 
 
