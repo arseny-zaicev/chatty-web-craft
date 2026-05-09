@@ -324,6 +324,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const filtered = sorted.filter((c) => {
     if (numberFilter !== "all" && c.whatsapp_number_id !== numberFilter) return false;
     if (starredOnly && !c.is_starred) return false;
+    if (myOnly && meId && c.assigned_user_id !== meId) return false;
     if (search) {
       const q = search.toLowerCase();
       const hay = `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`.toLowerCase();
@@ -334,6 +335,14 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
   const activeNumber = active ? numberById.get(active.whatsapp_number_id) : null;
+  const activeAssignee = active?.assigned_user_id ? memberById.get(active.assigned_user_id) ?? null : null;
+  const activeResponder = (() => {
+    if (!active?.active_responder_id || !active.active_responder_at) return null;
+    if (active.active_responder_id === meId) return null;
+    const ageMs = Date.now() - new Date(active.active_responder_at).getTime();
+    if (ageMs > 2 * 60 * 1000) return null;
+    return memberById.get(active.active_responder_id) ?? { user_id: active.active_responder_id, full_name: null, role: "" };
+  })();
 
   return (
     <>
