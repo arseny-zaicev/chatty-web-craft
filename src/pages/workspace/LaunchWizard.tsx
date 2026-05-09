@@ -167,26 +167,27 @@ export default function LaunchWizard() {
   const columns = audienceSource === "database" ? (dbBatch?.variable_schema ?? []) : csvColumns;
   const variableNames = activeLogical?.variables ?? [];
 
-  // Auto-map variables by name match.
-  // Priority for each {N}:
+  // Auto-map variables to columns. Fills dropdowns automatically; user can still override.
+  // Priority for each variable v (at position i):
   //   1) exact lowercase match (e.g. "first_name" -> "First_Name")
-  //   2) if N is numeric (template uses {{1}}, {{2}}...) and the batch has "var_N", use it
+  //   2) match against "var_<v>" or strip "var_" prefix and match
+  //   3) if v is numeric, use column "var_<v>" if present
+  //   4) positional fallback: "var_<i+1>" if present
   useEffect(() => {
-    if (!variableNames.length) return;
+    if (!variableNames.length || !columns.length) return;
     setMapping((prev) => {
       const next = { ...prev };
       let changed = false;
-      for (const v of variableNames) {
-        if (next[v]) continue;
+      variableNames.forEach((v, i) => {
+        if (next[v]) return;
         const lower = v.toLowerCase();
-        const exact = columns.find((c) => c.toLowerCase() === lower);
-        if (exact) { next[v] = exact; changed = true; continue; }
-        if (/^\d+$/.test(v)) {
-          const varKey = `var_${v}`;
-          const numeric = columns.find((c) => c.toLowerCase() === varKey);
-          if (numeric) { next[v] = numeric; changed = true; }
+        const stripped = lower.replace(/^var_/, "");
+        const tryCols = [lower, `var_${stripped}`, stripped, `var_${i + 1}`];
+        for (const candidate of tryCols) {
+          const found = columns.find((c) => c.toLowerCase() === candidate);
+          if (found) { next[v] = found; changed = true; break; }
         }
-      }
+      });
       return changed ? next : prev;
     });
   }, [variableNames, columns]);
