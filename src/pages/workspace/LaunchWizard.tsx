@@ -158,7 +158,10 @@ export default function LaunchWizard() {
   const columns = audienceSource === "database" ? (dbBatch?.variable_schema ?? []) : csvColumns;
   const variableNames = activeLogical?.variables ?? [];
 
-  // Auto-map variables by name match
+  // Auto-map variables by name match.
+  // Priority for each {N}:
+  //   1) exact lowercase match (e.g. "first_name" -> "First_Name")
+  //   2) if N is numeric (template uses {{1}}, {{2}}...) and the batch has "var_N", use it
   useEffect(() => {
     if (!variableNames.length) return;
     setMapping((prev) => {
@@ -167,8 +170,13 @@ export default function LaunchWizard() {
       for (const v of variableNames) {
         if (next[v]) continue;
         const lower = v.toLowerCase();
-        const match = columns.find((c) => c.toLowerCase() === lower);
-        if (match) { next[v] = match; changed = true; }
+        const exact = columns.find((c) => c.toLowerCase() === lower);
+        if (exact) { next[v] = exact; changed = true; continue; }
+        if (/^\d+$/.test(v)) {
+          const varKey = `var_${v}`;
+          const numeric = columns.find((c) => c.toLowerCase() === varKey);
+          if (numeric) { next[v] = numeric; changed = true; }
+        }
       }
       return changed ? next : prev;
     });
