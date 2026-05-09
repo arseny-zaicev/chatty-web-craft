@@ -116,7 +116,7 @@ export default function LaunchWizard() {
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
   const [scheduledDates, setScheduledDates] = useState<string[]>([]); // YYYY-MM-DD
   const [windowStart, setWindowStart] = useState("09:00");
-  const [windowEnd, setWindowEnd] = useState("18:00");
+  const [windowEnd, setWindowEnd] = useState("20:00");
   const [respectTz, setRespectTz] = useState(true);
   const [schedulerKind, setSchedulerKind] = useState<"uniform" | "poisson">("poisson");
 
