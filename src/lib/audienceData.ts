@@ -13,6 +13,9 @@ export type AudienceBatch = {
   variable_schema: string[];
   source_filename: string | null;
   created_at: string;
+  prep_profile_id: string | null;
+  is_launch_ready: boolean;
+  derived_variables_preview: Array<Record<string, string>>;
 };
 
 export type AudienceBatchStats = {
