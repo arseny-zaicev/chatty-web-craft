@@ -472,6 +472,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   return (
                     <div
                       key={c.id}
+                      data-conversation-id={c.id}
                       className={`group relative border-b border-border/50 transition ${
                         isActive ? "bg-muted/60" : "hover:bg-muted/40"
                       } ${c.pinned_at ? "bg-primary/5" : ""}`}
