@@ -299,7 +299,7 @@ export default function FleetRegistry() {
 
   // Inline quick edits (status, DN status) without opening the drawer
   const quickPatch = useMutation({
-    mutationFn: async ({ row, patch }: { row: Row; patch: Partial<Pick<Row, "status" | "display_name_status">> }) => {
+    mutationFn: async ({ row, patch }: { row: Row; patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">> }) => {
       const update: Record<string, unknown> = { ...patch };
       // 30-day ban countdown logic for inline status changes
       if (patch.status) {
@@ -402,7 +402,7 @@ type RowActions = {
   onReassign: (id: string, workspaceId: string | null) => void;
   onEdit: (r: Row) => void;
   onDelete: (id: string) => void;
-  onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status">>) => void;
+  onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => void;
 };
 
 function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
@@ -553,7 +553,9 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
       <TableCell className="text-xs">{r.label ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-28 truncate">{r.display_name ?? <span className="text-muted-foreground">—</span>}</span>
+          <span className="inline-block w-28 truncate">
+            {r.display_name ?? r.label ?? <span className="text-muted-foreground">—</span>}
+          </span>
           <InlineDnSelect value={r.display_name_status} checkedAt={r.display_name_checked_at} onChange={(v) => onQuickPatch(r, { display_name_status: v })} />
         </div>
       </TableCell>
@@ -583,7 +585,16 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
         <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
       </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
-      <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
+      <TableCell>
+        <button
+          type="button"
+          onClick={() => onQuickPatch(r, { webhook_connected: !r.webhook_connected })}
+          title="Click to toggle (manual)"
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] hover:opacity-80 transition ${r.webhook_connected ? statusTone.ready : statusTone.warming}`}
+        >
+          {r.webhook_connected ? "connected" : "missing"}
+        </button>
+      </TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
       <TableCell className="text-xs font-medium tabular-nums">{(r.total_sent ?? 0).toLocaleString()}</TableCell>
       <TableCell className="text-xs tabular-nums">
@@ -599,12 +610,11 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(r)} title="Edit">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
-          {r.workspace_slug ? (
+          <ReassignInline value={r.workspace_id} workspaces={workspaces} onChange={(wid) => onReassign(r.id, wid)} />
+          {r.workspace_slug && (
             <Button asChild size="icon" variant="ghost" className="h-7 w-7" title="Open client">
               <Link to={`/ws/${r.workspace_slug}/settings`}><ExternalLink className="w-3.5 h-3.5" /></Link>
             </Button>
-          ) : (
-            <ReassignInline value={r.workspace_id} workspaces={workspaces} onChange={(wid) => onReassign(r.id, wid)} />
           )}
           <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => onDelete(r.id)} title="Delete">
             <Trash2 className="w-3.5 h-3.5" />
