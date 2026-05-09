@@ -176,7 +176,7 @@ async function notifyLaunchSlack(workspace_id: string | null, payload: { name: s
     const slackKey = Deno.env.get("SLACK_API_KEY");
     if (!lovableKey || !slackKey) return;
     // Look up channel from workspace, fallback to default
-    let channel = "#client-wins";
+    let channel = "#delivery-campaigns";
     if (workspace_id) {
       try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
