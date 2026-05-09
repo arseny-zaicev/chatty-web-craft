@@ -804,8 +804,8 @@ const DealCard = ({
     : null;
   return (
     <div
-      className={`group rounded-md border border-border bg-card p-3 text-sm cursor-pointer hover:border-primary/40 hover:shadow-sm transition ${
-        dragging ? "shadow-lg rotate-2" : ""
+      className={`group rounded-md border border-border bg-card p-3 text-sm cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-sm transition-shadow ${
+        dragging ? "shadow-2xl ring-2 ring-primary/40" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -819,13 +819,6 @@ const DealCard = ({
               {initials}
             </div>
           )}
-          <button
-            {...dragHandleProps}
-            onClick={(e) => e.stopPropagation()}
-            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-          >
-            <GripVertical className="w-4 h-4" />
-          </button>
         </div>
       </div>
       {deal.contact_name && (
