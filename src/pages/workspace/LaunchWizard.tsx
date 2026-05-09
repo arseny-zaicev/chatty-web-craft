@@ -370,23 +370,29 @@ export default function LaunchWizard() {
     return { perNumber, windowSec, avgGapSec };
   }, [recipients.length, activeNumbers.length, windowStart, windowEnd]);
 
-  // Feasibility: how many of today's volume actually fits before windowEnd in recipient TZ
+  // Feasibility: how many of today's volume actually fits before windowEnd in recipient TZ.
+  // Applies to BOTH Send now (60-120s gaps) and Pick days (window-spread gaps).
   const feasibility = useMemo(() => {
-    if (!pacing || !recipientNow || scheduleMode !== "scheduled") return null;
+    if (!pacing || !recipientNow) return null;
     const [nh, nm] = recipientNow.split(":").map(Number);
     const [eh, em] = windowEnd.split(":").map(Number);
     const [sh, sm] = windowStart.split(":").map(Number);
     const nowSec = nh * 3600 + nm * 60;
     const endSec = eh * 3600 + em * 60;
     const startSec = sh * 3600 + sm * 60;
-    // Effective remaining seconds today (only if we're inside the window)
-    const remainingSec = nowSec < startSec ? pacing.windowSec : Math.max(0, endSec - nowSec);
-    const fitsToday = Math.max(0, Math.floor(remainingSec / Math.max(1, pacing.avgGapSec))) * Math.max(1, activeNumbers.length);
+    // If we're before the window, today's full window is available; if inside, only what's left; if past, 0.
+    const remainingSec = nowSec < startSec
+      ? pacing.windowSec
+      : nowSec >= endSec ? 0 : Math.max(0, endSec - nowSec);
+    const gapSec = scheduleMode === "now"
+      ? Math.max(1, (delayMin + delayMax) / 2)
+      : Math.max(1, pacing.avgGapSec);
+    const perNumberFits = Math.floor(remainingSec / gapSec);
+    const fitsToday = Math.min(recipients.length, perNumberFits * Math.max(1, activeNumbers.length));
     const totalQueued = recipients.length;
     const overflow = Math.max(0, totalQueued - fitsToday);
-    const daysNeeded = Math.max(1, Math.ceil(totalQueued / Math.max(1, pacing.perNumber * activeNumbers.length / Math.max(1, pacing.windowSec / 60) * (pacing.windowSec / 60))));
-    return { remainingSec, fitsToday, overflow, totalQueued };
-  }, [pacing, recipientNow, scheduleMode, windowEnd, windowStart, activeNumbers.length, recipients.length]);
+    return { remainingSec, fitsToday, overflow, totalQueued, gapSec };
+  }, [pacing, recipientNow, scheduleMode, windowEnd, windowStart, activeNumbers.length, recipients.length, delayMin, delayMax]);
 
 
 
