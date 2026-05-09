@@ -27,9 +27,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import Index from "./pages/Index";
 
 // Lazy-load all secondary routes to keep initial bundle small
-const Index = lazyWithRetry(() => import("./pages/Index"));
 const SellerLeads = lazyWithRetry(() => import("./pages/SellerLeads"));
 const BrandAssets = lazyWithRetry(() => import("./pages/BrandAssets"));
 const Privacy = lazyWithRetry(() => import("./pages/Privacy"));
