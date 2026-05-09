@@ -85,11 +85,11 @@ export async function fetchCrmBase(workspaceId?: string) {
   return { numbers: (numbers ?? []) as WhatsAppNumber[], conversations: (conversations ?? []) as Conversation[] };
 }
 
-const DEFAULT_WORKSPACE_STAGES: Array<{ name: string; color: string; stage_type: "open" | "won" | "lost" | "booked" }> = [
+const DEFAULT_WORKSPACE_STAGES: Array<{ name: string; color: string; stage_type: "open" | "won" | "lost" }> = [
   { name: "New chats", color: "#10b981", stage_type: "open" },
   { name: "Qualified", color: "#3b82f6", stage_type: "open" },
   { name: "Follow-up", color: "#f59e0b", stage_type: "open" },
-  { name: "Booked", color: "#8b5cf6", stage_type: "booked" },
+  { name: "Booked", color: "#8b5cf6", stage_type: "open" },
   { name: "Won", color: "#22c55e", stage_type: "won" },
   { name: "Lost", color: "#ef4444", stage_type: "lost" },
 ];
