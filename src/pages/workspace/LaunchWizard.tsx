@@ -306,6 +306,37 @@ export default function LaunchWizard() {
     return `${(seconds / 3600).toFixed(1)}h`;
   }, [recipients.length, activeNumbers.length, delayMin, delayMax, type]);
 
+  // ----- Recipient region clock & realistic pacing -----
+  const recipientTz = useMemo(() => COUNTRY_TZ[poolCountry?.toUpperCase() ?? ""] ?? null, [poolCountry]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const recipientNow = useMemo(() => {
+    if (!recipientTz) return null;
+    try {
+      const fmt = new Intl.DateTimeFormat("en-GB", { timeZone: recipientTz, hour: "2-digit", minute: "2-digit", hour12: false });
+      return fmt.format(new Date(nowTick));
+    } catch { return null; }
+  }, [recipientTz, nowTick]);
+  const inWindow = useMemo(() => {
+    if (!recipientNow || !windowStart || !windowEnd) return null;
+    return recipientNow >= windowStart && recipientNow <= windowEnd;
+  }, [recipientNow, windowStart, windowEnd]);
+
+  // Realistic per-message gap when window mode is active
+  const pacing = useMemo(() => {
+    const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
+    if (!perNumber || !windowStart || !windowEnd) return null;
+    const [sh, sm] = windowStart.split(":").map(Number);
+    const [eh, em] = windowEnd.split(":").map(Number);
+    const windowSec = Math.max(60, (eh * 3600 + em * 60) - (sh * 3600 + sm * 60));
+    const avgGapSec = Math.floor(windowSec / Math.max(1, perNumber));
+    return { perNumber, windowSec, avgGapSec };
+  }, [recipients.length, activeNumbers.length, windowStart, windowEnd]);
+
+
   // ----- Sample DB rows for live preview (database source) -----
   const sampleDbRowsQ = useQuery({
     queryKey: ["launch", "preview-rows", dbBatchId],
