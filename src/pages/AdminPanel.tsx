@@ -251,45 +251,153 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
 }
 
 const HEALTH_META = {
-  healthy: { label: "Healthy", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", icon: CheckCircle2 },
-  attention: { label: "Attention", cls: "bg-amber-500/10 text-amber-500 border-amber-500/30", icon: AlertTriangle },
-  blocked: { label: "Blocked", cls: "bg-red-500/10 text-red-500 border-red-500/30", icon: AlertTriangle },
+  running:   { label: "Running",            cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: Rocket },
+  scheduled: { label: "Scheduled",          cls: "bg-sky-500/10 text-sky-600 border-sky-500/30",              icon: Calendar },
+  idle:      { label: "Ready to launch",    cls: "bg-muted text-muted-foreground border-border",              icon: CheckCircle2 },
+  attention: { label: "Attention",          cls: "bg-amber-500/10 text-amber-600 border-amber-500/30",        icon: AlertTriangle },
+  blocked:   { label: "No active numbers",  cls: "bg-red-500/10 text-red-600 border-red-500/30",              icon: AlertTriangle },
 } as const;
 
+function daysUntil(iso: string): number {
+  const ms = new Date(iso).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 86_400_000));
+}
+
+function formatDateShort(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspace"][string] | undefined }) {
-  const H = HEALTH_META[m?.health ?? "healthy"];
+  const H = HEALTH_META[m?.health ?? "idle"];
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(ws.name);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setName(ws.name); }, [ws.name]);
+
+  const saveName = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === ws.name) { setEditing(false); setName(ws.name); return; }
+    setSaving(true);
+    const { error } = await supabase.from("workspaces").update({ name: trimmed }).eq("id", ws.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); setName(ws.name); }
+    else { toast.success("Renamed"); }
+    setEditing(false);
+  };
+
+  const unread = m?.unread_replies ?? 0;
+  const numbersActive = m?.numbers_active ?? 0;
+  const numbersTotal = m?.numbers_total ?? 0;
+
   return (
     <Card className="group hover:border-primary/50 transition-colors flex flex-col">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ background: ws.color }} />
-            <CardTitle className="text-base truncate">{ws.name}</CardTitle>
+            {editing ? (
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") { setEditing(false); setName(ws.name); } }}
+                disabled={saving}
+                className="text-base font-semibold bg-transparent border-b border-primary/40 focus:outline-none focus:border-primary px-0.5 min-w-0 flex-1"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="text-base font-semibold truncate text-left hover:text-primary transition-colors"
+                title="Click to rename"
+              >
+                {ws.name}
+              </button>
+            )}
           </div>
-          <Badge variant="outline" className={`text-[10px] ${H.cls}`}><H.icon className="w-3 h-3 mr-1" />{H.label}</Badge>
+          <Badge variant="outline" className={`text-[10px] shrink-0 ${H.cls}`}>
+            <H.icon className="w-3 h-3 mr-1" />{H.label}
+          </Badge>
         </div>
         <CardDescription className="text-xs">/{ws.slug}</CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-3 flex-1 flex flex-col">
+        {/* Headline metric: campaign info */}
+        <div className="rounded-md border border-border bg-card/40 p-3">
+          {m?.health === "running" && (
+            <>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Rocket className="w-3.5 h-3.5" />Campaign running</div>
+              <div className="font-medium text-sm mt-0.5 truncate">{m.running_campaign_name ?? "Active campaign"}</div>
+              {m.campaign_end && (
+                <div className="text-xs text-muted-foreground mt-1">Ends {formatDateShort(m.campaign_end)} · {daysUntil(m.campaign_end)} day{daysUntil(m.campaign_end) === 1 ? "" : "s"} left</div>
+              )}
+            </>
+          )}
+          {m?.health === "scheduled" && m.next_launch && (
+            <>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Calendar className="w-3.5 h-3.5" />Next launch</div>
+              <div className="font-medium text-sm mt-0.5 truncate">{m.scheduled_campaign_name ?? "Scheduled campaign"}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Starts {formatDateShort(m.next_launch)} · in {daysUntil(m.next_launch)} day{daysUntil(m.next_launch) === 1 ? "" : "s"}
+                {m.campaign_end ? ` · ends ${formatDateShort(m.campaign_end)}` : ""}
+              </div>
+            </>
+          )}
+          {m?.health === "idle" && (
+            <>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="w-3.5 h-3.5" />No campaign scheduled</div>
+              <div className="font-medium text-sm mt-0.5">{numbersActive} active number{numbersActive === 1 ? "" : "s"} ready</div>
+              <div className="text-xs text-muted-foreground mt-1">Plan a launch when you're ready</div>
+            </>
+          )}
+          {m?.health === "attention" && (
+            <>
+              <div className="flex items-center gap-1.5 text-xs text-amber-600"><AlertTriangle className="w-3.5 h-3.5" />Replies piling up</div>
+              <div className="font-medium text-sm mt-0.5">{unread} unread message{unread === 1 ? "" : "s"}</div>
+              <div className="text-xs text-muted-foreground mt-1">Open inbox to handle them</div>
+            </>
+          )}
+          {m?.health === "blocked" && (
+            <>
+              <div className="flex items-center gap-1.5 text-xs text-red-600"><AlertTriangle className="w-3.5 h-3.5" />No active numbers</div>
+              <div className="font-medium text-sm mt-0.5">Connect a WhatsApp number first</div>
+              <div className="text-xs text-muted-foreground mt-1">{numbersTotal === 0 ? "No numbers added yet" : `${numbersTotal} number${numbersTotal === 1 ? "" : "s"} present, none active`}</div>
+            </>
+          )}
+        </div>
+
+        {/* Compact secondary stats */}
         <div className="grid grid-cols-3 gap-2 text-center">
-          <MiniStat label="Unread" value={m?.unread_replies ?? 0} highlight={(m?.unread_replies ?? 0) > 0} />
-          <MiniStat label="Active" value={m?.active_campaigns ?? 0} />
-          <MiniStat label="Numbers" value={m ? `${m.numbers_ready}/${m.numbers_total}` : "—"} />
+          <MiniStat label="Numbers" value={`${numbersActive}/${numbersTotal}`} />
+          <MiniStat label="Unread" value={unread} highlight={unread > 0} />
           <MiniStat label="Sent today" value={m?.delivered_today ?? 0} />
-          <MiniStat label="Replies today" value={m?.replies_today ?? 0} />
-          <MiniStat label="Last" value={m?.last_activity ? formatDistanceToNow(new Date(m.last_activity), { addSuffix: false }) : "—"} small />
         </div>
-        {m?.next_launch && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="w-3 h-3" />Next launch: {new Date(m.next_launch).toLocaleString()}</div>
-        )}
-        <div className="grid grid-cols-4 gap-1.5 mt-auto">
-          <QuickLink to={`/ws/${ws.slug}/overview`} icon={<LayoutDashboard className="h-3 w-3" />} label="Overview" />
-          <QuickLink to={`/ws/${ws.slug}/inbox`} icon={<Inbox className="h-3 w-3" />} label="Inbox" />
-          <QuickLink to={`/ws/${ws.slug}/launch`} icon={<Rocket className="h-3 w-3" />} label="Launch" primary />
-          <QuickLink to={`/ws/${ws.slug}/reporting`} icon={<BarChart3 className="h-3 w-3" />} label="Reports" />
+
+        <div className="flex items-center gap-2 mt-auto">
+          <Button asChild variant="outline" size="sm" className="flex-1 gap-1.5">
+            <Link to={`/ws/${ws.slug}/inbox`}>
+              <Inbox className="h-3.5 w-3.5" />Inbox{unread > 0 ? ` (${unread})` : ""}
+            </Link>
+          </Button>
+          <Button asChild variant="default" size="sm" className="flex-1 gap-1.5">
+            <Link to={`/ws/${ws.slug}/launch`}>
+              <Rocket className="h-3.5 w-3.5" />Launch
+            </Link>
+          </Button>
         </div>
-        <Button asChild variant="ghost" size="sm" className="w-full justify-between">
-          <Link to={`/ws/${ws.slug}/overview`}>Open workspace<ArrowRight className="h-4 w-4" /></Link>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full justify-between"
+          onClick={() => navigate(`/ws/${ws.slug}/overview`)}
+        >
+          Open workspace<ArrowRight className="h-4 w-4" />
         </Button>
       </CardContent>
     </Card>
@@ -303,17 +411,11 @@ const Kpi = ({ icon: Icon, label, value, accent }: { icon: React.ComponentType<{
   </div>
 );
 
-const MiniStat = ({ label, value, highlight, small }: { label: string; value: number | string; highlight?: boolean; small?: boolean }) => (
+const MiniStat = ({ label, value, highlight }: { label: string; value: number | string; highlight?: boolean }) => (
   <div className="rounded-md border border-border bg-card/40 py-1.5">
-    <div className={`font-display font-semibold ${small ? "text-xs" : "text-base"} ${highlight ? "text-emerald-500" : ""}`}>{value}</div>
+    <div className={`font-display font-semibold text-base ${highlight ? "text-emerald-500" : ""}`}>{value}</div>
     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
   </div>
-);
-
-const QuickLink = ({ to, icon, label, primary }: { to: string; icon: React.ReactNode; label: string; primary?: boolean }) => (
-  <Button asChild variant={primary ? "default" : "outline"} size="sm" className="gap-1 h-7 text-[10px] justify-center px-1.5">
-    <Link to={to}>{icon}{label}</Link>
-  </Button>
 );
 
 export default AdminPanel;
