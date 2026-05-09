@@ -4,11 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
-import CustomCursor from "@/components/CustomCursor";
-import CookieConsent from "@/components/CookieConsent";
-import ScrollProgress from "@/components/ScrollProgress";
 
 // Lazy-load all secondary routes to keep initial bundle small
 const Index = lazy(() => import("./pages/Index"));
@@ -44,6 +41,9 @@ const WorkspaceSettings = lazy(() => import("./pages/workspace/WorkspaceSettings
 const LaunchWizard = lazy(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazy(() => import("./pages/workspace/NewClient"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const CustomCursor = lazy(() => import("@/components/CustomCursor"));
+const CookieConsent = lazy(() => import("@/components/CookieConsent"));
+const ScrollProgress = lazy(() => import("@/components/ScrollProgress"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,16 +65,30 @@ const RouteFallback = () => (
   </main>
 );
 
+const SiteChrome = () => {
+  const { pathname } = useLocation();
+  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname === "/admin-auth" || pathname === "/client-auth";
+
+  if (isAppArea) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <CustomCursor />
+      <ScrollProgress />
+      <CookieConsent />
+    </Suspense>
+  );
+};
+
 const App = () => (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <CustomCursor />
-        <ScrollProgress />
         <BrowserRouter>
           <ScrollToTop />
+            <SiteChrome />
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Index />} />
@@ -119,7 +133,6 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
-          <CookieConsent />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
