@@ -14,9 +14,11 @@ import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const HEALTH = {
-  healthy: { label: "Healthy", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", icon: CheckCircle2 },
+  running: { label: "Running", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", icon: CheckCircle2 },
+  scheduled: { label: "Scheduled", cls: "bg-sky-500/10 text-sky-500 border-sky-500/30", icon: CheckCircle2 },
+  idle: { label: "Ready", cls: "bg-muted text-muted-foreground border-border", icon: CheckCircle2 },
   attention: { label: "Attention", cls: "bg-amber-500/10 text-amber-500 border-amber-500/30", icon: AlertTriangle },
-  blocked: { label: "Blocked", cls: "bg-red-500/10 text-red-500 border-red-500/30", icon: AlertTriangle },
+  blocked: { label: "No active numbers", cls: "bg-red-500/10 text-red-500 border-red-500/30", icon: AlertTriangle },
 } as const;
 
 export default function WorkspaceOverview() {
