@@ -407,14 +407,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }
   }
 
-  // Fire-and-forget Slack notification
-  const firstAt = rows.length > 0 ? rows[0].scheduled_at : new Date().toISOString();
-  notifyLaunchSlack(number.workspace_id, {
-    name, recipients: rows.length, firstAt,
-    mode: scheduledDates.length > 0 ? `${schedulerKind} · ${scheduledDates.length}d × ${windowStart}-${windowEnd}` : `${schedulerKind} · now`,
-    numberPhone: number.phone_number,
-  }).catch(() => {});
-
+  // Slack notification handled by DB trigger on campaigns.status change.
   return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate });
 }
 
