@@ -576,16 +576,24 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   </div>
 );
 
+type AssigneeLite = { user_id: string; full_name: string | null } | null;
+
 const StageColumn = ({
   stage,
   deals,
   total,
   onDealClick,
+  onOpenChat,
+  conversationOf,
+  assigneeOf,
 }: {
   stage: Stage;
   deals: Deal[];
   total: { count: number; sum: number };
   onDealClick: (id: string) => void;
+  onOpenChat?: (conversationId: string) => void;
+  conversationOf?: (d: Deal) => Conversation | null;
+  assigneeOf?: (d: Deal) => AssigneeLite;
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   return (
@@ -607,7 +615,14 @@ const StageColumn = ({
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[100px]">
         {deals.map((d) => (
-          <DraggableDeal key={d.id} deal={d} onClick={() => onDealClick(d.id)} />
+          <DraggableDeal
+            key={d.id}
+            deal={d}
+            onClick={() => onDealClick(d.id)}
+            onOpenChat={onOpenChat}
+            conversation={conversationOf?.(d) ?? null}
+            assignee={assigneeOf?.(d) ?? null}
+          />
         ))}
         {deals.length === 0 && (
           <div className="text-[11px] text-muted-foreground/60 text-center py-6">
@@ -619,7 +634,19 @@ const StageColumn = ({
   );
 };
 
-const DraggableDeal = ({ deal, onClick }: { deal: Deal; onClick: () => void }) => {
+const DraggableDeal = ({
+  deal,
+  onClick,
+  onOpenChat,
+  conversation,
+  assignee,
+}: {
+  deal: Deal;
+  onClick: () => void;
+  onOpenChat?: (conversationId: string) => void;
+  conversation?: Conversation | null;
+  assignee?: AssigneeLite;
+}) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: deal.id });
   return (
     <div
@@ -627,7 +654,13 @@ const DraggableDeal = ({ deal, onClick }: { deal: Deal; onClick: () => void }) =
       style={{ opacity: isDragging ? 0.4 : 1 }}
       onClick={onClick}
     >
-      <DealCard deal={deal} dragHandleProps={{ ...attributes, ...listeners }} />
+      <DealCard
+        deal={deal}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        onOpenChat={onOpenChat}
+        conversation={conversation}
+        assignee={assignee}
+      />
     </div>
   );
 };
@@ -636,11 +669,39 @@ const DealCard = ({
   deal,
   dragging,
   dragHandleProps,
+  onOpenChat,
+  conversation,
+  assignee,
 }: {
   deal: Deal;
   dragging?: boolean;
   dragHandleProps?: Record<string, unknown>;
+  onOpenChat?: (conversationId: string) => void;
+  conversation?: Conversation | null;
+  assignee?: AssigneeLite;
 }) => {
+  const phone = deal.contact_phone ?? conversation?.contact_phone ?? null;
+  const convId = deal.conversation_id ?? conversation?.id ?? null;
+  const copyPhone = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!phone) return;
+    navigator.clipboard.writeText(`+${phone}`);
+    toast.success("Phone copied");
+  };
+  const openChat = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (convId && onOpenChat) onOpenChat(convId);
+  };
+  const initials = assignee
+    ? (() => {
+        const n = assignee.full_name?.trim();
+        if (n) {
+          const p = n.split(/\s+/);
+          return ((p[0]?.[0] ?? "") + (p[1]?.[0] ?? "")).toUpperCase();
+        }
+        return assignee.user_id.slice(0, 2).toUpperCase();
+      })()
+    : null;
   return (
     <div
       className={`group rounded-md border border-border bg-card p-3 text-sm cursor-pointer hover:border-primary/40 hover:shadow-sm transition ${
@@ -648,24 +709,56 @@ const DealCard = ({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="font-medium leading-snug truncate">{deal.title}</div>
-        <button
-          {...dragHandleProps}
-          onClick={(e) => e.stopPropagation()}
-          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-        >
-          <GripVertical className="w-4 h-4" />
-        </button>
+        <div className="font-medium leading-snug truncate flex-1">{deal.title}</div>
+        <div className="flex items-center gap-1 shrink-0">
+          {initials && (
+            <div
+              className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center"
+              title={`Assigned: ${assignee?.full_name ?? "User"}`}
+            >
+              {initials}
+            </div>
+          )}
+          <button
+            {...dragHandleProps}
+            onClick={(e) => e.stopPropagation()}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-      {(deal.contact_name || deal.contact_phone) && (
+      {(deal.contact_name || phone) && (
         <div className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
-          {deal.contact_phone && <Phone className="w-3 h-3" />}
-          {deal.contact_name || `+${deal.contact_phone}`}
+          {phone && <Phone className="w-3 h-3" />}
+          {deal.contact_name || (phone ? `+${phone}` : "")}
         </div>
       )}
       {deal.amount != null && (
         <div className="text-xs font-semibold text-primary mt-1.5">
           ${Number(deal.amount).toLocaleString()}
+        </div>
+      )}
+      {(convId || phone) && (
+        <div className="mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          {convId && onOpenChat && (
+            <button
+              onClick={openChat}
+              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+              title="Open chat"
+            >
+              <MessageSquare className="w-3 h-3" /> Chat
+            </button>
+          )}
+          {phone && (
+            <button
+              onClick={copyPhone}
+              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+              title="Copy phone"
+            >
+              <Copy className="w-3 h-3" /> Copy
+            </button>
+          )}
         </div>
       )}
     </div>
