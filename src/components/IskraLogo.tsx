@@ -19,6 +19,6 @@ export const IskraSparkMark = ({ size = 32, className = "" }: { size?: number; c
 export const IskraLogo = ({ size = 32, textClass = "text-base" }: { size?: number; textClass?: string }) => (
   <div className="flex items-center gap-2">
     <IskraSparkMark size={size} />
-    <span className={`font-display font-semibold tracking-tight text-foreground ${textClass}`}>ISKRA</span>
+    <span className={`font-display font-semibold tracking-tight ${textClass}`}>ISKRA</span>
   </div>
 );
