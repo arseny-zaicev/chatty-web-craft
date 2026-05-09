@@ -20,7 +20,7 @@ import { geoFromPhone } from "@/lib/launchData";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
-type Status = "draft" | "ready" | "warming" | "restricted" | "banned" | "inactive";
+type Status = "active" | "ready" | "stock" | "warming" | "restricted" | "banned" | "draft" | "inactive";
 type Usage = "marketing" | "utility" | "both";
 
 type Row = {
