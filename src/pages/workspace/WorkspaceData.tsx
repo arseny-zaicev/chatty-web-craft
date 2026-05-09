@@ -198,6 +198,8 @@ function PresetsSection({
   const [creating, setCreating] = useState<PrepPreset | null>(null);
   const [batchName, setBatchName] = useState("");
   const [batchCountry, setBatchCountry] = useState("");
+  const [batchAudience, setBatchAudience] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
   const [batchNotes, setBatchNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
@@ -211,23 +213,36 @@ function PresetsSection({
     }
   };
 
-  const buildBatchName = (p: PrepPreset, country: string) => {
+  const buildBatchName = (country: string, audience: string) => {
     const date = new Date().toISOString().slice(0, 10);
     const c = country.trim().toUpperCase() || "ALL";
-    return `${date} | ${c} | ${p.name}`;
+    const a = audience.trim() || "AUDIENCE";
+    return `${date} | ${c} | ${a}`;
   };
 
   const startCreate = (p: PrepPreset) => {
     setCreating(p);
     setBatchCountry("");
+    setBatchAudience("");
     setBatchNotes("");
-    setBatchName(buildBatchName(p, ""));
+    setNameTouched(false);
+    setBatchName(buildBatchName("", ""));
     setCreatedBatchId(null);
   };
 
   const onCountryChange = (val: string) => {
     setBatchCountry(val);
-    if (creating && !createdBatchId) setBatchName(buildBatchName(creating, val));
+    if (!nameTouched && !createdBatchId) setBatchName(buildBatchName(val, batchAudience));
+  };
+
+  const onAudienceChange = (val: string) => {
+    setBatchAudience(val);
+    if (!nameTouched && !createdBatchId) setBatchName(buildBatchName(batchCountry, val));
+  };
+
+  const onBatchNameChange = (val: string) => {
+    setBatchName(val);
+    setNameTouched(true);
   };
 
   const submitBatch = async () => {
