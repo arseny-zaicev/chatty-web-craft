@@ -47,6 +47,8 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [myOnly, setMyOnly] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
