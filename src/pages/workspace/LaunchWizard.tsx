@@ -791,13 +791,20 @@ export default function LaunchWizard() {
               <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
               <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
                 <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
+                  disabled={scheduleMode === "scheduled"}
                   onChange={(e) => setDelayMin(Math.max(type === "utility" ? UTILITY_MIN_DELAY : 0, Number(e.target.value)))} />
               </Field>
               <Field label="Max delay (s)">
                 <Input type="number" min={delayMin} value={delayMax}
+                  disabled={scheduleMode === "scheduled"}
                   onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
               </Field>
             </div>
+            {scheduleMode === "scheduled" && (
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Min/Max delay is ignored when a window is set - gaps are computed from the window length below.
+              </div>
+            )}
 
             {/* Schedule */}
             <div className="mt-4 rounded-md border border-border/60 p-3 space-y-3">
@@ -864,15 +871,16 @@ export default function LaunchWizard() {
               )}
 
               <div className="text-[11px] text-muted-foreground space-y-1">
-                <div>
-                  {scheduleMode === "now"
-                    ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson (organic gaps)" : "Uniform fixed gaps"} of ${delayMin}-${delayMax}s between sends per number.`
-                    : `${scheduledDates.length || 0} day(s) × ${windowStart}-${windowEnd} ${respectTz ? "in each recipient's local time" : "in your time zone"}. Numbers fire staggered (no two at the same second).`}
-                </div>
-                {scheduleMode === "scheduled" && pacing && pacing.perNumber > 1 && (
+                {scheduleMode === "now" ? (
                   <div>
-                    Math: {pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h window ≈ <b>1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average. Min/max delays ({delayMin}-{delayMax}s) only act as the floor between two consecutive sends.
+                    Starts immediately. {schedulerKind === "poisson" ? "Poisson (organic, jittered)" : "Uniform fixed"} gaps of <b>{delayMin}-{delayMax}s</b> between sends per number. Total run ≈ <b>{Math.round(((delayMin + delayMax) / 2 * Math.max(1, pacing?.perNumber || 1)) / 60)} min</b> per number.
                   </div>
+                ) : pacing && pacing.perNumber > 1 ? (
+                  <div>
+                    {scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. <b>{pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h ≈ 1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average (jittered ±20% for organic feel). The 60-120s "Min/Max delay" field does not apply here - gaps are derived from the window so messages spread across the full session.
+                  </div>
+                ) : (
+                  <div>{scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in recipient's local time" : "in your time zone"}.</div>
                 )}
               </div>
             </div>
