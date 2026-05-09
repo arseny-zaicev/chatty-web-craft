@@ -1,6 +1,6 @@
 import { NavLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, LayoutDashboard, Inbox, KanbanSquare, Megaphone, Rocket, Loader2, Plus, BookOpen, Settings as SettingsIcon } from "lucide-react";
+import { Building2, LayoutDashboard, Inbox, KanbanSquare, Megaphone, Rocket, Loader2, BookOpen, Settings as SettingsIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -12,13 +12,16 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { fetchWorkspaces, workspaceKeys } from "@/lib/workspaces";
+import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 
-const opsTabs = [
+const clientTabs = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
   { key: "campaigns", label: "Campaigns", icon: Megaphone },
+];
+const managerExtras = [
   { key: "library", label: "Library", icon: BookOpen },
 ];
 const setupTabs = [
@@ -30,6 +33,11 @@ export function WorkspaceSidebar() {
   const collapsed = state === "collapsed";
   const { slug } = useParams<{ slug?: string }>();
   const { data: workspaces, isLoading } = useQuery({ queryKey: workspaceKeys.list, queryFn: fetchWorkspaces });
+  const currentWs = (workspaces ?? []).find((w: Workspace) => w.slug === slug);
+  const { data: role } = useWorkspaceRole(currentWs?.id);
+  const canManage = isManagerLike(role);
+
+  const opsTabs = canManage ? [...clientTabs, ...managerExtras] : clientTabs;
 
   return (
     <Sidebar collapsible="icon">
@@ -73,44 +81,49 @@ export function WorkspaceSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Launch campaign">
-                      <NavLink
-                        to={`/ws/${slug}/launch`}
-                        className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
-                      >
-                        <Rocket className="w-4 h-4" />
-                        {!collapsed && <span>Launch</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  {canManage && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild tooltip="Launch campaign">
+                        <NavLink
+                          to={`/ws/${slug}/launch`}
+                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
+                        >
+                          <Rocket className="w-4 h-4" />
+                          {!collapsed && <span>Launch</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarGroup>
-              <SidebarGroupLabel>{!collapsed && "Setup"}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {setupTabs.map((t) => (
-                    <SidebarMenuItem key={t.key}>
-                      <SidebarMenuButton asChild tooltip={t.label}>
-                        <NavLink
-                          to={`/ws/${slug}/${t.key}`}
-                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
-                        >
-                          <t.icon className="w-4 h-4" />
-                          {!collapsed && <span>{t.label}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {canManage && (
+              <SidebarGroup>
+                <SidebarGroupLabel>{!collapsed && "Setup"}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {setupTabs.map((t) => (
+                      <SidebarMenuItem key={t.key}>
+                        <SidebarMenuButton asChild tooltip={t.label}>
+                          <NavLink
+                            to={`/ws/${slug}/${t.key}`}
+                            className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
+                          >
+                            <t.icon className="w-4 h-4" />
+                            {!collapsed && <span>{t.label}</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
           </>
         )}
       </SidebarContent>
     </Sidebar>
   );
 }
+
