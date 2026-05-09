@@ -64,7 +64,12 @@ export default function LaunchWizard() {
   const [poolCountry, setPoolCountry] = useState<string>("");
   const [numberIds, setNumberIds] = useState<string[]>([]);
   const [csv, setCsv] = useState("phone,name\n");
-  const [audienceSource, setAudienceSource] = useState<"paste" | "upload" | "chats" | "saved">("paste");
+  const [audienceSource, setAudienceSource] = useState<"paste" | "upload" | "chats" | "saved" | "database">("paste");
+
+  // Database batch source state
+  const [dbBatchId, setDbBatchId] = useState<string>("");
+  const [dbAllUnused, setDbAllUnused] = useState(true);
+  const [dbQty, setDbQty] = useState<string>("100");
 
   const [audience, setAudience] = useState("");
   const [ctaPreset, setCtaPreset] = useState<string>("Call");
