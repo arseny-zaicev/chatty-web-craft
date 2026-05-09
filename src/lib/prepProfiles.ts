@@ -31,6 +31,8 @@ export type PrepProfile = {
   fallback_rules: Record<string, string>;
   quick_replies: string[];
   sample_payload: Record<string, string>;
+  /** The actual WhatsApp message body, with {var_1}, {first_name}, etc. Used to render a deterministic preview. */
+  sample_message_template: string | null;
   created_at: string;
   updated_at: string;
 };
