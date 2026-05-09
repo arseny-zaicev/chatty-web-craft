@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { RefreshCw, Activity, CheckCircle2, Radio, Maximize2 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { RefreshCw, Activity, CheckCircle2, Radio, Maximize2, Link2, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { evaluateAdminAccess } from "@/lib/adminGuard";
 import { IskraLoader } from "@/components/IskraLoader";
 import { IskraLogo } from "@/components/IskraLogo";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -151,15 +160,42 @@ function formatDate(d: Date) {
 
 export default function OpsLive() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tokenParam = searchParams.get("token") ?? "";
   const [authChecked, setAuthChecked] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [tokenMode, setTokenMode] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
   const [now, setNow] = useState<Date>(new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
+      // Token-based public access path
+      if (tokenParam) {
+        try {
+          const { data, error } = await supabase.functions.invoke("tv-token?action=verify", {
+            body: { token: tokenParam },
+          });
+          if (!mounted) return;
+          if (error || !data?.valid) {
+            navigate("/admin-auth");
+            return;
+          }
+          setTokenMode(true);
+          setAuthChecked(true);
+          return;
+        } catch {
+          navigate("/admin-auth");
+          return;
+        }
+      }
       const [{ data: { session } }, r] = await Promise.all([
         supabase.auth.getSession(),
         evaluateAdminAccess(),
@@ -169,12 +205,13 @@ export default function OpsLive() {
         navigate(r.state === "redirect" ? r.to : "/admin-auth");
         return;
       }
+      setIsAdmin(true);
       setAuthChecked(true);
     })();
     return () => {
       mounted = false;
     };
-  }, [navigate]);
+  }, [navigate, tokenParam]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -201,6 +238,38 @@ export default function OpsLive() {
       document.exitFullscreen().catch(() => {});
     } else {
       document.documentElement.requestFullscreen().catch(() => {});
+    }
+  };
+
+  const handleGenerateLink = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("tv-token?action=create", {
+        body: { days: 7, label: "Ops Live · TV" },
+      });
+      if (error || !data?.token) {
+        toast.error(error?.message ?? "Failed to generate link");
+        return;
+      }
+      const url = `${window.location.origin}/admin/ops-live?token=${data.token}`;
+      setGeneratedUrl(url);
+      setCopied(false);
+      toast.success("Link generated · valid 7 days");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate link");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!generatedUrl) return;
+    try {
+      await navigator.clipboard.writeText(generatedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy");
     }
   };
 
@@ -245,7 +314,7 @@ export default function OpsLive() {
             <div className="hidden sm:flex items-center gap-2">
               <Radio className="h-3.5 w-3.5 text-[hsl(152_65%_35%)] animate-pulse" />
               <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(152_65%_28%)]">
-                Live · Operations
+                Live · Operations{tokenMode ? " · View only" : ""}
               </span>
             </div>
             <div className="hidden md:block h-6 w-px bg-[hsl(38_25%_60%/0.5)]" />
@@ -277,6 +346,17 @@ export default function OpsLive() {
                 {formatTime(lastUpdated)} · next {nextRefreshIn}
               </div>
             </div>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLinkDialogOpen(true)}
+                className="border border-[hsl(152_65%_35%/0.4)] bg-[hsl(152_65%_35%/0.06)] hover:bg-[hsl(152_65%_35%/0.12)] text-[hsl(152_65%_28%)] rounded-full px-3 lg:px-4 h-8"
+              >
+                <Link2 className="h-3.5 w-3.5 lg:mr-2" />
+                <span className="hidden lg:inline">TV link</span>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -391,6 +471,40 @@ export default function OpsLive() {
           <div className="tabular-nums">Auto-refresh · 5 min</div>
         </footer>
       </div>
+
+      <Dialog open={linkDialogOpen} onOpenChange={(o) => { setLinkDialogOpen(o); if (!o) { setGeneratedUrl(null); setCopied(false); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Public TV link · 7 days</DialogTitle>
+            <DialogDescription>
+              Generate a read-only link to open Ops Live on a TV without signing in.
+              Anyone with the link can view the wallboard until it expires.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            {!generatedUrl ? (
+              <Button onClick={handleGenerateLink} disabled={generating} className="w-full">
+                {generating ? "Generating…" : "Generate 7-day link"}
+              </Button>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Input value={generatedUrl} readOnly className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                  <Button onClick={handleCopy} variant="outline" size="icon" aria-label="Copy">
+                    {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Expires in 7 days. To revoke earlier, delete the token in the database.
+                </p>
+                <Button variant="ghost" size="sm" onClick={handleGenerateLink} disabled={generating} className="self-start">
+                  Generate another
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
