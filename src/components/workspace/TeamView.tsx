@@ -50,13 +50,13 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
   const { data: members, isLoading } = useQuery({
     queryKey: membersKey(workspaceId),
     queryFn: async (): Promise<Member[]> => {
-      const { data, error } = await supabase
-        .from("workspace_members")
-        .select("id, user_id, role, created_at")
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: true });
+      const { data, error } = await supabase.functions.invoke("workspace-invite-link?action=members", {
+        body: { workspace_id: workspaceId },
+      });
       if (error) throw error;
-      return (data ?? []) as Member[];
+      const payload = data as { members?: Member[]; error?: string };
+      if (payload?.error) throw new Error(payload.error);
+      return payload.members ?? [];
     },
   });
 
