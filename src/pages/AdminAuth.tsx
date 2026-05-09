@@ -51,10 +51,10 @@ const AdminAuth = () => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await withTimeout(supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password,
-      }).then((result) => result);
+      }));
 
       if (error) {
         console.error("Login error:", error);
@@ -152,15 +152,30 @@ const AdminAuth = () => {
               className="w-full text-sm text-muted-foreground"
               disabled={isLoading}
               onClick={async () => {
-                if (!email || email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+                setAuthError(null);
+                const normalizedEmail = email.trim().toLowerCase();
+                if (!normalizedEmail || normalizedEmail !== ADMIN_EMAIL.toLowerCase()) {
                   toast.error("Enter admin email first");
                   return;
                 }
-                const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-                  redirectTo: `${window.location.origin}/admin-auth`,
-                });
-                if (error) toast.error(error.message);
-                else toast.success("Password reset link sent to your email!");
+                setIsLoading(true);
+                try {
+                  const { error } = await withTimeout(supabase.auth.resetPasswordForEmail(normalizedEmail, {
+                    redirectTo: `${window.location.origin}/reset-password?next=/admin-auth`,
+                  }), "Password reset request timed out. Try again.");
+                  if (error) {
+                    setAuthError(error.message);
+                    toast.error(error.message);
+                  } else {
+                    toast.success("Password reset link sent to your email!");
+                  }
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : "Could not send reset link. Try again.";
+                  setAuthError(message);
+                  toast.error(message);
+                } finally {
+                  setIsLoading(false);
+                }
               }}
             >
               Forgot password?
