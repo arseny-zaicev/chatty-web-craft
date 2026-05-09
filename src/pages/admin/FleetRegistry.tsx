@@ -810,6 +810,23 @@ function AddNumberDrawer({
             <Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))} placeholder="971500000000" />
           </Field>
 
+          <Field label="Messaging limit">
+            <Select value={messagingLimit} onValueChange={setMessagingLimit}>
+              <SelectTrigger><SelectValue placeholder="Tier" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="250">250 / day</SelectItem>
+                <SelectItem value="1000">1 000 / day</SelectItem>
+                <SelectItem value="2000">2 000 / day</SelectItem>
+                <SelectItem value="5000">5 000 / day</SelectItem>
+                <SelectItem value="10000">10 000 / day</SelectItem>
+                <SelectItem value="20000">20 000 / day</SelectItem>
+                <SelectItem value="50000">50 000 / day</SelectItem>
+                <SelectItem value="100000">100 000 / day</SelectItem>
+                <SelectItem value="unlimited">Unlimited</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
           <Field label="App name">
             <Input value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="01Ashik02" />
           </Field>
@@ -845,27 +862,13 @@ function AddNumberDrawer({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="WABA ID">
-              <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
-            </Field>
-            <Field label="Messaging limit">
-              <Select value={messagingLimit} onValueChange={setMessagingLimit}>
-                <SelectTrigger><SelectValue placeholder="Tier" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="250">250 / day</SelectItem>
-                  <SelectItem value="1000">1 000 / day</SelectItem>
-                  <SelectItem value="2000">2 000 / day</SelectItem>
-                  <SelectItem value="5000">5 000 / day</SelectItem>
-                  <SelectItem value="10000">10 000 / day</SelectItem>
-                  <SelectItem value="20000">20 000 / day</SelectItem>
-                  <SelectItem value="50000">50 000 / day</SelectItem>
-                  <SelectItem value="100000">100 000 / day</SelectItem>
-                  <SelectItem value="unlimited">Unlimited</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
+          <Field label="Webhook URL">
+            <CopyableField value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`} />
+          </Field>
+
+          <Field label="WABA ID">
+            <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
+          </Field>
 
           <Field label="Allocate to client">
             <Select value={workspaceId} onValueChange={setWorkspaceId}>
@@ -881,12 +884,9 @@ function AddNumberDrawer({
             <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="ready">ready</SelectItem>
-                <SelectItem value="warming">warming</SelectItem>
-                <SelectItem value="draft">draft (stock)</SelectItem>
-                <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
-                <SelectItem value="banned">banned</SelectItem>
-                <SelectItem value="inactive">inactive</SelectItem>
+                {STATUS_OPTIONS.map(([v, l]) => (
+                  <SelectItem key={v} value={v}>{l}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {editing && (editing.status === "restricted" || editing.status === "banned") && status !== "restricted" && status !== "banned" && (
