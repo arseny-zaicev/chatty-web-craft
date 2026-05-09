@@ -102,13 +102,15 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     queryFn: () => fetchPipelineBase(workspaceId),
   });
 
-  // Auth gate
+  // Auth gate + me id
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) navigate("/admin-auth");
+      else setMeId(data.session.user.id);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) navigate("/admin-auth");
+      else setMeId(session.user.id);
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
@@ -117,10 +119,11 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (!pipelineData) return;
     setStages(pipelineData.stages);
     setDeals(pipelineData.deals);
+    setConversations(pipelineData.conversations);
     if (pipelineData.stages[0] && !newStageId) setNewStageId(pipelineData.stages[0].id);
   }, [pipelineData, newStageId]);
 
-  // Realtime
+  // Realtime deals
   useEffect(() => {
     const channel = supabase
       .channel("pipeline-deals")
@@ -133,7 +136,6 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
           const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [...prev, incoming];
-          queryClient.setQueryData(crmKeys.pipeline(workspaceId), { stages, deals: next });
           return next;
         });
       })
@@ -141,7 +143,28 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, stages, workspaceId]);
+  }, [workspaceId]);
+
+  // Realtime conversations (assignee / responder updates)
+  useEffect(() => {
+    const channel = supabase
+      .channel("pipeline-conversations")
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
+        setConversations((prev) => {
+          if (payload.eventType === "DELETE") return prev.filter((c) => c.id !== (payload.old as Conversation).id);
+          const incoming = payload.new as Conversation;
+          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
+          const idx = prev.findIndex((c) => c.id === incoming.id);
+          return idx >= 0
+            ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
+            : [...prev, incoming];
+        });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [workspaceId]);
 
   const dealsByStage = useMemo(() => {
     const map = new Map<string, Deal[]>();
