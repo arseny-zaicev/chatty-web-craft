@@ -24,6 +24,9 @@ import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
+import AssigneeSelect from "@/components/workspace/AssigneeSelect";
+
+import { fetchWorkspaceMembers, memberDisplayName, workspaceMembersKey } from "@/lib/workspaceMembers";
 
 type Message = {
   id: string;
@@ -44,6 +47,8 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [myOnly, setMyOnly] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
@@ -85,9 +90,30 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     return map;
   }, [numbers]);
 
+  const { data: members = [] } = useQuery({
+    queryKey: workspaceMembersKey(workspaceId),
+    queryFn: () => fetchWorkspaceMembers(workspaceId),
+    enabled: !!workspaceId,
+  });
+  const memberById = useMemo(() => {
+    const m = new Map<string, (typeof members)[number]>();
+    members.forEach((x) => m.set(x.user_id, x));
+    return m;
+  }, [members]);
+
+  /** Mark current user as the active responder on a conversation. */
+  const touchResponder = async (conversationId: string) => {
+    if (!meId) return;
+    await supabase
+      .from("conversations")
+      .update({ active_responder_id: meId, active_responder_at: new Date().toISOString() })
+      .eq("id", conversationId);
+  };
+
   const handleSend = async () => {
     if (!activeId || !draft.trim() || sending) return;
     setSending(true);
+    void touchResponder(activeId);
     try {
       const { data, error } = await supabase.functions.invoke("send-whatsapp", {
         body: { conversation_id: activeId, text: draft.trim() },
@@ -168,13 +194,15 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     await supabase.from("conversations").update({ unread_count: 0 }).eq("id", conv.id);
   };
 
-  // Auth gate
+  // Auth gate + me id
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) navigate("/admin-auth");
+      else setMeId(data.session.user.id);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) navigate("/admin-auth");
+      else setMeId(session.user.id);
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
@@ -233,6 +261,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
         setLoadingMessages(false);
       });
     supabase.from("conversations").update({ unread_count: 0 }).eq("id", activeId).then(() => {});
+    void touchResponder(activeId);
     return () => {
       cancelled = true;
     };
@@ -295,6 +324,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const filtered = sorted.filter((c) => {
     if (numberFilter !== "all" && c.whatsapp_number_id !== numberFilter) return false;
     if (starredOnly && !c.is_starred) return false;
+    if (myOnly && meId && c.assigned_user_id !== meId) return false;
     if (search) {
       const q = search.toLowerCase();
       const hay = `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`.toLowerCase();
@@ -305,6 +335,14 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
   const activeNumber = active ? numberById.get(active.whatsapp_number_id) : null;
+  const activeAssignee = active?.assigned_user_id ? memberById.get(active.assigned_user_id) ?? null : null;
+  const activeResponder = (() => {
+    if (!active?.active_responder_id || !active.active_responder_at) return null;
+    if (active.active_responder_id === meId) return null;
+    const ageMs = Date.now() - new Date(active.active_responder_at).getTime();
+    if (ageMs > 2 * 60 * 1000) return null;
+    return memberById.get(active.active_responder_id) ?? { user_id: active.active_responder_id, full_name: null, role: "" };
+  })();
 
   return (
     <>
@@ -391,6 +429,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                 >
                   <Star className={`w-3 h-3 ${starredOnly ? "fill-amber-500" : ""}`} />
                   Starred
+                </button>
+                <button
+                  onClick={() => setMyOnly((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition ${
+                    myOnly
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                  title="Show only chats assigned to me"
+                >
+                  My chats
                 </button>
               </div>
             </div>
@@ -531,12 +580,51 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         )}
                         {active.pinned_at && <Pin className="w-3.5 h-3.5 text-primary" />}
                       </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Phone className="w-3 h-3" />+{active.contact_phone}
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />+{active.contact_phone}</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`+${active.contact_phone}`);
+                            toast.success("Phone copied");
+                          }}
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:border-primary/40 hover:text-primary transition"
+                        >
+                          Copy
+                        </button>
+                        {activeAssignee && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                            Assigned: {memberDisplayName(activeAssignee)}
+                          </span>
+                        )}
+                        {activeResponder && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30 animate-pulse">
+                            {memberDisplayName(activeResponder)} is replying...
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {workspaceId && (
+                      <div className="hidden md:block w-44">
+                        <AssigneeSelect
+                          workspaceId={workspaceId}
+                          value={active.assigned_user_id}
+                          onChange={async (uid) => {
+                            setConversations((prev) =>
+                              prev.map((c) => (c.id === active.id ? { ...c, assigned_user_id: uid } : c)),
+                            );
+                            const { error } = await supabase
+                              .from("conversations")
+                              .update({ assigned_user_id: uid })
+                              .eq("id", active.id);
+                            if (error) toast.error(error.message);
+                          }}
+                          placeholder="Assign..."
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    )}
                     {activeNumber && (
                       <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5" title="Sending number">
                         <Phone className="w-3 h-3" />

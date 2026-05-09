@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
-import { Deal, Stage, crmKeys, fetchPipelineBase } from "@/lib/crmData";
+import { Conversation, Deal, Stage, crmKeys, fetchPipelineBase } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,9 +47,12 @@ import {
   Phone,
   Trash2,
   GripVertical,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import AssigneeSelect from "@/components/workspace/AssigneeSelect";
+import { fetchWorkspaceMembers, workspaceMembersKey } from "@/lib/workspaceMembers";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
@@ -58,12 +61,15 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const wsSlug = wsSlugMatch?.[1];
   const inboxPath = (conversationId: string) =>
     wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
-  const queryClient = useQueryClient();
+  
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Deal | null>(null);
+  const [myOnly, setMyOnly] = useState(false);
+  const [meId, setMeId] = useState<string | null>(null);
 
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -74,18 +80,36 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
+  const { data: members = [] } = useQuery({
+    queryKey: workspaceMembersKey(workspaceId),
+    queryFn: () => fetchWorkspaceMembers(workspaceId),
+    enabled: !!workspaceId,
+  });
+  const memberById = useMemo(() => {
+    const m = new Map<string, (typeof members)[number]>();
+    members.forEach((x) => m.set(x.user_id, x));
+    return m;
+  }, [members]);
+  const convById = useMemo(() => {
+    const m = new Map<string, Conversation>();
+    conversations.forEach((c) => m.set(c.id, c));
+    return m;
+  }, [conversations]);
+
   const { data: pipelineData, isLoading } = useQuery({
     queryKey: crmKeys.pipeline(workspaceId),
     queryFn: () => fetchPipelineBase(workspaceId),
   });
 
-  // Auth gate
+  // Auth gate + me id
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) navigate("/admin-auth");
+      else setMeId(data.session.user.id);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) navigate("/admin-auth");
+      else setMeId(session.user.id);
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
@@ -94,10 +118,11 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (!pipelineData) return;
     setStages(pipelineData.stages);
     setDeals(pipelineData.deals);
+    setConversations(pipelineData.conversations);
     if (pipelineData.stages[0] && !newStageId) setNewStageId(pipelineData.stages[0].id);
   }, [pipelineData, newStageId]);
 
-  // Realtime
+  // Realtime deals
   useEffect(() => {
     const channel = supabase
       .channel("pipeline-deals")
@@ -110,7 +135,6 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
           const next = idx >= 0
             ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
             : [...prev, incoming];
-          queryClient.setQueryData(crmKeys.pipeline(workspaceId), { stages, deals: next });
           return next;
         });
       })
@@ -118,23 +142,55 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, stages, workspaceId]);
+  }, [workspaceId]);
+
+  // Realtime conversations (assignee / responder updates)
+  useEffect(() => {
+    const channel = supabase
+      .channel("pipeline-conversations")
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
+        setConversations((prev) => {
+          if (payload.eventType === "DELETE") return prev.filter((c) => c.id !== (payload.old as Conversation).id);
+          const incoming = payload.new as Conversation;
+          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
+          const idx = prev.findIndex((c) => c.id === incoming.id);
+          return idx >= 0
+            ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
+            : [...prev, incoming];
+        });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [workspaceId]);
+
+  const isMine = (d: Deal) => {
+    if (!d.conversation_id || !meId) return false;
+    const c = convById.get(d.conversation_id);
+    return c?.assigned_user_id === meId;
+  };
+  const visibleDeals = useMemo(
+    () => (myOnly && meId ? deals.filter(isMine) : deals),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deals, myOnly, meId, convById],
+  );
 
   const dealsByStage = useMemo(() => {
     const map = new Map<string, Deal[]>();
     stages.forEach((s) => map.set(s.id, []));
-    deals.forEach((d) => {
+    visibleDeals.forEach((d) => {
       const arr = map.get(d.stage_id);
       if (arr) arr.push(d);
     });
     map.forEach((arr) => arr.sort((a, b) => a.position - b.position));
     return map;
-  }, [deals, stages]);
+  }, [visibleDeals, stages]);
 
   const totalsByStage = useMemo(() => {
     const map = new Map<string, { count: number; sum: number }>();
     stages.forEach((s) => map.set(s.id, { count: 0, sum: 0 }));
-    deals.forEach((d) => {
+    visibleDeals.forEach((d) => {
       const t = map.get(d.stage_id);
       if (t) {
         t.count += 1;
@@ -142,7 +198,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       }
     });
     return map;
-  }, [deals, stages]);
+  }, [visibleDeals, stages]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setDraggingId(String(event.active.id));
@@ -281,6 +337,25 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
           </div>
         </header>}
 
+        {!embedded ? null : (
+          <div className="px-4 py-2 border-b border-border flex items-center justify-end gap-2 bg-card/30">
+            <button
+              onClick={() => setMyOnly((v) => !v)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                myOnly
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40"
+              }`}
+              title="Show only chats assigned to me"
+            >
+              {myOnly ? "My chats only" : "All chats"}
+            </button>
+            <Button size="sm" onClick={() => setShowNew(true)}>
+              <Plus className="w-4 h-4 mr-1" /> New deal
+            </Button>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -299,6 +374,12 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       deals={stageDeals}
                       total={totals}
                       onDealClick={(id) => setActiveDealId(id)}
+                      onOpenChat={(convId) => navigate(inboxPath(convId))}
+                      conversationOf={(d) => (d.conversation_id ? convById.get(d.conversation_id) ?? null : null)}
+                      assigneeOf={(d) => {
+                        const c = d.conversation_id ? convById.get(d.conversation_id) : null;
+                        return c?.assigned_user_id ? memberById.get(c.assigned_user_id) ?? null : null;
+                      }}
                     />
                   );
                 })}
@@ -403,6 +484,28 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                   />
                 </Field>
 
+                {activeDeal.conversation_id && (
+                  <Field label="Assigned to">
+                    <AssigneeSelect
+                      workspaceId={workspaceId}
+                      value={convById.get(activeDeal.conversation_id)?.assigned_user_id ?? null}
+                      onChange={async (uid) => {
+                        const cid = activeDeal.conversation_id!;
+                        // Optimistic
+                        setConversations((prev) =>
+                          prev.map((c) => (c.id === cid ? { ...c, assigned_user_id: uid } : c)),
+                        );
+                        const { error } = await supabase
+                          .from("conversations")
+                          .update({ assigned_user_id: uid })
+                          .eq("id", cid);
+                        if (error) toast.error(error.message);
+                        else toast.success("Assignee updated");
+                      }}
+                    />
+                  </Field>
+                )}
+
                 <div className="text-xs text-muted-foreground">
                   Updated {formatDistanceToNow(new Date(activeDeal.updated_at), { addSuffix: true })}
                 </div>
@@ -417,6 +520,37 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       <MessageSquare className="w-4 h-4 mr-1" /> Open chat
                     </Button>
                   )}
+                  {activeDeal.contact_phone && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`+${activeDeal.contact_phone}`);
+                        toast.success("Phone copied");
+                      }}
+                    >
+                      <Phone className="w-4 h-4 mr-1" /> Copy phone
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const stageName = stages.find((s) => s.id === activeDeal.stage_id)?.name ?? "";
+                      const lines = [
+                        `Title: ${activeDeal.title}`,
+                        activeDeal.contact_name ? `Contact: ${activeDeal.contact_name}` : null,
+                        activeDeal.contact_phone ? `Phone: +${activeDeal.contact_phone}` : null,
+                        activeDeal.amount != null ? `Amount: $${Number(activeDeal.amount).toLocaleString()}` : null,
+                        `Stage: ${stageName}`,
+                        activeDeal.notes ? `Notes: ${activeDeal.notes}` : null,
+                      ].filter(Boolean);
+                      navigator.clipboard.writeText(lines.join("\n"));
+                      toast.success("Details copied");
+                    }}
+                  >
+                    <Copy className="w-4 h-4 mr-1" /> Copy details
+                  </Button>
                   <Button size="sm" onClick={saveDeal} disabled={!editing}>
                     Save
                   </Button>
@@ -494,16 +628,24 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   </div>
 );
 
+type AssigneeLite = { user_id: string; full_name: string | null } | null;
+
 const StageColumn = ({
   stage,
   deals,
   total,
   onDealClick,
+  onOpenChat,
+  conversationOf,
+  assigneeOf,
 }: {
   stage: Stage;
   deals: Deal[];
   total: { count: number; sum: number };
   onDealClick: (id: string) => void;
+  onOpenChat?: (conversationId: string) => void;
+  conversationOf?: (d: Deal) => Conversation | null;
+  assigneeOf?: (d: Deal) => AssigneeLite;
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   return (
@@ -525,7 +667,14 @@ const StageColumn = ({
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[100px]">
         {deals.map((d) => (
-          <DraggableDeal key={d.id} deal={d} onClick={() => onDealClick(d.id)} />
+          <DraggableDeal
+            key={d.id}
+            deal={d}
+            onClick={() => onDealClick(d.id)}
+            onOpenChat={onOpenChat}
+            conversation={conversationOf?.(d) ?? null}
+            assignee={assigneeOf?.(d) ?? null}
+          />
         ))}
         {deals.length === 0 && (
           <div className="text-[11px] text-muted-foreground/60 text-center py-6">
@@ -537,7 +686,19 @@ const StageColumn = ({
   );
 };
 
-const DraggableDeal = ({ deal, onClick }: { deal: Deal; onClick: () => void }) => {
+const DraggableDeal = ({
+  deal,
+  onClick,
+  onOpenChat,
+  conversation,
+  assignee,
+}: {
+  deal: Deal;
+  onClick: () => void;
+  onOpenChat?: (conversationId: string) => void;
+  conversation?: Conversation | null;
+  assignee?: AssigneeLite;
+}) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: deal.id });
   return (
     <div
@@ -545,7 +706,13 @@ const DraggableDeal = ({ deal, onClick }: { deal: Deal; onClick: () => void }) =
       style={{ opacity: isDragging ? 0.4 : 1 }}
       onClick={onClick}
     >
-      <DealCard deal={deal} dragHandleProps={{ ...attributes, ...listeners }} />
+      <DealCard
+        deal={deal}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        onOpenChat={onOpenChat}
+        conversation={conversation}
+        assignee={assignee}
+      />
     </div>
   );
 };
@@ -554,11 +721,39 @@ const DealCard = ({
   deal,
   dragging,
   dragHandleProps,
+  onOpenChat,
+  conversation,
+  assignee,
 }: {
   deal: Deal;
   dragging?: boolean;
   dragHandleProps?: Record<string, unknown>;
+  onOpenChat?: (conversationId: string) => void;
+  conversation?: Conversation | null;
+  assignee?: AssigneeLite;
 }) => {
+  const phone = deal.contact_phone ?? conversation?.contact_phone ?? null;
+  const convId = deal.conversation_id ?? conversation?.id ?? null;
+  const copyPhone = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!phone) return;
+    navigator.clipboard.writeText(`+${phone}`);
+    toast.success("Phone copied");
+  };
+  const openChat = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (convId && onOpenChat) onOpenChat(convId);
+  };
+  const initials = assignee
+    ? (() => {
+        const n = assignee.full_name?.trim();
+        if (n) {
+          const p = n.split(/\s+/);
+          return ((p[0]?.[0] ?? "") + (p[1]?.[0] ?? "")).toUpperCase();
+        }
+        return assignee.user_id.slice(0, 2).toUpperCase();
+      })()
+    : null;
   return (
     <div
       className={`group rounded-md border border-border bg-card p-3 text-sm cursor-pointer hover:border-primary/40 hover:shadow-sm transition ${
@@ -566,24 +761,56 @@ const DealCard = ({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="font-medium leading-snug truncate">{deal.title}</div>
-        <button
-          {...dragHandleProps}
-          onClick={(e) => e.stopPropagation()}
-          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-        >
-          <GripVertical className="w-4 h-4" />
-        </button>
+        <div className="font-medium leading-snug truncate flex-1">{deal.title}</div>
+        <div className="flex items-center gap-1 shrink-0">
+          {initials && (
+            <div
+              className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center"
+              title={`Assigned: ${assignee?.full_name ?? "User"}`}
+            >
+              {initials}
+            </div>
+          )}
+          <button
+            {...dragHandleProps}
+            onClick={(e) => e.stopPropagation()}
+            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-      {(deal.contact_name || deal.contact_phone) && (
+      {(deal.contact_name || phone) && (
         <div className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
-          {deal.contact_phone && <Phone className="w-3 h-3" />}
-          {deal.contact_name || `+${deal.contact_phone}`}
+          {phone && <Phone className="w-3 h-3" />}
+          {deal.contact_name || (phone ? `+${phone}` : "")}
         </div>
       )}
       {deal.amount != null && (
         <div className="text-xs font-semibold text-primary mt-1.5">
           ${Number(deal.amount).toLocaleString()}
+        </div>
+      )}
+      {(convId || phone) && (
+        <div className="mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          {convId && onOpenChat && (
+            <button
+              onClick={openChat}
+              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+              title="Open chat"
+            >
+              <MessageSquare className="w-3 h-3" /> Chat
+            </button>
+          )}
+          {phone && (
+            <button
+              onClick={copyPhone}
+              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+              title="Copy phone"
+            >
+              <Copy className="w-3 h-3" /> Copy
+            </button>
+          )}
         </div>
       )}
     </div>
