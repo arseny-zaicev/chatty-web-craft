@@ -1053,6 +1053,42 @@ export type Database = {
         }
         Relationships: []
       }
+      slack_event_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error: string | null
+          event_type: string
+          id: string
+          payload: Json
+          processed_at: string | null
+          status: string
+          workspace_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       stage_automations: {
         Row: {
           created_at: string
@@ -1410,6 +1446,7 @@ export type Database = {
           color: string
           created_at: string
           id: string
+          inbox_alerts_enabled: boolean
           internal_code: string | null
           is_active: boolean
           name: string
@@ -1422,6 +1459,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          inbox_alerts_enabled?: boolean
           internal_code?: string | null
           is_active?: boolean
           name: string
@@ -1434,6 +1472,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          inbox_alerts_enabled?: boolean
           internal_code?: string | null
           is_active?: boolean
           name?: string
