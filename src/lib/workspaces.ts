@@ -7,6 +7,7 @@ export type Workspace = {
   color: string;
   is_active: boolean;
   owner_user_id: string;
+  internal_code: string | null;
 };
 
 export const workspaceKeys = {
