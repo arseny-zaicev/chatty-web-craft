@@ -321,10 +321,11 @@ export default function FleetRegistry() {
     },
     onMutate: async ({ row, patch }) => {
       await qc.cancelQueries({ queryKey: ["fleet-registry"] });
-      const prev = qc.getQueriesData<Row[]>({ queryKey: ["fleet-registry"] });
-      qc.setQueriesData<Row[]>({ queryKey: ["fleet-registry"] }, (old) =>
-        old?.map((r) => (r.id === row.id ? { ...r, ...patch } : r)) ?? old,
-      );
+      const prev = qc.getQueriesData<{ rows: Row[]; workspaces: WS[] }>({ queryKey: ["fleet-registry"] });
+      qc.setQueriesData<{ rows: Row[]; workspaces: WS[] }>({ queryKey: ["fleet-registry"] }, (old) => {
+        if (!old || !Array.isArray(old.rows)) return old;
+        return { ...old, rows: old.rows.map((r) => (r.id === row.id ? { ...r, ...patch } : r)) };
+      });
       return { prev };
     },
     onSuccess: () => {
