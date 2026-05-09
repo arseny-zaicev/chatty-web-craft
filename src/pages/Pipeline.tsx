@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,6 +53,11 @@ import { formatDistanceToNow } from "date-fns";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const wsSlugMatch = location.pathname.match(/^\/ws\/([^/]+)/);
+  const wsSlug = wsSlugMatch?.[1];
+  const inboxPath = (conversationId: string) =>
+    wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
   const queryClient = useQueryClient();
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -407,7 +412,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(`/crm?conversation=${activeDeal.conversation_id}`)}
+                      onClick={() => navigate(inboxPath(activeDeal.conversation_id!))}
                     >
                       <MessageSquare className="w-4 h-4 mr-1" /> Open chat
                     </Button>
