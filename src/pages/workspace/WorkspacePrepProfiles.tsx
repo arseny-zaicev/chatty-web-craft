@@ -53,7 +53,7 @@ export default function WorkspacePrepProfiles() {
               <Badge variant="outline" className="text-[10px]">Internal · managers only</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-              Reusable rules that turn raw uploads into launch-ready audience batches: required source fields, derived launch variables, validation, fallbacks, and a sample render preview.
+              A Prep Profile is a <strong>saved recipe</strong>. The system never guesses a prompt from a name - the prompt and the rendered message are generated deterministically from the recipe's fields below: required input columns, derived launch variables, validation rules, fallbacks, and a sample message body.
             </p>
           </div>
           <div className="flex items-center gap-2">
