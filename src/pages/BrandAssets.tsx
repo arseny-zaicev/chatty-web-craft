@@ -224,17 +224,19 @@ const BrandAssets = () => {
           <section className="mb-20">
             <div className="flex items-center gap-3 mb-8 border-b border-border pb-3">
               <Square className="w-5 h-5 text-primary" />
-              <h2 className="font-display text-2xl font-bold">Spark Logo - Solid Background</h2>
+              <h2 className="font-display text-2xl font-bold">Spark Mark - Solid Background</h2>
             </div>
-            <p className="text-muted-foreground mb-6">Square format with rounded corners. Ideal for avatars, profile pictures, and app icons.</p>
+            <p className="text-muted-foreground mb-6">Square format with rounded corners and the official emerald gradient. Ideal for avatars, profile pictures, and app icons.</p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {solidVariants.map((v) => (
                 <div key={v.name} className="bg-card border border-border rounded-xl p-5">
                   <div className="flex justify-center mb-4">
-                    <div className="w-[160px] h-[160px] rounded-2xl flex items-center justify-center" style={{ background: v.bg }}>
-                      <IskraSparkSVG size={90} color={v.fg} />
-                    </div>
+                    <IskraMarkPreview
+                      size={160}
+                      bg={v.bg === "emerald-gradient" ? "linear-gradient(135deg, #1f8f5e 0%, #166b45 100%)" : v.bg}
+                      glyphColor={v.fg}
+                    />
                   </div>
                   <p className="font-semibold text-sm text-center mb-3">{v.name}</p>
                   <div className="flex flex-wrap gap-1.5 justify-center">
