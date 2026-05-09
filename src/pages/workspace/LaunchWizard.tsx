@@ -72,6 +72,7 @@ export default function LaunchWizard() {
   const [dbQty, setDbQty] = useState<string>("100");
 
   const [audience, setAudience] = useState("");
+  const [audienceDirty, setAudienceDirty] = useState(false);
   const [ctaPreset, setCtaPreset] = useState<string>("Call");
   const [ctaCustom, setCtaCustom] = useState("");
   const cta = ctaPreset === "Other" ? ctaCustom : ctaPreset;
@@ -146,6 +147,14 @@ export default function LaunchWizard() {
       setDbBatchId(dbBatchesQ.data![0].id);
     }
   }, [audienceSource, dbBatchesQ.data, dbBatchId]);
+
+  // Auto-fill audience name from selected DB batch (unless user typed their own)
+  useEffect(() => {
+    if (audienceSource !== "database") return;
+    if (audienceDirty) return;
+    const n = (dbBatch?.name ?? "").trim();
+    if (n && n !== audience) setAudience(n);
+  }, [audienceSource, dbBatch?.name, audienceDirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ----- Audience parsing & mapping -----
   const csvRecipients = useMemo(() => parseCsv(csv), [csv]);
@@ -895,7 +904,7 @@ export default function LaunchWizard() {
           <Step n={6} icon={Bookmark} title="Campaign name">
             <div className="grid sm:grid-cols-2 gap-2">
               <Field label="Audience">
-                <Input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="GTM Professionals" />
+                <Input value={audience} onChange={(e) => { setAudience(e.target.value); setAudienceDirty(true); }} placeholder="GTM Professionals" />
               </Field>
               <Field label="CTA">
                 <div className="flex gap-2">
