@@ -134,18 +134,6 @@ const BrandAssets = () => {
   const { toast } = useToast();
 
   // Canonical brand palette - synced 1:1 with src/index.css HSL tokens.
-  const brandColors = [
-    { name: "Emerald", hex: "#1f8f5e", desc: "Primary", usage: "Main brand color, CTAs" },
-    { name: "Emerald Deep", hex: "#166b45", desc: "Dark variant", usage: "Hover, gradients, plate end" },
-    { name: "Emerald Light", hex: "#20b873", desc: "Accent", usage: "Highlights, badges, glow" },
-    { name: "Dark", hex: "#0a0a0a", desc: "Background", usage: "Dark mode bg" },
-    { name: "Warm White", hex: "#f5f3ef", desc: "Light bg", usage: "Light mode bg" },
-    { name: "Pure White", hex: "#ffffff", desc: "Text/Cards", usage: "Text on dark" },
-  ];
-
-  const sizes = [256, 512, 1024];
-
-  // Canonical brand palette - synced 1:1 with src/index.css HSL tokens.
   // Champagne & Cream are the signature ISKRA tones - the entire site sits on them.
   const brandColors = [
     { name: "Champagne Beige", hex: "#E5DBC9", hsl: "36 34% 87%", desc: "Signature background", usage: "Main page bg, sidebars - the core ISKRA tone" },
