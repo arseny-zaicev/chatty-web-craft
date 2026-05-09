@@ -145,13 +145,31 @@ const BrandAssets = () => {
 
   const sizes = [256, 512, 1024];
 
+  // Canonical brand palette - synced 1:1 with src/index.css HSL tokens.
+  // Champagne & Cream are the signature ISKRA tones - the entire site sits on them.
+  const brandColors = [
+    { name: "Champagne Beige", hex: "#E5DBC9", hsl: "36 34% 87%", desc: "Signature background", usage: "Main page bg, sidebars - the core ISKRA tone" },
+    { name: "Champagne Light", hex: "#ECE5D6", hsl: "38 32% 93%", desc: "Secondary surface", usage: "Secondary panels, soft sections" },
+    { name: "Cream", hex: "#FBF9F4", hsl: "40 40% 98%", desc: "Cards & surfaces", usage: "Cards, popovers, raised surfaces" },
+    { name: "Gold", hex: "#A17E3F", hsl: "38 50% 42%", desc: "Accent metal", usage: "Premium accents, dividers, badges" },
+    { name: "Ink", hex: "#221A14", hsl: "28 22% 11%", desc: "Body text", usage: "Foreground text on champagne" },
+    { name: "Emerald", hex: "#1F9166", hsl: "152 65% 35%", desc: "Primary green", usage: "CTAs, primary buttons, links" },
+    { name: "Emerald Light", hex: "#20B873", hsl: "152 70% 42%", desc: "Accent green", usage: "Highlights, hover, accents" },
+    { name: "Emerald Deep", hex: "#196640", hsl: "152 60% 25%", desc: "Dark green", usage: "Gradients end, plate shadow" },
+    { name: "Emerald Glow", hex: "#34DA90", hsl: "152 80% 55%", desc: "Luminous", usage: "Glows, shimmer, halo effects" },
+    { name: "Warm Dark", hex: "#1B1612", hsl: "28 18% 9%", desc: "Dark mode bg", usage: "Dark sections, footer" },
+    { name: "Pure White", hex: "#FFFFFF", hsl: "0 0% 100%", desc: "Pure white", usage: "Mark glyph, text on emerald" },
+  ];
+
+  const sizes = [256, 512, 1024];
+
   // Color variants for transparent mark (glyph only, no plate).
   const sparkVariants = [
     { name: "White", color: "#ffffff", preview: "#0a0a0a" },
-    { name: "Black", color: "#0a0a0a", preview: "#f5f3ef" },
-    { name: "Emerald", color: "#1f8f5e", preview: "#f5f3ef" },
-    { name: "Emerald Deep", color: "#166b45", preview: "#f5f3ef" },
-    { name: "Warm White", color: "#f5f3ef", preview: "#166b45" },
+    { name: "Ink", color: "#221A14", preview: "#E5DBC9" },
+    { name: "Emerald", color: "#1F9166", preview: "#FBF9F4" },
+    { name: "Emerald Deep", color: "#196640", preview: "#FBF9F4" },
+    { name: "Gold", color: "#A17E3F", preview: "#221A14" },
   ];
 
   // Solid background variants (avatar / app icon style with rounded plate).
