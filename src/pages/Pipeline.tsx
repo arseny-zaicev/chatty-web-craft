@@ -46,7 +46,6 @@ import {
   MessageSquare,
   Phone,
   Trash2,
-  GripVertical,
   Copy,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -743,15 +742,20 @@ const DraggableDeal = ({
   assignee?: AssigneeLite;
 }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: deal.id });
+  const style: React.CSSProperties = {
+    opacity: isDragging ? 0 : 1,
+    touchAction: "none",
+  };
   return (
     <div
       ref={setNodeRef}
-      style={{ opacity: isDragging ? 0.4 : 1 }}
+      style={style}
       onClick={onClick}
+      {...attributes}
+      {...listeners}
     >
       <DealCard
         deal={deal}
-        dragHandleProps={{ ...attributes, ...listeners }}
         onOpenChat={onOpenChat}
         conversation={conversation}
         assignee={assignee}
@@ -763,14 +767,12 @@ const DraggableDeal = ({
 const DealCard = ({
   deal,
   dragging,
-  dragHandleProps,
   onOpenChat,
   conversation,
   assignee,
 }: {
   deal: Deal;
   dragging?: boolean;
-  dragHandleProps?: Record<string, unknown>;
   onOpenChat?: (conversationId: string) => void;
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
@@ -799,8 +801,8 @@ const DealCard = ({
     : null;
   return (
     <div
-      className={`group rounded-md border border-border bg-card p-3 text-sm cursor-pointer hover:border-primary/40 hover:shadow-sm transition ${
-        dragging ? "shadow-lg rotate-2" : ""
+      className={`group rounded-md border border-border bg-card p-3 text-sm cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-sm transition-shadow ${
+        dragging ? "shadow-2xl ring-2 ring-primary/40" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -814,13 +816,6 @@ const DealCard = ({
               {initials}
             </div>
           )}
-          <button
-            {...dragHandleProps}
-            onClick={(e) => e.stopPropagation()}
-            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-          >
-            <GripVertical className="w-4 h-4" />
-          </button>
         </div>
       </div>
       {deal.contact_name && (
@@ -885,9 +880,12 @@ const ActionDropZone = ({ zone }: { zone: ActionZone }) => {
 const BottomActionBar = ({ visible, stages }: { visible: boolean; stages: Stage[] }) => {
   if (!visible) return null;
 
-  // Build zones from stage_type (won/lost) + special "delete"
+  // Final-status zones: won/lost via stage_type + any stage named "booked"
   const won = stages.filter((s) => s.stage_type === "won");
   const lost = stages.filter((s) => s.stage_type === "lost");
+  const booked = stages.filter(
+    (s) => s.stage_type !== "won" && s.stage_type !== "lost" && /booked/i.test(s.name),
+  );
 
   const zones: ActionZone[] = [
     { id: "__delete__", label: "Delete", bg: "bg-muted/80", hoverBg: "bg-muted", text: "text-foreground" },
@@ -897,6 +895,13 @@ const BottomActionBar = ({ visible, stages }: { visible: boolean; stages: Stage[
       bg: "bg-destructive/80",
       hoverBg: "bg-destructive",
       text: "text-destructive-foreground",
+    })),
+    ...booked.map<ActionZone>((s) => ({
+      id: s.id,
+      label: s.name,
+      bg: "bg-primary/80",
+      hoverBg: "bg-primary",
+      text: "text-primary-foreground",
     })),
     ...won.map<ActionZone>((s) => ({
       id: s.id,

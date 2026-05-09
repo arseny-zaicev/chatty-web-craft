@@ -214,8 +214,20 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     const requested = searchParams.get("conversation");
     if (requested && baseData.conversations.some((c) => c.id === requested)) {
       setActiveId(requested);
+      // Reset filters so the requested conversation is visible in the list
+      setNumberFilter("all");
+      setMyOnly(false);
+      setStarredOnly(false);
+      setSearch("");
     }
   }, [baseData, searchParams]);
+
+  // Scroll the active conversation into view when it changes (e.g. opened from Pipeline)
+  useEffect(() => {
+    if (!activeId) return;
+    const el = document.querySelector(`[data-conversation-id="${activeId}"]`);
+    if (el) (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeId, conversations]);
 
   // Realtime conversations
   useEffect(() => {
@@ -460,6 +472,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   return (
                     <div
                       key={c.id}
+                      data-conversation-id={c.id}
                       className={`group relative border-b border-border/50 transition ${
                         isActive ? "bg-muted/60" : "hover:bg-muted/40"
                       } ${c.pinned_at ? "bg-primary/5" : ""}`}
