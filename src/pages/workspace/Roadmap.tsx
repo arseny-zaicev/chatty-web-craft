@@ -69,34 +69,83 @@ export default function Roadmap() {
     enabled: !!ws?.id,
   });
 
+  const [sectionFilter, setSectionFilter] = useState<string>("all");
+
+  const sections = useMemo(() => {
+    const s = new Set<string>();
+    (items ?? []).forEach((it) => { if (it.tags?.[0]) s.add(it.tags[0]); });
+    return Array.from(s).sort();
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    if (sectionFilter === "all") return items ?? [];
+    return (items ?? []).filter((it) => it.tags?.[0] === sectionFilter);
+  }, [items, sectionFilter]);
+
   const grouped = useMemo(() => {
     const map: Record<Status, RoadmapItem[]> = { idea: [], planned: [], in_progress: [], shipped: [] };
-    (items ?? []).forEach((it) => map[it.status].push(it));
+    filteredItems.forEach((it) => map[it.status].push(it));
     return map;
-  }, [items]);
+  }, [filteredItems]);
 
   const [editing, setEditing] = useState<RoadmapItem | null>(null);
   const [open, setOpen] = useState(false);
+
 
   // Auto-seed from chat ideas (only first time, when board is empty)
   useEffect(() => {
     if (!ws?.id || isLoading) return;
     if ((items ?? []).length > 0) return;
-    const seedKey = `iskra:roadmap:seeded:${ws.id}`;
+    const seedKey = `iskra:roadmap:seeded:v3:${ws.id}`;
     if (localStorage.getItem(seedKey)) return;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      // Section is the FIRST tag. Order: Backend → Delivery → Inbox & CRM → Launch → Notifications → Analytics → Integrations → Client Portal → Ops
       const seed: Array<Partial<RoadmapItem>> = [
-        { title: "Smart scheduling (send window + multi-day)", description: "Pick days + time window 09:00–22:00, respect recipient timezone", status: "in_progress", tags: ["scheduling"], priority: 3, why: "Avoid late-hour pings, distribute load across days" },
-        { title: "Poisson scheduler + cross-number shuffle", description: "Exponential intervals between sends, round-robin across numbers so no two numbers fire in the same second", status: "planned", tags: ["scheduling", "backend"], priority: 3, why: "Looks like organic human pattern, lowers ban rate" },
-        { title: "Slack notifications: campaign launched + completed", description: "Post to #iskra-campaigns. Later: per-client channels", status: "planned", tags: ["notifications", "slack"], priority: 2, why: "Visibility for the team without opening dashboard" },
-        { title: "Google Calendar event on launch", description: "Transparent event (no busy block) so meetings can stack on top", status: "planned", tags: ["notifications", "calendar"], priority: 2, why: "Personal awareness of all launches across days" },
-        { title: "A/B copy variants in Launch", description: "Pick 2–3 templates, split traffic, track winner by open/reply", status: "idea", tags: ["launch", "experiments"], priority: 3, why: "Optimise copy per audience" },
-        { title: "Campaigns & Stats page", description: "Per-campaign dashboard: sent, delivered, read, replied, CTR, A/B winner", status: "idea", tags: ["analytics"], priority: 3, why: "Need data to learn what works" },
-        { title: "Google Sheets → Inbox: ad leads ingestion", description: "Connect a Google Sheet where Meta/Google ads leads land. Auto-sync new rows into Inbox/Pipeline as conversations. First for us, then enable per-client (each client maps their own sheet).", status: "idea", tags: ["integrations", "leads", "google-sheets"], priority: 3, why: "Single source of truth for paid leads, no manual export, instant follow-up via WhatsApp" },
-        { title: "Auto-suggest audience name from DB batch", description: "When picking a DB batch, prefill audience field from batch name", status: "shipped", tags: ["launch", "ux"], priority: 1 },
-        { title: "Auto-map template variables from batch columns", description: "Aggressive matching: exact name → var_N → stripped → positional", status: "shipped", tags: ["launch", "ux"], priority: 1 },
+        // ───── SHIPPED ─────
+        { title: "WhatsApp send/receive via Gupshup", status: "shipped", tags: ["Backend", "whatsapp"], priority: 2 },
+        { title: "Webhook ingestion + delivery events", description: "Inbound messages, delivery/read status, errors stored in whatsapp_message_events", status: "shipped", tags: ["Backend", "webhook"], priority: 2 },
+        { title: "Per-number quotas + auto-allocation", description: "Round-robin across numbers, 200/day default", status: "shipped", tags: ["Delivery", "scheduling"], priority: 2 },
+        { title: "Audience batches + variable schema", description: "Upload CSV, map columns, derive variables, mark used/reserved/unused", status: "shipped", tags: ["Launch", "data"], priority: 2 },
+        { title: "Audience prep profiles", description: "Reusable schemas: required/optional fields, fallbacks, derived vars", status: "shipped", tags: ["Launch", "data"], priority: 1 },
+        { title: "Auto-suggest audience name from batch", description: "Prefill audience field from batch name on selection", status: "shipped", tags: ["Launch", "ux"], priority: 1 },
+        { title: "Aggressive variable auto-mapping", description: "Exact name → var_N → stripped → positional fallback", status: "shipped", tags: ["Launch", "ux"], priority: 2 },
+        { title: "Inbox: conversations + threads", description: "Realtime, unread badges, pin/star, assign", status: "shipped", tags: ["Inbox & CRM", "inbox"], priority: 2 },
+        { title: "Pipeline (Kanban) + auto-deal on new conv", description: "Stages per workspace, auto-create deal on first message", status: "shipped", tags: ["Inbox & CRM", "pipeline"], priority: 2 },
+        { title: "Saved replies + Library fields", description: "Workspace-level reusable copy & custom fields", status: "shipped", tags: ["Inbox & CRM", "ux"], priority: 1 },
+        { title: "Workspace roles (owner/manager/viewer)", description: "RLS via is_workspace_manager / is_workspace_member", status: "shipped", tags: ["Backend", "auth"], priority: 2 },
+        { title: "Admin client portal scaffolding", status: "shipped", tags: ["Client Portal", "ux"], priority: 1 },
+        { title: "Roadmap board (this page)", status: "shipped", tags: ["Ops", "internal"], priority: 1 },
+
+        // ───── IN PROGRESS ─────
+        { title: "Smart scheduling (send window + multi-day)", description: "Pick days + window 09:00-22:00, recipient timezone", status: "in_progress", tags: ["Delivery", "scheduling"], priority: 3, why: "Avoid late-hour pings, distribute load across days" },
+        { title: "Slack notifications: campaign launched", description: "Post to #iskra-campaigns on launch. Per-client channels later.", status: "in_progress", tags: ["Notifications", "slack"], priority: 3, why: "Team visibility without opening dashboard" },
+
+        // ───── PLANNED ─────
+        { title: "Poisson scheduler + cross-number shuffle", description: "Exponential intervals, round-robin so no two numbers fire same second", status: "planned", tags: ["Backend", "scheduling"], priority: 3, why: "Organic human pattern, lower ban rate" },
+        { title: "Slack: campaign completed + per-client channel", description: "Stats summary on completion. Each client gets their own channel later.", status: "planned", tags: ["Notifications", "slack"], priority: 2 },
+        { title: "Google Calendar event on launch", description: "Transparent event (no busy block) so meetings can stack on top", status: "planned", tags: ["Notifications", "calendar"], priority: 2, why: "Personal awareness across days" },
+        { title: "A/B copy variants in Launch", description: "Pick 2-3 templates, split traffic, track winner by reply rate", status: "planned", tags: ["Launch", "experiments"], priority: 3, why: "Optimise copy per audience" },
+        { title: "Campaigns & Stats page", description: "Per-campaign dashboard: sent, delivered, read, replied, CTR, A/B winner", status: "planned", tags: ["Analytics", "dashboard"], priority: 3, why: "Need data to learn what works" },
+        { title: "Workspace settings: Slack channel field", description: "Per-workspace target channel for notifications", status: "planned", tags: ["Notifications", "settings"], priority: 2 },
+
+        // ───── IDEAS ─────
+        { title: "Google Sheets → Inbox: ad leads ingestion", description: "Connect a Google Sheet where Meta/Google ads leads land. Auto-sync new rows into Inbox/Pipeline as conversations. First for us, then per-client mapping.", status: "idea", tags: ["Integrations", "leads", "google-sheets"], priority: 3, why: "Single source of truth for paid leads, instant WA follow-up" },
+        { title: "Meta Lead Ads webhook (direct)", description: "Skip the sheet, ingest leads directly from Meta Lead Ads forms", status: "idea", tags: ["Integrations", "leads", "meta"], priority: 2 },
+        { title: "Number health dashboard", description: "Restrictions, quality rating, warming status per number", status: "idea", tags: ["Delivery", "ops"], priority: 2 },
+        { title: "Reply-rate alerts", description: "Slack ping if reply rate drops below baseline mid-campaign", status: "idea", tags: ["Analytics", "alerts"], priority: 2 },
+        { title: "Auto-pause on bad delivery", description: "Pause campaign if failure rate spikes (number flagged)", status: "idea", tags: ["Backend", "safety"], priority: 2 },
+        { title: "Client-facing read-only dashboard", description: "Client sees: campaigns sent, leads in pipeline, reply samples (anonymised)", status: "idea", tags: ["Client Portal", "dashboard"], priority: 3, why: "Reduce 'where are we at' questions" },
+        { title: "Client portal: lead exports + Pipedrive sync", description: "Export warm leads to client's Pipedrive automatically", status: "idea", tags: ["Client Portal", "integrations"], priority: 3 },
+        { title: "Onboarding wizard for new client", description: "Connect WA number → upload audience → pick template → launch", status: "idea", tags: ["Client Portal", "onboarding"], priority: 2 },
+        { title: "Template library with proven copy", description: "Curated message templates per niche (real estate, edu, e-com)", status: "idea", tags: ["Launch", "library"], priority: 1 },
+        { title: "AI reply suggestions in Inbox", description: "Suggest 3 replies based on thread context + saved replies", status: "idea", tags: ["Inbox & CRM", "ai"], priority: 2 },
+        { title: "AI auto-qualify leads", description: "Score conversations: hot/warm/cold based on intent signals", status: "idea", tags: ["Analytics", "ai"], priority: 2 },
+        { title: "Audit log per workspace", description: "Who launched what, when, with which audience", status: "idea", tags: ["Ops", "compliance"], priority: 1 },
+        { title: "Backup numbers / failover", description: "If primary number gets restricted mid-campaign, auto-switch to backup", status: "idea", tags: ["Delivery", "reliability"], priority: 2 },
+        { title: "Rate limit per recipient (anti-spam)", description: "Don't message same number twice in N days across campaigns", status: "idea", tags: ["Backend", "safety"], priority: 2 },
+        { title: "Multi-language template support", description: "Detect recipient language by phone prefix, send matching template", status: "idea", tags: ["Launch", "i18n"], priority: 1 },
       ];
       const rows = seed.map((s, i) => ({ ...s, workspace_id: ws.id, user_id: user.id, position: i }));
       const { error } = await supabase.from("roadmap_items").insert(rows as any);
@@ -106,6 +155,7 @@ export default function Roadmap() {
       }
     })();
   }, [ws?.id, items, isLoading, qc]);
+
 
   async function saveItem(payload: Partial<RoadmapItem>): Promise<void> {
     if (!ws?.id) return;
@@ -171,6 +221,28 @@ export default function Roadmap() {
           </DialogTrigger>
           <ItemDialog initial={editing} onSave={saveItem} />
         </Dialog>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          onClick={() => setSectionFilter("all")}
+          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${sectionFilter === "all" ? "bg-foreground text-background border-foreground" : "bg-background text-muted-foreground border-border hover:text-foreground"}`}
+        >
+          All ({(items ?? []).length})
+        </button>
+        {sections.map((s) => {
+          const count = (items ?? []).filter((it) => it.tags?.[0] === s).length;
+          const active = sectionFilter === s;
+          return (
+            <button
+              key={s}
+              onClick={() => setSectionFilter(s)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? "bg-foreground text-background border-foreground" : "bg-background text-muted-foreground border-border hover:text-foreground"}`}
+            >
+              {s} ({count})
+            </button>
+          );
+        })}
       </div>
 
       {isLoading ? (
