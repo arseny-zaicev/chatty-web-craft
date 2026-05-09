@@ -629,12 +629,6 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(r)} title="Edit">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
-          <ReassignInline value={r.workspace_id} workspaces={workspaces} onChange={(wid) => onReassign(r.id, wid)} />
-          {r.workspace_slug && (
-            <Button asChild size="icon" variant="ghost" className="h-7 w-7" title="Open client">
-              <Link to={`/ws/${r.workspace_slug}/settings`}><ExternalLink className="w-3.5 h-3.5" /></Link>
-            </Button>
-          )}
           <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => onDelete(r.id)} title="Delete">
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
