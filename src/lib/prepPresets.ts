@@ -137,9 +137,13 @@ EXPECTED COUNTS (report at the end)
 INSERT TARGET (Supabase / Lovable Cloud)
   table: public.audience_rows
   workspace_id: ${ctx.workspaceId}
-  batch_id: ${ctx.batchId ?? "<paste the batch id from the Data page after creating an empty batch>"}
+  batch_id: ${ctx.batchId ?? "<MISSING - create the batch first from the Data page>"}
   preset: ${preset.id}
 ${SUPABASE_URL ? `  project url: ${SUPABASE_URL}` : ""}
+
+IMPORTANT
+  - Every inserted row MUST include both workspace_id and batch_id exactly as above.
+  - Do NOT create a new audience_batches row - it already exists.
 
 WORKFLOW FOR CODEX
   1. Parse the raw input the operator pasted.
