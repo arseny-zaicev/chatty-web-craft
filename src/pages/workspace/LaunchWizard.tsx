@@ -878,3 +878,10 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div className="flex justify-between text-sm"><span className="text-muted-foreground">{label}</span><span className="font-medium truncate ml-2">{value}</span></div>
 );
+
+const Stat = ({ label, value, highlight }: { label: string; value: number | string; highlight?: boolean }) => (
+  <div className={`rounded-md border p-2 ${highlight ? "border-primary/40 bg-primary/5" : "border-border bg-card/30"}`}>
+    <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+    <div className="text-sm font-semibold">{value}</div>
+  </div>
+);
