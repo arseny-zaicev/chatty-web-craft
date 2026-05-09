@@ -16,7 +16,14 @@ export async function sendSlackMessage(channel: string, text: string): Promise<v
         "X-Connection-Api-Key": slackKey,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ channel, text, unfurl_links: false, unfurl_media: false }),
+      body: JSON.stringify({
+        channel,
+        text,
+        username: "Iskra",
+        icon_url: "https://iskra.ae/iskra-favicon-v2.svg",
+        unfurl_links: false,
+        unfurl_media: false,
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.ok === false) {
