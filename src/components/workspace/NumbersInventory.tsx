@@ -191,7 +191,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   <Badge variant="outline" className={tone("muted")}>{country || "--"}</Badge>
                   <Badge variant="outline" className={tone(STATUS_TONE[draft.status])}>
                     {draft.status === "banned" || draft.status === "restricted" ? <Ban className="w-3 h-3 mr-1 inline" /> : null}
-                    {draft.status}
+                    {statusLabel(draft.status)}
                   </Badge>
                   <Badge variant="outline" className={tone("muted")}>use: {draft.usage_type}</Badge>
                   <Badge variant="outline" className={tone(draft.provider_api_key ? "ok" : "warn")}>
