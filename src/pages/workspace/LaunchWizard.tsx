@@ -356,14 +356,17 @@ export default function LaunchWizard() {
         );
         if (reserved.length === 0) throw new Error("Could not reserve any rows (already used?)");
         reservedRowIds = reserved.map((r) => r.id);
-        // Build mapped recipients from row.payload using current mapping
+        // Build mapped recipients from row.payload + derived_payload using current mapping
         const built: Recipient[] = reserved.map((r) => {
           const vars: Record<string, string> = {};
+          const dp: Record<string, string> = (r as any).derived_payload ?? {};
           for (const v of variableNames) {
             const src = mapping[v];
-            if (!src) continue;
-            if (src.startsWith("__static:")) vars[v] = src.slice("__static:".length);
-            else vars[v] = String(r.payload?.[src] ?? "");
+            let raw = "";
+            if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
+            else if (src) raw = String((r.payload as any)?.[src] ?? dp?.[src] ?? "");
+            if (!raw) raw = String(dp?.[`var_${v}`] ?? "");
+            vars[v] = raw;
           }
           rowIdByPhone.set(r.phone, r.id);
           return { phone: r.phone, variables: vars };
