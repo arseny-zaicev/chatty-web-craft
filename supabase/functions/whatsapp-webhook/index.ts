@@ -196,13 +196,30 @@ async function handleInbound(payload: Record<string, unknown>) {
 
   if (automations && automations.length > 0) {
     const lowered = (body ?? "").toLowerCase();
+    const loweredButton = (buttonReply ?? "").toLowerCase();
+    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matchKeyword = (kw: string) => {
+      const k = kw.trim().toLowerCase();
+      if (!k) return false;
+      // Whole-word match for alphanumeric tokens; fall back to substring for emoji/punctuation.
+      if (/^[\p{L}\p{N}_]+$/u.test(k)) {
+        const re = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRe(k)}([^\\p{L}\\p{N}_]|$)`, "u");
+        return re.test(lowered);
+      }
+      return lowered.includes(k);
+    };
     for (const a of automations) {
       let match = false;
       if (a.trigger === "inbound_any") match = true;
       else if (a.trigger === "button_click" && triggers.includes("button_click")) {
-        match = !a.trigger_value || a.trigger_value === buttonReply;
+        if (!a.trigger_value) match = true;
+        else {
+          const variants = a.trigger_value.split("|").map((v) => v.trim().toLowerCase()).filter(Boolean);
+          match = variants.some((v) => v === loweredButton || v === (body ?? "").toLowerCase());
+        }
       } else if (a.trigger === "inbound_keyword" && a.trigger_value) {
-        match = lowered.includes(a.trigger_value.toLowerCase());
+        const keywords = a.trigger_value.split("|");
+        match = keywords.some(matchKeyword);
       }
       if (match) {
         await supabase
