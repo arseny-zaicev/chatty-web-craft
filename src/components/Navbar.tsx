@@ -63,7 +63,7 @@ export const Navbar = () => {
 
           <div className="hidden md:flex items-center gap-4">
             <Link
-              to="/client-auth"
+              to="/portal-auth"
               className="text-xs font-medium text-muted-foreground/70 hover:text-foreground transition-colors duration-200"
             >
               Client Login
@@ -101,7 +101,7 @@ export const Navbar = () => {
                   </a>
               ))}
               <Link
-                to="/client-auth"
+                to="/portal-auth"
                 className="text-sm font-medium text-muted-foreground/70 hover:text-foreground transition-colors duration-200 py-2 border-t border-border/30 pt-4"
                 onClick={() => setIsOpen(false)}
               >
