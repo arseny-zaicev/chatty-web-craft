@@ -43,6 +43,7 @@ class ChunkErrorBoundary extends Component<{ children: ReactNode }, { error: unk
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
     console.error(error, errorInfo);
+    if (isDynamicImportError(error)) recoverFromStaleChunk();
   }
 
   render() {
@@ -141,8 +142,9 @@ const App = () => (
         <BrowserRouter>
           <ScrollToTop />
             <SiteChrome />
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
+          <ChunkErrorBoundary>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/seller-leads" element={<SellerLeads />} />
               <Route path="/brand" element={<BrandAssets />} />
@@ -188,8 +190,9 @@ const App = () => (
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
+              </Routes>
+            </Suspense>
+          </ChunkErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
