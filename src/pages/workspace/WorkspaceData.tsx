@@ -112,6 +112,11 @@ export default function WorkspaceData() {
                     <Badge variant="outline" className="text-[10px]">{b.campaign_type}</Badge>
                     {b.country && <Badge variant="outline" className="text-[10px]">{b.country}</Badge>}
                     {b.copy_profile && <Badge variant="outline" className="text-[10px] text-muted-foreground">{b.copy_profile}</Badge>}
+                    {b.is_launch_ready ? (
+                      <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600"><ShieldCheck className="w-3 h-3 mr-1" />Launch-ready</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600"><ShieldAlert className="w-3 h-3 mr-1" />No prep profile</Badge>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     {new Date(b.created_at).toLocaleString()}
