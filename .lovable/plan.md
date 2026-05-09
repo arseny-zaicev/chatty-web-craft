@@ -1,60 +1,87 @@
-# Pipeline ↔ Inbox sync, deal actions, assignee system
+# Prep Profiles for Audience Data
 
-## 1. База (migration)
+Internal-only system that enforces a defined "shape" on every audience batch before it can be launched. Clients never see any of this.
 
-Расширяем `conversations`:
-- `assigned_user_id uuid` - ответственный сеттер (постоянная привязка)
-- `active_responder_id uuid` - кто прямо сейчас отвечает (presence)
-- `active_responder_at timestamptz` - когда последний раз был активен (TTL ~2 минуты)
+## 1. Database schema (migration)
 
-Backfill: для каждой `conversation` без `deal` вызываем `ensure_deal_for_conversation()`. Триггер уже создаёт deal на новую беседу, так что в будущем это покрыто.
+New tables (all RLS: `is_workspace_manager` only):
 
-Realtime publication для `conversations` (если ещё нет) - чтобы видеть presence обновления.
+**`audience_prep_profiles`**
+- `workspace_id`, `user_id`
+- `name`, `description`
+- `campaign_type` ('marketing' | 'utility')
+- `template_label` (logical name, e.g. "demo_booking_v2") - free text
+- `required_fields` jsonb (string[]) - source columns that MUST exist & be non-empty
+- `optional_fields` jsonb (string[])
+- `derived_variables` jsonb - array of `{ key: "var_1", strategy: "field"|"template"|"static", source?: string, template?: string, fallback?: string }` where `template` supports `{field_name}` placeholders
+- `invalid_rules` jsonb - array of `{ field, rule: "non_empty"|"min_length"|"regex"|"phone", value? }`
+- `fallback_rules` jsonb - per-field fallback values
+- `quick_replies` jsonb (string[]) - optional button set
+- `sample_payload` jsonb - one example source row for preview
 
-## 2. Pipeline карточка (DealCard)
+**`audience_batches`** - add columns:
+- `prep_profile_id uuid` (nullable for legacy)
+- `is_launch_ready boolean default false`
+- `derived_variables_preview jsonb` - first 3 rendered samples
 
-Добавляем на карточку (видно без открытия Sheet):
-- Кнопка "Open chat" → ведёт в `/ws/{slug}/inbox?conversation={id}` (если есть)
-- Кнопка "Copy phone" → копирует `contact_phone` в clipboard
-- Аватар/инициалы assignee в углу
+**`audience_rows`** - add column:
+- `derived_payload jsonb default '{}'` - rendered var_1..var_N for that row
 
-## 3. Pipeline Sheet (Deal details)
+## 2. Library (`src/lib/prepProfiles.ts`)
 
-Добавляем кнопки в действиях:
-- "Open chat" (есть)
-- "Copy phone"
-- "Copy details" → копирует name+phone+amount+stage+notes как plain-text блок
-- Селект "Assigned to" - выбрать сеттера из workspace_members (+ "Unassigned")
+- CRUD for profiles
+- `applyProfile(profile, row)` → `{ derivedPayload, errors[] }`
+- `renderTemplate(tpl, row, fallbacks)` - replaces `{field}` tokens, applies fallbacks
+- `validateRow(profile, row)` - returns invalid/valid + reason
 
-## 4. Inbox (CRM)
+## 3. UI - Prep Profiles manager
 
-В шапке открытой беседы:
-- "Active: {name}" - кто сейчас в чате (если `active_responder_at` < 2 мин назад и это не я)
-- Селект "Assigned to" - смена ответственного
+New page `/ws/:slug/data/profiles` (manager-only, restricted segment):
+- List profiles per workspace
+- Create/Edit dialog with sections:
+  - Basic (name, campaign type, template label)
+  - Required & optional source fields (chip input)
+  - Derived variables editor (rows with key + strategy + template/source + fallback)
+  - Invalid rules + fallback rules
+  - Quick replies (optional)
+  - Sample payload (key/value editor) + live "Sample rendered output" panel
 
-При открытии беседы / отправке сообщения автоматически проставляем `active_responder_id = me, active_responder_at = now()`.
+Add tab/link from `WorkspaceData.tsx` header.
 
-В списке бесед слева:
-- Toggle "My chats only" - фильтрует по `assigned_user_id = me`
-- Счётчик "Mine: X / All: Y" в шапке
+## 4. Refactor `WorkspaceData.tsx` upload flow
 
-## 5. Pipeline списка
+Upload dialog becomes 3-step:
+1. **Pick Prep Profile** (required) + upload file
+2. **Mapping & Preview**: show detected phone column, mapped source fields, sample of 5 derived rows, totals (valid/invalid/duplicates), sample rendered message using profile.template_label + derived vars
+3. **Confirm & Save** - only saves if `validRows > 0`; sets `is_launch_ready = true` when 100% required fields present in valid rows
 
-- Toggle "My chats only" в шапке Pipeline (тот же фильтр).
-- Все беседы теперь имеют deal → колонки покажут реальный поток.
+Update `audienceData.ts.uploadBatch` to:
+- Accept `prepProfileId`
+- For each row, run `validateRow` + `applyProfile` and store `derived_payload` per row
+- Compute and store `derived_variables_preview` (first 3 samples)
+- Mark batch `is_launch_ready` based on validation
 
-## 6. Технические детали
+## 5. Launch wizard integration
 
-- `assigned_user_id` хранится на `conversations` (источник правды) - `deals.user_id` остаётся владельцем записи. Pipeline показывает `deal.conversation.assigned_user_id`.
-- Members для селекта тащим из `workspace_members` + `profiles.full_name` (fallback на email из auth - но т.к. emails в auth не доступны клиенту, добавим `display_name` через профиль или просто email хранить в `workspace_members`). Вариант проще: храним `display_name` прямо в `workspace_members` через join с `profiles`, а если нет имени - покажем "User abc12345".
-- RLS: всё это видят те же роли (workspace_member). Update assignee может только manager+ или сам себе (для самопринятия).
+In `LaunchWizard.tsx` Database tab:
+- Filter `dbBatchesQ` to `is_launch_ready = true`
+- For selected batch, show: Prep Profile name, template label, derived variable list with coverage % (rows where derived var resolved non-empty)
+- Auto-fill variable mapping from profile's `derived_variables` keys (skip manual mapping step)
+- Block "Launch" button if any required derived var has <100% coverage; show which one
 
-## Файлы
+## 6. Visibility / access
 
-- `supabase/migrations/...` - новые колонки + backfill + realtime
-- `src/lib/conversations.ts` - helpers (assignConversation, claimResponder)
-- `src/lib/workspaceMembers.ts` - useWorkspaceMembers hook
-- `src/components/workspace/AssigneeSelect.tsx` - переиспользуемый селект
-- `src/pages/Pipeline.tsx` - кнопки на карточке + sheet + filter
-- `src/pages/CRM.tsx` - active responder + assignee + filter
-- `src/lib/crmData.ts` - расширить типы Deal/Conversation
+Already covered: `data` segment is restricted to manager-like roles. New `/data/profiles` route reuses the same guard. No client exposure anywhere.
+
+## 7. Out of scope for this pass
+
+- "Pull from Supabase" source - leave Upload as the only ingestion method, but design the profile layer so a future pull source can plug in
+- AI-suggested derived variables
+
+## Files
+
+- migration: new SQL
+- create: `src/lib/prepProfiles.ts`, `src/pages/workspace/WorkspacePrepProfiles.tsx`, `src/components/workspace/PrepProfileDialog.tsx`, `src/components/workspace/UploadAudienceDialog.tsx` (extracted multi-step)
+- edit: `src/lib/audienceData.ts`, `src/pages/workspace/WorkspaceData.tsx`, `src/pages/workspace/LaunchWizard.tsx`, `src/pages/workspace/WorkspaceLayout.tsx` (route/restriction), `src/App.tsx` (route)
+
+Migration runs first; after approval I'll write the code in one pass.
