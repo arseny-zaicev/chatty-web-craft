@@ -298,6 +298,20 @@ export default function OpsLive() {
     return <IskraLoader message="Loading mission control…" />;
   }
 
+  if (tokenError) {
+    return (
+      <div className="min-h-screen w-full bg-background text-foreground flex items-center justify-center p-8">
+        <div className="max-w-md text-center space-y-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(152_65%_28%)]">
+            Ops Live · TV access
+          </div>
+          <h1 className="text-2xl font-semibold">Link unavailable</h1>
+          <p className="text-sm text-muted-foreground">{tokenError}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       key={refreshKey}
