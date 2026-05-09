@@ -9,9 +9,9 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import CustomCursor from "@/components/CustomCursor";
 import CookieConsent from "@/components/CookieConsent";
 import ScrollProgress from "@/components/ScrollProgress";
-import Index from "./pages/Index";
 
 // Lazy-load all secondary routes to keep initial bundle small
+const Index = lazy(() => import("./pages/Index"));
 const SellerLeads = lazy(() => import("./pages/SellerLeads"));
 const BrandAssets = lazy(() => import("./pages/BrandAssets"));
 const Privacy = lazy(() => import("./pages/Privacy"));
@@ -57,7 +57,12 @@ const queryClient = new QueryClient({
 });
 
 const RouteFallback = () => (
-  <div className="min-h-screen bg-background" aria-hidden="true" />
+  <main className="min-h-screen bg-background flex items-center justify-center px-6">
+    <div className="flex items-center gap-3 rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
+      Loading secure admin area...
+    </div>
+  </main>
 );
 
 const App = () => (
