@@ -5,9 +5,10 @@ import TemplatesView from "@/components/workspace/TemplatesView";
 import NumbersInventory from "@/components/workspace/NumbersInventory";
 import WorkspaceLibrary from "@/components/workspace/WorkspaceLibrary";
 import WorkspaceCampaigns from "@/pages/workspace/WorkspaceCampaigns";
+import WorkspaceData from "@/pages/workspace/WorkspaceData";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
-type Section = "inbox" | "pipeline" | "templates" | "numbers" | "campaigns" | "library";
+type Section = "inbox" | "pipeline" | "templates" | "numbers" | "campaigns" | "library" | "data";
 
 export default function WorkspaceSection({ section }: { section: Section }) {
   const { workspace } = useOutletContext<WorkspaceContext>();
@@ -22,8 +23,10 @@ export default function WorkspaceSection({ section }: { section: Section }) {
   if (section === "numbers") return <NumbersInventory workspaceId={workspace.id} />;
   if (section === "campaigns") return <WorkspaceCampaigns workspaceId={workspace.id} slug={workspace.slug} />;
   if (section === "library") return <WorkspaceLibrary workspaceId={workspace.id} />;
+  if (section === "data") return <WorkspaceData />;
 
   return null;
 }
+
 
 
