@@ -116,7 +116,7 @@ export default function LaunchWizard() {
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
   const [scheduledDates, setScheduledDates] = useState<string[]>([]); // YYYY-MM-DD
   const [windowStart, setWindowStart] = useState("09:00");
-  const [windowEnd, setWindowEnd] = useState("18:00");
+  const [windowEnd, setWindowEnd] = useState("20:00");
   const [respectTz, setRespectTz] = useState(true);
   const [schedulerKind, setSchedulerKind] = useState<"uniform" | "poisson">("poisson");
 
@@ -362,6 +362,26 @@ export default function LaunchWizard() {
     const avgGapSec = Math.floor(windowSec / Math.max(1, perNumber));
     return { perNumber, windowSec, avgGapSec };
   }, [recipients.length, activeNumbers.length, windowStart, windowEnd]);
+
+  // Feasibility: how many of today's volume actually fits before windowEnd in recipient TZ
+  const feasibility = useMemo(() => {
+    if (!pacing || !recipientNow || scheduleMode !== "scheduled") return null;
+    const [nh, nm] = recipientNow.split(":").map(Number);
+    const [eh, em] = windowEnd.split(":").map(Number);
+    const [sh, sm] = windowStart.split(":").map(Number);
+    const nowSec = nh * 3600 + nm * 60;
+    const endSec = eh * 3600 + em * 60;
+    const startSec = sh * 3600 + sm * 60;
+    // Effective remaining seconds today (only if we're inside the window)
+    const remainingSec = nowSec < startSec ? pacing.windowSec : Math.max(0, endSec - nowSec);
+    const fitsToday = Math.max(0, Math.floor(remainingSec / Math.max(1, pacing.avgGapSec))) * Math.max(1, activeNumbers.length);
+    const totalQueued = recipients.length;
+    const overflow = Math.max(0, totalQueued - fitsToday);
+    const daysNeeded = Math.max(1, Math.ceil(totalQueued / Math.max(1, pacing.perNumber * activeNumbers.length / Math.max(1, pacing.windowSec / 60) * (pacing.windowSec / 60))));
+    return { remainingSec, fitsToday, overflow, totalQueued };
+  }, [pacing, recipientNow, scheduleMode, windowEnd, windowStart, activeNumbers.length, recipients.length]);
+
+
 
 
   // ----- Sample DB rows for live preview (database source) -----
@@ -881,6 +901,15 @@ export default function LaunchWizard() {
                   </div>
                 ) : (
                   <div>{scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in recipient's local time" : "in your time zone"}.</div>
+                )}
+                {scheduleMode === "scheduled" && feasibility && feasibility.totalQueued > 0 && (
+                  <div className={`mt-1 px-2 py-1.5 rounded-md border text-[11px] ${feasibility.overflow > 0 ? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"}`}>
+                    <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd}.
+                    {feasibility.overflow > 0
+                      ? ` ${feasibility.overflow.toLocaleString()} will roll into the next scheduled day. Add more dates above if you want everything sent — otherwise leftovers wait in queue with status "scheduled".`
+                      : " Everything fits today."}
+                    <div className="opacity-80 mt-0.5">Stats: campaign stays <b>running</b> across days. <b>sent_count</b> grows live; un-sent recipients keep <b>scheduled_at</b> = next available slot. You'll see "X / Y sent · Z scheduled for tomorrow" on the campaign page.</div>
+                  </div>
                 )}
               </div>
             </div>
