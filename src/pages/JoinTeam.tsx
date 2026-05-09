@@ -14,6 +14,9 @@ interface LinkInfo {
   valid: boolean;
   workspace_name?: string;
   workspace_slug?: string | null;
+  workspace_color?: string | null;
+  workspace_website?: string | null;
+  workspace_logo?: string | null;
   role?: string;
   seats_left?: number;
   error?: string;
