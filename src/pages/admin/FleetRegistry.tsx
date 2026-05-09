@@ -669,13 +669,14 @@ function AddNumberDrawer({
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("draft");
+  const [dnApproved, setDnApproved] = useState<boolean>(false);
   
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
+    setProvidedBy(""); setAssignedRef(""); setStatus("draft"); setDnApproved(false);
   };
 
   useEffect(() => {
