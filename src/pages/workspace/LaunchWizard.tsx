@@ -372,7 +372,7 @@ export default function LaunchWizard() {
 
   // Feasibility: how many of today's volume actually fits before windowEnd in recipient TZ
   const feasibility = useMemo(() => {
-    if (!pacing || !recipientNow) return null;
+    if (!pacing || !recipientNow || scheduleMode !== "scheduled") return null;
     const [nh, nm] = recipientNow.split(":").map(Number);
     const [eh, em] = windowEnd.split(":").map(Number);
     const [sh, sm] = windowStart.split(":").map(Number);
