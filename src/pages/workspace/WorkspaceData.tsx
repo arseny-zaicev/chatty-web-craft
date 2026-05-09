@@ -259,49 +259,6 @@ function PresetsSection({
         <h2 className="font-medium text-sm">Ingestion presets</h2>
         <Badge variant="outline" className="text-[10px]">primary workflow</Badge>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">
-        Pick a preset → copy its prompt → run it in Codex with the raw data. Codex inserts validated rows into this workspace, then refresh below and launch.
-      </p>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        {PREP_PRESETS.map((p) => (
-          <div key={p.id} className={`rounded-md border p-3 bg-background/40 ${p.isRecommended ? "border-primary/50" : "border-border"}`}>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-sm">{p.name}</span>
-              <Badge variant="outline" className="text-[10px]">{p.campaignType}</Badge>
-              {p.isRecommended && <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30" variant="outline">Recommended</Badge>}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-1">{p.blurb}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">
-              vars: {p.variables.map((v) => v.key).join(", ")} · required: {p.requiredSourceFields.join(", ")}
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              <Button size="sm" variant="outline" onClick={() => setViewing(p)}>
-                <Eye className="w-3.5 h-3.5 mr-1" /> View prompt
-              </Button>
-              <Button size="sm"
-                onClick={() => copy(buildPresetPrompt(p, { workspaceName, workspaceId }), `${p.name} prompt`)}>
-                <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <Dialog open={!!viewing} onOpenChange={(o) => { if (!o) setViewing(null); }}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{viewing?.name} - Codex prompt</DialogTitle>
-            <DialogDescription>
-              Generated from the preset. Paste this into Codex along with the raw data; it will validate, dedupe, and insert into this workspace's audience batch.
-            </DialogDescription>
-          </DialogHeader>
-          {viewing && (
-            <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap font-mono">
-{buildPresetPrompt(viewing, { workspaceName, workspaceId })}
-            </pre>
-          )}
-      <p className="text-xs text-muted-foreground mb-3">
         Pick a preset → create the empty batch → copy its prompt → run it in Codex with the raw data. Codex inserts validated rows into <code>public.audience_rows</code> under the batch_id, then refresh below and launch.
       </p>
 
