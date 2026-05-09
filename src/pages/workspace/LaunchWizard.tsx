@@ -280,9 +280,49 @@ export default function LaunchWizard() {
     return `${(seconds / 3600).toFixed(1)}h`;
   }, [recipients.length, activeNumbers.length, delayMin, delayMax, type]);
 
+  // ----- Sample DB rows for live preview (database source) -----
+  const sampleDbRowsQ = useQuery({
+    queryKey: ["launch", "preview-rows", dbBatchId],
+    queryFn: async () => {
+      const { data, error } = await (supabase
+        .from("audience_rows") as any)
+        .select("phone, payload, derived_payload")
+        .eq("batch_id", dbBatchId)
+        .eq("validation_status", "valid")
+        .eq("usage_status", "unused")
+        .limit(3);
+      if (error) throw error;
+      return (data ?? []) as Array<{ phone: string; payload: Record<string, string>; derived_payload: Record<string, string> }>;
+    },
+    enabled: Boolean(dbBatchId) && audienceSource === "database",
+    staleTime: 30_000,
+  });
+
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
     if (!activeLogical) return [] as Array<{ phone: string; body: string; missing: string[] }>;
+    // Database source: render from real DB rows using derived_payload (preferred) + payload fallback.
+    if (audienceSource === "database") {
+      const rows = sampleDbRowsQ.data ?? [];
+      return rows.map((r) => {
+        const vals: Record<string, string> = {};
+        for (const v of variableNames) {
+          const src = mapping[v];
+          let raw = "";
+          if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
+          else if (src) raw = String(r.payload?.[src] ?? r.derived_payload?.[src] ?? "");
+          // Fallback: if no mapping, try derived_payload["var_<v>"] (handles {{1}} -> var_1 etc.)
+          if (!raw) raw = String(r.derived_payload?.[`var_${v}`] ?? "");
+          vals[v] = raw;
+        }
+        const missing = variableNames.filter((v) => !String(vals[v] ?? "").trim());
+        return {
+          phone: r.phone,
+          body: renderTemplateBody(activeLogical.body, variableNames, vals),
+          missing,
+        };
+      });
+    }
     return mappedRecipients.slice(0, 3).map((r) => {
       const vals = r.variables ?? {};
       const missing = variableNames.filter((v) => !String(vals[v] ?? "").trim());
@@ -292,7 +332,7 @@ export default function LaunchWizard() {
         missing,
       };
     });
-  }, [mappedRecipients, activeLogical, variableNames]);
+  }, [mappedRecipients, activeLogical, variableNames, audienceSource, sampleDbRowsQ.data, mapping]);
 
   // ----- Launch -----
   const launch = useMutation({
