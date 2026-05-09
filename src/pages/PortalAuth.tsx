@@ -48,6 +48,7 @@ export default function PortalAuth() {
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (error) return toast.error(error.message);
+    try { localStorage.setItem("iskra:lastEmail", email.trim().toLowerCase()); } catch { /* ignore */ }
     const mail = data.user?.email?.toLowerCase();
     if (mail === ADMIN_EMAIL.toLowerCase()) {
       navigate("/admin");
