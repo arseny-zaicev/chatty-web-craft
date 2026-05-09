@@ -742,16 +742,22 @@ const DraggableDeal = ({
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
 }) => {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: deal.id });
+  const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({ id: deal.id });
+  const style: React.CSSProperties = {
+    opacity: isDragging ? 0 : 1,
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    touchAction: "none",
+  };
   return (
     <div
       ref={setNodeRef}
-      style={{ opacity: isDragging ? 0.4 : 1 }}
+      style={style}
       onClick={onClick}
+      {...attributes}
+      {...listeners}
     >
       <DealCard
         deal={deal}
-        dragHandleProps={{ ...attributes, ...listeners }}
         onOpenChat={onOpenChat}
         conversation={conversation}
         assignee={assignee}
