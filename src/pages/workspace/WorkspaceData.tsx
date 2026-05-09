@@ -270,6 +270,7 @@ function UploadDialog({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [prepProfileId, setPrepProfileId] = useState<string>("");
+  const [mapping, setMapping] = useState<Record<string, string>>({});
 
   const profilesQ = useQuery({
     queryKey: prepProfileKeys.list(workspaceId),
@@ -282,6 +283,7 @@ function UploadDialog({
     setFile(null); setParsed(null); setPhoneColumn("");
     setName(""); setCountry(""); setCampaignType("marketing");
     setCopyProfile(""); setNotes(""); setBusy(false); setPrepProfileId("");
+    setMapping({});
   };
 
   const handleFile = async (f: File) => {
