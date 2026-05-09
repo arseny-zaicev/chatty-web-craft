@@ -65,9 +65,12 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const queryClient = useQueryClient();
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Deal | null>(null);
+  const [myOnly, setMyOnly] = useState(false);
+  const [meId, setMeId] = useState<string | null>(null);
 
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -77,6 +80,22 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const [newStageId, setNewStageId] = useState("");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const { data: members = [] } = useQuery({
+    queryKey: workspaceMembersKey(workspaceId),
+    queryFn: () => fetchWorkspaceMembers(workspaceId),
+    enabled: !!workspaceId,
+  });
+  const memberById = useMemo(() => {
+    const m = new Map<string, (typeof members)[number]>();
+    members.forEach((x) => m.set(x.user_id, x));
+    return m;
+  }, [members]);
+  const convById = useMemo(() => {
+    const m = new Map<string, Conversation>();
+    conversations.forEach((c) => m.set(c.id, c));
+    return m;
+  }, [conversations]);
 
   const { data: pipelineData, isLoading } = useQuery({
     queryKey: crmKeys.pipeline(workspaceId),
