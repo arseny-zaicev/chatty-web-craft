@@ -299,7 +299,7 @@ export default function FleetRegistry() {
 
   // Inline quick edits (status, DN status) without opening the drawer
   const quickPatch = useMutation({
-    mutationFn: async ({ row, patch }: { row: Row; patch: Partial<Pick<Row, "status" | "display_name_status">> }) => {
+    mutationFn: async ({ row, patch }: { row: Row; patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">> }) => {
       const update: Record<string, unknown> = { ...patch };
       // 30-day ban countdown logic for inline status changes
       if (patch.status) {
