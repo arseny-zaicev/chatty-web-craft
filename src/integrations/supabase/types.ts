@@ -1355,6 +1355,45 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_invite_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          max_uses: number
+          revoked_at: string | null
+          role: string
+          token: string
+          used_count: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          max_uses?: number
+          revoked_at?: string | null
+          role?: string
+          token: string
+          used_count?: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          max_uses?: number
+          revoked_at?: string | null
+          role?: string
+          token?: string
+          used_count?: number
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_library_fields: {
         Row: {
           created_at: string

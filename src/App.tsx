@@ -74,6 +74,7 @@ const Terms = lazyWithRetry(() => import("./pages/Terms"));
 const PortalAuth = lazyWithRetry(() => import("./pages/PortalAuth"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const AcceptInvite = lazyWithRetry(() => import("./pages/AcceptInvite"));
+const JoinTeam = lazyWithRetry(() => import("./pages/JoinTeam"));
 
 const AISeoReport = lazyWithRetry(() => import("./pages/AISeoReport"));
 const AdminAuth = lazyWithRetry(() => import("./pages/AdminAuth"));
@@ -122,7 +123,7 @@ const RouteFallback = () => <IskraLoader />;
 
 const SiteChrome = () => {
   const { pathname } = useLocation();
-  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname === "/admin-auth" || pathname === "/portal-auth" || pathname === "/accept-invite";
+  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname.startsWith("/join/") || pathname === "/admin-auth" || pathname === "/portal-auth" || pathname === "/accept-invite";
 
   if (isAppArea) return null;
 
@@ -159,6 +160,7 @@ const App = () => (
               <Route path="/portal-auth" element={<PortalAuth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
+              <Route path="/join/:token" element={<JoinTeam />} />
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
