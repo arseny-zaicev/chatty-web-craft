@@ -74,6 +74,7 @@ const Terms = lazyWithRetry(() => import("./pages/Terms"));
 const PortalAuth = lazyWithRetry(() => import("./pages/PortalAuth"));
 const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const AcceptInvite = lazyWithRetry(() => import("./pages/AcceptInvite"));
+const JoinTeam = lazyWithRetry(() => import("./pages/JoinTeam"));
 
 const AISeoReport = lazyWithRetry(() => import("./pages/AISeoReport"));
 const AdminAuth = lazyWithRetry(() => import("./pages/AdminAuth"));
