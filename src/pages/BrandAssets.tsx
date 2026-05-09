@@ -134,13 +134,19 @@ const BrandAssets = () => {
   const { toast } = useToast();
 
   // Canonical brand palette - synced 1:1 with src/index.css HSL tokens.
+  // Champagne & Cream are the signature ISKRA tones - the entire site sits on them.
   const brandColors = [
-    { name: "Emerald", hex: "#1f8f5e", desc: "Primary", usage: "Main brand color, CTAs" },
-    { name: "Emerald Deep", hex: "#166b45", desc: "Dark variant", usage: "Hover, gradients, plate end" },
-    { name: "Emerald Light", hex: "#20b873", desc: "Accent", usage: "Highlights, badges, glow" },
-    { name: "Dark", hex: "#0a0a0a", desc: "Background", usage: "Dark mode bg" },
-    { name: "Warm White", hex: "#f5f3ef", desc: "Light bg", usage: "Light mode bg" },
-    { name: "Pure White", hex: "#ffffff", desc: "Text/Cards", usage: "Text on dark" },
+    { name: "Champagne Beige", hex: "#E5DBC9", hsl: "36 34% 87%", desc: "Signature background", usage: "Main page bg, sidebars - the core ISKRA tone" },
+    { name: "Champagne Light", hex: "#ECE5D6", hsl: "38 32% 93%", desc: "Secondary surface", usage: "Secondary panels, soft sections" },
+    { name: "Cream", hex: "#FBF9F4", hsl: "40 40% 98%", desc: "Cards & surfaces", usage: "Cards, popovers, raised surfaces" },
+    { name: "Gold", hex: "#A17E3F", hsl: "38 50% 42%", desc: "Accent metal", usage: "Premium accents, dividers, badges" },
+    { name: "Ink", hex: "#221A14", hsl: "28 22% 11%", desc: "Body text", usage: "Foreground text on champagne" },
+    { name: "Emerald", hex: "#1F9166", hsl: "152 65% 35%", desc: "Primary green", usage: "CTAs, primary buttons, links" },
+    { name: "Emerald Light", hex: "#20B873", hsl: "152 70% 42%", desc: "Accent green", usage: "Highlights, hover, accents" },
+    { name: "Emerald Deep", hex: "#196640", hsl: "152 60% 25%", desc: "Dark green", usage: "Gradients end, plate shadow" },
+    { name: "Emerald Glow", hex: "#34DA90", hsl: "152 80% 55%", desc: "Luminous", usage: "Glows, shimmer, halo effects" },
+    { name: "Warm Dark", hex: "#1B1612", hsl: "28 18% 9%", desc: "Dark mode bg", usage: "Dark sections, footer" },
+    { name: "Pure White", hex: "#FFFFFF", hsl: "0 0% 100%", desc: "Pure white", usage: "Mark glyph, text on emerald" },
   ];
 
   const sizes = [256, 512, 1024];
@@ -148,18 +154,18 @@ const BrandAssets = () => {
   // Color variants for transparent mark (glyph only, no plate).
   const sparkVariants = [
     { name: "White", color: "#ffffff", preview: "#0a0a0a" },
-    { name: "Black", color: "#0a0a0a", preview: "#f5f3ef" },
-    { name: "Emerald", color: "#1f8f5e", preview: "#f5f3ef" },
-    { name: "Emerald Deep", color: "#166b45", preview: "#f5f3ef" },
-    { name: "Warm White", color: "#f5f3ef", preview: "#166b45" },
+    { name: "Ink", color: "#221A14", preview: "#E5DBC9" },
+    { name: "Emerald", color: "#1F9166", preview: "#FBF9F4" },
+    { name: "Emerald Deep", color: "#196640", preview: "#FBF9F4" },
+    { name: "Gold", color: "#A17E3F", preview: "#221A14" },
   ];
 
   // Solid background variants (avatar / app icon style with rounded plate).
   const solidVariants = [
     { name: "Emerald Gradient", fg: "#ffffff", bg: "emerald-gradient" },
-    { name: "White on Dark", fg: "#ffffff", bg: "#0a0a0a" },
-    { name: "Black on White", fg: "#0a0a0a", bg: "#ffffff" },
-    { name: "Emerald on Cream", fg: "#1f8f5e", bg: "#f5f3ef" },
+    { name: "Emerald on Cream", fg: "#1F9166", bg: "#FBF9F4" },
+    { name: "Cream on Emerald", fg: "#FBF9F4", bg: "#1F9166" },
+    { name: "Gold on Ink", fg: "#A17E3F", bg: "#1B1612" },
   ];
 
 
@@ -349,18 +355,33 @@ const BrandAssets = () => {
               <Palette className="w-5 h-5 text-primary" />
               <h2 className="font-display text-2xl font-bold">Brand Colors</h2>
             </div>
-            <p className="text-muted-foreground mb-6">Click any color to copy the hex code.</p>
+            <p className="text-muted-foreground mb-2">The full ISKRA palette - every shade actually used in the product. Click hex or HSL to copy.</p>
+            <p className="text-xs text-muted-foreground/70 mb-6">The signature ISKRA tone is <strong className="text-foreground">Champagne Beige</strong> - the warm cream the entire site sits on. Emerald is the action color; Gold is the premium accent.</p>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {brandColors.map((c) => (
-                <div key={c.hex} className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => copyToClipboard(c.hex, toast)}>
-                  <div className="w-full aspect-square rounded-lg mb-3 border border-border/50" style={{ background: c.hex }} />
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-sm">{c.name}</p>
-                    <Copy className="w-3 h-3 text-muted-foreground" />
+                <div key={c.hex} className="bg-card border border-border rounded-xl p-4 hover:border-primary/50 transition-colors">
+                  <div className="w-full aspect-[5/2] rounded-lg mb-3 border border-border/50" style={{ background: c.hex }} />
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="font-semibold text-sm leading-tight">{c.name}</p>
                   </div>
-                  <p className="text-xs font-mono text-muted-foreground mb-1">{c.hex}</p>
-                  <p className="text-xs text-muted-foreground/70">{c.usage}</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(c.hex, toast)}
+                    className="flex items-center justify-between w-full text-xs font-mono text-muted-foreground hover:text-foreground transition-colors mb-1"
+                  >
+                    <span>{c.hex}</span>
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(`hsl(${c.hsl})`, toast)}
+                    className="flex items-center justify-between w-full text-xs font-mono text-muted-foreground/70 hover:text-foreground transition-colors mb-2"
+                  >
+                    <span>hsl({c.hsl})</span>
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  <p className="text-xs text-muted-foreground/70 leading-snug">{c.usage}</p>
                 </div>
               ))}
             </div>
