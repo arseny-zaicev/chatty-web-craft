@@ -181,7 +181,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
             const sync = syncByNumber.get(n.id) ?? { lastSync: null, approved: 0, total: 0 };
             const ready = computeReadiness(draft, sync.approved);
             const dirty = Boolean(drafts[n.id]);
-            const excludedFromLaunch = draft.status === "restricted" || draft.status === "banned" || draft.status === "inactive" || draft.status === "stock" || draft.status === "draft" || !draft.is_active;
+            const excludedFromLaunch = draft.status === "restricted" || draft.status === "banned" || draft.status === "inactive" || !draft.is_active;
             const country = draft.country_code || geoFromPhone(draft.phone_number);
             return (
               <div key={n.id} className="rounded-lg border border-border bg-card/30 p-4 space-y-3">
