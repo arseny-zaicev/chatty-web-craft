@@ -146,14 +146,14 @@ export default function Roadmap() {
 
   async function moveItem(item: RoadmapItem, status: Status) {
     const { error } = await supabase.from("roadmap_items").update({ status }).eq("id", item.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["roadmap", ws?.id] });
   }
 
   async function deleteItem(item: RoadmapItem) {
     if (!confirm(`Delete "${item.title}"?`)) return;
     const { error } = await supabase.from("roadmap_items").delete().eq("id", item.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["roadmap", ws?.id] });
   }
 
