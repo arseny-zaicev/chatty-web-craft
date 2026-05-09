@@ -735,6 +735,7 @@ function AddNumberDrawer({
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
       setWebhookConnected(Boolean(editing.webhook_connected));
+    } else {
       reset();
     }
   }, [open, editing]);
