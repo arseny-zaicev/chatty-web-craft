@@ -166,21 +166,32 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     };
   }, [workspaceId]);
 
+  const isMine = (d: Deal) => {
+    if (!d.conversation_id || !meId) return false;
+    const c = convById.get(d.conversation_id);
+    return c?.assigned_user_id === meId;
+  };
+  const visibleDeals = useMemo(
+    () => (myOnly && meId ? deals.filter(isMine) : deals),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deals, myOnly, meId, convById],
+  );
+
   const dealsByStage = useMemo(() => {
     const map = new Map<string, Deal[]>();
     stages.forEach((s) => map.set(s.id, []));
-    deals.forEach((d) => {
+    visibleDeals.forEach((d) => {
       const arr = map.get(d.stage_id);
       if (arr) arr.push(d);
     });
     map.forEach((arr) => arr.sort((a, b) => a.position - b.position));
     return map;
-  }, [deals, stages]);
+  }, [visibleDeals, stages]);
 
   const totalsByStage = useMemo(() => {
     const map = new Map<string, { count: number; sum: number }>();
     stages.forEach((s) => map.set(s.id, { count: 0, sum: 0 }));
-    deals.forEach((d) => {
+    visibleDeals.forEach((d) => {
       const t = map.get(d.stage_id);
       if (t) {
         t.count += 1;
@@ -188,7 +199,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       }
     });
     return map;
-  }, [deals, stages]);
+  }, [visibleDeals, stages]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setDraggingId(String(event.active.id));
