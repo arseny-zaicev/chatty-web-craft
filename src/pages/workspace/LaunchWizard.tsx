@@ -3,7 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Loader2, Play, RefreshCw, Rocket, Users, FileText, Phone, Clock, Zap, Timer,
-  Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2,
+  Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2, Database,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,10 @@ import {
   loadMapping, saveMapping, listSavedAudiences, saveAudience, deleteSavedAudience,
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
+import {
+  audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows,
+  type AudienceBatch, type AudienceBatchStats, type AudienceRow,
+} from "@/lib/audienceData";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
@@ -60,7 +64,12 @@ export default function LaunchWizard() {
   const [poolCountry, setPoolCountry] = useState<string>("");
   const [numberIds, setNumberIds] = useState<string[]>([]);
   const [csv, setCsv] = useState("phone,name\n");
-  const [audienceSource, setAudienceSource] = useState<"paste" | "upload" | "chats" | "saved">("paste");
+  const [audienceSource, setAudienceSource] = useState<"paste" | "upload" | "chats" | "saved" | "database">("paste");
+
+  // Database batch source state
+  const [dbBatchId, setDbBatchId] = useState<string>("");
+  const [dbAllUnused, setDbAllUnused] = useState(true);
+  const [dbQty, setDbQty] = useState<string>("100");
 
   const [audience, setAudience] = useState("");
   const [ctaPreset, setCtaPreset] = useState<string>("Call");
@@ -112,9 +121,41 @@ export default function LaunchWizard() {
     setMapping(saved);
   }, [workspace, logicalKey]);
 
+  // ----- Database batches (internal-only audience source) -----
+  const dbBatchesQ = useQuery({
+    queryKey: audienceKeys.batches(workspace?.id),
+    queryFn: () => fetchBatches(workspace!.id),
+    enabled: Boolean(workspace) && audienceSource === "database",
+  });
+  const dbStatsQ = useQuery({
+    queryKey: audienceKeys.stats(workspace?.id),
+    queryFn: () => fetchBatchStats(workspace!.id),
+    enabled: Boolean(workspace) && audienceSource === "database",
+  });
+  const dbBatch: AudienceBatch | undefined = (dbBatchesQ.data ?? []).find((b) => b.id === dbBatchId);
+  const dbStats: AudienceBatchStats | undefined = (dbStatsQ.data ?? []).find((s) => s.batch_id === dbBatchId);
+  const dbAvailable = dbStats?.unused ?? 0;
+  const dbTargetCount = audienceSource === "database"
+    ? (dbAllUnused ? dbAvailable : Math.min(Math.max(0, Number(dbQty) || 0), dbAvailable))
+    : 0;
+
+  // Auto-pick first batch when entering db mode
+  useEffect(() => {
+    if (audienceSource !== "database") return;
+    if (!dbBatchId && (dbBatchesQ.data?.length ?? 0) > 0) {
+      setDbBatchId(dbBatchesQ.data![0].id);
+    }
+  }, [audienceSource, dbBatchesQ.data, dbBatchId]);
+
   // ----- Audience parsing & mapping -----
-  const recipients = useMemo(() => parseCsv(csv), [csv]);
-  const columns = useMemo(() => detectColumns(recipients), [recipients]);
+  const csvRecipients = useMemo(() => parseCsv(csv), [csv]);
+  const csvColumns = useMemo(() => detectColumns(csvRecipients), [csvRecipients]);
+  // When the database source is active, columns come from the batch's variable schema.
+  // Recipient count is virtual until we actually reserve rows on launch.
+  const recipients = audienceSource === "database"
+    ? Array.from({ length: dbTargetCount }, () => ({ phone: "", variables: {} } as Recipient))
+    : csvRecipients;
+  const columns = audienceSource === "database" ? (dbBatch?.variable_schema ?? []) : csvColumns;
   const variableNames = activeLogical?.variables ?? [];
 
   // Auto-map variables by name match
@@ -259,44 +300,102 @@ export default function LaunchWizard() {
       if (!campaignName.trim()) throw new Error("Name the campaign");
       if (!activeLogical) throw new Error("Pick a logical template");
       if (numberIds.length === 0) throw new Error("Select at least one sending number");
-      if (recipients.length === 0) throw new Error("Add recipients");
       if (resolution.missing.length > 0) throw new Error("Some numbers don't have an approved variant of this template");
+
+      // ---- Build the recipient list (and reserve DB rows if database mode) ----
+      let workingRecipients: Recipient[] = mappedRecipients;
+      let reservedRowIds: string[] = [];
+      let rowIdByPhone = new Map<string, string>();
+
+      if (audienceSource === "database") {
+        if (!dbBatch) throw new Error("Pick a database batch");
+        if (dbTargetCount <= 0) throw new Error("No unused rows available");
+        const reserved: AudienceRow[] = await reserveRows(
+          dbBatch.id,
+          dbAllUnused ? null : dbTargetCount,
+        );
+        if (reserved.length === 0) throw new Error("Could not reserve any rows (already used?)");
+        reservedRowIds = reserved.map((r) => r.id);
+        // Build mapped recipients from row.payload using current mapping
+        const built: Recipient[] = reserved.map((r) => {
+          const vars: Record<string, string> = {};
+          for (const v of variableNames) {
+            const src = mapping[v];
+            if (!src) continue;
+            if (src.startsWith("__static:")) vars[v] = src.slice("__static:".length);
+            else vars[v] = String(r.payload?.[src] ?? "");
+          }
+          rowIdByPhone.set(r.phone, r.id);
+          return { phone: r.phone, variables: vars };
+        });
+        workingRecipients = built;
+      } else if (workingRecipients.length === 0) {
+        throw new Error("Add recipients");
+      }
 
       // Distribute recipients across numbers
       const buckets = new Map<string, Recipient[]>();
       const targets = resolution.ok;
       if (targets.length === 1) {
-        buckets.set(targets[0].numberId, mappedRecipients);
+        buckets.set(targets[0].numberId, workingRecipients);
       } else {
         targets.forEach((t) => buckets.set(t.numberId, []));
-        mappedRecipients.forEach((r, i) => {
+        workingRecipients.forEach((r, i) => {
           const t = targets[i % targets.length];
           buckets.get(t.numberId)!.push(r);
         });
       }
 
-      const results: Array<{ ok: boolean; numberId: string; res?: any; error?: string }> = [];
-      for (const t of targets) {
-        const list = buckets.get(t.numberId) ?? [];
-        if (list.length === 0) continue;
-        const subname = targets.length > 1
-          ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
-          : campaignName;
-        const { data: res, error } = await supabase.functions.invoke("campaigns", {
-          body: {
-            action: "launch",
-            name: subname,
-            whatsapp_number_id: t.numberId,
-            template_id: t.template.id,
-            delay_min_seconds: delayMin,
-            delay_max_seconds: delayMax,
-            recipients: list,
-          },
-        });
-        if (error) results.push({ ok: false, numberId: t.numberId, error: error.message });
-        else if ((res as any)?.error) results.push({ ok: false, numberId: t.numberId, error: (res as any).error });
-        else results.push({ ok: true, numberId: t.numberId, res });
+      const results: Array<{ ok: boolean; numberId: string; res?: any; error?: string; rowIds?: string[] }> = [];
+      try {
+        for (const t of targets) {
+          const list = buckets.get(t.numberId) ?? [];
+          if (list.length === 0) continue;
+          const bucketRowIds = audienceSource === "database"
+            ? list.map((r) => rowIdByPhone.get(r.phone)).filter((x): x is string => !!x)
+            : [];
+          const subname = targets.length > 1
+            ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
+            : campaignName;
+          const { data: res, error } = await supabase.functions.invoke("campaigns", {
+            body: {
+              action: "launch",
+              name: subname,
+              whatsapp_number_id: t.numberId,
+              template_id: t.template.id,
+              delay_min_seconds: delayMin,
+              delay_max_seconds: delayMax,
+              recipients: list,
+            },
+          });
+          if (error) results.push({ ok: false, numberId: t.numberId, error: error.message, rowIds: bucketRowIds });
+          else if ((res as any)?.error) results.push({ ok: false, numberId: t.numberId, error: (res as any).error, rowIds: bucketRowIds });
+          else results.push({ ok: true, numberId: t.numberId, res, rowIds: bucketRowIds });
+        }
+      } catch (e) {
+        // Outer failure -> release everything still reserved
+        if (reservedRowIds.length > 0) {
+          try { await releaseRows(reservedRowIds); } catch { /* swallow */ }
+        }
+        throw e;
       }
+
+      // Mark used / release per bucket result
+      if (audienceSource === "database") {
+        for (const r of results) {
+          const ids = r.rowIds ?? [];
+          if (ids.length === 0) continue;
+          if (r.ok) {
+            const cid = (r.res as any)?.campaign_id;
+            if (cid) {
+              try { await markRowsUsed(ids, cid); } catch { /* ignore */ }
+            }
+          } else {
+            try { await releaseRows(ids); } catch { /* ignore */ }
+          }
+        }
+      }
+
       // Persist mapping for next time
       if (workspace && activeLogical) saveMapping(workspace.id, activeLogical.key, mapping);
       return results;
@@ -307,6 +406,7 @@ export default function LaunchWizard() {
       if (failed === 0) toast.success(`Launched ${ok} campaign${ok === 1 ? "" : "s"}`);
       else toast.error(`Launched ${ok}, failed ${failed}: ${results.find((r) => !r.ok)?.error ?? ""}`);
       qc.invalidateQueries({ queryKey: ["crm", "campaigns"] });
+      qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace?.id) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Launch failed"),
   });
@@ -495,11 +595,12 @@ export default function LaunchWizard() {
           {/* Step 4: Audience */}
           <Step n={4} icon={Users} title="Audience">
             <Tabs value={audienceSource} onValueChange={(v) => setAudienceSource(v as any)}>
-              <TabsList className="grid grid-cols-4 w-full">
+              <TabsList className="grid grid-cols-5 w-full">
                 <TabsTrigger value="paste"><FileText className="w-3.5 h-3.5 mr-1" />Paste</TabsTrigger>
                 <TabsTrigger value="upload"><Upload className="w-3.5 h-3.5 mr-1" />Upload</TabsTrigger>
                 <TabsTrigger value="chats"><MessagesSquare className="w-3.5 h-3.5 mr-1" />Chats</TabsTrigger>
                 <TabsTrigger value="saved"><Bookmark className="w-3.5 h-3.5 mr-1" />Saved</TabsTrigger>
+                <TabsTrigger value="database"><Database className="w-3.5 h-3.5 mr-1" />Database</TabsTrigger>
               </TabsList>
 
               <TabsContent value="paste" className="mt-3">
@@ -548,6 +649,56 @@ export default function LaunchWizard() {
                       </div>
                     ))}
                   </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="database" className="mt-3 space-y-3">
+                {dbBatchesQ.isLoading ? (
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading batches...</div>
+                ) : (dbBatchesQ.data?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground">No database batches yet. Upload one in the Data section.</p>
+                ) : (
+                  <>
+                    <Select value={dbBatchId} onValueChange={setDbBatchId}>
+                      <SelectTrigger><SelectValue placeholder="Pick a batch" /></SelectTrigger>
+                      <SelectContent>
+                        {(dbBatchesQ.data ?? []).map((b) => {
+                          const s = (dbStatsQ.data ?? []).find((x) => x.batch_id === b.id);
+                          return (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name} {s ? `· ${s.unused} unused / ${s.valid} valid` : ""}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    {dbBatch && (
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                        <Stat label="Total" value={dbStats?.total ?? 0} />
+                        <Stat label="Valid" value={dbStats?.valid ?? 0} />
+                        <Stat label="Duplicates" value={dbStats?.duplicates ?? 0} />
+                        <Stat label="Used" value={dbStats?.used ?? 0} />
+                        <Stat label="Unused" value={dbStats?.unused ?? 0} highlight />
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                      <label className="flex items-center gap-1.5">
+                        <input type="checkbox" checked={dbAllUnused} onChange={(e) => setDbAllUnused(e.target.checked)} />
+                        Use all unused ({dbAvailable})
+                      </label>
+                      {!dbAllUnused && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Quantity</span>
+                          <Input type="number" min={1} max={dbAvailable} className="h-8 w-24"
+                            value={dbQty} onChange={(e) => setDbQty(e.target.value)} />
+                        </div>
+                      )}
+                      <Badge variant="outline" className="text-[10px]">Will reserve {dbTargetCount} row{dbTargetCount === 1 ? "" : "s"} on launch</Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Rows are reserved when you click Launch, marked used after each sub-campaign succeeds, and released automatically if a sub-campaign fails.
+                    </p>
+                  </>
                 )}
               </TabsContent>
             </Tabs>
@@ -726,4 +877,11 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
   <div className="flex justify-between text-sm"><span className="text-muted-foreground">{label}</span><span className="font-medium truncate ml-2">{value}</span></div>
+);
+
+const Stat = ({ label, value, highlight }: { label: string; value: number | string; highlight?: boolean }) => (
+  <div className={`rounded-md border p-2 ${highlight ? "border-primary/40 bg-primary/5" : "border-border bg-card/30"}`}>
+    <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+    <div className="text-sm font-semibold">{value}</div>
+  </div>
 );

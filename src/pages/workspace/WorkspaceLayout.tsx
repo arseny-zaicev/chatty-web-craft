@@ -67,7 +67,7 @@ export default function WorkspaceLayout() {
     const parts = location.pathname.split("/").filter(Boolean); // ["ws", slug, section?]
     const seg = parts[2];
     if (!seg || seg === "overview") return "Overview";
-    const map: Record<string, string> = { inbox: "Inbox", pipeline: "Pipeline", campaigns: "Campaigns", launch: "Launch", library: "Library", settings: "Settings" };
+    const map: Record<string, string> = { inbox: "Inbox", pipeline: "Pipeline", campaigns: "Campaigns", launch: "Launch", library: "Library", settings: "Settings", data: "Data" };
     return map[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
   }, [location.pathname]);
 
@@ -145,7 +145,7 @@ function RoleGuardedOutlet({ workspace }: { workspace?: Workspace }) {
   if (!workspace) return <Outlet context={{ workspace }} />;
   if (isLoading) return <WorkspaceMainFallback />;
   const seg = location.pathname.split("/").filter(Boolean)[2];
-  const restricted = seg === "library" || seg === "settings" || seg === "launch";
+  const restricted = seg === "library" || seg === "settings" || seg === "launch" || seg === "data";
   if (restricted && !isManagerLike(role)) {
     return <Navigate to={`/ws/${workspace.slug}/overview`} replace />;
   }
