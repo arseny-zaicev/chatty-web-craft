@@ -4,6 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   buildCampaignLifecycleBlocks,
   buildNumberAlertBlocks,
+  buildPositiveLeadBlocks,
+  buildInboxSpikeBlocks,
   postSlack,
 } from "../_shared/slackBlocks.ts";
 
@@ -48,22 +50,25 @@ Deno.serve(async (req) => {
   let processed = 0; let failed = 0;
   for (const ev of events || []) {
     try {
-      // Lookup workspace info (may be null for unassigned numbers)
       let ws: { id: string; name: string; slug: string | null; internal_code: string | null } | null = null;
+      let workspaceChannel: string | null = null;
+      let inboxAlertsEnabled = false;
       if (ev.workspace_id) {
         const { data } = await supabase
           .from("workspaces")
-          .select("id, name, slug, internal_code, slack_channel_id")
+          .select("id, name, slug, internal_code, slack_channel_id, inbox_alerts_enabled")
           .eq("id", ev.workspace_id)
           .maybeSingle();
-        if (data) ws = { id: data.id, name: data.name, slug: data.slug, internal_code: data.internal_code };
-        var workspaceChannel: string | null = data?.slack_channel_id || null;
+        if (data) {
+          ws = { id: data.id, name: data.name, slug: data.slug, internal_code: data.internal_code };
+          workspaceChannel = data.slack_channel_id || null;
+          inboxAlertsEnabled = !!data.inbox_alerts_enabled;
+        }
       }
 
       const targets = new Set<string>();
 
       if (CAMPAIGN_EVENTS.has(ev.event_type)) {
-        // Get number phone for richer message
         let numberPhone: string | null = null;
         const numId = (ev.payload as any)?.whatsapp_number_id;
         if (numId) {
@@ -71,21 +76,34 @@ Deno.serve(async (req) => {
           numberPhone = n?.phone_number || null;
         }
         if (!ws) {
-          // skip if no workspace context (shouldn't happen for campaigns)
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
         const msg = buildCampaignLifecycleBlocks({ event: ev.event_type, ws, payload: ev.payload as any, numberPhone });
         if (OPS_CAMPAIGNS) targets.add(OPS_CAMPAIGNS);
-        if (workspaceChannel!) targets.add(workspaceChannel!);
+        if (workspaceChannel) targets.add(workspaceChannel);
         for (const ch of targets) await postSlack(ch, msg);
       } else if (NUMBER_EVENTS.has(ev.event_type)) {
         const msg = buildNumberAlertBlocks({ event: ev.event_type, ws, payload: ev.payload as any });
         if (OPS_NUMBERS) targets.add(OPS_NUMBERS);
-        if (workspaceChannel!) targets.add(workspaceChannel!);
+        if (workspaceChannel) targets.add(workspaceChannel);
         for (const ch of targets) await postSlack(ch, msg);
+      } else if (ev.event_type === "positive_lead") {
+        if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
+          await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
+          continue;
+        }
+        const msg = buildPositiveLeadBlocks({ ws, payload: ev.payload as any });
+        await postSlack(workspaceChannel, msg);
+      } else if (ev.event_type === "inbox_unread_spike") {
+        if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
+          await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
+          continue;
+        }
+        const p = ev.payload as any;
+        const msg = buildInboxSpikeBlocks({ ws, unreadCount: p.unread_total || 0, conversations: p.conversations || [] });
+        await postSlack(workspaceChannel, msg);
       } else {
-        // Unknown event type - mark skipped
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
       }
