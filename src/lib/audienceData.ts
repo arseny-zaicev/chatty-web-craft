@@ -154,8 +154,17 @@ export async function uploadBatch(params: {
   phoneColumn: string;
   sourceFilename: string | null;
   prepProfile?: PrepProfile | null;
+  /** sourceColumn -> profileField (e.g. "Full Name" -> "first_name") */
+  columnMapping?: Record<string, string>;
 }): Promise<{ batchId: string; summary: ValidationSummary; isLaunchReady: boolean }> {
-  const variableSchema = params.parsed.headers.filter((h) => h !== params.phoneColumn);
+  const mapping = params.columnMapping ?? {};
+  // The variable_schema we store should reflect the mapped field names actually used downstream.
+  const mappedFields = new Set<string>();
+  for (const h of params.parsed.headers) {
+    if (h === params.phoneColumn) continue;
+    mappedFields.add(mapping[h] && mapping[h] !== "" ? mapping[h] : h);
+  }
+  const variableSchema = Array.from(mappedFields);
   const profile = params.prepProfile ?? null;
 
   const seen = new Set<string>();
