@@ -1149,6 +1149,8 @@ export type Database = {
         | "restricted"
         | "banned"
         | "inactive"
+        | "active"
+        | "stock"
       whatsapp_number_usage: "marketing" | "utility" | "both"
     }
     CompositeTypes: {
@@ -1326,6 +1328,8 @@ export const Constants = {
         "restricted",
         "banned",
         "inactive",
+        "active",
+        "stock",
       ],
       whatsapp_number_usage: ["marketing", "utility", "both"],
     },
