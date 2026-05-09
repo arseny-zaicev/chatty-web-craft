@@ -355,18 +355,33 @@ const BrandAssets = () => {
               <Palette className="w-5 h-5 text-primary" />
               <h2 className="font-display text-2xl font-bold">Brand Colors</h2>
             </div>
-            <p className="text-muted-foreground mb-6">Click any color to copy the hex code.</p>
+            <p className="text-muted-foreground mb-2">The full ISKRA palette - every shade actually used in the product. Click hex or HSL to copy.</p>
+            <p className="text-xs text-muted-foreground/70 mb-6">The signature ISKRA tone is <strong className="text-foreground">Champagne Beige</strong> - the warm cream the entire site sits on. Emerald is the action color; Gold is the premium accent.</p>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {brandColors.map((c) => (
-                <div key={c.hex} className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => copyToClipboard(c.hex, toast)}>
-                  <div className="w-full aspect-square rounded-lg mb-3 border border-border/50" style={{ background: c.hex }} />
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-sm">{c.name}</p>
-                    <Copy className="w-3 h-3 text-muted-foreground" />
+                <div key={c.hex} className="bg-card border border-border rounded-xl p-4 hover:border-primary/50 transition-colors">
+                  <div className="w-full aspect-[5/2] rounded-lg mb-3 border border-border/50" style={{ background: c.hex }} />
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="font-semibold text-sm leading-tight">{c.name}</p>
                   </div>
-                  <p className="text-xs font-mono text-muted-foreground mb-1">{c.hex}</p>
-                  <p className="text-xs text-muted-foreground/70">{c.usage}</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(c.hex, toast)}
+                    className="flex items-center justify-between w-full text-xs font-mono text-muted-foreground hover:text-foreground transition-colors mb-1"
+                  >
+                    <span>{c.hex}</span>
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(`hsl(${c.hsl})`, toast)}
+                    className="flex items-center justify-between w-full text-xs font-mono text-muted-foreground/70 hover:text-foreground transition-colors mb-2"
+                  >
+                    <span>hsl({c.hsl})</span>
+                    <Copy className="w-3 h-3" />
+                  </button>
+                  <p className="text-xs text-muted-foreground/70 leading-snug">{c.usage}</p>
                 </div>
               ))}
             </div>
