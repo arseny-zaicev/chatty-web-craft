@@ -65,7 +65,7 @@ export async function fetchCrmBase(workspaceId?: string) {
   let conversationsQuery = supabase
     .from("conversations")
     .select(
-      "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at",
+      "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at",
     )
     .order("last_message_at", { ascending: false, nullsFirst: false });
 
