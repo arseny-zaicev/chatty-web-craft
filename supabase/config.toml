@@ -1,34 +1,29 @@
 project_id = "xglfamaaotmwulglwcui"
 
-[functions.google-sheets]
-verify_jwt = false
-
-[functions.admin-clients]
-verify_jwt = false
-
-[functions.init-admin]
-verify_jwt = false
-
-[functions.submit-form]
-verify_jwt = false
-
-[functions.generate-ai-seo-report]
-verify_jwt = true
-
-[functions.whatsapp-webhook]
-verify_jwt = false
-
-[functions.calendly-webhook]
-verify_jwt = false
-
-[functions.register-calendly-webhook]
-verify_jwt = false
-
-[functions.campaigns]
-verify_jwt = false
-
-[functions.send-whatsapp]
-verify_jwt = false
-
-[functions.gupshup-set-callback]
-verify_jwt = false
+[functions]
+  [functions.admin-clients]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.calendly-webhook]
+    verify_jwt = false
+  [functions.campaigns]
+    verify_jwt = false
+  [functions.generate-ai-seo-report]
+    verify_jwt = true
+  [functions.google-sheets]
+    verify_jwt = false
+  [functions.gupshup-set-callback]
+    verify_jwt = false
+  [functions.init-admin]
+    verify_jwt = false
+  [functions.process-email-queue]
+    verify_jwt = true
+  [functions.register-calendly-webhook]
+    verify_jwt = false
+  [functions.send-whatsapp]
+    verify_jwt = false
+  [functions.submit-form]
+    verify_jwt = false
+  [functions.whatsapp-webhook]
+    verify_jwt = false
