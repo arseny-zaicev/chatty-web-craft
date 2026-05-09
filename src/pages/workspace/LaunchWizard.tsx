@@ -505,14 +505,86 @@ export default function LaunchWizard() {
                     ))}
                   </SelectContent>
                 </Select>
-                {activeLogical && (
-                  <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
-                    <div>Variants: {activeLogical.variants.map((v) => v.name).join(", ")}</div>
-                    {activeLogical.variables.length > 0 && (
-                      <div>Variables: {activeLogical.variables.map((v) => `{${v}}`).join(" ")}</div>
-                    )}
-                  </div>
-                )}
+                {activeLogical && (() => {
+                  const poolReady = poolNumbers.filter((n) => activeLogical.variantByNumber.has(n.id)).length;
+                  const poolMissing = poolNumbers.length - poolReady;
+                  const orphanVariants = activeLogical.variants.filter(
+                    (v) => !v.whatsapp_number_id || !numbers.find((n) => n.id === v.whatsapp_number_id),
+                  );
+                  return (
+                    <div className="mt-3 space-y-2">
+                      {/* Coverage summary */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">
+                          {poolReady}/{poolNumbers.length} numbers in pool ready
+                        </Badge>
+                        {poolMissing > 0 && (
+                          <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">
+                            {poolMissing} missing variant
+                          </Badge>
+                        )}
+                        {activeLogical.variables.length > 0 && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {activeLogical.variables.length} variable{activeLogical.variables.length === 1 ? "" : "s"}: {activeLogical.variables.map((v) => `{${v}}`).join(" ")}
+                          </Badge>
+                        )}
+                        {orphanVariants.length > 0 && (
+                          <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">
+                            {orphanVariants.length} orphan variant (no number)
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Per-number variant table */}
+                      <div className="rounded-md border border-border overflow-hidden">
+                        <div className="grid grid-cols-[1fr_1.4fr_auto_auto] gap-2 px-2 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/40">
+                          <div>Number</div>
+                          <div>Template variant</div>
+                          <div>Lang</div>
+                          <div>Status</div>
+                        </div>
+                        <div className="divide-y divide-border">
+                          {poolNumbers.map((n) => {
+                            const variant = activeLogical.variantByNumber.get(n.id);
+                            return (
+                              <div key={n.id} className="grid grid-cols-[1fr_1.4fr_auto_auto] gap-2 px-2 py-1.5 text-xs items-center">
+                                <div className="truncate">{n.label ?? `+${n.phone_number}`}</div>
+                                <div className="truncate font-mono text-[11px]">
+                                  {variant?.name ?? <span className="text-amber-600">- missing -</span>}
+                                </div>
+                                <div className="text-muted-foreground text-[11px]">{variant?.language ?? "-"}</div>
+                                <div>
+                                  {variant ? (
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] ${variant.status === "approved" ? "border-emerald-500/30 text-emerald-600" : "border-amber-500/30 text-amber-600"}`}
+                                    >
+                                      {variant.status}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-600">no variant</Badge>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Template body preview */}
+                      {activeLogical.body ? (
+                        <div className="rounded-md border border-border bg-muted/30 p-2.5">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Template body</div>
+                          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">{activeLogical.body}</pre>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-600 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" /> No body synced for this template - re-sync from Gupshup.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </>
             )}
           </Step>
