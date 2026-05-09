@@ -46,7 +46,6 @@ import {
   MessageSquare,
   Phone,
   Trash2,
-  GripVertical,
   Copy,
 } from "lucide-react";
 import { toast } from "sonner";
