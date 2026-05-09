@@ -53,6 +53,108 @@ export type Database = {
         }
         Relationships: []
       }
+      audience_batches: {
+        Row: {
+          campaign_type: string
+          copy_profile: string | null
+          country: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          source_filename: string | null
+          updated_at: string
+          user_id: string
+          variable_schema: Json
+          workspace_id: string
+        }
+        Insert: {
+          campaign_type?: string
+          copy_profile?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          source_filename?: string | null
+          updated_at?: string
+          user_id: string
+          variable_schema?: Json
+          workspace_id: string
+        }
+        Update: {
+          campaign_type?: string
+          copy_profile?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          source_filename?: string | null
+          updated_at?: string
+          user_id?: string
+          variable_schema?: Json
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      audience_rows: {
+        Row: {
+          batch_id: string
+          created_at: string
+          id: string
+          payload: Json
+          phone: string
+          reserved_at: string | null
+          usage_status: Database["public"]["Enums"]["audience_row_usage"]
+          used_at: string | null
+          used_in_campaign_id: string | null
+          validation_status: Database["public"]["Enums"]["audience_row_validation"]
+          workspace_id: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          phone: string
+          reserved_at?: string | null
+          usage_status?: Database["public"]["Enums"]["audience_row_usage"]
+          used_at?: string | null
+          used_in_campaign_id?: string | null
+          validation_status?: Database["public"]["Enums"]["audience_row_validation"]
+          workspace_id: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          phone?: string
+          reserved_at?: string | null
+          usage_status?: Database["public"]["Enums"]["audience_row_usage"]
+          used_at?: string | null
+          used_in_campaign_id?: string | null
+          validation_status?: Database["public"]["Enums"]["audience_row_validation"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "audience_batch_stats"
+            referencedColumns: ["batch_id"]
+          },
+          {
+            foreignKeyName: "audience_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "audience_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_number_allocations: {
         Row: {
           allocated_count: number
@@ -1198,7 +1300,21 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      audience_batch_stats: {
+        Row: {
+          batch_id: string | null
+          duplicates: number | null
+          invalid: number | null
+          reserved: number | null
+          scheduled: number | null
+          total: number | null
+          unused: number | null
+          used: number | null
+          valid: number | null
+          workspace_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       delete_email: {
@@ -1234,6 +1350,10 @@ export type Database = {
         Args: { _user_id: string; _workspace_id: string }
         Returns: boolean
       }
+      mark_audience_rows_used: {
+        Args: { _campaign_id: string; _row_ids: string[] }
+        Returns: number
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -1251,9 +1371,34 @@ export type Database = {
           read_ct: number
         }[]
       }
+      release_audience_rows: { Args: { _row_ids: string[] }; Returns: number }
+      reserve_audience_rows: {
+        Args: { _batch_id: string; _quantity: number }
+        Returns: {
+          batch_id: string
+          created_at: string
+          id: string
+          payload: Json
+          phone: string
+          reserved_at: string | null
+          usage_status: Database["public"]["Enums"]["audience_row_usage"]
+          used_at: string | null
+          used_in_campaign_id: string | null
+          validation_status: Database["public"]["Enums"]["audience_row_validation"]
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audience_rows"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       app_role: "owner" | "manager" | "viewer"
+      audience_row_usage: "unused" | "reserved" | "scheduled" | "used"
+      audience_row_validation: "valid" | "invalid" | "duplicate"
       automation_trigger: "button_click" | "inbound_keyword" | "inbound_any"
       campaign_recipient_status:
         | "pending"
@@ -1429,6 +1574,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "manager", "viewer"],
+      audience_row_usage: ["unused", "reserved", "scheduled", "used"],
+      audience_row_validation: ["valid", "invalid", "duplicate"],
       automation_trigger: ["button_click", "inbound_keyword", "inbound_any"],
       campaign_recipient_status: [
         "pending",
