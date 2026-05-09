@@ -211,12 +211,23 @@ function PresetsSection({
     }
   };
 
+  const buildBatchName = (p: PrepPreset, country: string) => {
+    const date = new Date().toISOString().slice(0, 10);
+    const c = country.trim().toUpperCase() || "ALL";
+    return `${date} | ${c} | ${p.name}`;
+  };
+
   const startCreate = (p: PrepPreset) => {
     setCreating(p);
-    setBatchName(`${p.name} - ${new Date().toISOString().slice(0, 10)}`);
     setBatchCountry("");
     setBatchNotes("");
+    setBatchName(buildBatchName(p, ""));
     setCreatedBatchId(null);
+  };
+
+  const onCountryChange = (val: string) => {
+    setBatchCountry(val);
+    if (creating && !createdBatchId) setBatchName(buildBatchName(creating, val));
   };
 
   const submitBatch = async () => {
@@ -322,7 +333,7 @@ function PresetsSection({
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Country (optional)</label>
-                  <Input value={batchCountry} onChange={(e) => setBatchCountry(e.target.value)} placeholder="e.g. AE" disabled={!!createdBatchId} />
+                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE" disabled={!!createdBatchId} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Campaign type</label>
