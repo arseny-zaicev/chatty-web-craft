@@ -783,6 +783,7 @@ function AddNumberDrawer({
         provided_by: providedBy || null,
         assigned_ref: assignedRef || null,
         usage_type: usage,
+        webhook_connected: webhookConnected,
         ...dnPatch,
       };
 
