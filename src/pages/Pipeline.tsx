@@ -742,10 +742,9 @@ const DraggableDeal = ({
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
 }) => {
-  const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({ id: deal.id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: deal.id });
   const style: React.CSSProperties = {
     opacity: isDragging ? 0 : 1,
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     touchAction: "none",
   };
   return (
