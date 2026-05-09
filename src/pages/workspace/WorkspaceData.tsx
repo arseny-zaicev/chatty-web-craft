@@ -83,9 +83,14 @@ export default function WorkspaceData() {
               Clients never see this section or raw rows.
             </p>
           </div>
-          <Button onClick={() => setOpenUpload(true)}>
-            <Upload className="w-4 h-4 mr-1" /> Upload audience
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline">
+              <Link to={`/ws/${workspace.slug}/data/profiles`}><Wand2 className="w-4 h-4 mr-1" />Prep Profiles</Link>
+            </Button>
+            <Button onClick={() => setOpenUpload(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Upload audience
+            </Button>
+          </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
