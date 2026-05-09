@@ -582,6 +582,13 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         </SheetContent>
       </Sheet>
 
+      <StageAutomationsDialog
+        open={showAutomations}
+        onOpenChange={setShowAutomations}
+        workspaceId={workspaceId}
+        stages={stages}
+      />
+
       {/* New deal dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>
