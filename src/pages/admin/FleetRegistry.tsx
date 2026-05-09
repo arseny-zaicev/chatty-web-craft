@@ -798,6 +798,17 @@ function AddNumberDrawer({
 
           <Field label="Display name">
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Iskra Sales" />
+            <div className="flex items-center justify-between mt-2 px-1">
+              <div className="text-[11px] text-muted-foreground">
+                Approved by Meta?
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] ${dnApproved ? "text-emerald-700 font-medium" : "text-muted-foreground"}`}>
+                  {dnApproved ? "approved" : "pending"}
+                </span>
+                <Switch checked={dnApproved} onCheckedChange={setDnApproved} />
+              </div>
+            </div>
           </Field>
 
           <Field label="Profile picture">
