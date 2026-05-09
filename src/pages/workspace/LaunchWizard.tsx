@@ -651,6 +651,56 @@ export default function LaunchWizard() {
                   </div>
                 )}
               </TabsContent>
+
+              <TabsContent value="database" className="mt-3 space-y-3">
+                {dbBatchesQ.isLoading ? (
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading batches...</div>
+                ) : (dbBatchesQ.data?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground">No database batches yet. Upload one in the Data section.</p>
+                ) : (
+                  <>
+                    <Select value={dbBatchId} onValueChange={setDbBatchId}>
+                      <SelectTrigger><SelectValue placeholder="Pick a batch" /></SelectTrigger>
+                      <SelectContent>
+                        {(dbBatchesQ.data ?? []).map((b) => {
+                          const s = (dbStatsQ.data ?? []).find((x) => x.batch_id === b.id);
+                          return (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name} {s ? `· ${s.unused} unused / ${s.valid} valid` : ""}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    {dbBatch && (
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                        <Stat label="Total" value={dbStats?.total ?? 0} />
+                        <Stat label="Valid" value={dbStats?.valid ?? 0} />
+                        <Stat label="Duplicates" value={dbStats?.duplicates ?? 0} />
+                        <Stat label="Used" value={dbStats?.used ?? 0} />
+                        <Stat label="Unused" value={dbStats?.unused ?? 0} highlight />
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                      <label className="flex items-center gap-1.5">
+                        <input type="checkbox" checked={dbAllUnused} onChange={(e) => setDbAllUnused(e.target.checked)} />
+                        Use all unused ({dbAvailable})
+                      </label>
+                      {!dbAllUnused && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Quantity</span>
+                          <Input type="number" min={1} max={dbAvailable} className="h-8 w-24"
+                            value={dbQty} onChange={(e) => setDbQty(e.target.value)} />
+                        </div>
+                      )}
+                      <Badge variant="outline" className="text-[10px]">Will reserve {dbTargetCount} row{dbTargetCount === 1 ? "" : "s"} on launch</Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Rows are reserved when you click Launch, marked used after each sub-campaign succeeds, and released automatically if a sub-campaign fails.
+                    </p>
+                  </>
+                )}
+              </TabsContent>
             </Tabs>
 
             <div className="flex items-center justify-between flex-wrap gap-2 mt-3 text-xs text-muted-foreground">
