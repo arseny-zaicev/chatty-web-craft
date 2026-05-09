@@ -91,6 +91,12 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
               <Input value={color} onChange={(e) => setColor(e.target.value)} />
             </div>
           </Field>
+          <Field label="Website">
+            <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="salesforce.com" />
+          </Field>
+          <Field label="Logo URL (optional)">
+            <Input value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="Auto-detected from website if empty" />
+          </Field>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
