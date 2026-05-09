@@ -141,6 +141,7 @@ function ProfileEditor({
   const [fallbacks, setFallbacks] = useState<Record<string, string>>(initial?.fallback_rules ?? {});
   const [quickReplies, setQuickReplies] = useState<string[]>(initial?.quick_replies ?? []);
   const [sample, setSample] = useState<Record<string, string>>(initial?.sample_payload ?? {});
+  const [sampleMessageTemplate, setSampleMessageTemplate] = useState<string>(initial?.sample_message_template ?? "");
   const [busy, setBusy] = useState(false);
 
   const allFields = useMemo(
@@ -157,12 +158,14 @@ function ProfileEditor({
       required_fields: requiredFields, optional_fields: optionalFields,
       derived_variables: derived, invalid_rules: invalidRules,
       fallback_rules: fallbacks, quick_replies: quickReplies, sample_payload: sample,
+      sample_message_template: sampleMessageTemplate || null,
       created_at: "", updated_at: "",
     };
     const validation = validateRowAgainstProfile(profile, sample);
     const derivedOut = applyDerivedVariables(profile, sample);
-    return { validation, derivedOut };
-  }, [initial?.id, workspaceId, name, description, campaignType, templateLabel, requiredFields, optionalFields, derived, invalidRules, fallbacks, quickReplies, sample]);
+    const renderedMessage = renderSampleMessage(profile, sample);
+    return { validation, derivedOut, renderedMessage };
+  }, [initial?.id, workspaceId, name, description, campaignType, templateLabel, requiredFields, optionalFields, derived, invalidRules, fallbacks, quickReplies, sample, sampleMessageTemplate]);
 
   const submit = async () => {
     if (!name.trim()) { toast.error("Name is required"); return; }
