@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
+import { applyDerivedVariables, validateRowAgainstProfile, type PrepProfile } from "./prepProfiles";
 
 export type AudienceBatch = {
   id: string;
@@ -12,6 +13,9 @@ export type AudienceBatch = {
   variable_schema: string[];
   source_filename: string | null;
   created_at: string;
+  prep_profile_id: string | null;
+  is_launch_ready: boolean;
+  derived_variables_preview: Array<Record<string, string>>;
 };
 
 export type AudienceBatchStats = {
@@ -36,6 +40,7 @@ export type AudienceRow = {
   usage_status: "unused" | "reserved" | "scheduled" | "used";
   used_in_campaign_id: string | null;
   created_at: string;
+  derived_payload: Record<string, string>;
 };
 
 export const audienceKeys = {
@@ -148,11 +153,76 @@ export async function uploadBatch(params: {
   parsed: ParsedAudience;
   phoneColumn: string;
   sourceFilename: string | null;
-}): Promise<{ batchId: string; summary: ValidationSummary }> {
+  prepProfile?: PrepProfile | null;
+}): Promise<{ batchId: string; summary: ValidationSummary; isLaunchReady: boolean }> {
   const variableSchema = params.parsed.headers.filter((h) => h !== params.phoneColumn);
+  const profile = params.prepProfile ?? null;
 
-  const { data: batch, error: batchErr } = await supabase
-    .from("audience_batches")
+  const seen = new Set<string>();
+  let valid = 0, invalid = 0, duplicates = 0;
+  type StagedRow = {
+    workspace_id: string;
+    phone: string;
+    payload: Record<string, string>;
+    validation_status: "valid" | "invalid" | "duplicate";
+    derived_payload: Record<string, string>;
+  };
+  const staged: StagedRow[] = [];
+  const derivedPreview: Array<Record<string, string>> = [];
+
+  for (const r of params.parsed.rows) {
+    const rawPhone = r[params.phoneColumn];
+    const norm = normalizePhone(rawPhone);
+    const payload: Record<string, string> = {};
+    for (const v of variableSchema) payload[v] = r[v] ?? "";
+
+    let derived: Record<string, string> = {};
+    let profileFail = false;
+    if (profile) {
+      const v = validateRowAgainstProfile(profile, payload);
+      if (!v.ok) profileFail = true;
+      derived = applyDerivedVariables(profile, payload);
+    }
+
+    if (!norm || profileFail) {
+      invalid++;
+      const key = `__invalid__:${rawPhone || crypto.randomUUID()}:${invalid}`;
+      staged.push({
+        workspace_id: params.workspaceId,
+        phone: key.slice(0, 64),
+        payload,
+        validation_status: "invalid",
+        derived_payload: derived,
+      });
+      continue;
+    }
+    if (seen.has(norm)) {
+      duplicates++;
+      staged.push({
+        workspace_id: params.workspaceId,
+        phone: `__dup__:${norm}:${duplicates}`,
+        payload,
+        validation_status: "duplicate",
+        derived_payload: derived,
+      });
+      continue;
+    }
+    seen.add(norm);
+    valid++;
+    if (derivedPreview.length < 3 && Object.keys(derived).length > 0) derivedPreview.push(derived);
+    staged.push({
+      workspace_id: params.workspaceId,
+      phone: norm,
+      payload,
+      validation_status: "valid",
+      derived_payload: derived,
+    });
+  }
+
+  const isLaunchReady = !!profile && valid > 0;
+
+  const { data: batch, error: batchErr } = await (supabase
+    .from("audience_batches") as any)
     .insert({
       workspace_id: params.workspaceId,
       user_id: params.userId,
@@ -163,65 +233,21 @@ export async function uploadBatch(params: {
       notes: params.notes,
       variable_schema: variableSchema,
       source_filename: params.sourceFilename,
+      prep_profile_id: profile?.id ?? null,
+      is_launch_ready: isLaunchReady,
+      derived_variables_preview: derivedPreview,
     })
     .select("id")
     .single();
 
   if (batchErr || !batch) throw batchErr ?? new Error("Failed to create batch");
 
-  const seen = new Set<string>();
-  let valid = 0, invalid = 0, duplicates = 0;
-  const dbRows: Array<{
-    batch_id: string;
-    workspace_id: string;
-    phone: string;
-    payload: Record<string, string>;
-    validation_status: "valid" | "invalid" | "duplicate";
-  }> = [];
-
-  for (const r of params.parsed.rows) {
-    const rawPhone = r[params.phoneColumn];
-    const norm = normalizePhone(rawPhone);
-    const payload: Record<string, string> = {};
-    for (const v of variableSchema) payload[v] = r[v] ?? "";
-    if (!norm) {
-      invalid++;
-      const key = `__invalid__:${rawPhone || crypto.randomUUID()}:${invalid}`;
-      dbRows.push({
-        batch_id: batch.id,
-        workspace_id: params.workspaceId,
-        phone: key.slice(0, 64),
-        payload,
-        validation_status: "invalid",
-      });
-      continue;
-    }
-    if (seen.has(norm)) {
-      duplicates++;
-      dbRows.push({
-        batch_id: batch.id,
-        workspace_id: params.workspaceId,
-        phone: `__dup__:${norm}:${duplicates}`,
-        payload,
-        validation_status: "duplicate",
-      });
-      continue;
-    }
-    seen.add(norm);
-    valid++;
-    dbRows.push({
-      batch_id: batch.id,
-      workspace_id: params.workspaceId,
-      phone: norm,
-      payload,
-      validation_status: "valid",
-    });
-  }
+  const dbRows = staged.map((s) => ({ batch_id: batch.id, ...s }));
 
   const CHUNK = 500;
   for (let i = 0; i < dbRows.length; i += CHUNK) {
     const slice = dbRows.slice(i, i + CHUNK);
-    const { error } = await supabase.from("audience_rows").insert(slice);
+    const { error } = await supabase.from("audience_rows").insert(slice as never);
     if (error) {
       await supabase.from("audience_batches").delete().eq("id", batch.id);
       throw error;
@@ -231,21 +257,24 @@ export async function uploadBatch(params: {
   return {
     batchId: batch.id,
     summary: { total: params.parsed.rows.length, valid, invalid, duplicates },
+    isLaunchReady,
   };
 }
 
 /* ---------- Queries ---------- */
 
 export async function fetchBatches(workspaceId: string): Promise<AudienceBatch[]> {
-  const { data, error } = await supabase
-    .from("audience_batches")
-    .select("id, workspace_id, name, country, campaign_type, copy_profile, notes, variable_schema, source_filename, created_at")
+  const { data, error } = await (supabase
+    .from("audience_batches") as any)
+    .select("id, workspace_id, name, country, campaign_type, copy_profile, notes, variable_schema, source_filename, created_at, prep_profile_id, is_launch_ready, derived_variables_preview")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((b) => ({
+  return (data ?? []).map((b: any) => ({
     ...b,
     variable_schema: Array.isArray(b.variable_schema) ? (b.variable_schema as string[]) : [],
+    is_launch_ready: !!b.is_launch_ready,
+    derived_variables_preview: Array.isArray(b.derived_variables_preview) ? b.derived_variables_preview : [],
   })) as AudienceBatch[];
 }
 
@@ -259,9 +288,9 @@ export async function fetchBatchStats(workspaceId: string): Promise<AudienceBatc
 }
 
 export async function fetchBatchRows(batchId: string, limit = 200): Promise<AudienceRow[]> {
-  const { data, error } = await supabase
-    .from("audience_rows")
-    .select("id, batch_id, workspace_id, phone, payload, validation_status, usage_status, used_in_campaign_id, created_at")
+  const { data, error } = await (supabase
+    .from("audience_rows") as any)
+    .select("id, batch_id, workspace_id, phone, payload, validation_status, usage_status, used_in_campaign_id, created_at, derived_payload")
     .eq("batch_id", batchId)
     .order("created_at")
     .limit(limit);

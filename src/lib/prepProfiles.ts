@@ -1,0 +1,189 @@
+import { supabase } from "@/integrations/supabase/client";
+
+export type DerivedStrategy = "field" | "template" | "static";
+export type DerivedVariable = {
+  key: string;             // e.g. "var_1"
+  strategy: DerivedStrategy;
+  source?: string;         // for "field": source column name
+  template?: string;       // for "template": e.g. "a demo system for {company}"
+  static?: string;         // for "static": literal value
+  fallback?: string;       // applied when result is empty
+};
+
+export type InvalidRule = {
+  field: string;
+  rule: "non_empty" | "min_length" | "regex";
+  value?: string;          // for min_length (number-as-string) or regex pattern
+};
+
+export type PrepProfile = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  campaign_type: "marketing" | "utility";
+  template_label: string | null;
+  required_fields: string[];
+  optional_fields: string[];
+  derived_variables: DerivedVariable[];
+  invalid_rules: InvalidRule[];
+  fallback_rules: Record<string, string>;
+  quick_replies: string[];
+  sample_payload: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+};
+
+export const prepProfileKeys = {
+  list: (wid?: string) => ["prep-profiles", wid ?? "none"] as const,
+};
+
+const fromRow = (r: Record<string, unknown>): PrepProfile => ({
+  id: r.id as string,
+  workspace_id: r.workspace_id as string,
+  user_id: r.user_id as string,
+  name: r.name as string,
+  description: (r.description as string) ?? null,
+  campaign_type: (r.campaign_type as "marketing" | "utility") ?? "marketing",
+  template_label: (r.template_label as string) ?? null,
+  required_fields: Array.isArray(r.required_fields) ? (r.required_fields as string[]) : [],
+  optional_fields: Array.isArray(r.optional_fields) ? (r.optional_fields as string[]) : [],
+  derived_variables: Array.isArray(r.derived_variables) ? (r.derived_variables as DerivedVariable[]) : [],
+  invalid_rules: Array.isArray(r.invalid_rules) ? (r.invalid_rules as InvalidRule[]) : [],
+  fallback_rules: (r.fallback_rules as Record<string, string>) ?? {},
+  quick_replies: Array.isArray(r.quick_replies) ? (r.quick_replies as string[]) : [],
+  sample_payload: (r.sample_payload as Record<string, string>) ?? {},
+  created_at: r.created_at as string,
+  updated_at: r.updated_at as string,
+});
+
+export async function listPrepProfiles(workspaceId: string): Promise<PrepProfile[]> {
+  const { data, error } = await supabase
+    .from("audience_prep_profiles" as never)
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => fromRow(r as Record<string, unknown>));
+}
+
+export async function upsertPrepProfile(
+  p: Partial<PrepProfile> & { workspace_id: string; user_id: string; name: string },
+): Promise<PrepProfile> {
+  const payload = {
+    id: p.id,
+    workspace_id: p.workspace_id,
+    user_id: p.user_id,
+    name: p.name,
+    description: p.description ?? null,
+    campaign_type: p.campaign_type ?? "marketing",
+    template_label: p.template_label ?? null,
+    required_fields: p.required_fields ?? [],
+    optional_fields: p.optional_fields ?? [],
+    derived_variables: p.derived_variables ?? [],
+    invalid_rules: p.invalid_rules ?? [],
+    fallback_rules: p.fallback_rules ?? {},
+    quick_replies: p.quick_replies ?? [],
+    sample_payload: p.sample_payload ?? {},
+  };
+  const tbl = supabase.from("audience_prep_profiles" as never) as any;
+  const q = p.id
+    ? tbl.update(payload).eq("id", p.id).select("*").single()
+    : tbl.insert(payload).select("*").single();
+  const { data, error } = await q;
+  if (error) throw error;
+  return fromRow(data as Record<string, unknown>);
+}
+
+export async function deletePrepProfile(id: string): Promise<void> {
+  const { error } = await supabase.from("audience_prep_profiles" as never).delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ---------- Render / validate ---------- */
+
+export function renderTemplate(
+  tpl: string,
+  row: Record<string, string>,
+  fallbacks: Record<string, string>,
+): string {
+  return tpl.replace(/\{([\w.-]+)\}/g, (_m, key: string) => {
+    const v = row[key];
+    if (v != null && String(v).trim() !== "") return String(v);
+    const fb = fallbacks[key];
+    return fb != null ? String(fb) : "";
+  });
+}
+
+export function applyDerivedVariables(
+  profile: PrepProfile,
+  row: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const dv of profile.derived_variables) {
+    let val = "";
+    if (dv.strategy === "static") {
+      val = dv.static ?? "";
+    } else if (dv.strategy === "field") {
+      val = String(row[dv.source ?? ""] ?? "").trim();
+    } else if (dv.strategy === "template") {
+      val = renderTemplate(dv.template ?? "", row, profile.fallback_rules).trim();
+    }
+    if (!val && dv.fallback) val = dv.fallback;
+    out[dv.key] = val;
+  }
+  return out;
+}
+
+export type RowValidation = {
+  ok: boolean;
+  errors: string[];
+};
+
+export function validateRowAgainstProfile(
+  profile: PrepProfile,
+  row: Record<string, string>,
+): RowValidation {
+  const errors: string[] = [];
+  for (const f of profile.required_fields) {
+    const v = row[f];
+    const fb = profile.fallback_rules[f];
+    if ((v == null || String(v).trim() === "") && (fb == null || fb === "")) {
+      errors.push(`missing ${f}`);
+    }
+  }
+  for (const r of profile.invalid_rules) {
+    const v = String(row[r.field] ?? "").trim();
+    if (r.rule === "non_empty" && !v) errors.push(`${r.field} empty`);
+    if (r.rule === "min_length") {
+      const n = Number(r.value ?? "0");
+      if (v.length < n) errors.push(`${r.field}<${n} chars`);
+    }
+    if (r.rule === "regex" && r.value) {
+      try {
+        if (!new RegExp(r.value).test(v)) errors.push(`${r.field} regex fail`);
+      } catch {
+        /* ignore bad regex */
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+export type DerivedCoverage = { key: string; covered: number; total: number };
+
+export function computeDerivedCoverage(
+  profile: PrepProfile,
+  rows: Array<{ derived_payload?: Record<string, string> | null }>,
+): DerivedCoverage[] {
+  const total = rows.length || 0;
+  return profile.derived_variables.map((dv) => {
+    let covered = 0;
+    for (const r of rows) {
+      const v = r.derived_payload?.[dv.key];
+      if (v != null && String(v).trim() !== "") covered++;
+    }
+    return { key: dv.key, covered, total };
+  });
+}

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon,
+  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon, Wand2, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,10 @@ import {
   parseAudienceFile, detectPhoneColumn, uploadBatch, deleteBatch,
   type ParsedAudience,
 } from "@/lib/audienceData";
+import {
+  prepProfileKeys, listPrepProfiles, applyDerivedVariables, validateRowAgainstProfile,
+  type PrepProfile,
+} from "@/lib/prepProfiles";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 export default function WorkspaceData() {
@@ -79,9 +83,14 @@ export default function WorkspaceData() {
               Clients never see this section or raw rows.
             </p>
           </div>
-          <Button onClick={() => setOpenUpload(true)}>
-            <Upload className="w-4 h-4 mr-1" /> Upload audience
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline">
+              <Link to={`/ws/${workspace.slug}/data/profiles`}><Wand2 className="w-4 h-4 mr-1" />Prep Profiles</Link>
+            </Button>
+            <Button onClick={() => setOpenUpload(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Upload audience
+            </Button>
+          </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
@@ -103,6 +112,11 @@ export default function WorkspaceData() {
                     <Badge variant="outline" className="text-[10px]">{b.campaign_type}</Badge>
                     {b.country && <Badge variant="outline" className="text-[10px]">{b.country}</Badge>}
                     {b.copy_profile && <Badge variant="outline" className="text-[10px] text-muted-foreground">{b.copy_profile}</Badge>}
+                    {b.is_launch_ready ? (
+                      <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600"><ShieldCheck className="w-3 h-3 mr-1" />Launch-ready</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600"><ShieldAlert className="w-3 h-3 mr-1" />No prep profile</Badge>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     {new Date(b.created_at).toLocaleString()}
@@ -180,11 +194,19 @@ function UploadDialog({
   const [copyProfile, setCopyProfile] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [prepProfileId, setPrepProfileId] = useState<string>("");
+
+  const profilesQ = useQuery({
+    queryKey: prepProfileKeys.list(workspaceId),
+    queryFn: () => listPrepProfiles(workspaceId),
+    enabled: open,
+  });
+  const prepProfile: PrepProfile | null = (profilesQ.data ?? []).find((p) => p.id === prepProfileId) ?? null;
 
   const reset = () => {
     setFile(null); setParsed(null); setPhoneColumn("");
     setName(""); setCountry(""); setCampaignType("marketing");
-    setCopyProfile(""); setNotes(""); setBusy(false);
+    setCopyProfile(""); setNotes(""); setBusy(false); setPrepProfileId("");
   };
 
   const handleFile = async (f: File) => {
@@ -212,14 +234,34 @@ function UploadDialog({
       const cleaned = (v || "").replace(/[^\d+]/g, "").replace(/^\+/, "").replace(/^00+/, "");
       if (cleaned.length < 7 || cleaned.length > 15) { invalid++; continue; }
       if (seen.has(cleaned)) { dup++; continue; }
-      seen.add(cleaned); valid++;
+      seen.add(cleaned);
+      if (prepProfile) {
+        const payload: Record<string, string> = {};
+        for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
+        const vr = validateRowAgainstProfile(prepProfile, payload);
+        if (!vr.ok) { invalid++; continue; }
+      }
+      valid++;
     }
     return { total: parsed.rows.length, valid, invalid, duplicates: dup };
-  }, [parsed, phoneColumn]);
+  }, [parsed, phoneColumn, prepProfile]);
+
+  const derivedSamples = useMemo(() => {
+    if (!parsed || !prepProfile) return [];
+    return parsed.rows.slice(0, 3).map((r) => {
+      const payload: Record<string, string> = {};
+      for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
+      return applyDerivedVariables(prepProfile, payload);
+    });
+  }, [parsed, prepProfile, phoneColumn]);
 
   const submit = async () => {
     if (!parsed || !phoneColumn || !name.trim()) {
       toast.error("Pick a file, phone column and a batch name");
+      return;
+    }
+    if (!prepProfile) {
+      toast.error("Pick a prep profile (required for launch readiness)");
       return;
     }
     setBusy(true);
@@ -237,8 +279,9 @@ function UploadDialog({
         parsed,
         phoneColumn,
         sourceFilename: file?.name ?? null,
+        prepProfile,
       });
-      toast.success(`Uploaded ${result.summary.valid} valid · ${result.summary.invalid} invalid · ${result.summary.duplicates} duplicates`);
+      toast.success(`Uploaded ${result.summary.valid} valid · ${result.summary.invalid} invalid · ${result.summary.duplicates} duplicates${result.isLaunchReady ? " · launch-ready" : ""}`);
       reset();
       onOpenChange(false);
       onUploaded();
@@ -260,6 +303,17 @@ function UploadDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <div>
+            <label className="text-xs text-muted-foreground">Prep Profile *</label>
+            <Select value={prepProfileId} onValueChange={setPrepProfileId}>
+              <SelectTrigger><SelectValue placeholder={(profilesQ.data?.length ?? 0) === 0 ? "Create a profile first in Prep Profiles" : "Pick a prep profile"} /></SelectTrigger>
+              <SelectContent>
+                {(profilesQ.data ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name} ({p.campaign_type})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div>
             <label className="text-xs text-muted-foreground">File (CSV / XLSX / TSV)</label>
             <input

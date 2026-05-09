@@ -59,9 +59,12 @@ export type Database = {
           copy_profile: string | null
           country: string | null
           created_at: string
+          derived_variables_preview: Json
           id: string
+          is_launch_ready: boolean
           name: string
           notes: string | null
+          prep_profile_id: string | null
           source_filename: string | null
           updated_at: string
           user_id: string
@@ -73,9 +76,12 @@ export type Database = {
           copy_profile?: string | null
           country?: string | null
           created_at?: string
+          derived_variables_preview?: Json
           id?: string
+          is_launch_ready?: boolean
           name: string
           notes?: string | null
+          prep_profile_id?: string | null
           source_filename?: string | null
           updated_at?: string
           user_id: string
@@ -87,13 +93,81 @@ export type Database = {
           copy_profile?: string | null
           country?: string | null
           created_at?: string
+          derived_variables_preview?: Json
           id?: string
+          is_launch_ready?: boolean
           name?: string
           notes?: string | null
+          prep_profile_id?: string | null
           source_filename?: string | null
           updated_at?: string
           user_id?: string
           variable_schema?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audience_batches_prep_profile_id_fkey"
+            columns: ["prep_profile_id"]
+            isOneToOne: false
+            referencedRelation: "audience_prep_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audience_prep_profiles: {
+        Row: {
+          campaign_type: string
+          created_at: string
+          derived_variables: Json
+          description: string | null
+          fallback_rules: Json
+          id: string
+          invalid_rules: Json
+          name: string
+          optional_fields: Json
+          quick_replies: Json
+          required_fields: Json
+          sample_payload: Json
+          template_label: string | null
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          campaign_type?: string
+          created_at?: string
+          derived_variables?: Json
+          description?: string | null
+          fallback_rules?: Json
+          id?: string
+          invalid_rules?: Json
+          name: string
+          optional_fields?: Json
+          quick_replies?: Json
+          required_fields?: Json
+          sample_payload?: Json
+          template_label?: string | null
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          campaign_type?: string
+          created_at?: string
+          derived_variables?: Json
+          description?: string | null
+          fallback_rules?: Json
+          id?: string
+          invalid_rules?: Json
+          name?: string
+          optional_fields?: Json
+          quick_replies?: Json
+          required_fields?: Json
+          sample_payload?: Json
+          template_label?: string | null
+          updated_at?: string
+          user_id?: string
           workspace_id?: string
         }
         Relationships: []
@@ -102,6 +176,7 @@ export type Database = {
         Row: {
           batch_id: string
           created_at: string
+          derived_payload: Json
           id: string
           payload: Json
           phone: string
@@ -115,6 +190,7 @@ export type Database = {
         Insert: {
           batch_id: string
           created_at?: string
+          derived_payload?: Json
           id?: string
           payload?: Json
           phone: string
@@ -128,6 +204,7 @@ export type Database = {
         Update: {
           batch_id?: string
           created_at?: string
+          derived_payload?: Json
           id?: string
           payload?: Json
           phone?: string
@@ -1377,6 +1454,7 @@ export type Database = {
         Returns: {
           batch_id: string
           created_at: string
+          derived_payload: Json
           id: string
           payload: Json
           phone: string
