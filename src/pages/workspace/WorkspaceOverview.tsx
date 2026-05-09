@@ -104,29 +104,42 @@ export default function WorkspaceOverview() {
           <CardContent className="space-y-3 text-sm">
             <Row icon={Clock} label="Last activity" value={data.last_activity ? formatDistanceToNow(new Date(data.last_activity), { addSuffix: true }) : "—"} />
             <Row icon={Calendar} label="Next launch" value={data.next_launch ? new Date(data.next_launch).toLocaleString() : "—"} />
-            <Row icon={Phone} label="Numbers" value={`${data.numbers_ready} ready of ${data.numbers_total}`} />
-            {data.health !== "healthy" && (
-              <div className={`rounded-md border p-2.5 text-xs ${H.cls}`}>
-                <div className="font-medium flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />Needs attention</div>
-                <div className="opacity-80 mt-0.5">
-                  {data.numbers_total === 0 && "Add a WhatsApp number in Settings."}
-                  {data.numbers_total > 0 && data.numbers_ready === 0 && "No numbers are ready. Check Settings → Numbers."}
-                  {data.numbers_ready > 0 && data.unread_replies > 20 && "Inbox has many unread replies."}
+            {canManage && <Row icon={Phone} label="Numbers" value={`${data.numbers_ready} ready of ${data.numbers_total}`} />}
+            {(() => {
+              const infraIssue = data.numbers_total === 0 || (data.numbers_total > 0 && data.numbers_ready === 0);
+              const inboxIssue = data.numbers_ready > 0 && data.unread_replies > 20;
+              const showAttention = canManage ? data.health !== "healthy" : inboxIssue;
+              if (!showAttention) return null;
+              return (
+                <div className={`rounded-md border p-2.5 text-xs ${H.cls}`}>
+                  <div className="font-medium flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />Needs attention</div>
+                  <div className="opacity-80 mt-0.5">
+                    {canManage && infraIssue && data.numbers_total === 0 && "Add a WhatsApp number in Settings."}
+                    {canManage && infraIssue && data.numbers_total > 0 && data.numbers_ready === 0 && "No numbers are ready. Check Settings → Numbers."}
+                    {inboxIssue && (canManage && infraIssue ? " " : "") + "Inbox has many unread replies."}
+                  </div>
+                  {canManage && infraIssue && (
+                    <Button asChild size="sm" variant="outline" className="mt-2 h-7 text-xs"><Link to={`/ws/${slug}/settings`}>Open Settings</Link></Button>
+                  )}
+                  {inboxIssue && (
+                    <Button asChild size="sm" variant="outline" className="mt-2 h-7 text-xs ml-2"><Link to={`/ws/${slug}/inbox`}>Open Inbox</Link></Button>
+                  )}
                 </div>
-                <Button asChild size="sm" variant="outline" className="mt-2 h-7 text-xs"><Link to={`/ws/${slug}/settings`}>Open Settings</Link></Button>
-              </div>
-            )}
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
 
       {/* Quick links */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Resources</CardTitle></CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          <div className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /><span>Website, booking link and offer summary live in <Link to={`/ws/${slug}/library`} className="text-primary underline">Library</Link>.</span><ExternalLink className="w-3.5 h-3.5" /></div>
-        </CardContent>
-      </Card>
+      {canManage && (
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-base">Resources</CardTitle></CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /><span>Website, booking link and offer summary live in <Link to={`/ws/${slug}/library`} className="text-primary underline">Library</Link>.</span><ExternalLink className="w-3.5 h-3.5" /></div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
