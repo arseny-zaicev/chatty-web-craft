@@ -6,17 +6,23 @@ const startOfDayIso = () => {
   return d.toISOString();
 };
 
+export type WorkspaceHealth = "running" | "scheduled" | "idle" | "attention" | "blocked";
+
 export type WorkspaceMetrics = {
   workspace_id: string;
   unread_replies: number;
   active_campaigns: number;
   numbers_total: number;
   numbers_ready: number;
+  numbers_active: number;
   delivered_today: number;
   replies_today: number;
   last_activity: string | null;
   next_launch: string | null;
-  health: "healthy" | "attention" | "blocked";
+  campaign_end: string | null;
+  running_campaign_name: string | null;
+  scheduled_campaign_name: string | null;
+  health: WorkspaceHealth;
 };
 
 export type PortfolioSnapshot = {
