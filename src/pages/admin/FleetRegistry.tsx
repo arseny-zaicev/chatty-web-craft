@@ -886,6 +886,17 @@ function AddNumberDrawer({
 
           <Field label="Webhook URL">
             <CopyableField value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`} />
+            <div className="flex items-center justify-between mt-2 px-1">
+              <div className="text-[11px] text-muted-foreground">
+                Pasted into Gupshup callback URL?
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] ${webhookConnected ? "text-emerald-700 font-medium" : "text-muted-foreground"}`}>
+                  {webhookConnected ? "connected" : "not connected"}
+                </span>
+                <Switch checked={webhookConnected} onCheckedChange={setWebhookConnected} />
+              </div>
+            </div>
           </Field>
 
           <Field label="WABA ID">
