@@ -1449,6 +1449,8 @@ export type Database = {
           inbox_alerts_enabled: boolean
           internal_code: string | null
           is_active: boolean
+          last_inbox_spike_alert_at: string | null
+          last_positive_lead_alert_at: string | null
           name: string
           owner_user_id: string
           slack_channel_id: string | null
@@ -1462,6 +1464,8 @@ export type Database = {
           inbox_alerts_enabled?: boolean
           internal_code?: string | null
           is_active?: boolean
+          last_inbox_spike_alert_at?: string | null
+          last_positive_lead_alert_at?: string | null
           name: string
           owner_user_id: string
           slack_channel_id?: string | null
@@ -1475,6 +1479,8 @@ export type Database = {
           inbox_alerts_enabled?: boolean
           internal_code?: string | null
           is_active?: boolean
+          last_inbox_spike_alert_at?: string | null
+          last_positive_lead_alert_at?: string | null
           name?: string
           owner_user_id?: string
           slack_channel_id?: string | null
