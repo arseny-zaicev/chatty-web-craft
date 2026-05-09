@@ -13,7 +13,9 @@ import { IskraLogo } from "@/components/IskraLogo";
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
 export default function PortalAuth() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    try { return localStorage.getItem("iskra:lastEmail") ?? ""; } catch { return ""; }
+  });
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
