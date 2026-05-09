@@ -171,6 +171,124 @@ export function validateRowAgainstProfile(
   return { ok: errors.length === 0, errors };
 }
 
+/* ---------- Prompt builders (Codex / fallback) ---------- */
+
+const ph = (s: string | null | undefined, fb = "—") =>
+  s && String(s).trim() !== "" ? String(s) : fb;
+
+/**
+ * Strict prep prompt for the primary path: prepare/validate audience in Codex,
+ * then insert rows into the company's audience batch in Supabase.
+ */
+export function buildPrepPrompt(
+  profile: PrepProfile,
+  ctx: { workspaceName: string; workspaceId: string; batchId?: string },
+): string {
+  const required = profile.required_fields.length ? profile.required_fields.join(", ") : "(none defined)";
+  const optional = profile.optional_fields.length ? profile.optional_fields.join(", ") : "(none)";
+  const derivedLines = profile.derived_variables.length === 0
+    ? "  (no derived variables defined)"
+    : profile.derived_variables.map((d) => {
+        const detail =
+          d.strategy === "field" ? `from source column "${ph(d.source)}"` :
+          d.strategy === "template" ? `template = "${ph(d.template)}"` :
+          `static = "${ph(d.static)}"`;
+        const fb = d.fallback ? `; fallback = "${d.fallback}"` : "";
+        return `  - ${d.key}: ${d.strategy} ${detail}${fb}`;
+      }).join("\n");
+  const invalidLines = profile.invalid_rules.length === 0
+    ? "  (no extra invalid rules)"
+    : profile.invalid_rules.map((r) =>
+        `  - ${r.field}: ${r.rule}${r.value ? ` (${r.value})` : ""}`).join("\n");
+  const fallbackLines = Object.keys(profile.fallback_rules).length === 0
+    ? "  (no field-level fallbacks)"
+    : Object.entries(profile.fallback_rules).map(([k, v]) => `  - ${k} -> "${v}"`).join("\n");
+  const quick = profile.quick_replies.length ? profile.quick_replies.join(" | ") : "(none)";
+
+  return `You are preparing an audience batch for the "${ctx.workspaceName}" workspace.
+
+PREP PROFILE: ${profile.name}
+Campaign type: ${profile.campaign_type}
+Logical template / copy: ${ph(profile.template_label)}
+${profile.description ? `Notes: ${profile.description}\n` : ""}
+GOAL
+Take the raw input rows the operator gives you and produce a clean, validated dataset that can be inserted directly into the audience_rows table for this workspace.
+
+REQUIRED SOURCE FIELDS (must be present and non-empty unless a fallback covers them)
+${required}
+
+OPTIONAL SOURCE FIELDS
+${optional}
+
+VALIDATION RULES
+  - phone is required, normalised to digits only (no +, no spaces)
+  - phone length 7-15
+  - in-batch duplicate phones must be removed
+${invalidLines}
+
+FALLBACKS WHEN A FIELD IS MISSING
+${fallbackLines}
+
+DERIVED LAUNCH VARIABLES (computed per row, stored in derived_payload)
+${derivedLines}
+
+QUICK REPLIES (informational only)
+${quick}
+
+OUTPUT (one JSON array; one object per valid row)
+[
+  {
+    "phone": "9715xxxxxxxx",
+    "payload": { /* original source columns minus phone */ },
+    "derived_payload": { ${profile.derived_variables.map((d) => `"${d.key}": "..."`).join(", ") || ""} },
+    "validation_status": "valid"
+  }
+]
+
+INSERT TARGET (Supabase)
+  table: public.audience_rows
+  workspace_id: ${ctx.workspaceId}
+  batch_id: ${ctx.batchId ?? "<paste the batch id from the Data page>"}
+  prep_profile_id: ${profile.id}
+
+DO NOT
+  - invent values that are not present and not covered by a fallback
+  - include rows that fail required-field or invalid-rule checks
+  - re-use phones that already exist as "used" in this workspace`;
+}
+
+/**
+ * Lightweight fallback prompt for the operator path:
+ * what to put into a CSV/XLSX so the in-app Upload audience flow accepts it.
+ */
+export function buildFallbackPrompt(profile: PrepProfile): string {
+  const required = profile.required_fields.length ? profile.required_fields.join(", ") : "(none)";
+  const optional = profile.optional_fields.length ? profile.optional_fields.join(", ") : "(none)";
+  const derived = profile.derived_variables.length === 0
+    ? "(none defined)"
+    : profile.derived_variables.map((d) =>
+        d.strategy === "field" ? `${d.key} <- ${ph(d.source)}` :
+        d.strategy === "template" ? `${d.key} <- "${ph(d.template)}"` :
+        `${d.key} = "${ph(d.static)}"`).join("; ");
+  return `Fallback path: prepare a CSV/XLSX for the in-app Upload audience flow.
+
+Profile: ${profile.name} (${profile.campaign_type})
+Template: ${ph(profile.template_label)}
+
+Columns:
+  - phone (required, digits only or with +, will be normalised)
+  - ${required}  (required)
+  - ${optional}  (optional)
+
+Derived variables (rendered automatically once uploaded):
+  ${derived}
+
+Rules:
+  - one row per contact; no duplicate phones
+  - leave a cell empty only if the profile defines a fallback for that field
+  - do not pre-render derived variables — the app does that during upload`;
+}
+
 export type DerivedCoverage = { key: string; covered: number; total: number };
 
 export function computeDerivedCoverage(
