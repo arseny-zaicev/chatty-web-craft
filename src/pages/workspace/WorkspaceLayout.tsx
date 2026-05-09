@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 import { IskraLoader } from "@/components/IskraLoader";
+import { useHeartbeat } from "@/hooks/useHeartbeat";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
