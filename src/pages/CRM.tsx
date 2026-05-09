@@ -430,6 +430,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   <Star className={`w-3 h-3 ${starredOnly ? "fill-amber-500" : ""}`} />
                   Starred
                 </button>
+                <button
+                  onClick={() => setMyOnly((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition ${
+                    myOnly
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                  title="Show only chats assigned to me"
+                >
+                  My chats
+                </button>
               </div>
             </div>
 
