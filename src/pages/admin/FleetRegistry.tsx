@@ -625,10 +625,10 @@ function InlineStatusSelect({ value, onChange }: { value: Status; onChange: (v: 
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="draft">draft</SelectItem>
-        <SelectItem value="warming">warming</SelectItem>
         <SelectItem value="ready">ready</SelectItem>
-        <SelectItem value="restricted">restricted</SelectItem>
+        <SelectItem value="warming">warming</SelectItem>
+        <SelectItem value="draft">draft (stock)</SelectItem>
+        <SelectItem value="restricted">restricted (30d)</SelectItem>
         <SelectItem value="banned">banned</SelectItem>
         <SelectItem value="inactive">inactive</SelectItem>
       </SelectContent>
