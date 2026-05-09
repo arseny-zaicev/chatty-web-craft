@@ -104,6 +104,8 @@ export default function WorkspaceData() {
           </div>
         </div>
 
+        <PresetsSection workspaceName={workspace.name} workspaceId={workspace.id} />
+
         <PrepPromptsSection workspaceName={workspace.name} workspaceId={workspace.id} workspaceSlug={workspace.slug} />
 
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
