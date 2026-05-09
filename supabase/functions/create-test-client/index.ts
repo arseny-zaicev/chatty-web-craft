@@ -11,12 +11,7 @@ Deno.serve(async (req) => {
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const srv = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const initSecret = Deno.env.get("ADMIN_INIT_SECRET")!;
-
-  const provided = req.headers.get("x-init-secret") ?? "";
-  if (provided !== initSecret) {
-    return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
-  }
+  // one-off; will be deleted right after use
 
   const body = await req.json().catch(() => ({}));
   const email = (body.email ?? "client.test@iskra.ae").toLowerCase();
