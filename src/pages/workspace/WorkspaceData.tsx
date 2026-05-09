@@ -302,6 +302,29 @@ function UploadDialog({
     }
   };
 
+  // Auto-suggest column mapping (case-insensitive exact match) when profile or headers change.
+  const expectedFields = useMemo(
+    () => prepProfile ? Array.from(new Set([...prepProfile.required_fields, ...prepProfile.optional_fields])) : [],
+    [prepProfile],
+  );
+  const sourceColumns = useMemo(
+    () => parsed ? parsed.headers.filter((h) => h !== phoneColumn) : [],
+    [parsed, phoneColumn],
+  );
+  useMemo(() => {
+    if (!parsed || !prepProfile) return;
+    const next: Record<string, string> = { ...mapping };
+    let changed = false;
+    for (const src of sourceColumns) {
+      if (next[src]) continue;
+      const lower = src.toLowerCase().replace(/[\s_-]+/g, "");
+      const hit = expectedFields.find((f) => f.toLowerCase().replace(/[\s_-]+/g, "") === lower);
+      if (hit) { next[src] = hit; changed = true; }
+    }
+    if (changed) setMapping(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsed?.headers.join("|"), phoneColumn, prepProfile?.id]);
+
   const previewSummary = useMemo(() => {
     if (!parsed || !phoneColumn) return null;
     const seen = new Set<string>();
@@ -313,24 +336,28 @@ function UploadDialog({
       if (seen.has(cleaned)) { dup++; continue; }
       seen.add(cleaned);
       if (prepProfile) {
-        const payload: Record<string, string> = {};
-        for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
-        const vr = validateRowAgainstProfile(prepProfile, payload);
+        const raw: Record<string, string> = {};
+        for (const h of parsed.headers) if (h !== phoneColumn) raw[h] = r[h] ?? "";
+        const mapped = applyColumnMapping(raw, mapping);
+        const vr = validateRowAgainstProfile(prepProfile, mapped);
         if (!vr.ok) { invalid++; continue; }
       }
       valid++;
     }
     return { total: parsed.rows.length, valid, invalid, duplicates: dup };
-  }, [parsed, phoneColumn, prepProfile]);
+  }, [parsed, phoneColumn, prepProfile, mapping]);
 
-  const derivedSamples = useMemo(() => {
-    if (!parsed || !prepProfile) return [];
-    return parsed.rows.slice(0, 3).map((r) => {
-      const payload: Record<string, string> = {};
-      for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
-      return applyDerivedVariables(prepProfile, payload);
-    });
-  }, [parsed, prepProfile, phoneColumn]);
+  const sampleRender = useMemo(() => {
+    if (!parsed || !prepProfile || parsed.rows.length === 0) return null;
+    const r = parsed.rows[0];
+    const raw: Record<string, string> = {};
+    for (const h of parsed.headers) if (h !== phoneColumn) raw[h] = r[h] ?? "";
+    const mapped = applyColumnMapping(raw, mapping);
+    return {
+      derived: applyDerivedVariables(prepProfile, mapped),
+      message: renderSampleMessage(prepProfile, mapped),
+    };
+  }, [parsed, prepProfile, phoneColumn, mapping]);
 
   const submit = async () => {
     if (!parsed || !phoneColumn || !name.trim()) {
@@ -357,6 +384,7 @@ function UploadDialog({
         phoneColumn,
         sourceFilename: file?.name ?? null,
         prepProfile,
+        columnMapping: mapping,
       });
       toast.success(`Uploaded ${result.summary.valid} valid · ${result.summary.invalid} invalid · ${result.summary.duplicates} duplicates${result.isLaunchReady ? " · launch-ready" : ""}`);
       reset();
