@@ -304,6 +304,17 @@ function UploadDialog({
 
         <div className="space-y-4">
           <div>
+            <label className="text-xs text-muted-foreground">Prep Profile *</label>
+            <Select value={prepProfileId} onValueChange={setPrepProfileId}>
+              <SelectTrigger><SelectValue placeholder={(profilesQ.data?.length ?? 0) === 0 ? "Create a profile first in Prep Profiles" : "Pick a prep profile"} /></SelectTrigger>
+              <SelectContent>
+                {(profilesQ.data ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name} ({p.campaign_type})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
             <label className="text-xs text-muted-foreground">File (CSV / XLSX / TSV)</label>
             <input
               type="file"
