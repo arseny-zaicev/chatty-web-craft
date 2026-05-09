@@ -300,44 +300,102 @@ export default function LaunchWizard() {
       if (!campaignName.trim()) throw new Error("Name the campaign");
       if (!activeLogical) throw new Error("Pick a logical template");
       if (numberIds.length === 0) throw new Error("Select at least one sending number");
-      if (recipients.length === 0) throw new Error("Add recipients");
       if (resolution.missing.length > 0) throw new Error("Some numbers don't have an approved variant of this template");
+
+      // ---- Build the recipient list (and reserve DB rows if database mode) ----
+      let workingRecipients: Recipient[] = mappedRecipients;
+      let reservedRowIds: string[] = [];
+      let rowIdByPhone = new Map<string, string>();
+
+      if (audienceSource === "database") {
+        if (!dbBatch) throw new Error("Pick a database batch");
+        if (dbTargetCount <= 0) throw new Error("No unused rows available");
+        const reserved: AudienceRow[] = await reserveRows(
+          dbBatch.id,
+          dbAllUnused ? null : dbTargetCount,
+        );
+        if (reserved.length === 0) throw new Error("Could not reserve any rows (already used?)");
+        reservedRowIds = reserved.map((r) => r.id);
+        // Build mapped recipients from row.payload using current mapping
+        const built: Recipient[] = reserved.map((r) => {
+          const vars: Record<string, string> = {};
+          for (const v of variableNames) {
+            const src = mapping[v];
+            if (!src) continue;
+            if (src.startsWith("__static:")) vars[v] = src.slice("__static:".length);
+            else vars[v] = String(r.payload?.[src] ?? "");
+          }
+          rowIdByPhone.set(r.phone, r.id);
+          return { phone: r.phone, variables: vars };
+        });
+        workingRecipients = built;
+      } else if (workingRecipients.length === 0) {
+        throw new Error("Add recipients");
+      }
 
       // Distribute recipients across numbers
       const buckets = new Map<string, Recipient[]>();
       const targets = resolution.ok;
       if (targets.length === 1) {
-        buckets.set(targets[0].numberId, mappedRecipients);
+        buckets.set(targets[0].numberId, workingRecipients);
       } else {
         targets.forEach((t) => buckets.set(t.numberId, []));
-        mappedRecipients.forEach((r, i) => {
+        workingRecipients.forEach((r, i) => {
           const t = targets[i % targets.length];
           buckets.get(t.numberId)!.push(r);
         });
       }
 
-      const results: Array<{ ok: boolean; numberId: string; res?: any; error?: string }> = [];
-      for (const t of targets) {
-        const list = buckets.get(t.numberId) ?? [];
-        if (list.length === 0) continue;
-        const subname = targets.length > 1
-          ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
-          : campaignName;
-        const { data: res, error } = await supabase.functions.invoke("campaigns", {
-          body: {
-            action: "launch",
-            name: subname,
-            whatsapp_number_id: t.numberId,
-            template_id: t.template.id,
-            delay_min_seconds: delayMin,
-            delay_max_seconds: delayMax,
-            recipients: list,
-          },
-        });
-        if (error) results.push({ ok: false, numberId: t.numberId, error: error.message });
-        else if ((res as any)?.error) results.push({ ok: false, numberId: t.numberId, error: (res as any).error });
-        else results.push({ ok: true, numberId: t.numberId, res });
+      const results: Array<{ ok: boolean; numberId: string; res?: any; error?: string; rowIds?: string[] }> = [];
+      try {
+        for (const t of targets) {
+          const list = buckets.get(t.numberId) ?? [];
+          if (list.length === 0) continue;
+          const bucketRowIds = audienceSource === "database"
+            ? list.map((r) => rowIdByPhone.get(r.phone)).filter((x): x is string => !!x)
+            : [];
+          const subname = targets.length > 1
+            ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
+            : campaignName;
+          const { data: res, error } = await supabase.functions.invoke("campaigns", {
+            body: {
+              action: "launch",
+              name: subname,
+              whatsapp_number_id: t.numberId,
+              template_id: t.template.id,
+              delay_min_seconds: delayMin,
+              delay_max_seconds: delayMax,
+              recipients: list,
+            },
+          });
+          if (error) results.push({ ok: false, numberId: t.numberId, error: error.message, rowIds: bucketRowIds });
+          else if ((res as any)?.error) results.push({ ok: false, numberId: t.numberId, error: (res as any).error, rowIds: bucketRowIds });
+          else results.push({ ok: true, numberId: t.numberId, res, rowIds: bucketRowIds });
+        }
+      } catch (e) {
+        // Outer failure -> release everything still reserved
+        if (reservedRowIds.length > 0) {
+          try { await releaseRows(reservedRowIds); } catch { /* swallow */ }
+        }
+        throw e;
       }
+
+      // Mark used / release per bucket result
+      if (audienceSource === "database") {
+        for (const r of results) {
+          const ids = r.rowIds ?? [];
+          if (ids.length === 0) continue;
+          if (r.ok) {
+            const cid = (r.res as any)?.campaign_id;
+            if (cid) {
+              try { await markRowsUsed(ids, cid); } catch { /* ignore */ }
+            }
+          } else {
+            try { await releaseRows(ids); } catch { /* ignore */ }
+          }
+        }
+      }
+
       // Persist mapping for next time
       if (workspace && activeLogical) saveMapping(workspace.id, activeLogical.key, mapping);
       return results;
