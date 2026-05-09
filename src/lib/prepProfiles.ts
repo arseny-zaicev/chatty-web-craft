@@ -175,6 +175,36 @@ export function validateRowAgainstProfile(
   return { ok: errors.length === 0, errors };
 }
 
+/**
+ * Apply a column mapping (sourceColumn -> profileField) to a raw row.
+ * Unmapped columns are passed through unchanged so nothing is lost.
+ */
+export function applyColumnMapping(
+  row: Record<string, string>,
+  mapping: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = { ...row };
+  for (const [src, dest] of Object.entries(mapping)) {
+    if (!dest || src === dest) continue;
+    if (row[src] != null && (out[dest] == null || out[dest] === "")) out[dest] = row[src];
+  }
+  return out;
+}
+
+/**
+ * Render the saved sample_message_template using a row's payload + derived vars.
+ * Returns null if no template is defined on the profile.
+ */
+export function renderSampleMessage(
+  profile: PrepProfile,
+  row: Record<string, string>,
+): string | null {
+  if (!profile.sample_message_template) return null;
+  const derived = applyDerivedVariables(profile, row);
+  const merged: Record<string, string> = { ...row, ...derived };
+  return renderTemplate(profile.sample_message_template, merged, profile.fallback_rules);
+}
+
 /* ---------- Prompt builders (Codex / fallback) ---------- */
 
 const ph = (s: string | null | undefined, fb = "—") =>
