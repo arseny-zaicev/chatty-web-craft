@@ -193,7 +193,14 @@ function Stat({ label, value, className }: { label: string; value: number; class
 function PresetsSection({
   workspaceName, workspaceId,
 }: { workspaceName: string; workspaceId: string }) {
+  const qc = useQueryClient();
   const [viewing, setViewing] = useState<PrepPreset | null>(null);
+  const [creating, setCreating] = useState<PrepPreset | null>(null);
+  const [batchName, setBatchName] = useState("");
+  const [batchCountry, setBatchCountry] = useState("");
+  const [batchNotes, setBatchNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
 
   const copy = async (text: string, label: string) => {
     try {
@@ -201,6 +208,47 @@ function PresetsSection({
       toast.success(`${label} copied`);
     } catch {
       toast.error("Clipboard blocked - select text manually");
+    }
+  };
+
+  const startCreate = (p: PrepPreset) => {
+    setCreating(p);
+    setBatchName(`${p.name} - ${new Date().toISOString().slice(0, 10)}`);
+    setBatchCountry("");
+    setBatchNotes("");
+    setCreatedBatchId(null);
+  };
+
+  const submitBatch = async () => {
+    if (!creating || !batchName.trim()) { toast.error("Batch name required"); return; }
+    setBusy(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Not authenticated");
+      const { data, error } = await (supabase.from("audience_batches") as any).insert({
+        workspace_id: workspaceId,
+        user_id: u.user.id,
+        name: batchName.trim(),
+        country: batchCountry.trim() || null,
+        campaign_type: creating.campaignType,
+        copy_profile: creating.id,
+        notes: batchNotes.trim() || null,
+        variable_schema: creating.variables.map((v) => v.key),
+        source_filename: null,
+        prep_profile_id: null,
+        is_launch_ready: false,
+        derived_variables_preview: [],
+        column_mapping: {},
+      }).select("id").single();
+      if (error || !data) throw error ?? new Error("Failed to create batch");
+      setCreatedBatchId(data.id);
+      toast.success("Batch created - copy the prompt below");
+      qc.invalidateQueries({ queryKey: audienceKeys.batches(workspaceId) });
+      qc.invalidateQueries({ queryKey: audienceKeys.stats(workspaceId) });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create batch");
+    } finally {
+      setBusy(false);
     }
   };
 
