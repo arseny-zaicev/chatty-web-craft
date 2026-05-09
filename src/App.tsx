@@ -29,6 +29,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { IskraLoader } from "@/components/IskraLoader";
 import Index from "./pages/Index";
 
 // Lazy-load all secondary routes to keep initial bundle small
@@ -79,12 +80,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const RouteFallback = () => (
-  <main className="min-h-screen bg-background flex items-center justify-center px-6" aria-busy="true">
-    <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
-    <span className="sr-only">Loading…</span>
-  </main>
-);
+const RouteFallback = () => <IskraLoader />;
 
 const SiteChrome = () => {
   const { pathname } = useLocation();

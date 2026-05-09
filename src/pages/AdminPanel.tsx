@@ -10,6 +10,7 @@ import {
   Activity, ArrowRight, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, BarChart3,
   Phone, LayoutDashboard, Clock, Globe, Users,
 } from "lucide-react";
+import { IskraLoader } from "@/components/IskraLoader";
 import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
@@ -111,11 +112,7 @@ const AdminPanel = () => {
   };
 
   if (!authChecked) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <IskraLoader message="Unlocking the admin console…" />;
   }
 
   return (
