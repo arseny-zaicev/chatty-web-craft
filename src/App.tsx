@@ -86,7 +86,7 @@ const RouteFallback = () => (
 
 const SiteChrome = () => {
   const { pathname } = useLocation();
-  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname === "/admin-auth" || pathname === "/client-auth";
+  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname === "/admin-auth" || pathname === "/portal-auth";
 
   if (isAppArea) return null;
 
