@@ -469,6 +469,47 @@ function UploadDialog({
                 </div>
               </div>
 
+              {prepProfile && sourceColumns.length > 0 && (
+                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                  <div className="text-sm font-medium">Map source columns to expected fields</div>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-matched by name where possible. Override below. Unmapped columns are kept as-is in <code>payload</code>.
+                  </p>
+                  <div className="grid gap-1.5">
+                    {sourceColumns.map((src) => (
+                      <div key={src} className="grid grid-cols-12 gap-2 items-center">
+                        <code className="col-span-5 text-xs truncate" title={src}>{src}</code>
+                        <span className="col-span-1 text-center text-muted-foreground text-xs">→</span>
+                        <Select value={mapping[src] ?? "__same"} onValueChange={(v) => {
+                          const next = { ...mapping };
+                          if (v === "__same") delete next[src]; else next[src] = v;
+                          setMapping(next);
+                        }}>
+                          <SelectTrigger className="col-span-6 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__same">(keep as &quot;{src}&quot;)</SelectItem>
+                            {expectedFields.map((f) => {
+                              const required = prepProfile.required_fields.includes(f);
+                              return <SelectItem key={f} value={f}>{f}{required ? " *" : ""}</SelectItem>;
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                  {(() => {
+                    const usedTargets = new Set(Object.values(mapping));
+                    const missing = prepProfile.required_fields.filter((f) => !usedTargets.has(f) && !sourceColumns.includes(f));
+                    if (missing.length === 0) return null;
+                    return (
+                      <div className="text-xs text-amber-600 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Missing required fields: {missing.join(", ")}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               {previewSummary && (
                 <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
                   <div className="font-medium mb-1">Preview</div>
@@ -479,8 +520,24 @@ function UploadDialog({
                     <Stat label="Duplicates" value={previewSummary.duplicates} className="text-amber-600" />
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Variables to be stored: {parsed.headers.filter((h) => h !== phoneColumn).join(", ") || "none"}
+                    Variables to be stored: {parsed.headers.filter((h) => h !== phoneColumn).map((h) => mapping[h] && mapping[h] !== "" ? mapping[h] : h).join(", ") || "none"}
                   </div>
+                </div>
+              )}
+
+              {sampleRender && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                  <div className="text-sm font-medium flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" /> First-row rendered preview</div>
+                  <div className="font-mono text-xs space-y-0.5">
+                    {Object.entries(sampleRender.derived).map(([k, v]) => (
+                      <div key={k}><span className="text-primary">{k}</span> = {v || <em className="text-muted-foreground">(empty)</em>}</div>
+                    ))}
+                  </div>
+                  {sampleRender.message != null && (
+                    <div className="rounded-md bg-background border border-border p-2 whitespace-pre-wrap text-xs">
+                      {sampleRender.message || <em className="text-muted-foreground">(empty render — add a sample message body to the prep profile)</em>}
+                    </div>
+                  )}
                 </div>
               )}
             </>
