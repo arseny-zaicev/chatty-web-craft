@@ -723,8 +723,13 @@ function AddNumberDrawer({
         restrictionPatch.restricted_at = null;
       }
 
-      // Display name status is edited inline from the table - no patch needed here.
+      // Display name approval (also editable inline from the table).
+      const desiredDn: DnStatus = dnApproved ? "approved" : "pending";
       const dnPatch: Record<string, unknown> = {};
+      if (!editing || editing.display_name_status !== desiredDn) {
+        dnPatch.display_name_status = desiredDn;
+        dnPatch.display_name_checked_at = new Date().toISOString();
+      }
 
       const payload = {
         phone_number: cleanPhone,
