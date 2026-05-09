@@ -413,13 +413,25 @@ const BrandAssets = () => {
                   <img src={linkedinBanner} alt="ISKRA LinkedIn Banner" className="w-full max-w-[400px] rounded-lg object-cover" />
                 </div>
                 <p className="font-semibold text-sm text-center mb-1">LinkedIn Banner</p>
-                <p className="text-xs text-muted-foreground text-center mb-3">1584 × 396 pixels</p>
-                <div className="flex justify-center">
-                  <a href={linkedinBanner} download="iskra-linkedin-banner.png">
+                <p className="text-xs text-muted-foreground text-center mb-3">1584 × 396 - canonical mark + wordmark</p>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <a href={linkedinBanner} download="iskra-linkedin-banner.svg">
                     <Button variant="outline" size="sm" className="gap-2">
-                      <Download className="w-4 h-4" /> Download PNG
+                      <Download className="w-4 h-4" /> SVG
                     </Button>
                   </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={async () => {
+                      const res = await fetch(linkedinBanner);
+                      const svg = await res.text();
+                      downloadPNGFromSVG(svg, "iskra-linkedin-banner.png", 1584, 396);
+                    }}
+                  >
+                    <Download className="w-4 h-4" /> PNG
+                  </Button>
                 </div>
               </div>
             </div>
