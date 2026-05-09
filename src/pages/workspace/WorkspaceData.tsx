@@ -298,37 +298,33 @@ function PrepPromptsSection({
         Optional: hand-built recipes for edge cases the presets above don't cover. Manage them in <Link to={`/ws/${workspaceSlug}/data/profiles`} className="text-primary underline">Prep Profiles</Link>.
       </p>
 
-      {(
-        <></>
-      )}
-        <div className="grid gap-2 sm:grid-cols-2">
-          {profiles.map((p) => (
-            <div key={p.id} className="rounded-md border border-border p-3 bg-background/40">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-sm truncate">{p.name}</span>
-                <Badge variant="outline" className="text-[10px]">{p.campaign_type}</Badge>
-                {p.template_label && <Badge variant="outline" className="text-[10px] text-muted-foreground">{p.template_label}</Badge>}
-              </div>
-              <div className="text-[11px] text-muted-foreground mt-1">
-                required: {p.required_fields.join(", ") || "none"} · derives: {p.derived_variables.map((d) => d.key).join(", ") || "none"}
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                <Button size="sm" variant="outline" onClick={() => setViewing(p)}>
-                  <Eye className="w-3.5 h-3.5 mr-1" /> View prompt
-                </Button>
-                <Button size="sm" variant="ghost"
-                  onClick={() => copy(buildPrepPrompt(p, { workspaceName, workspaceId }), "Prep prompt")}>
-                  <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
-                </Button>
-                <Button size="sm" variant="ghost"
-                  onClick={() => copy(buildFallbackPrompt(p), "Fallback prompt")}>
-                  <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy fallback
-                </Button>
-              </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {profiles.map((p) => (
+          <div key={p.id} className="rounded-md border border-border p-3 bg-background/40">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-sm truncate">{p.name}</span>
+              <Badge variant="outline" className="text-[10px]">{p.campaign_type}</Badge>
+              {p.template_label && <Badge variant="outline" className="text-[10px] text-muted-foreground">{p.template_label}</Badge>}
             </div>
-          ))}
-        </div>
-      )}
+            <div className="text-[11px] text-muted-foreground mt-1">
+              required: {p.required_fields.join(", ") || "none"} · derives: {p.derived_variables.map((d) => d.key).join(", ") || "none"}
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              <Button size="sm" variant="outline" onClick={() => setViewing(p)}>
+                <Eye className="w-3.5 h-3.5 mr-1" /> View prompt
+              </Button>
+              <Button size="sm" variant="ghost"
+                onClick={() => copy(buildPrepPrompt(p, { workspaceName, workspaceId }), "Prep prompt")}>
+                <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
+              </Button>
+              <Button size="sm" variant="ghost"
+                onClick={() => copy(buildFallbackPrompt(p), "Fallback prompt")}>
+                <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy fallback
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <Dialog open={!!viewing} onOpenChange={(o) => { if (!o) setViewing(null); }}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
