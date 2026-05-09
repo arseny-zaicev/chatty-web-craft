@@ -324,14 +324,21 @@ export default function LaunchWizard() {
   };
 
   // ----- ETA -----
+  const fmtDur = (sec: number) => {
+    if (sec < 60) return `${sec}s`;
+    const m = Math.round(sec / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return mm ? `${h}h ${mm}m` : `${h}h`;
+  };
   const eta = useMemo(() => {
     const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
-    const avgDelay = type === "marketing" ? Math.max(1, (delayMin + delayMax) / 2) : (delayMin + delayMax) / 2;
-    const seconds = Math.round(perNumber * avgDelay);
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-    return `${(seconds / 3600).toFixed(1)}h`;
-  }, [recipients.length, activeNumbers.length, delayMin, delayMax, type]);
+    const avgSec = Math.round(perNumber * (delayMin + delayMax) / 2);
+    const maxSec = Math.round(perNumber * delayMax);
+    if (!perNumber) return "-";
+    return `${fmtDur(avgSec)} avg · up to ${fmtDur(maxSec)}`;
+  }, [recipients.length, activeNumbers.length, delayMin, delayMax]);
 
   // ----- Recipient region clock & realistic pacing -----
   const recipientTz = useMemo(() => COUNTRY_TZ[poolCountry?.toUpperCase() ?? ""] ?? null, [poolCountry]);
