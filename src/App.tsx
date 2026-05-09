@@ -123,7 +123,7 @@ const RouteFallback = () => <IskraLoader />;
 
 const SiteChrome = () => {
   const { pathname } = useLocation();
-  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname === "/admin-auth" || pathname === "/portal-auth" || pathname === "/accept-invite";
+  const isAppArea = pathname.startsWith("/admin") || pathname.startsWith("/ws") || pathname.startsWith("/join/") || pathname === "/admin-auth" || pathname === "/portal-auth" || pathname === "/accept-invite";
 
   if (isAppArea) return null;
 
