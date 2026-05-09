@@ -4,23 +4,46 @@ import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Download, FileImage, Palette, LayoutGrid, Square, RectangleHorizontal, Copy, Sparkles } from "lucide-react";
 import workspaceAvatar from "@/assets/logo/iskra-workspace-avatar.png";
-import linkedinBanner from "@/assets/linkedin/iskra-linkedin-banner-v3.png";
+import linkedinBanner from "@/assets/linkedin/iskra-linkedin-banner-v4.svg";
 import { useToast } from "@/hooks/use-toast";
 
-// 4-pointed spark path (viewBox 0 0 160 160) - matches official ISKRA logo
-const SPARK_PATH = "M80 0L92 56L148 80L92 104L80 160L68 104L12 80L68 56L80 0Z";
+// Lucide Sparkles glyph - the canonical ISKRA mark (matches in-app IskraSparkMark + favicon).
+const SPARKLES_PATHS = `
+  <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+  <path d="M20 3v4"/>
+  <path d="M22 5h-4"/>
+  <path d="M4 17v2"/>
+  <path d="M5 18H3"/>
+`;
 
-// ISKRA Spark Logo - 4-pointed star
-const IskraSparkSVG = ({ size = 64, color = "#ffffff" }: { size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d={SPARK_PATH} fill={color} />
+// React preview of the Sparkles mark.
+const SparklesGlyph = ({ size = 24, stroke = "#ffffff", strokeWidth = 1.6 }: { size?: number; stroke?: string; strokeWidth?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+    <path d="M20 3v4" />
+    <path d="M22 5h-4" />
+    <path d="M4 17v2" />
+    <path d="M5 18H3" />
   </svg>
 );
 
-// Full logo (icon + ISKRA wordmark) preview
-const FullLogoPreview = ({ bgColor, fgColor }: { bgColor: string; fgColor: string }) => (
+// Canonical mark = sparkles glyph centered inside an emerald rounded square (or just glyph for transparent variants).
+const IskraMarkPreview = ({ size = 80, bg, glyphColor }: { size?: number; bg?: string; glyphColor: string }) => {
+  const inner = Math.round(size * 0.5);
+  if (!bg) {
+    return <SparklesGlyph size={inner} stroke={glyphColor} strokeWidth={1.6} />;
+  }
+  return (
+    <div className="rounded-2xl flex items-center justify-center" style={{ width: size, height: size, background: bg }}>
+      <SparklesGlyph size={inner} stroke={glyphColor} strokeWidth={1.6} />
+    </div>
+  );
+};
+
+// Full logo (mark + ISKRA wordmark) preview
+const FullLogoPreview = ({ bgColor, fgColor, markBg }: { bgColor: string; fgColor: string; markBg?: string }) => (
   <div className="flex items-center gap-4 px-10 py-8 rounded-lg" style={{ backgroundColor: bgColor }}>
-    <IskraSparkSVG size={64} color={fgColor} />
+    <IskraMarkPreview size={72} bg={markBg} glyphColor={markBg ? "#ffffff" : fgColor} />
     <span className="font-display text-5xl font-bold tracking-tight" style={{ color: fgColor }}>ISKRA</span>
   </div>
 );
