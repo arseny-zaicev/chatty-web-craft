@@ -341,7 +341,7 @@ export default function FleetRegistry() {
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-8 w-56" placeholder="Search phone, label..." value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ["ready", "ready"], ["warming", "warming"], ["draft", "draft"], ["restricted", "restricted"], ["banned", "banned"], ["inactive", "inactive"]]} />
+          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ["inactive", "active"], ["ready", "ready"], ["draft", "stock"], ["warming", "warming"], ["restricted", "restricted (30d)"], ["banned", "banned"]]} />
           <FilterSelect value={fUsage} onChange={setFUsage} placeholder="All use cases" options={[["all", "All use cases"], ["marketing", "marketing"], ["utility", "utility"], ["both", "both"]]} />
         </div>
 
