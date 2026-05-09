@@ -176,7 +176,7 @@ async function notifyLaunchSlack(workspace_id: string | null, payload: { name: s
     const slackKey = Deno.env.get("SLACK_API_KEY");
     if (!lovableKey || !slackKey) return;
     // Look up channel from workspace, fallback to default
-    let channel = "#iskra-campaigns";
+    let channel = "#client-wins";
     if (workspace_id) {
       try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -189,8 +189,15 @@ async function notifyLaunchSlack(workspace_id: string | null, payload: { name: s
     const text = `🚀 *Campaign launched*: ${payload.name}\n• Recipients: *${payload.recipients}*\n• First send: ${payload.firstAt}\n• Scheduler: ${payload.mode}${payload.numberPhone ? `\n• Number: +${payload.numberPhone}` : ""}`;
     await fetch("https://connector-gateway.lovable.dev/slack/api/chat.postMessage", {
       method: "POST",
-      headers: { Authorization: `Bearer ${lovableKey}`, "X-Connection-Api-Key": slackKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ channel, text, unfurl_links: false, unfurl_media: false }),
+      headers: { Authorization: `Bearer ${lovableKey}`, "X-Connection-Api-Key": slackKey, "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        channel,
+        text,
+        username: "Iskra",
+        icon_url: "https://iskra.ae/iskra-favicon-v2.svg",
+        unfurl_links: false,
+        unfurl_media: false,
+      }),
     }).catch(() => {});
   } catch { /* ignore */ }
 }
