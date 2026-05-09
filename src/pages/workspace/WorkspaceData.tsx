@@ -198,6 +198,8 @@ function PresetsSection({
   const [creating, setCreating] = useState<PrepPreset | null>(null);
   const [batchName, setBatchName] = useState("");
   const [batchCountry, setBatchCountry] = useState("");
+  const [batchAudience, setBatchAudience] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
   const [batchNotes, setBatchNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
@@ -211,23 +213,36 @@ function PresetsSection({
     }
   };
 
-  const buildBatchName = (p: PrepPreset, country: string) => {
+  const buildBatchName = (country: string, audience: string) => {
     const date = new Date().toISOString().slice(0, 10);
     const c = country.trim().toUpperCase() || "ALL";
-    return `${date} | ${c} | ${p.name}`;
+    const a = audience.trim() || "AUDIENCE";
+    return `${date} | ${c} | ${a}`;
   };
 
   const startCreate = (p: PrepPreset) => {
     setCreating(p);
     setBatchCountry("");
+    setBatchAudience("");
     setBatchNotes("");
-    setBatchName(buildBatchName(p, ""));
+    setNameTouched(false);
+    setBatchName(buildBatchName("", ""));
     setCreatedBatchId(null);
   };
 
   const onCountryChange = (val: string) => {
     setBatchCountry(val);
-    if (creating && !createdBatchId) setBatchName(buildBatchName(creating, val));
+    if (!nameTouched && !createdBatchId) setBatchName(buildBatchName(val, batchAudience));
+  };
+
+  const onAudienceChange = (val: string) => {
+    setBatchAudience(val);
+    if (!nameTouched && !createdBatchId) setBatchName(buildBatchName(batchCountry, val));
+  };
+
+  const onBatchNameChange = (val: string) => {
+    setBatchName(val);
+    setNameTouched(true);
   };
 
   const submitBatch = async () => {
@@ -327,17 +342,28 @@ function PresetsSection({
           {creating && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground">Batch name *</label>
-                  <Input value={batchName} onChange={(e) => setBatchName(e.target.value)} disabled={!!createdBatchId} />
-                </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Country (optional)</label>
-                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE" disabled={!!createdBatchId} />
+                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE, US, ALL" disabled={!!createdBatchId} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Audience *</label>
+                  <Input value={batchAudience} onChange={(e) => onAudienceChange(e.target.value)} placeholder="e.g. cold leads Q2, no-shows, churned" disabled={!!createdBatchId} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground flex items-center justify-between">
+                    <span>Batch name *</span>
+                    <span className="text-[10px] text-muted-foreground/70">format: DATE | COUNTRY | AUDIENCE (auto-fills from fields above)</span>
+                  </label>
+                  <Input value={batchName} onChange={(e) => onBatchNameChange(e.target.value)} disabled={!!createdBatchId} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Campaign type</label>
                   <Input value={creating.campaignType} disabled />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Template variant</label>
+                  <Input value={creating.name} disabled />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-muted-foreground">Notes (optional)</label>
