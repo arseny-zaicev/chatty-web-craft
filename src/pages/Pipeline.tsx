@@ -862,4 +862,60 @@ const DealCard = ({
   );
 };
 
+type ActionZone = {
+  id: string;
+  label: string;
+  bg: string;
+  hoverBg: string;
+  text: string;
+};
+
+const ActionDropZone = ({ zone }: { zone: ActionZone }) => {
+  const { setNodeRef, isOver } = useDroppable({ id: zone.id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex-1 h-full flex items-center justify-center text-sm font-semibold transition-all ${zone.text} ${isOver ? `${zone.hoverBg} scale-[1.02]` : zone.bg}`}
+    >
+      {zone.label}
+    </div>
+  );
+};
+
+const BottomActionBar = ({ visible, stages }: { visible: boolean; stages: Stage[] }) => {
+  if (!visible) return null;
+
+  // Build zones from stage_type (won/lost) + special "delete"
+  const won = stages.filter((s) => s.stage_type === "won");
+  const lost = stages.filter((s) => s.stage_type === "lost");
+
+  const zones: ActionZone[] = [
+    { id: "__delete__", label: "Delete", bg: "bg-muted/80", hoverBg: "bg-muted", text: "text-foreground" },
+    ...lost.map<ActionZone>((s) => ({
+      id: s.id,
+      label: s.name,
+      bg: "bg-destructive/80",
+      hoverBg: "bg-destructive",
+      text: "text-destructive-foreground",
+    })),
+    ...won.map<ActionZone>((s) => ({
+      id: s.id,
+      label: s.name,
+      bg: "bg-emerald-600/80",
+      hoverBg: "bg-emerald-600",
+      text: "text-white",
+    })),
+  ];
+
+  if (zones.length === 0) return null;
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-16 flex shadow-2xl z-50 pointer-events-auto animate-in slide-in-from-bottom-4 duration-150">
+      {zones.map((z) => (
+        <ActionDropZone key={z.id} zone={z} />
+      ))}
+    </div>
+  );
+};
+
 export default Pipeline;
