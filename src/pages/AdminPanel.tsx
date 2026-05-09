@@ -7,6 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import {
   Loader2, LogOut, Plus, Sparkles, Building2, Rocket, Inbox, Megaphone, FileText,
+} from "lucide-react";
+import { IskraLoader } from "@/components/IskraLoader";
+import {
+  // dummy block to keep prior import shape — will be removed below
+  Sparkles as _IskraDummy,
   Activity, ArrowRight, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, BarChart3,
   Phone, LayoutDashboard, Clock, Globe, Users,
 } from "lucide-react";
