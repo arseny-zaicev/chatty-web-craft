@@ -341,7 +341,7 @@ export default function FleetRegistry() {
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-8 w-56" placeholder="Search phone, label..." value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ["ready", "ready"], ["warming", "warming"], ["draft", "draft"], ["restricted", "restricted"], ["banned", "banned"], ["inactive", "inactive"]]} />
+          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ["ready", "ready"], ["warming", "warming"], ["draft", "draft (stock)"], ["restricted", "restricted (30d)"], ["banned", "banned"], ["inactive", "inactive"]]} />
           <FilterSelect value={fUsage} onChange={setFUsage} placeholder="All use cases" options={[["all", "All use cases"], ["marketing", "marketing"], ["utility", "utility"], ["both", "both"]]} />
         </div>
 
@@ -625,10 +625,10 @@ function InlineStatusSelect({ value, onChange }: { value: Status; onChange: (v: 
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="draft">draft</SelectItem>
-        <SelectItem value="warming">warming</SelectItem>
         <SelectItem value="ready">ready</SelectItem>
-        <SelectItem value="restricted">restricted</SelectItem>
+        <SelectItem value="warming">warming</SelectItem>
+        <SelectItem value="draft">draft (stock)</SelectItem>
+        <SelectItem value="restricted">restricted (30d)</SelectItem>
         <SelectItem value="banned">banned</SelectItem>
         <SelectItem value="inactive">inactive</SelectItem>
       </SelectContent>
@@ -669,13 +669,14 @@ function AddNumberDrawer({
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("draft");
+  const [dnApproved, setDnApproved] = useState<boolean>(false);
   
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft");
+    setProvidedBy(""); setAssignedRef(""); setStatus("draft"); setDnApproved(false);
   };
 
   useEffect(() => {
@@ -694,7 +695,7 @@ function AddNumberDrawer({
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
       setStatus(editing.status);
-      
+      setDnApproved(editing.display_name_status === "approved");
     } else {
       reset();
     }
@@ -722,8 +723,13 @@ function AddNumberDrawer({
         restrictionPatch.restricted_at = null;
       }
 
-      // Display name status is edited inline from the table - no patch needed here.
+      // Display name approval (also editable inline from the table).
+      const desiredDn: DnStatus = dnApproved ? "approved" : "pending";
       const dnPatch: Record<string, unknown> = {};
+      if (!editing || editing.display_name_status !== desiredDn) {
+        dnPatch.display_name_status = desiredDn;
+        dnPatch.display_name_checked_at = new Date().toISOString();
+      }
 
       const payload = {
         phone_number: cleanPhone,
@@ -792,6 +798,17 @@ function AddNumberDrawer({
 
           <Field label="Display name">
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Iskra Sales" />
+            <div className="flex items-center justify-between mt-2 px-1">
+              <div className="text-[11px] text-muted-foreground">
+                Approved by Meta?
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] ${dnApproved ? "text-emerald-700 font-medium" : "text-muted-foreground"}`}>
+                  {dnApproved ? "approved" : "pending"}
+                </span>
+                <Switch checked={dnApproved} onCheckedChange={setDnApproved} />
+              </div>
+            </div>
           </Field>
 
           <Field label="Profile picture">
@@ -836,7 +853,7 @@ function AddNumberDrawer({
             <Select value={workspaceId} onValueChange={setWorkspaceId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__unassigned__">Unassigned (stock / warming / future client)</SelectItem>
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
                 {workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -846,9 +863,9 @@ function AddNumberDrawer({
             <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="draft">draft</SelectItem>
-                <SelectItem value="warming">warming</SelectItem>
                 <SelectItem value="ready">ready</SelectItem>
+                <SelectItem value="warming">warming</SelectItem>
+                <SelectItem value="draft">draft (stock)</SelectItem>
                 <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
                 <SelectItem value="banned">banned</SelectItem>
                 <SelectItem value="inactive">inactive</SelectItem>
