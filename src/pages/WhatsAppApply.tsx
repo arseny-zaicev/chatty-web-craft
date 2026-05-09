@@ -1,7 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { WhatsAppOutreachForm } from "@/components/WhatsAppOutreachForm";
-import { Sparkles } from "lucide-react";
+import { IskraLogo } from "@/components/IskraLogo";
 
 const WhatsAppApply = () => {
   return (
