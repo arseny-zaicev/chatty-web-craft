@@ -94,12 +94,14 @@ export default function JoinTeam() {
         return;
       }
 
+      // Remember email for the sign-in page (prefill on next visit)
+      try { localStorage.setItem("iskra:lastEmail", mail); } catch { /* ignore */ }
+
       // Sign the user in
       const { error: signErr } = await supabase.auth.signInWithPassword({ email: mail, password });
       if (signErr) {
-        // Email already existed and password was different
         if (result.already_existed) {
-          toast.success("You were added to the workspace. Please sign in.");
+          toast.success("You were added to the workspace. Sign in with your existing password.");
           navigate("/portal-auth", { replace: true });
           return;
         }
