@@ -181,20 +181,31 @@ export default function OpsLive() {
     (async () => {
       // Token-based public access path
       if (tokenParam) {
+        // Guard against placeholder URLs like /tv/:token
+        const looksValid = /^[A-Za-z0-9_-]{16,}$/.test(tokenParam);
+        if (!looksValid) {
+          if (!mounted) return;
+          setTokenError("This TV link is invalid. Generate a new one from the admin panel.");
+          setAuthChecked(true);
+          return;
+        }
         try {
           const { data, error } = await supabase.functions.invoke("tv-token?action=verify", {
             body: { token: tokenParam },
           });
           if (!mounted) return;
           if (error || !data?.valid) {
-            navigate("/admin-auth");
+            setTokenError("This TV link has expired or was revoked. Please generate a new one.");
+            setAuthChecked(true);
             return;
           }
           setTokenMode(true);
           setAuthChecked(true);
           return;
         } catch {
-          navigate("/admin-auth");
+          if (!mounted) return;
+          setTokenError("Could not verify TV link. Please try again.");
+          setAuthChecked(true);
           return;
         }
       }
