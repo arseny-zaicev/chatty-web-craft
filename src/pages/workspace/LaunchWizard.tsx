@@ -156,6 +156,7 @@ export default function LaunchWizard() {
     ? Array.from({ length: dbTargetCount }, () => ({ phone: "", variables: {} } as Recipient))
     : csvRecipients;
   const columns = audienceSource === "database" ? (dbBatch?.variable_schema ?? []) : csvColumns;
+  const variableNames = activeLogical?.variables ?? [];
 
   // Auto-map variables by name match
   useEffect(() => {
