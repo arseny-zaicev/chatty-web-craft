@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Users } from "lucide-react";
+import { Loader2, Users, Eye, EyeOff } from "lucide-react";
 import { IskraLogo } from "@/components/IskraLogo";
 
 interface LinkInfo {
