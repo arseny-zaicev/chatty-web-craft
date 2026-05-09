@@ -85,14 +85,24 @@ export default function WorkspaceData() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" title="Refresh"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: audienceKeys.batches(workspace.id) });
+                qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace.id) });
+                qc.invalidateQueries({ queryKey: prepProfileKeys.list(workspace.id) });
+              }}>
+              <RefreshCw className="w-4 h-4" />
+            </Button>
             <Button asChild variant="outline">
               <Link to={`/ws/${workspace.slug}/data/profiles`}><Wand2 className="w-4 h-4 mr-1" />Prep Profiles</Link>
             </Button>
             <Button onClick={() => setOpenUpload(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Upload audience
+              <Upload className="w-4 h-4 mr-1" /> Upload audience (fallback)
             </Button>
           </div>
         </div>
+
+        <PrepPromptsSection workspaceName={workspace.name} workspaceId={workspace.id} workspaceSlug={workspace.slug} />
 
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
           {batchesQ.isLoading && (
