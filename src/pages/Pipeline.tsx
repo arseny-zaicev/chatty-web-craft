@@ -338,6 +338,25 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
           </div>
         </header>}
 
+        {!embedded ? null : (
+          <div className="px-4 py-2 border-b border-border flex items-center justify-end gap-2 bg-card/30">
+            <button
+              onClick={() => setMyOnly((v) => !v)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                myOnly
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40"
+              }`}
+              title="Show only chats assigned to me"
+            >
+              {myOnly ? "My chats only" : "All chats"}
+            </button>
+            <Button size="sm" onClick={() => setShowNew(true)}>
+              <Plus className="w-4 h-4 mr-1" /> New deal
+            </Button>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -356,6 +375,12 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       deals={stageDeals}
                       total={totals}
                       onDealClick={(id) => setActiveDealId(id)}
+                      onOpenChat={(convId) => navigate(inboxPath(convId))}
+                      conversationOf={(d) => (d.conversation_id ? convById.get(d.conversation_id) ?? null : null)}
+                      assigneeOf={(d) => {
+                        const c = d.conversation_id ? convById.get(d.conversation_id) : null;
+                        return c?.assigned_user_id ? memberById.get(c.assigned_user_id) ?? null : null;
+                      }}
                     />
                   );
                 })}
