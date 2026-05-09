@@ -388,7 +388,7 @@ type RowActions = {
 function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   return (
     <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
-      <Table>
+      <Table className="whitespace-nowrap">
         <TableHeader>
           <TableRow>
             <FleetHeaders showClient />
@@ -444,7 +444,7 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQui
             )}
             <span className="ml-auto text-xs text-muted-foreground">{g.rows.length} number{g.rows.length === 1 ? "" : "s"}</span>
           </div>
-          <Table>
+          <Table className="whitespace-nowrap">
             <TableHeader>
               <TableRow>
                 <FleetHeaders showClient={false} />
