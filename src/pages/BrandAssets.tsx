@@ -263,61 +263,61 @@ const BrandAssets = () => {
               <RectangleHorizontal className="w-5 h-5 text-primary" />
               <h2 className="font-display text-2xl font-bold">Full Logo - Horizontal</h2>
             </div>
-            <p className="text-muted-foreground mb-6">Spark + ISKRA wordmark. Use for document headers, website navigation, presentations, and letterheads.</p>
+            <p className="text-muted-foreground mb-6">Emerald-plated mark + ISKRA wordmark - exactly as it appears in the app, navbar, footer, and admin. Use for document headers, presentations, and letterheads.</p>
 
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Dark bg */}
+              {/* Dark bg with emerald plate (canonical) */}
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <FullLogoPreview bgColor="#0a0a0a" fgColor="#ffffff" markBg="emerald-gradient" />
+                </div>
+                <p className="font-semibold text-sm text-center mb-1">Canonical on Dark</p>
+                <p className="text-xs text-muted-foreground text-center mb-3">Matches in-app navbar logo</p>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", "#0a0a0a", 800, 240, "emerald-gradient"), "iskra-full-canonical-dark.png", 800, 240)}>
+                    <Download className="w-3 h-3 mr-1" /> PNG 800
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", "#0a0a0a", 1600, 480, "emerald-gradient"), "iskra-full-canonical-dark@2x.png", 1600, 480)}>
+                    <Download className="w-3 h-3 mr-1" /> 2× PNG
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => downloadSVG(fullLogoSVG("#ffffff", "#0a0a0a", 800, 240, "emerald-gradient"), "iskra-full-canonical-dark.svg")}>
+                    SVG
+                  </Button>
+                </div>
+              </div>
+
+              {/* Light bg with emerald plate (canonical) */}
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex justify-center mb-4">
+                  <FullLogoPreview bgColor="#ffffff" fgColor="#0a0a0a" markBg="emerald-gradient" />
+                </div>
+                <p className="font-semibold text-sm text-center mb-1">Canonical on Light</p>
+                <p className="text-xs text-muted-foreground text-center mb-3">For light docs and slides</p>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#0a0a0a", "#ffffff", 800, 240, "emerald-gradient"), "iskra-full-canonical-light.png", 800, 240)}>
+                    <Download className="w-3 h-3 mr-1" /> PNG 800
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#0a0a0a", "#ffffff", 1600, 480, "emerald-gradient"), "iskra-full-canonical-light@2x.png", 1600, 480)}>
+                    <Download className="w-3 h-3 mr-1" /> 2× PNG
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => downloadSVG(fullLogoSVG("#0a0a0a", "#ffffff", 800, 240, "emerald-gradient"), "iskra-full-canonical-light.svg")}>
+                    SVG
+                  </Button>
+                </div>
+              </div>
+
+              {/* Mono on dark - flat fallback */}
               <div className="bg-card border border-border rounded-xl p-6">
                 <div className="flex justify-center mb-4">
                   <FullLogoPreview bgColor="#0a0a0a" fgColor="#ffffff" />
                 </div>
-                <p className="font-semibold text-sm text-center mb-3">White on Dark</p>
+                <p className="font-semibold text-sm text-center mb-1">Mono White on Dark</p>
+                <p className="text-xs text-muted-foreground text-center mb-3">Flat single-color fallback</p>
                 <div className="flex gap-2 justify-center flex-wrap">
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", "#0a0a0a"), "iskra-full-dark.png", 800, 240)}>
-                    <Download className="w-3 h-3 mr-1" /> PNG 800
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", "#0a0a0a"), "iskra-full-mono-dark.png", 800, 240)}>
+                    <Download className="w-3 h-3 mr-1" /> PNG
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", "#0a0a0a", 1600, 480), "iskra-full-dark@2x.png", 1600, 480)}>
-                    <Download className="w-3 h-3 mr-1" /> 2× PNG
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => downloadSVG(fullLogoSVG("#ffffff", "#0a0a0a"), "iskra-full-dark.svg")}>
-                    SVG
-                  </Button>
-                </div>
-              </div>
-
-              {/* Light bg */}
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex justify-center mb-4">
-                  <FullLogoPreview bgColor="#ffffff" fgColor="#0a0a0a" />
-                </div>
-                <p className="font-semibold text-sm text-center mb-3">Black on White</p>
-                <div className="flex gap-2 justify-center flex-wrap">
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#0a0a0a", "#ffffff"), "iskra-full-light.png", 800, 240)}>
-                    <Download className="w-3 h-3 mr-1" /> PNG 800
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#0a0a0a", "#ffffff", 1600, 480), "iskra-full-light@2x.png", 1600, 480)}>
-                    <Download className="w-3 h-3 mr-1" /> 2× PNG
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => downloadSVG(fullLogoSVG("#0a0a0a", "#ffffff"), "iskra-full-light.svg")}>
-                    SVG
-                  </Button>
-                </div>
-              </div>
-
-              {/* Emerald bg */}
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex justify-center mb-4">
-                  <FullLogoPreview bgColor="#2d9d74" fgColor="#ffffff" />
-                </div>
-                <p className="font-semibold text-sm text-center mb-3">White on Emerald</p>
-                <div className="flex gap-2 justify-center flex-wrap">
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", "#2d9d74"), "iskra-full-emerald.png", 800, 240)}>
-                    <Download className="w-3 h-3 mr-1" /> PNG 800
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", "#2d9d74", 1600, 480), "iskra-full-emerald@2x.png", 1600, 480)}>
-                    <Download className="w-3 h-3 mr-1" /> 2× PNG
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => downloadSVG(fullLogoSVG("#ffffff", "#2d9d74"), "iskra-full-emerald.svg")}>
+                  <Button size="sm" variant="ghost" onClick={() => downloadSVG(fullLogoSVG("#ffffff", "#0a0a0a"), "iskra-full-mono-dark.svg")}>
                     SVG
                   </Button>
                 </div>
@@ -326,25 +326,24 @@ const BrandAssets = () => {
               {/* Transparent */}
               <div className="bg-card border border-border rounded-xl p-6">
                 <div className="flex justify-center mb-4 rounded-lg" style={{ background: "repeating-conic-gradient(#e5e5e5 0% 25%, #ffffff 0% 50%) 50% / 20px 20px" }}>
-                  <FullLogoPreview bgColor="transparent" fgColor="#0a0a0a" />
+                  <FullLogoPreview bgColor="transparent" fgColor="#0a0a0a" markBg="emerald-gradient" />
                 </div>
-                <p className="font-semibold text-sm text-center mb-3">Transparent (Black)</p>
+                <p className="font-semibold text-sm text-center mb-1">Transparent (Canonical)</p>
+                <p className="text-xs text-muted-foreground text-center mb-3">Emerald plate over any surface</p>
                 <div className="flex gap-2 justify-center flex-wrap">
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#0a0a0a", null), "iskra-full-transparent-black.png", 800, 240, true)}>
-                    <Download className="w-3 h-3 mr-1" /> PNG
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#0a0a0a", null, 800, 240, "emerald-gradient"), "iskra-full-transparent-black-text.png", 800, 240, true)}>
+                    <Download className="w-3 h-3 mr-1" /> Black text
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", null), "iskra-full-transparent-white.png", 800, 240, true)}>
-                    <Download className="w-3 h-3 mr-1" /> White PNG
+                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#ffffff", null, 800, 240, "emerald-gradient"), "iskra-full-transparent-white-text.png", 800, 240, true)}>
+                    <Download className="w-3 h-3 mr-1" /> White text
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => downloadPNGFromSVG(fullLogoSVG("#2d9d74", null), "iskra-full-transparent-emerald.png", 800, 240, true)}>
-                    <Download className="w-3 h-3 mr-1" /> Emerald PNG
+                  <Button size="sm" variant="ghost" onClick={() => downloadSVG(fullLogoSVG("#0a0a0a", null, 800, 240, "emerald-gradient"), "iskra-full-transparent.svg")}>
+                    SVG
                   </Button>
                 </div>
               </div>
             </div>
           </section>
-
-          {/* Brand Colors */}
           <section className="mb-20">
             <div className="flex items-center gap-3 mb-8 border-b border-border pb-3">
               <Palette className="w-5 h-5 text-primary" />
