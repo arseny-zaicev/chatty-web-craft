@@ -190,6 +190,7 @@ const App = () => (
                 <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />
                 <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
                 <Route path=":slug/library" element={<WorkspaceSection section="library" />} />
+                <Route path=":slug/materials" element={<WorkspaceMaterials />} />
                 <Route path=":slug/data" element={<WorkspaceSection section="data" />} />
                 <Route path=":slug/data/profiles" element={<WorkspacePrepProfiles />} />
                 <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
