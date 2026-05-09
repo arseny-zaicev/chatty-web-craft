@@ -686,7 +686,7 @@ function AddNumberDrawer({
   const [usage, setUsage] = useState<Usage>("both");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
-  const [status, setStatus] = useState<Status>("draft");
+  const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   
 
@@ -694,7 +694,7 @@ function AddNumberDrawer({
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
-    setProvidedBy(""); setAssignedRef(""); setStatus("draft"); setDnApproved(false);
+    setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
   };
 
   useEffect(() => {
