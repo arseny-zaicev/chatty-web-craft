@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 import { IskraLoader } from "@/components/IskraLoader";
+import { useHeartbeat } from "@/hooks/useHeartbeat";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
@@ -23,6 +24,7 @@ export default function WorkspaceLayout() {
   const { slug } = useParams<{ slug?: string }>();
   const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
+  useHeartbeat();
 
   useEffect(() => {
     let cancelled = false;

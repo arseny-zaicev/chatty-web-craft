@@ -205,6 +205,80 @@ Deno.serve(async (req) => {
       return json({ error: "Forbidden" }, 403);
     }
 
+    if (action === "members") {
+      // Returns enriched member list: name, email, role, joined, last sign-in,
+      // total sign-ins (auth metadata), and 30-day active minutes / sessions.
+      const { data: rows, error: memErr } = await admin
+        .from("workspace_members")
+        .select("id, user_id, role, created_at")
+        .eq("workspace_id", workspace_id)
+        .order("created_at", { ascending: true });
+      if (memErr) return json({ error: memErr.message }, 500);
+
+      const userIds = (rows ?? []).map((r) => r.user_id);
+      if (userIds.length === 0) return json({ members: [] });
+
+      // Profiles
+      const { data: profiles } = await admin
+        .from("profiles")
+        .select("user_id, full_name")
+        .in("user_id", userIds);
+      const profileById = new Map<string, { full_name: string | null }>();
+      for (const p of profiles ?? []) profileById.set(p.user_id, { full_name: (p as { full_name?: string }).full_name ?? null });
+
+      // Auth users — fetch one by one (no bulk by id endpoint)
+      const authById = new Map<string, { email: string | null; last_sign_in_at: string | null; created_at: string | null }>();
+      await Promise.all(
+        userIds.map(async (uid) => {
+          const { data } = await admin.auth.admin.getUserById(uid);
+          if (data?.user) {
+            authById.set(uid, {
+              email: data.user.email ?? null,
+              last_sign_in_at: data.user.last_sign_in_at ?? null,
+              created_at: data.user.created_at ?? null,
+            });
+          }
+        })
+      );
+
+      // Activity (last 30 days)
+      const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const { data: act } = await admin
+        .from("user_activity")
+        .select("user_id, minutes_active, sessions, last_seen_at, day")
+        .in("user_id", userIds)
+        .gte("day", since);
+      const actByUser = new Map<string, { minutes: number; sessions: number; last_seen: string | null }>();
+      for (const a of act ?? []) {
+        const cur = actByUser.get(a.user_id) ?? { minutes: 0, sessions: 0, last_seen: null as string | null };
+        cur.minutes += a.minutes_active ?? 0;
+        cur.sessions += a.sessions ?? 0;
+        if (!cur.last_seen || (a.last_seen_at && a.last_seen_at > cur.last_seen)) cur.last_seen = a.last_seen_at;
+        actByUser.set(a.user_id, cur);
+      }
+
+      const members = (rows ?? []).map((r) => {
+        const auth = authById.get(r.user_id) ?? { email: null, last_sign_in_at: null, created_at: null };
+        const prof = profileById.get(r.user_id) ?? { full_name: null };
+        const a = actByUser.get(r.user_id) ?? { minutes: 0, sessions: 0, last_seen: null };
+        return {
+          id: r.id,
+          user_id: r.user_id,
+          role: r.role,
+          joined_at: r.created_at,
+          email: auth.email,
+          full_name: prof.full_name,
+          account_created_at: auth.created_at,
+          last_sign_in_at: auth.last_sign_in_at,
+          last_seen_at: a.last_seen,
+          minutes_30d: a.minutes,
+          sessions_30d: a.sessions,
+        };
+      });
+
+      return json({ members });
+    }
+
     if (action === "create") {
       const role = body?.role === "client" ? "client" : "manager";
       const max_uses = Math.min(Math.max(Number(body?.max_uses ?? 4), 1), 50);
