@@ -24,6 +24,7 @@ export default function WorkspaceLayout() {
   const { slug } = useParams<{ slug?: string }>();
   const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
+  useHeartbeat();
 
   useEffect(() => {
     let cancelled = false;
