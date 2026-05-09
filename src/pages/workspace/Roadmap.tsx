@@ -136,7 +136,7 @@ export default function Roadmap() {
         priority: payload.priority ?? 1,
         position: (items?.length ?? 0),
       });
-      if (error) return toast.error(error.message);
+      if (error) { toast.error(error.message); return; }
       toast.success("Added");
     }
     setOpen(false);
