@@ -198,6 +198,66 @@ export function buildDigestBlocks(args: {
   return { text: `${headline} - ${subtitle}`, blocks };
 }
 
+export function buildPositiveLeadBlocks(args: {
+  ws: WorkspaceInfo;
+  payload: Record<string, unknown>;
+}): BlockMessage {
+  const { ws, payload } = args;
+  const tag = brandTag(ws.name, ws.internal_code);
+  const phone = String(payload.contact_phone || "");
+  const name = String(payload.contact_name || "").trim();
+  const preview = String(payload.last_message_text || "").slice(0, 220);
+  const headline = `⭐  ${tag}  ·  Positive lead`;
+  const fields: { type: string; text: string }[] = [
+    { type: "mrkdwn", text: `*Contact*\n${name || "-"}\n+${phone}` },
+  ];
+  if (preview) fields.push({ type: "mrkdwn", text: `*Last message*\n${preview}` });
+  return {
+    text: `${headline}: ${name || phone}`,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: headline, emoji: true } },
+      { type: "section", fields },
+      {
+        type: "actions",
+        elements: [
+          { type: "button", style: "primary", text: { type: "plain_text", text: "Open chat" }, url: `${workspaceUrl(ws.slug)}/inbox?conversation=${payload.conversation_id}` },
+        ],
+      },
+      { type: "context", elements: [{ type: "mrkdwn", text: `_${tag} · ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dubai" })}_` }] },
+    ],
+  };
+}
+
+export function buildInboxSpikeBlocks(args: {
+  ws: WorkspaceInfo;
+  unreadCount: number;
+  conversations: Array<{ contact_name: string | null; contact_phone: string; unread_count: number; last_message_text: string | null }>;
+}): BlockMessage {
+  const { ws, unreadCount, conversations } = args;
+  const tag = brandTag(ws.name, ws.internal_code);
+  const headline = `📨  ${tag}  ·  Inbox needs attention`;
+  const lines = conversations.slice(0, 8).map((c) => {
+    const who = (c.contact_name || `+${c.contact_phone}`).trim();
+    const preview = (c.last_message_text || "").slice(0, 80).replace(/\n/g, " ");
+    return `• *${who}* — ${c.unread_count} unread${preview ? ` · _${preview}_` : ""}`;
+  });
+  return {
+    text: `${headline}: ${unreadCount} unread`,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: headline, emoji: true } },
+      { type: "section", text: { type: "mrkdwn", text: `*${unreadCount}* unread message${unreadCount === 1 ? "" : "s"} across *${conversations.length}* conversation${conversations.length === 1 ? "" : "s"}.` } },
+      { type: "section", text: { type: "mrkdwn", text: lines.join("\n") || "_No previews available._" } },
+      {
+        type: "actions",
+        elements: [
+          { type: "button", style: "primary", text: { type: "plain_text", text: "Open inbox" }, url: `${workspaceUrl(ws.slug)}/inbox` },
+        ],
+      },
+      { type: "context", elements: [{ type: "mrkdwn", text: `_${tag} · ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dubai" })}_` }] },
+    ],
+  };
+}
+
 export async function postSlack(channel: string, msg: BlockMessage): Promise<void> {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   const slackKey = Deno.env.get("SLACK_API_KEY");
