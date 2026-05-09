@@ -214,9 +214,28 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     const { active, over } = event;
     if (!over) return;
     const dealId = String(active.id);
-    const targetStageId = String(over.id);
+    const overId = String(over.id);
     const deal = deals.find((d) => d.id === dealId);
-    if (!deal || deal.stage_id === targetStageId) return;
+    if (!deal) return;
+
+    // Special: delete drop zone
+    if (overId === "__delete__") {
+      const ok = confirm("Delete this deal?");
+      if (!ok) return;
+      const prev = deals;
+      setDeals((p) => p.filter((d) => d.id !== dealId));
+      const { error } = await supabase.from("deals").delete().eq("id", dealId);
+      if (error) {
+        toast.error("Failed to delete");
+        setDeals(prev);
+      } else {
+        toast.success("Deal deleted");
+      }
+      return;
+    }
+
+    const targetStageId = overId;
+    if (deal.stage_id === targetStageId) return;
 
     // optimistic
     const prevStageId = deal.stage_id;
@@ -236,6 +255,9 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       setDeals((prev) =>
         prev.map((d) => (d.id === dealId ? { ...d, stage_id: prevStageId } : d)),
       );
+    } else {
+      const stageName = stages.find((s) => s.id === targetStageId)?.name;
+      if (stageName) toast.success(`Moved to ${stageName}`);
     }
   };
 
@@ -307,7 +329,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         <meta name="robots" content="noindex,nofollow" />
       </Helmet>
 
-      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-background text-foreground`}>
+      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-background text-foreground relative`}>
         {!embedded && <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
           <div className="flex items-center gap-3">
             <KanbanSquare className="w-5 h-5 text-primary" />
@@ -401,6 +423,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
             <DragOverlay>
               {draggingDeal ? <DealCard deal={draggingDeal} dragging /> : null}
             </DragOverlay>
+            <BottomActionBar visible={!!draggingDeal} stages={stages} />
           </DndContext>
         )}
       </div>
@@ -835,6 +858,62 @@ const DealCard = ({
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+type ActionZone = {
+  id: string;
+  label: string;
+  bg: string;
+  hoverBg: string;
+  text: string;
+};
+
+const ActionDropZone = ({ zone }: { zone: ActionZone }) => {
+  const { setNodeRef, isOver } = useDroppable({ id: zone.id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex-1 h-full flex items-center justify-center text-sm font-semibold transition-all ${zone.text} ${isOver ? `${zone.hoverBg} scale-[1.02]` : zone.bg}`}
+    >
+      {zone.label}
+    </div>
+  );
+};
+
+const BottomActionBar = ({ visible, stages }: { visible: boolean; stages: Stage[] }) => {
+  if (!visible) return null;
+
+  // Build zones from stage_type (won/lost) + special "delete"
+  const won = stages.filter((s) => s.stage_type === "won");
+  const lost = stages.filter((s) => s.stage_type === "lost");
+
+  const zones: ActionZone[] = [
+    { id: "__delete__", label: "Delete", bg: "bg-muted/80", hoverBg: "bg-muted", text: "text-foreground" },
+    ...lost.map<ActionZone>((s) => ({
+      id: s.id,
+      label: s.name,
+      bg: "bg-destructive/80",
+      hoverBg: "bg-destructive",
+      text: "text-destructive-foreground",
+    })),
+    ...won.map<ActionZone>((s) => ({
+      id: s.id,
+      label: s.name,
+      bg: "bg-emerald-600/80",
+      hoverBg: "bg-emerald-600",
+      text: "text-white",
+    })),
+  ];
+
+  if (zones.length === 0) return null;
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-16 flex shadow-2xl z-50 pointer-events-auto animate-in slide-in-from-bottom-4 duration-150">
+      {zones.map((z) => (
+        <ActionDropZone key={z.id} zone={z} />
+      ))}
     </div>
   );
 };
