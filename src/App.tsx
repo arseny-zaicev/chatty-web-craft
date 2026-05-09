@@ -160,6 +160,7 @@ const App = () => (
               <Route path="/portal-auth" element={<PortalAuth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
+              <Route path="/join/:token" element={<JoinTeam />} />
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
