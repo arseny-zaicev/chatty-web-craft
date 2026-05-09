@@ -836,7 +836,7 @@ function AddNumberDrawer({
             <Select value={workspaceId} onValueChange={setWorkspaceId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__unassigned__">Unassigned (stock / warming / future client)</SelectItem>
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
                 {workspaces.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -846,9 +846,9 @@ function AddNumberDrawer({
             <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="draft">draft</SelectItem>
-                <SelectItem value="warming">warming</SelectItem>
                 <SelectItem value="ready">ready</SelectItem>
+                <SelectItem value="warming">warming</SelectItem>
+                <SelectItem value="draft">draft (stock)</SelectItem>
                 <SelectItem value="restricted">restricted (starts 30d ban countdown)</SelectItem>
                 <SelectItem value="banned">banned</SelectItem>
                 <SelectItem value="inactive">inactive</SelectItem>
