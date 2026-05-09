@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon,
+  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon, Wand2, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,10 @@ import {
   parseAudienceFile, detectPhoneColumn, uploadBatch, deleteBatch,
   type ParsedAudience,
 } from "@/lib/audienceData";
+import {
+  prepProfileKeys, listPrepProfiles, applyDerivedVariables, validateRowAgainstProfile,
+  type PrepProfile,
+} from "@/lib/prepProfiles";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 export default function WorkspaceData() {
