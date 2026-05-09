@@ -774,7 +774,7 @@ function AddNumberDrawer({
         const { data: existing } = await supabase.from("whatsapp_numbers")
           .select("id").eq("phone_number", cleanPhone).maybeSingle();
         if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
-        const initialStatus: Status = targetWs ? status : "inactive";
+        const initialStatus: Status = targetWs ? status : "stock";
         const { error } = await supabase.from("whatsapp_numbers").insert({
           ...payload,
           user_id: auth.user.id,
