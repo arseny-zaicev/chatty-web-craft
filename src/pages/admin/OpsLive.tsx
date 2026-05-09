@@ -241,7 +241,37 @@ export default function OpsLive() {
     }
   };
 
-  const nextRefreshIn = useMemo(() => {
+  const handleGenerateLink = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("tv-token?action=create", {
+        body: { days: 7, label: "Ops Live · TV" },
+      });
+      if (error || !data?.token) {
+        toast.error(error?.message ?? "Failed to generate link");
+        return;
+      }
+      const url = `${window.location.origin}/admin/ops-live?token=${data.token}`;
+      setGeneratedUrl(url);
+      setCopied(false);
+      toast.success("Link generated · valid 7 days");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate link");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!generatedUrl) return;
+    try {
+      await navigator.clipboard.writeText(generatedUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy");
+    }
+  };
     const elapsed = now.getTime() - lastUpdated.getTime();
     const remaining = Math.max(0, REFRESH_INTERVAL_MS - elapsed);
     const m = Math.floor(remaining / 60000);
