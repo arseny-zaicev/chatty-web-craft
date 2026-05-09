@@ -902,6 +902,15 @@ export default function LaunchWizard() {
                 ) : (
                   <div>{scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in recipient's local time" : "in your time zone"}.</div>
                 )}
+                {scheduleMode === "scheduled" && feasibility && feasibility.totalQueued > 0 && (
+                  <div className={`mt-1 px-2 py-1.5 rounded-md border text-[11px] ${feasibility.overflow > 0 ? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"}`}>
+                    <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd}.
+                    {feasibility.overflow > 0
+                      ? ` ${feasibility.overflow.toLocaleString()} will roll into the next scheduled day. Add more dates above if you want everything sent — otherwise leftovers wait in queue with status "scheduled".`
+                      : " Everything fits today."}
+                    <div className="opacity-80 mt-0.5">Stats: campaign stays <b>running</b> across days. <b>sent_count</b> grows live; un-sent recipients keep <b>scheduled_at</b> = next available slot. You'll see "X / Y sent · Z scheduled for tomorrow" on the campaign page.</div>
+                  </div>
+                )}
               </div>
             </div>
           </Step>
