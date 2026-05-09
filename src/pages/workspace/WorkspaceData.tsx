@@ -301,13 +301,113 @@ function PresetsSection({
 {buildPresetPrompt(viewing, { workspaceName, workspaceId })}
             </pre>
           )}
-          <DialogFooter>
-            {viewing && (
-              <Button onClick={() => copy(buildPresetPrompt(viewing, { workspaceName, workspaceId }), `${viewing.name} prompt`)}>
-                <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
+      <p className="text-xs text-muted-foreground mb-3">
+        Pick a preset → create the empty batch → copy its prompt → run it in Codex with the raw data. Codex inserts validated rows into <code>public.audience_rows</code> under the batch_id, then refresh below and launch.
+      </p>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {PREP_PRESETS.map((p) => (
+          <div key={p.id} className={`rounded-md border p-3 bg-background/40 ${p.isRecommended ? "border-primary/50" : "border-border"}`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-sm">{p.name}</span>
+              <Badge variant="outline" className="text-[10px]">{p.campaignType}</Badge>
+              {p.isRecommended && <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30" variant="outline">Recommended</Badge>}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1">{p.blurb}</div>
+            <div className="text-[11px] text-muted-foreground mt-1">
+              vars: {p.variables.map((v) => v.key).join(", ")} · required: {p.requiredSourceFields.join(", ")}
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>
+                <Eye className="w-3.5 h-3.5 mr-1" /> Preview prompt
               </Button>
-            )}
-          </DialogFooter>
+              <Button size="sm" onClick={() => startCreate(p)}>
+                <Database className="w-3.5 h-3.5 mr-1" /> Create batch &amp; get prompt
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Preview-only dialog (no batch yet) */}
+      <Dialog open={!!viewing} onOpenChange={(o) => { if (!o) setViewing(null); }}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{viewing?.name} - prompt preview</DialogTitle>
+            <DialogDescription>
+              Preview only. To actually run it, close this and click <strong>Create batch &amp; get prompt</strong> so Codex inserts rows under a real batch_id.
+            </DialogDescription>
+          </DialogHeader>
+          {viewing && (
+            <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap font-mono">
+{buildPresetPrompt(viewing, { workspaceName, workspaceId })}
+            </pre>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create-batch dialog */}
+      <Dialog open={!!creating} onOpenChange={(o) => { if (!o) { setCreating(null); setCreatedBatchId(null); } }}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{creating?.name} - create batch</DialogTitle>
+            <DialogDescription>
+              Step 1: create the empty batch. Step 2: copy the generated prompt (with the batch_id baked in) and run it in Codex.
+            </DialogDescription>
+          </DialogHeader>
+          {creating && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Batch name *</label>
+                  <Input value={batchName} onChange={(e) => setBatchName(e.target.value)} disabled={!!createdBatchId} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Country (optional)</label>
+                  <Input value={batchCountry} onChange={(e) => setBatchCountry(e.target.value)} placeholder="e.g. AE" disabled={!!createdBatchId} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Campaign type</label>
+                  <Input value={creating.campaignType} disabled />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Notes (optional)</label>
+                  <Textarea rows={2} value={batchNotes} onChange={(e) => setBatchNotes(e.target.value)} disabled={!!createdBatchId} />
+                </div>
+              </div>
+
+              {!createdBatchId && (
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setCreating(null)}>Cancel</Button>
+                  <Button onClick={submitBatch} disabled={busy || !batchName.trim()}>
+                    {busy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Database className="w-4 h-4 mr-1" />}
+                    Create batch
+                  </Button>
+                </DialogFooter>
+              )}
+
+              {createdBatchId && (
+                <>
+                  <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Batch created. batch_id: <code className="font-mono">{createdBatchId}</code>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Codex prompt (batch_id baked in)</div>
+                    <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap font-mono max-h-[40vh] overflow-y-auto">
+{buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId })}
+                    </pre>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => { setCreating(null); setCreatedBatchId(null); }}>Done</Button>
+                    <Button onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId }), `${creating.name} prompt`)}>
+                      <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
