@@ -322,17 +322,26 @@ function ProfileEditor({
             <ChipInput label="Buttons" values={quickReplies} onChange={setQuickReplies} placeholder="Yes" />
           </Section>
 
+          <Section title="Sample message body (template)">
+            <p className="text-xs text-muted-foreground">
+              The actual WhatsApp message body. Use <code>{"{var_1}"}</code>, <code>{"{first_name}"}</code>, etc. - source fields and derived variables both work. This drives the rendered preview below.
+            </p>
+            <Textarea rows={4} value={sampleMessageTemplate}
+              onChange={(e) => setSampleMessageTemplate(e.target.value)}
+              placeholder={"Hi {first_name}, {var_1}.\nReply YES to book a slot."} />
+          </Section>
+
           <Section title="Sample row & rendered preview">
             <KeyValueEditor values={sample} onChange={setSample} keyPlaceholder="field" valuePlaceholder="value" suggestions={allFields} />
-            <div className="rounded-md border border-border bg-muted/30 p-3 mt-2">
-              <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1.5"><Eye className="w-3.5 h-3.5" />Live preview</div>
+            <div className="rounded-md border border-border bg-muted/30 p-3 mt-2 space-y-2">
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" />Live preview (deterministic)</div>
               <div className="text-xs">
                 <span className="text-muted-foreground">Validation: </span>
                 {livePreview.validation.ok
                   ? <span className="text-emerald-600">OK</span>
                   : <span className="text-amber-600">{livePreview.validation.errors.join("; ")}</span>}
               </div>
-              <div className="mt-2 space-y-1 font-mono text-xs">
+              <div className="space-y-1 font-mono text-xs">
                 {Object.keys(livePreview.derivedOut).length === 0 && (
                   <span className="text-muted-foreground">No derived variables to show.</span>
                 )}
@@ -340,6 +349,11 @@ function ProfileEditor({
                   <div key={k}><span className="text-primary">{k}</span> = <span>{v || <em className="text-muted-foreground">(empty)</em>}</span></div>
                 ))}
               </div>
+              {livePreview.renderedMessage != null && (
+                <div className="rounded-md bg-background border border-border p-2 whitespace-pre-wrap text-xs">
+                  {livePreview.renderedMessage || <em className="text-muted-foreground">(empty render)</em>}
+                </div>
+              )}
             </div>
           </Section>
         </div>
