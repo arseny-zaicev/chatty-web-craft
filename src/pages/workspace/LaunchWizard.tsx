@@ -41,6 +41,33 @@ const TYPE_PRESETS: Record<CampaignType, { label: string; mode: "Blast" | "Utili
 
 const UTILITY_MIN_DELAY = 60;
 
+// Country code/name → IANA timezone for "recipient region clock"
+const COUNTRY_TZ: Record<string, string> = {
+  US: "America/New_York", USA: "America/New_York", "UNITED STATES": "America/New_York",
+  CA: "America/Toronto", CANADA: "America/Toronto",
+  UK: "Europe/London", GB: "Europe/London", "UNITED KINGDOM": "Europe/London",
+  AE: "Asia/Dubai", UAE: "Asia/Dubai", "UNITED ARAB EMIRATES": "Asia/Dubai",
+  SA: "Asia/Riyadh", "SAUDI ARABIA": "Asia/Riyadh",
+  IN: "Asia/Kolkata", INDIA: "Asia/Kolkata",
+  PK: "Asia/Karachi", PAKISTAN: "Asia/Karachi",
+  RU: "Europe/Moscow", RUSSIA: "Europe/Moscow",
+  DE: "Europe/Berlin", GERMANY: "Europe/Berlin",
+  FR: "Europe/Paris", FRANCE: "Europe/Paris",
+  ES: "Europe/Madrid", SPAIN: "Europe/Madrid",
+  IT: "Europe/Rome", ITALY: "Europe/Rome",
+  TR: "Europe/Istanbul", TURKEY: "Europe/Istanbul",
+  AU: "Australia/Sydney", AUSTRALIA: "Australia/Sydney",
+  BR: "America/Sao_Paulo", BRAZIL: "America/Sao_Paulo",
+  MX: "America/Mexico_City", MEXICO: "America/Mexico_City",
+  SG: "Asia/Singapore", SINGAPORE: "Asia/Singapore",
+  HK: "Asia/Hong_Kong", "HONG KONG": "Asia/Hong_Kong",
+  JP: "Asia/Tokyo", JAPAN: "Asia/Tokyo",
+  CN: "Asia/Shanghai", CHINA: "Asia/Shanghai",
+  ZA: "Africa/Johannesburg", "SOUTH AFRICA": "Africa/Johannesburg",
+  NG: "Africa/Lagos", NIGERIA: "Africa/Lagos",
+  EG: "Africa/Cairo", EGYPT: "Africa/Cairo",
+};
+
 export default function LaunchWizard() {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const qc = useQueryClient();
