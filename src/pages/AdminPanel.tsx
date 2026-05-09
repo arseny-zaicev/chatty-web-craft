@@ -22,6 +22,7 @@ import { formatDistanceToNow } from "date-fns";
 import { IskraLogo } from "@/components/IskraLogo";
 import { cn } from "@/lib/utils";
 import { evaluateAdminAccess } from "@/lib/adminGuard";
+import { NewClientDialog } from "@/components/workspace/NewClientDialog";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
