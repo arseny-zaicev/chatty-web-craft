@@ -103,7 +103,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate text-sm">{c.name}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {template?.name ?? "—"} · {number ? (number.label ?? `+${number.phone_number}`) : "—"} · {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
+                      {[template?.name, number ? (number.label ?? `+${number.phone_number}`) : null, formatDistanceToNow(new Date(c.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
