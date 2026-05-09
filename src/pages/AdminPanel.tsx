@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { IskraLogo } from "@/components/IskraLogo";
 import { cn } from "@/lib/utils";
+import { evaluateAdminAccess } from "@/lib/adminGuard";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
@@ -70,22 +71,31 @@ const AdminPanel = () => {
 
   useEffect(() => {
     let mounted = true;
-    const check = async () => {
-      const { evaluateAdminAccess } = await import("@/lib/adminGuard");
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setUser(session?.user ?? null);
-      const r = await evaluateAdminAccess();
-      if (!mounted) return;
-      if (r.state === "redirect") {
-        if (r.reason === "not-admin") toast.error("Access denied. Admin only.");
-        navigate(r.to);
-      } else {
-        setAuthChecked(true);
-      }
+    let inFlight: Promise<void> | null = null;
+    const check = () => {
+      if (inFlight) return inFlight;
+      inFlight = (async () => {
+        const [{ data: { session } }, r] = await Promise.all([
+          supabase.auth.getSession(),
+          evaluateAdminAccess(),
+        ]);
+        if (!mounted) return;
+        setUser(session?.user ?? null);
+        if (r.state === "redirect") {
+          if (r.reason === "not-admin") toast.error("Access denied. Admin only.");
+          navigate(r.to);
+        } else {
+          setAuthChecked(true);
+        }
+      })().finally(() => { inFlight = null; });
+      return inFlight;
     };
     check();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { check(); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // Skip the redundant INITIAL_SESSION fire — our initial check() already covers it.
+      if (event === "INITIAL_SESSION") return;
+      if (event === "SIGNED_OUT" || event === "SIGNED_IN" || event === "MFA_CHALLENGE_VERIFIED") check();
+    });
     return () => { mounted = false; subscription.unsubscribe(); };
   }, [navigate]);
 
