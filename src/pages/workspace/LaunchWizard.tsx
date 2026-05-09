@@ -819,15 +819,19 @@ export default function LaunchWizard() {
             </Tabs>
 
             <div className="flex items-center justify-between flex-wrap gap-2 mt-3 text-xs text-muted-foreground">
-              <span>{recipients.length} valid recipients · {columns.length} columns detected</span>
-              {recipients.length > 0 && workspace && (
+              <span>
+                {audienceSource === "database"
+                  ? `${dbTargetCount} recipients will be reserved from this batch on launch`
+                  : `${recipients.length} valid recipients · ${columns.length} columns detected`}
+              </span>
+              {audienceSource !== "database" && recipients.length > 0 && workspace && (
                 <div className="flex items-center gap-1">
-                  <Input className="h-7 w-44 text-xs" placeholder="Audience name" value={saveAudName} onChange={(e) => setSaveAudName(e.target.value)} />
+                  <Input className="h-7 w-44 text-xs" placeholder="Save this CSV as..." value={saveAudName} onChange={(e) => setSaveAudName(e.target.value)} />
                   <Button variant="ghost" size="sm" onClick={() => {
                     saveAudience(workspace.id, saveAudName || `Audience ${savedList.length + 1}`, csv, recipients.length);
                     setSavedList(listSavedAudiences(workspace.id));
                     setSaveAudName("");
-                    toast.success("Audience saved");
+                    toast.success("Audience saved to Saved tab");
                   }}>
                     <Save className="w-3.5 h-3.5 mr-1" />Save
                   </Button>
