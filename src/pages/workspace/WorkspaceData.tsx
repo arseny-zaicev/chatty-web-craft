@@ -194,11 +194,19 @@ function UploadDialog({
   const [copyProfile, setCopyProfile] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [prepProfileId, setPrepProfileId] = useState<string>("");
+
+  const profilesQ = useQuery({
+    queryKey: prepProfileKeys.list(workspaceId),
+    queryFn: () => listPrepProfiles(workspaceId),
+    enabled: open,
+  });
+  const prepProfile: PrepProfile | null = (profilesQ.data ?? []).find((p) => p.id === prepProfileId) ?? null;
 
   const reset = () => {
     setFile(null); setParsed(null); setPhoneColumn("");
     setName(""); setCountry(""); setCampaignType("marketing");
-    setCopyProfile(""); setNotes(""); setBusy(false);
+    setCopyProfile(""); setNotes(""); setBusy(false); setPrepProfileId("");
   };
 
   const handleFile = async (f: File) => {
@@ -226,14 +234,34 @@ function UploadDialog({
       const cleaned = (v || "").replace(/[^\d+]/g, "").replace(/^\+/, "").replace(/^00+/, "");
       if (cleaned.length < 7 || cleaned.length > 15) { invalid++; continue; }
       if (seen.has(cleaned)) { dup++; continue; }
-      seen.add(cleaned); valid++;
+      seen.add(cleaned);
+      if (prepProfile) {
+        const payload: Record<string, string> = {};
+        for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
+        const vr = validateRowAgainstProfile(prepProfile, payload);
+        if (!vr.ok) { invalid++; continue; }
+      }
+      valid++;
     }
     return { total: parsed.rows.length, valid, invalid, duplicates: dup };
-  }, [parsed, phoneColumn]);
+  }, [parsed, phoneColumn, prepProfile]);
+
+  const derivedSamples = useMemo(() => {
+    if (!parsed || !prepProfile) return [];
+    return parsed.rows.slice(0, 3).map((r) => {
+      const payload: Record<string, string> = {};
+      for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
+      return applyDerivedVariables(prepProfile, payload);
+    });
+  }, [parsed, prepProfile, phoneColumn]);
 
   const submit = async () => {
     if (!parsed || !phoneColumn || !name.trim()) {
       toast.error("Pick a file, phone column and a batch name");
+      return;
+    }
+    if (!prepProfile) {
+      toast.error("Pick a prep profile (required for launch readiness)");
       return;
     }
     setBusy(true);
@@ -251,8 +279,9 @@ function UploadDialog({
         parsed,
         phoneColumn,
         sourceFilename: file?.name ?? null,
+        prepProfile,
       });
-      toast.success(`Uploaded ${result.summary.valid} valid · ${result.summary.invalid} invalid · ${result.summary.duplicates} duplicates`);
+      toast.success(`Uploaded ${result.summary.valid} valid · ${result.summary.invalid} invalid · ${result.summary.duplicates} duplicates${result.isLaunchReady ? " · launch-ready" : ""}`);
       reset();
       onOpenChange(false);
       onUploaded();
