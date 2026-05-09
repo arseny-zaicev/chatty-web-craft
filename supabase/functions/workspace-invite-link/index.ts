@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
 
       const { data: ws } = await admin
         .from("workspaces")
-        .select("name, slug")
+        .select("name, slug, color, website_url, logo_url")
         .eq("id", link.workspace_id)
         .maybeSingle();
 
@@ -68,6 +68,9 @@ Deno.serve(async (req) => {
         valid: true,
         workspace_name: ws?.name ?? "your team",
         workspace_slug: ws?.slug ?? null,
+        workspace_color: ws?.color ?? null,
+        workspace_website: ws?.website_url ?? null,
+        workspace_logo: ws?.logo_url ?? null,
         role: link.role,
         seats_left: link.max_uses - link.used_count,
       });

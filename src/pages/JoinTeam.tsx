@@ -14,6 +14,9 @@ interface LinkInfo {
   valid: boolean;
   workspace_name?: string;
   workspace_slug?: string | null;
+  workspace_color?: string | null;
+  workspace_website?: string | null;
+  workspace_logo?: string | null;
   role?: string;
   seats_left?: number;
   error?: string;
@@ -119,30 +122,84 @@ export default function JoinTeam() {
     }
   };
 
+  const accent = info?.workspace_color ?? "#10b981";
+
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center px-6 py-10">
+    <main className="min-h-screen bg-background flex items-center justify-center px-6 py-10 relative overflow-hidden">
       <Helmet>
-        <title>Join your team - Iskra</title>
+        <title>{info?.valid ? `Join ${info.workspace_name} - Iskra` : "Join your team - Iskra"}</title>
         <meta name="robots" content="noindex,nofollow" />
       </Helmet>
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-3">
-          <IskraLogo size={36} textClass="text-base" />
+
+      {/* Ambient brand glow */}
+      {info?.valid && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{ background: `radial-gradient(60% 50% at 50% 0%, ${accent}22 0%, transparent 70%)` }}
+        />
+      )}
+
+      <Card className="w-full max-w-md relative">
+        <CardHeader className="space-y-4">
+          {info?.valid ? (
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <IskraLogo size={32} textClass="text-sm" />
+              <span className="text-xl text-muted-foreground/50 font-light leading-none">×</span>
+              <div className="flex items-center gap-2">
+                {info.workspace_logo ? (
+                  <img
+                    src={info.workspace_logo}
+                    alt={`${info.workspace_name} logo`}
+                    className="w-8 h-8 rounded-md object-contain bg-white p-0.5"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-md flex items-center justify-center text-white font-semibold text-xs"
+                    style={{ background: accent }}
+                  >
+                    {(info.workspace_name ?? "?").slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <span className="font-display text-sm font-semibold">{info.workspace_name}</span>
+              </div>
+            </div>
+          ) : (
+            <IskraLogo size={36} textClass="text-base" />
+          )}
+
           {loadingInfo ? (
             <CardDescription>Verifying invitation…</CardDescription>
           ) : info?.valid ? (
-            <>
-              <CardTitle>Join {info.workspace_name}</CardTitle>
+            <div className="text-center space-y-2">
+              <CardTitle className="text-2xl">
+                Join the {info.workspace_name} team
+              </CardTitle>
               <CardDescription className="space-y-2">
                 <span className="block">
-                  Create your Iskra account. Your name will appear on chats you reply to.
+                  Create your Iskra account to manage WhatsApp outreach for{" "}
+                  {info.workspace_website ? (
+                    <a
+                      href={info.workspace_website}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="underline-offset-2 hover:underline"
+                      style={{ color: accent }}
+                    >
+                      {info.workspace_name}
+                    </a>
+                  ) : (
+                    info.workspace_name
+                  )}
+                  .
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Users className="w-3.5 h-3.5" />
                   {info.seats_left} {info.seats_left === 1 ? "seat" : "seats"} left
                 </span>
               </CardDescription>
-            </>
+            </div>
           ) : (
             <>
               <CardTitle>Link unavailable</CardTitle>

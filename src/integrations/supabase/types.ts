@@ -1616,11 +1616,13 @@ export type Database = {
           is_active: boolean
           last_inbox_spike_alert_at: string | null
           last_positive_lead_alert_at: string | null
+          logo_url: string | null
           name: string
           owner_user_id: string
           slack_channel_id: string | null
           slug: string
           updated_at: string
+          website_url: string | null
         }
         Insert: {
           color?: string
@@ -1631,11 +1633,13 @@ export type Database = {
           is_active?: boolean
           last_inbox_spike_alert_at?: string | null
           last_positive_lead_alert_at?: string | null
+          logo_url?: string | null
           name: string
           owner_user_id: string
           slack_channel_id?: string | null
           slug: string
           updated_at?: string
+          website_url?: string | null
         }
         Update: {
           color?: string
@@ -1646,11 +1650,13 @@ export type Database = {
           is_active?: boolean
           last_inbox_spike_alert_at?: string | null
           last_positive_lead_alert_at?: string | null
+          logo_url?: string | null
           name?: string
           owner_user_id?: string
           slack_channel_id?: string | null
           slug?: string
           updated_at?: string
+          website_url?: string | null
         }
         Relationships: []
       }

@@ -10,6 +10,8 @@ export type Workspace = {
   internal_code: string | null;
   slack_channel_id: string | null;
   inbox_alerts_enabled: boolean;
+  website_url: string | null;
+  logo_url: string | null;
 };
 
 export const workspaceKeys = {
@@ -20,7 +22,7 @@ export const workspaceKeys = {
 export async function fetchWorkspaces(): Promise<Workspace[]> {
   const { data, error } = await supabase
     .from("workspaces")
-    .select("id, name, slug, color, is_active, owner_user_id, internal_code, slack_channel_id, inbox_alerts_enabled")
+    .select("id, name, slug, color, is_active, owner_user_id, internal_code, slack_channel_id, inbox_alerts_enabled, website_url, logo_url")
     .eq("is_active", true)
     .order("name");
   if (error) throw error;
