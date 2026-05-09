@@ -261,6 +261,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
         setLoadingMessages(false);
       });
     supabase.from("conversations").update({ unread_count: 0 }).eq("id", activeId).then(() => {});
+    void touchResponder(activeId);
     return () => {
       cancelled = true;
     };
