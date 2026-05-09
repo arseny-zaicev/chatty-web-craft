@@ -161,7 +161,8 @@ function formatDate(d: Date) {
 export default function OpsLive() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const tokenParam = searchParams.get("token") ?? "";
+  const { token: tokenFromPath } = useParams<{ token?: string }>();
+  const tokenParam = tokenFromPath ?? searchParams.get("token") ?? "";
   const [authChecked, setAuthChecked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [tokenMode, setTokenMode] = useState(false);
