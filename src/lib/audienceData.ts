@@ -40,6 +40,7 @@ export type AudienceRow = {
   usage_status: "unused" | "reserved" | "scheduled" | "used";
   used_in_campaign_id: string | null;
   created_at: string;
+  derived_payload: Record<string, string>;
 };
 
 export const audienceKeys = {
