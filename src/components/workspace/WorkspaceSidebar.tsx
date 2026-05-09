@@ -23,7 +23,8 @@ const clientTabs = [
 ];
 const managerExtras = [
   { key: "data", label: "Data", icon: Database },
-  { key: "library", label: "Library", icon: BookOpen },
+  { key: "materials", label: "Materials", icon: FolderOpen },
+  { key: "library", label: "Quick replies", icon: BookOpen },
 ];
 const setupTabs = [
   { key: "settings", label: "Settings", icon: SettingsIcon },
