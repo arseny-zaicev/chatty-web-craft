@@ -111,6 +111,90 @@ async function canAccessUser(admin: any, requesterId: string, ownerId: string) {
   return Boolean(data);
 }
 
+// Map common phone country prefixes -> IANA timezone (rough, single TZ per country)
+const PHONE_TZ: Array<[string, string]> = [
+  ["971", "Asia/Dubai"], ["972", "Asia/Jerusalem"], ["966", "Asia/Riyadh"], ["965", "Asia/Kuwait"],
+  ["974", "Asia/Qatar"], ["973", "Asia/Bahrain"], ["968", "Asia/Muscat"], ["20", "Africa/Cairo"],
+  ["44", "Europe/London"], ["353", "Europe/Dublin"], ["33", "Europe/Paris"], ["49", "Europe/Berlin"],
+  ["34", "Europe/Madrid"], ["39", "Europe/Rome"], ["31", "Europe/Amsterdam"], ["351", "Europe/Lisbon"],
+  ["41", "Europe/Zurich"], ["43", "Europe/Vienna"], ["46", "Europe/Stockholm"], ["47", "Europe/Oslo"],
+  ["45", "Europe/Copenhagen"], ["358", "Europe/Helsinki"], ["48", "Europe/Warsaw"], ["420", "Europe/Prague"],
+  ["7", "Europe/Moscow"], ["380", "Europe/Kyiv"],
+  ["1", "America/New_York"], ["52", "America/Mexico_City"], ["55", "America/Sao_Paulo"], ["54", "America/Argentina/Buenos_Aires"],
+  ["91", "Asia/Kolkata"], ["86", "Asia/Shanghai"], ["81", "Asia/Tokyo"], ["82", "Asia/Seoul"],
+  ["65", "Asia/Singapore"], ["60", "Asia/Kuala_Lumpur"], ["62", "Asia/Jakarta"], ["63", "Asia/Manila"],
+  ["66", "Asia/Bangkok"], ["84", "Asia/Ho_Chi_Minh"], ["61", "Australia/Sydney"], ["64", "Pacific/Auckland"],
+  ["27", "Africa/Johannesburg"], ["234", "Africa/Lagos"], ["254", "Africa/Nairobi"], ["212", "Africa/Casablanca"],
+];
+
+function tzFromPhone(phone: string): string {
+  const d = String(phone || "").replace(/[^\d]/g, "");
+  if (!d) return "UTC";
+  const sorted = [...PHONE_TZ].sort((a, b) => b[0].length - a[0].length);
+  for (const [pfx, tz] of sorted) if (d.startsWith(pfx)) return tz;
+  return "UTC";
+}
+
+// Get UTC offset (minutes) for a given IANA tz at instant `at`. Approximate, good enough for windows.
+function tzOffsetMinutes(tz: string, at: Date): number {
+  try {
+    const dtf = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const parts = dtf.formatToParts(at);
+    const map: any = {};
+    for (const p of parts) map[p.type] = p.value;
+    const asUTC = Date.UTC(Number(map.year), Number(map.month) - 1, Number(map.day), Number(map.hour), Number(map.minute), Number(map.second));
+    return Math.round((asUTC - at.getTime()) / 60000);
+  } catch { return 0; }
+}
+
+// Parse "HH:MM" to minutes
+function hhmmToMin(s: string): number {
+  const [h, m] = String(s || "09:00").split(":").map((x) => parseInt(x, 10) || 0);
+  return Math.max(0, Math.min(24 * 60 - 1, h * 60 + m));
+}
+
+// Build a UTC Date for `dateStr (YYYY-MM-DD) at HH:MM in tz`.
+function dateAtTzToUTC(dateStr: string, hhmm: string, tz: string): Date {
+  const [Y, M, D] = dateStr.split("-").map((x) => parseInt(x, 10));
+  const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10) || 0);
+  // Treat the wall clock as UTC, then offset
+  const naiveUtc = Date.UTC(Y, (M || 1) - 1, D || 1, h || 0, m || 0, 0);
+  const offset = tzOffsetMinutes(tz, new Date(naiveUtc));
+  return new Date(naiveUtc - offset * 60_000);
+}
+
+// Poisson inter-arrival sampler with given rate (events per second). Returns seconds gap.
+function exponentialGap(ratePerSec: number): number {
+  if (ratePerSec <= 0) return 0;
+  const u = Math.max(1e-9, Math.random());
+  return -Math.log(u) / ratePerSec;
+}
+
+async function notifyLaunchSlack(workspace_id: string | null, payload: { name: string; recipients: number; firstAt: string; mode: string; numberPhone?: string }) {
+  try {
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    const slackKey = Deno.env.get("SLACK_API_KEY");
+    if (!lovableKey || !slackKey) return;
+    // Look up channel from workspace, fallback to default
+    let channel = "#iskra-campaigns";
+    if (workspace_id) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const admin = createClient(supabaseUrl, serviceKey);
+        const { data: ws } = await admin.from("workspaces").select("slack_channel_id, name").eq("id", workspace_id).maybeSingle();
+        if (ws?.slack_channel_id) channel = ws.slack_channel_id;
+      } catch { /* ignore */ }
+    }
+    const text = `🚀 *Campaign launched*: ${payload.name}\n• Recipients: *${payload.recipients}*\n• First send: ${payload.firstAt}\n• Scheduler: ${payload.mode}${payload.numberPhone ? `\n• Number: +${payload.numberPhone}` : ""}`;
+    await fetch("https://connector-gateway.lovable.dev/slack/api/chat.postMessage", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${lovableKey}`, "X-Connection-Api-Key": slackKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ channel, text, unfurl_links: false, unfurl_media: false }),
+    }).catch(() => {});
+  } catch { /* ignore */ }
+}
+
 async function launchCampaign(admin: any, requesterId: string, body: any) {
   const name = String(body.name || "").trim().slice(0, 160);
   const whatsappNumberId = String(body.whatsapp_number_id || "");
@@ -118,6 +202,15 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
+
+  // New scheduling params
+  const schedulerKind: "uniform" | "poisson" = body.scheduler_kind === "uniform" ? "uniform" : "poisson";
+  const scheduledDates: string[] = Array.isArray(body.scheduled_dates) ? body.scheduled_dates.filter((d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
+  const windowStart: string = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : "09:00";
+  const windowEnd: string = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : "18:00";
+  const respectTz: boolean = body.respect_recipient_tz !== false;
+  const bucketIndex: number = Math.max(0, Number(body.bucket_index ?? 0) | 0);
+  const bucketCount: number = Math.max(1, Number(body.bucket_count ?? 1) | 0);
 
   if (!name || !uuidRegex.test(whatsappNumberId) || !uuidRegex.test(templateId)) {
     return json({ error: "Campaign name, number, and template are required" }, 400);
@@ -165,29 +258,107 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       delay_max_seconds: maxDelay,
       total_recipients: cleanRecipients.length,
       scheduled_start_at: new Date().toISOString(),
+      schedule_window_start: windowStart + ":00",
+      schedule_window_end: windowEnd + ":00",
+      respect_recipient_tz: respectTz,
+      scheduled_dates: scheduledDates,
     })
     .select("id")
     .single();
   if (campaignError || !campaign) return json({ error: campaignError?.message || "Failed to create campaign" }, 500);
 
-  let cursor = Date.now() + 5000;
-  const rows = cleanRecipients.map((r: any) => {
-    cursor += randomDelay(minDelay, maxDelay) * 1000;
-    return {
-      ...r,
-      user_id: number.user_id,
-      workspace_id: number.workspace_id,
-      campaign_id: campaign.id,
-      status: "scheduled",
-      scheduled_at: new Date(cursor).toISOString(),
-    };
-  });
+  // ------- Compute scheduled_at per recipient -------
+  const wsMin = hhmmToMin(windowStart);
+  const wsMax = hhmmToMin(windowEnd);
+  const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
+  const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
+  // Cross-number stagger: shift this bucket's first send by index * (avgDelay / bucketCount)
+  const bucketShiftSec = bucketCount > 1 ? Math.floor((avgDelay / bucketCount) * bucketIndex) : 0;
+
+  const rows: any[] = [];
+
+  if (scheduledDates.length === 0) {
+    // Send-now path: distribute starting in 5s, using poisson or uniform spacing
+    let cursorMs = Date.now() + 5_000 + bucketShiftSec * 1000;
+    for (const r of cleanRecipients) {
+      let gapSec: number;
+      if (schedulerKind === "poisson") {
+        // Treat avgDelay as 1/rate
+        gapSec = exponentialGap(1 / avgDelay);
+        // Clamp to [minDelay, max(minDelay+1, maxDelay*3)]
+        gapSec = Math.max(minDelay, Math.min(Math.max(minDelay + 1, maxDelay * 3), gapSec));
+      } else {
+        gapSec = randomDelay(minDelay, maxDelay);
+      }
+      cursorMs += gapSec * 1000;
+      rows.push({
+        ...r,
+        user_id: number.user_id,
+        workspace_id: number.workspace_id,
+        campaign_id: campaign.id,
+        status: "scheduled",
+        scheduled_at: new Date(cursorMs).toISOString(),
+      });
+    }
+  } else {
+    // Multi-day path: split recipients evenly across dates, schedule inside window
+    const perDay = Math.ceil(cleanRecipients.length / scheduledDates.length);
+    for (let di = 0; di < scheduledDates.length; di++) {
+      const date = scheduledDates[di];
+      const slice = cleanRecipients.slice(di * perDay, (di + 1) * perDay);
+      if (slice.length === 0) continue;
+      // Per-recipient schedule: recipient TZ if respectTz, else workspace TZ (UTC fallback)
+      // Build per-recipient slot inside [windowStart, windowEnd] with poisson spacing
+      // Sort by tz so same-tz recipients get sequential slots; we still randomize inside.
+      const perTz = new Map<string, typeof slice>();
+      for (const r of slice) {
+        const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
+        if (!perTz.has(tz)) perTz.set(tz, []);
+        perTz.get(tz)!.push(r);
+      }
+      for (const [tz, list] of perTz) {
+        const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
+        const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
+        const span = Math.max(60_000, endUtc - startUtc);
+        if (schedulerKind === "poisson") {
+          // exponential gaps with rate so expected total ≈ span
+          const rate = list.length / (span / 1000);
+          let cursor = startUtc;
+          for (const r of list) {
+            cursor += exponentialGap(rate) * 1000;
+            if (cursor > endUtc) cursor = endUtc - Math.floor(Math.random() * 60_000); // clamp
+            rows.push({
+              ...r,
+              user_id: number.user_id, workspace_id: number.workspace_id,
+              campaign_id: campaign.id, status: "scheduled",
+              scheduled_at: new Date(cursor).toISOString(),
+            });
+          }
+        } else {
+          // Uniform: evenly distributed slots + jitter
+          const step = span / Math.max(1, list.length);
+          for (let i = 0; i < list.length; i++) {
+            const jitter = (Math.random() - 0.5) * step * 0.4;
+            const ts = startUtc + i * step + jitter;
+            rows.push({
+              ...list[i],
+              user_id: number.user_id, workspace_id: number.workspace_id,
+              campaign_id: campaign.id, status: "scheduled",
+              scheduled_at: new Date(Math.min(endUtc, Math.max(startUtc, ts))).toISOString(),
+            });
+          }
+        }
+      }
+    }
+    // Sort by scheduled_at to keep DB insert tidy
+    rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+  }
 
   const { error: recipientsError } = await admin.from("campaign_recipients").insert(rows);
   if (recipientsError) return json({ error: recipientsError.message }, 500);
 
   let immediate: any = null;
-  if (minDelay === 0 && maxDelay === 0) {
+  if (scheduledDates.length === 0 && minDelay === 0 && maxDelay === 0) {
     await admin.from("campaign_recipients")
       .update({ scheduled_at: new Date(Date.now() - 1000).toISOString() })
       .eq("campaign_id", campaign.id);
@@ -198,6 +369,15 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       immediate = { error: err instanceof Error ? err.message : "process failed" };
     }
   }
+
+  // Fire-and-forget Slack notification
+  const firstAt = rows.length > 0 ? rows[0].scheduled_at : new Date().toISOString();
+  notifyLaunchSlack(number.workspace_id, {
+    name, recipients: rows.length, firstAt,
+    mode: scheduledDates.length > 0 ? `${schedulerKind} · ${scheduledDates.length}d × ${windowStart}-${windowEnd}` : `${schedulerKind} · now`,
+    numberPhone: number.phone_number,
+  }).catch(() => {});
+
   return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate });
 }
 
