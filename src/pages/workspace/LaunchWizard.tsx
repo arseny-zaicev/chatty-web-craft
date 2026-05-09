@@ -740,6 +740,68 @@ export default function LaunchWizard() {
                   onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
               </Field>
             </div>
+
+            {/* Schedule */}
+            <div className="mt-4 rounded-md border border-border/60 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Schedule</div>
+                <Tabs value={scheduleMode} onValueChange={(v) => setScheduleMode(v as any)}>
+                  <TabsList className="h-7">
+                    <TabsTrigger value="now" className="text-xs px-2 py-0.5">Send now</TabsTrigger>
+                    <TabsTrigger value="scheduled" className="text-xs px-2 py-0.5">Pick days</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {scheduleMode === "scheduled" && (
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-1">Launch days (recipients are split evenly across selected days)</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input type="date" className="w-auto" min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v && !scheduledDates.includes(v)) setScheduledDates([...scheduledDates, v].sort());
+                        e.target.value = "";
+                      }} />
+                    {scheduledDates.map((d) => (
+                      <Badge key={d} variant="secondary" className="gap-1 cursor-pointer" onClick={() => setScheduledDates(scheduledDates.filter((x) => x !== d))}>
+                        {d} ✕
+                      </Badge>
+                    ))}
+                    {scheduledDates.length === 0 && <span className="text-xs text-muted-foreground">Add at least one date</span>}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Field label="Window from"><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
+                <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+                <Field label="Scheduler">
+                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="poisson">Poisson (organic, jittered)</SelectItem>
+                      <SelectItem value="uniform">Uniform (fixed delays)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Recipient TZ">
+                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Respect (per phone)</SelectItem>
+                      <SelectItem value="no">Workspace TZ</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              <div className="text-[11px] text-muted-foreground">
+                {scheduleMode === "now"
+                  ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson-distributed inter-arrivals" : "Uniform delays"} within ${delayMin}-${delayMax}s.`
+                  : `${scheduledDates.length || 0} day(s) × window ${windowStart}-${windowEnd}${respectTz ? " (recipient local time)" : ""}. Cross-number stagger applied.`}
+              </div>
+            </div>
           </Step>
 
           {/* Step 4: Audience */}
