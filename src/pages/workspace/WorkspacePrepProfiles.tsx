@@ -188,6 +188,7 @@ function ProfileEditor({
         fallback_rules: fallbacks,
         quick_replies: quickReplies,
         sample_payload: sample,
+        sample_message_template: sampleMessageTemplate.trim() || null,
       });
       toast.success(initial ? "Profile updated" : "Profile created");
       onSaved();
