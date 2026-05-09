@@ -18,6 +18,7 @@ import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces
 import { fetchPortfolioSnapshot, portfolioKeys, type PortfolioSnapshot } from "@/lib/portfolioMetrics";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
+import { IskraLogo } from "@/components/IskraLogo";
 import { cn } from "@/lib/utils";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
