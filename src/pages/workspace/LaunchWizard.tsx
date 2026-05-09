@@ -85,6 +85,14 @@ export default function LaunchWizard() {
   const [routing, setRouting] = useState(preset.routing);
   const [mapping, setMapping] = useState<Record<string, string>>({});
 
+  // ----- Scheduling -----
+  const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
+  const [scheduledDates, setScheduledDates] = useState<string[]>([]); // YYYY-MM-DD
+  const [windowStart, setWindowStart] = useState("09:00");
+  const [windowEnd, setWindowEnd] = useState("18:00");
+  const [respectTz, setRespectTz] = useState(true);
+  const [schedulerKind, setSchedulerKind] = useState<"uniform" | "poisson">("poisson");
+
 
   // When type changes, reset defaults (unless user dirty-edited)
   const typeAppliedRef = useRef<CampaignType>("marketing");
