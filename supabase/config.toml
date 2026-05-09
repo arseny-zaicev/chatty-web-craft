@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.gupshup-set-callback]
 verify_jwt = false
+
+[functions.process-email-queue]
+verify_jwt = true
