@@ -471,6 +471,40 @@ export default function OpsLive() {
           <div className="tabular-nums">Auto-refresh · 5 min</div>
         </footer>
       </div>
+
+      <Dialog open={linkDialogOpen} onOpenChange={(o) => { setLinkDialogOpen(o); if (!o) { setGeneratedUrl(null); setCopied(false); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Public TV link · 7 days</DialogTitle>
+            <DialogDescription>
+              Generate a read-only link to open Ops Live on a TV without signing in.
+              Anyone with the link can view the wallboard until it expires.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            {!generatedUrl ? (
+              <Button onClick={handleGenerateLink} disabled={generating} className="w-full">
+                {generating ? "Generating…" : "Generate 7-day link"}
+              </Button>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Input value={generatedUrl} readOnly className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                  <Button onClick={handleCopy} variant="outline" size="icon" aria-label="Copy">
+                    {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Expires in 7 days. To revoke earlier, delete the token in the database.
+                </p>
+                <Button variant="ghost" size="sm" onClick={handleGenerateLink} disabled={generating} className="self-start">
+                  Generate another
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
