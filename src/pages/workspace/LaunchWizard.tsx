@@ -41,6 +41,33 @@ const TYPE_PRESETS: Record<CampaignType, { label: string; mode: "Blast" | "Utili
 
 const UTILITY_MIN_DELAY = 60;
 
+// Country code/name → IANA timezone for "recipient region clock"
+const COUNTRY_TZ: Record<string, string> = {
+  US: "America/New_York", USA: "America/New_York", "UNITED STATES": "America/New_York",
+  CA: "America/Toronto", CANADA: "America/Toronto",
+  UK: "Europe/London", GB: "Europe/London", "UNITED KINGDOM": "Europe/London",
+  AE: "Asia/Dubai", UAE: "Asia/Dubai", "UNITED ARAB EMIRATES": "Asia/Dubai",
+  SA: "Asia/Riyadh", "SAUDI ARABIA": "Asia/Riyadh",
+  IN: "Asia/Kolkata", INDIA: "Asia/Kolkata",
+  PK: "Asia/Karachi", PAKISTAN: "Asia/Karachi",
+  RU: "Europe/Moscow", RUSSIA: "Europe/Moscow",
+  DE: "Europe/Berlin", GERMANY: "Europe/Berlin",
+  FR: "Europe/Paris", FRANCE: "Europe/Paris",
+  ES: "Europe/Madrid", SPAIN: "Europe/Madrid",
+  IT: "Europe/Rome", ITALY: "Europe/Rome",
+  TR: "Europe/Istanbul", TURKEY: "Europe/Istanbul",
+  AU: "Australia/Sydney", AUSTRALIA: "Australia/Sydney",
+  BR: "America/Sao_Paulo", BRAZIL: "America/Sao_Paulo",
+  MX: "America/Mexico_City", MEXICO: "America/Mexico_City",
+  SG: "Asia/Singapore", SINGAPORE: "Asia/Singapore",
+  HK: "Asia/Hong_Kong", "HONG KONG": "Asia/Hong_Kong",
+  JP: "Asia/Tokyo", JAPAN: "Asia/Tokyo",
+  CN: "Asia/Shanghai", CHINA: "Asia/Shanghai",
+  ZA: "Africa/Johannesburg", "SOUTH AFRICA": "Africa/Johannesburg",
+  NG: "Africa/Lagos", NIGERIA: "Africa/Lagos",
+  EG: "Africa/Cairo", EGYPT: "Africa/Cairo",
+};
+
 export default function LaunchWizard() {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const qc = useQueryClient();
@@ -305,6 +332,37 @@ export default function LaunchWizard() {
     if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
     return `${(seconds / 3600).toFixed(1)}h`;
   }, [recipients.length, activeNumbers.length, delayMin, delayMax, type]);
+
+  // ----- Recipient region clock & realistic pacing -----
+  const recipientTz = useMemo(() => COUNTRY_TZ[poolCountry?.toUpperCase() ?? ""] ?? null, [poolCountry]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const recipientNow = useMemo(() => {
+    if (!recipientTz) return null;
+    try {
+      const fmt = new Intl.DateTimeFormat("en-GB", { timeZone: recipientTz, hour: "2-digit", minute: "2-digit", hour12: false });
+      return fmt.format(new Date(nowTick));
+    } catch { return null; }
+  }, [recipientTz, nowTick]);
+  const inWindow = useMemo(() => {
+    if (!recipientNow || !windowStart || !windowEnd) return null;
+    return recipientNow >= windowStart && recipientNow <= windowEnd;
+  }, [recipientNow, windowStart, windowEnd]);
+
+  // Realistic per-message gap when window mode is active
+  const pacing = useMemo(() => {
+    const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
+    if (!perNumber || !windowStart || !windowEnd) return null;
+    const [sh, sm] = windowStart.split(":").map(Number);
+    const [eh, em] = windowEnd.split(":").map(Number);
+    const windowSec = Math.max(60, (eh * 3600 + em * 60) - (sh * 3600 + sm * 60));
+    const avgGapSec = Math.floor(windowSec / Math.max(1, perNumber));
+    return { perNumber, windowSec, avgGapSec };
+  }, [recipients.length, activeNumbers.length, windowStart, windowEnd]);
+
 
   // ----- Sample DB rows for live preview (database source) -----
   const sampleDbRowsQ = useQuery({
@@ -785,24 +843,41 @@ export default function LaunchWizard() {
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Recipient TZ">
+                <Field label="Time zone basis">
                   <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">Respect (per phone)</SelectItem>
-                      <SelectItem value="no">Workspace TZ</SelectItem>
+                      <SelectItem value="yes">Recipient local (per phone prefix)</SelectItem>
+                      <SelectItem value="no">My time zone (browser)</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
               </div>
 
-              <div className="text-[11px] text-muted-foreground">
-                {scheduleMode === "now"
-                  ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson-distributed inter-arrivals" : "Uniform delays"} within ${delayMin}-${delayMax}s.`
-                  : `${scheduledDates.length || 0} day(s) × window ${windowStart}-${windowEnd}${respectTz ? " (recipient local time)" : ""}. Cross-number stagger applied.`}
+              {/* Recipient region clock */}
+              {recipientTz && recipientNow && (
+                <div className={`text-[11px] flex items-center gap-2 px-2 py-1.5 rounded-md border ${inWindow ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500"}`}>
+                  <span className="font-mono font-semibold">{recipientNow}</span>
+                  <span className="opacity-70">in {poolCountry} ({recipientTz.split("/")[1].replace("_", " ")})</span>
+                  <span className="ml-auto">{inWindow ? `✓ inside ${windowStart}-${windowEnd}` : `outside ${windowStart}-${windowEnd}`}</span>
+                </div>
+              )}
+
+              <div className="text-[11px] text-muted-foreground space-y-1">
+                <div>
+                  {scheduleMode === "now"
+                    ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson (organic gaps)" : "Uniform fixed gaps"} of ${delayMin}-${delayMax}s between sends per number.`
+                    : `${scheduledDates.length || 0} day(s) × ${windowStart}-${windowEnd} ${respectTz ? "in each recipient's local time" : "in your time zone"}. Numbers fire staggered (no two at the same second).`}
+                </div>
+                {scheduleMode === "scheduled" && pacing && pacing.perNumber > 1 && (
+                  <div>
+                    Math: {pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h window ≈ <b>1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average. Min/max delays ({delayMin}-{delayMax}s) only act as the floor between two consecutive sends.
+                  </div>
+                )}
               </div>
             </div>
           </Step>
+
 
           {/* Step 4: Audience */}
           <Step n={4} icon={Users} title="Audience">
