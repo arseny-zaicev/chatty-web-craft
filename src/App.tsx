@@ -29,42 +29,42 @@ import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-route
 import { ScrollToTop } from "@/components/ScrollToTop";
 
 // Lazy-load all secondary routes to keep initial bundle small
-const Index = lazy(() => import("./pages/Index"));
-const SellerLeads = lazy(() => import("./pages/SellerLeads"));
-const BrandAssets = lazy(() => import("./pages/BrandAssets"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Terms = lazy(() => import("./pages/Terms"));
-const ClientAuth = lazy(() => import("./pages/ClientAuth"));
-const ClientPortal = lazy(() => import("./pages/ClientPortal"));
-const ClientStats = lazy(() => import("./pages/ClientStats"));
-const AISeoReport = lazy(() => import("./pages/AISeoReport"));
-const AdminAuth = lazy(() => import("./pages/AdminAuth"));
-const AdminPanel = lazy(() => import("./pages/AdminPanel"));
-const FleetRegistry = lazy(() => import("./pages/admin/FleetRegistry"));
-const FleetAnalytics = lazy(() => import("./pages/admin/FleetAnalytics"));
-const AdminMfaSetup = lazy(() => import("./pages/admin/AdminMfaSetup"));
-const AdminMfaVerify = lazy(() => import("./pages/admin/AdminMfaVerify"));
-const Apply = lazy(() => import("./pages/Apply"));
-const SellerLeadsApply = lazy(() => import("./pages/SellerLeadsApply"));
-const WhatsAppApply = lazy(() => import("./pages/WhatsAppApply"));
-const Book = lazy(() => import("./pages/Book"));
-const Booked = lazy(() => import("./pages/Booked"));
-const Demo = lazy(() => import("./pages/Demo"));
-const BMAccess = lazy(() => import("./pages/BMAccess"));
-const CRM = lazy(() => import("./pages/CRM"));
-const Pipeline = lazy(() => import("./pages/Pipeline"));
+const Index = lazyWithRetry(() => import("./pages/Index"));
+const SellerLeads = lazyWithRetry(() => import("./pages/SellerLeads"));
+const BrandAssets = lazyWithRetry(() => import("./pages/BrandAssets"));
+const Privacy = lazyWithRetry(() => import("./pages/Privacy"));
+const Terms = lazyWithRetry(() => import("./pages/Terms"));
+const ClientAuth = lazyWithRetry(() => import("./pages/ClientAuth"));
+const ClientPortal = lazyWithRetry(() => import("./pages/ClientPortal"));
+const ClientStats = lazyWithRetry(() => import("./pages/ClientStats"));
+const AISeoReport = lazyWithRetry(() => import("./pages/AISeoReport"));
+const AdminAuth = lazyWithRetry(() => import("./pages/AdminAuth"));
+const AdminPanel = lazyWithRetry(() => import("./pages/AdminPanel"));
+const FleetRegistry = lazyWithRetry(() => import("./pages/admin/FleetRegistry"));
+const FleetAnalytics = lazyWithRetry(() => import("./pages/admin/FleetAnalytics"));
+const AdminMfaSetup = lazyWithRetry(() => import("./pages/admin/AdminMfaSetup"));
+const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"));
+const Apply = lazyWithRetry(() => import("./pages/Apply"));
+const SellerLeadsApply = lazyWithRetry(() => import("./pages/SellerLeadsApply"));
+const WhatsAppApply = lazyWithRetry(() => import("./pages/WhatsAppApply"));
+const Book = lazyWithRetry(() => import("./pages/Book"));
+const Booked = lazyWithRetry(() => import("./pages/Booked"));
+const Demo = lazyWithRetry(() => import("./pages/Demo"));
+const BMAccess = lazyWithRetry(() => import("./pages/BMAccess"));
+const CRM = lazyWithRetry(() => import("./pages/CRM"));
+const Pipeline = lazyWithRetry(() => import("./pages/Pipeline"));
 
-const WorkspaceLayout = lazy(() => import("./pages/workspace/WorkspaceLayout"));
-const WorkspaceSection = lazy(() => import("./pages/workspace/WorkspaceSection"));
-const WorkspaceOverview = lazy(() => import("./pages/workspace/WorkspaceOverview"));
+const WorkspaceLayout = lazyWithRetry(() => import("./pages/workspace/WorkspaceLayout"));
+const WorkspaceSection = lazyWithRetry(() => import("./pages/workspace/WorkspaceSection"));
+const WorkspaceOverview = lazyWithRetry(() => import("./pages/workspace/WorkspaceOverview"));
 
-const WorkspaceSettings = lazy(() => import("./pages/workspace/WorkspaceSettings"));
-const LaunchWizard = lazy(() => import("./pages/workspace/LaunchWizard"));
-const NewClient = lazy(() => import("./pages/workspace/NewClient"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const CustomCursor = lazy(() => import("@/components/CustomCursor"));
-const CookieConsent = lazy(() => import("@/components/CookieConsent"));
-const ScrollProgress = lazy(() => import("@/components/ScrollProgress"));
+const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/WorkspaceSettings"));
+const LaunchWizard = lazyWithRetry(() => import("./pages/workspace/LaunchWizard"));
+const NewClient = lazyWithRetry(() => import("./pages/workspace/NewClient"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+const CustomCursor = lazyWithRetry(() => import("@/components/CustomCursor"));
+const CookieConsent = lazyWithRetry(() => import("@/components/CookieConsent"));
+const ScrollProgress = lazyWithRetry(() => import("@/components/ScrollProgress"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
