@@ -97,32 +97,47 @@ const downloadPNGFromSVG = async (svgContent: string, filename: string, width: n
   img.src = svgUrl;
 };
 
-// SVG generators
-const sparkSVG = (color: string, bg: string | null, size = 512) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 160 160">
-${bg ? `<rect width="160" height="160" fill="${bg}"/>` : ""}
-<path d="${SPARK_PATH}" fill="${color}"/>
-</svg>`;
+// SVG generators - all use the canonical Sparkles glyph (matches in-app mark + favicon).
+// Mark layout: lucide Sparkles 24x24 path, scaled to fit a 160x160 canvas at ~50% inner size.
+const sparkleInner = (color: string, scale = 4.5, tx = 26, ty = 26, sw = 1.6) =>
+  `<g transform="translate(${tx} ${ty}) scale(${scale})" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${SPARKLES_PATHS}</g>`;
 
-const sparkRoundedSVG = (color: string, bg: string, size = 512) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 160 160">
-<rect width="160" height="160" rx="32" ry="32" fill="${bg}"/>
-<path d="${SPARK_PATH}" fill="${color}"/>
-</svg>`;
+// Transparent mark - just the glyph, no plate.
+const sparkSVG = (color: string, _bg: string | null, size = 512) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 160 160">${sparkleInner(color, 4.5, 26, 26, 1.4)}</svg>`;
 
-const fullLogoSVG = (fg: string, bg: string | null, w = 800, h = 240) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 800 240">
-${bg ? `<rect width="800" height="240" fill="${bg}"/>` : ""}
-<g transform="translate(120, 40) scale(1)">
-  <path d="${SPARK_PATH}" fill="${fg}"/>
-</g>
-<text x="320" y="155" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="800" font-size="120" fill="${fg}" letter-spacing="-2">ISKRA</text>
-</svg>`;
+// Rounded plate (avatar) - emerald gradient or solid bg.
+const sparkRoundedSVG = (glyph: string, bg: string, size = 512) => {
+  const isGradient = bg === "emerald-gradient";
+  const fillBg = isGradient ? "url(#brandG)" : bg;
+  const grad = isGradient
+    ? `<defs><linearGradient id="brandG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1f8f5e"/><stop offset="100%" stop-color="#166b45"/></linearGradient></defs>`
+    : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 160 160">${grad}<rect width="160" height="160" rx="34" ry="34" fill="${fillBg}"/>${sparkleInner(glyph, 4.5, 26, 26, 1.6)}</svg>`;
+};
+
+// Full logo (mark + ISKRA wordmark) - 800x240 default.
+const fullLogoSVG = (fg: string, bg: string | null, w = 800, h = 240, markBg: string | null = null) => {
+  const isGradient = markBg === "emerald-gradient";
+  const grad = isGradient
+    ? `<defs><linearGradient id="brandG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1f8f5e"/><stop offset="100%" stop-color="#166b45"/></linearGradient></defs>`
+    : "";
+  const plate = markBg
+    ? `<rect x="80" y="60" width="120" height="120" rx="26" ry="26" fill="${isGradient ? "url(#brandG)" : markBg}"/>`
+    : "";
+  const glyphColor = markBg ? "#ffffff" : fg;
+  // Sparkles glyph centered inside the 120x120 plate area (or in the same spot if no plate).
+  const glyphTransform = `translate(110, 90) scale(3.3)`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 800 240">${grad}${bg ? `<rect width="800" height="240" fill="${bg}"/>` : ""}${plate}<g transform="${glyphTransform}" fill="none" stroke="${glyphColor}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${SPARKLES_PATHS}</g><text x="240" y="155" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="800" font-size="120" fill="${fg}" letter-spacing="-2">ISKRA</text></svg>`;
+};
 
 const BrandAssets = () => {
   const { toast } = useToast();
 
+  // Canonical brand palette - synced 1:1 with src/index.css HSL tokens.
   const brandColors = [
-    { name: "Emerald", hex: "#2d9d74", desc: "Primary", usage: "Main brand color, CTAs" },
-    { name: "Emerald Deep", hex: "#1a7a5a", desc: "Dark variant", usage: "Hover, gradients" },
-    { name: "Emerald Light", hex: "#34d399", desc: "Accent", usage: "Highlights, badges" },
+    { name: "Emerald", hex: "#1f8f5e", desc: "Primary", usage: "Main brand color, CTAs" },
+    { name: "Emerald Deep", hex: "#166b45", desc: "Dark variant", usage: "Hover, gradients, plate end" },
+    { name: "Emerald Light", hex: "#20b873", desc: "Accent", usage: "Highlights, badges, glow" },
     { name: "Dark", hex: "#0a0a0a", desc: "Background", usage: "Dark mode bg" },
     { name: "Warm White", hex: "#f5f3ef", desc: "Light bg", usage: "Light mode bg" },
     { name: "Pure White", hex: "#ffffff", desc: "Text/Cards", usage: "Text on dark" },
@@ -130,22 +145,23 @@ const BrandAssets = () => {
 
   const sizes = [256, 512, 1024];
 
-  // Color variants for transparent spark
+  // Color variants for transparent mark (glyph only, no plate).
   const sparkVariants = [
     { name: "White", color: "#ffffff", preview: "#0a0a0a" },
     { name: "Black", color: "#0a0a0a", preview: "#f5f3ef" },
-    { name: "Emerald", color: "#2d9d74", preview: "#f5f3ef" },
-    { name: "Emerald Deep", color: "#1a7a5a", preview: "#f5f3ef" },
-    { name: "Warm White", color: "#f5f3ef", preview: "#1a7a5a" },
+    { name: "Emerald", color: "#1f8f5e", preview: "#f5f3ef" },
+    { name: "Emerald Deep", color: "#166b45", preview: "#f5f3ef" },
+    { name: "Warm White", color: "#f5f3ef", preview: "#166b45" },
   ];
 
-  // Solid background variants
+  // Solid background variants (avatar / app icon style with rounded plate).
   const solidVariants = [
+    { name: "Emerald Gradient", fg: "#ffffff", bg: "emerald-gradient" },
     { name: "White on Dark", fg: "#ffffff", bg: "#0a0a0a" },
     { name: "Black on White", fg: "#0a0a0a", bg: "#ffffff" },
-    { name: "White on Emerald", fg: "#ffffff", bg: "#2d9d74" },
-    { name: "Emerald on Cream", fg: "#2d9d74", bg: "#f5f3ef" },
+    { name: "Emerald on Cream", fg: "#1f8f5e", bg: "#f5f3ef" },
   ];
+
 
   return (
     <>
