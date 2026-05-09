@@ -791,13 +791,20 @@ export default function LaunchWizard() {
               <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
               <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
                 <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
+                  disabled={scheduleMode === "scheduled"}
                   onChange={(e) => setDelayMin(Math.max(type === "utility" ? UTILITY_MIN_DELAY : 0, Number(e.target.value)))} />
               </Field>
               <Field label="Max delay (s)">
                 <Input type="number" min={delayMin} value={delayMax}
+                  disabled={scheduleMode === "scheduled"}
                   onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
               </Field>
             </div>
+            {scheduleMode === "scheduled" && (
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Min/Max delay is ignored when a window is set - gaps are computed from the window length below.
+              </div>
+            )}
 
             {/* Schedule */}
             <div className="mt-4 rounded-md border border-border/60 p-3 space-y-3">
