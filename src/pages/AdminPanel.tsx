@@ -187,6 +187,7 @@ const AdminPanel = () => {
 };
 
 function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[]; isLoading: boolean; onRefetch: () => void }) {
+  const [showNew, setShowNew] = useState(false);
   const { data: snapshot } = useQuery<PortfolioSnapshot>({
     queryKey: portfolioKeys.snapshot,
     queryFn: fetchPortfolioSnapshot,
@@ -207,8 +208,8 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
           <h2 className="text-2xl font-display font-bold">Portfolio</h2>
           <p className="text-sm text-muted-foreground">All clients at a glance. Open any folder to manage their inbox, launches and reporting.</p>
         </div>
-        <Button asChild>
-          <Link to="/ws/new"><Plus className="h-4 w-4 mr-2" />New client</Link>
+        <Button onClick={() => setShowNew(true)}>
+          <Plus className="h-4 w-4 mr-2" />New client
         </Button>
       </div>
 
@@ -227,22 +228,24 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
           <CardContent className="py-16 text-center text-muted-foreground">
             <Building2 className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p className="mb-4">No clients yet</p>
-            <Button asChild><Link to="/ws/new"><Plus className="h-4 w-4 mr-2" />Create first client</Link></Button>
+            <Button onClick={() => setShowNew(true)}><Plus className="h-4 w-4 mr-2" />Create first client</Button>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {workspaces.map((w) => <ClientCard key={w.id} ws={w} m={snapshot?.byWorkspace[w.id]} />)}
-          <Card className="border-dashed flex items-center justify-center hover:border-primary/50 transition-colors min-h-[260px]">
-            <Button asChild variant="ghost" className="h-auto flex-col gap-2 py-8">
-              <Link to="/ws/new">
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"><Plus className="h-5 w-5" /></div>
-                <span>Add client</span>
-              </Link>
-            </Button>
-          </Card>
+          <button
+            type="button"
+            onClick={() => setShowNew(true)}
+            className="rounded-lg border border-dashed border-border bg-card/30 hover:border-primary/50 hover:bg-card/50 transition-colors min-h-[260px] flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"><Plus className="h-5 w-5" /></div>
+            <span className="text-sm font-medium">Add client</span>
+          </button>
         </div>
       )}
+
+      <NewClientDialog open={showNew} onOpenChange={setShowNew} />
     </div>
   );
 }
