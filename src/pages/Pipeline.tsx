@@ -880,9 +880,12 @@ const ActionDropZone = ({ zone }: { zone: ActionZone }) => {
 const BottomActionBar = ({ visible, stages }: { visible: boolean; stages: Stage[] }) => {
   if (!visible) return null;
 
-  // Build zones from stage_type (won/lost) + special "delete"
+  // Final-status zones: won/lost via stage_type + any stage named "booked"
   const won = stages.filter((s) => s.stage_type === "won");
   const lost = stages.filter((s) => s.stage_type === "lost");
+  const booked = stages.filter(
+    (s) => s.stage_type !== "won" && s.stage_type !== "lost" && /booked/i.test(s.name),
+  );
 
   const zones: ActionZone[] = [
     { id: "__delete__", label: "Delete", bg: "bg-muted/80", hoverBg: "bg-muted", text: "text-foreground" },
@@ -892,6 +895,13 @@ const BottomActionBar = ({ visible, stages }: { visible: boolean; stages: Stage[
       bg: "bg-destructive/80",
       hoverBg: "bg-destructive",
       text: "text-destructive-foreground",
+    })),
+    ...booked.map<ActionZone>((s) => ({
+      id: s.id,
+      label: s.name,
+      bg: "bg-primary/80",
+      hoverBg: "bg-primary",
+      text: "text-primary-foreground",
     })),
     ...won.map<ActionZone>((s) => ({
       id: s.id,
