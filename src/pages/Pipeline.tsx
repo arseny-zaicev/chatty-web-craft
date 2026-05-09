@@ -343,17 +343,25 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
 
         {!embedded ? null : (
           <div className="px-4 py-2 border-b border-border flex items-center justify-end gap-2 bg-card/30">
-            <button
-              onClick={() => setMyOnly((v) => !v)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                myOnly
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border text-muted-foreground hover:border-primary/40"
-              }`}
-              title="Show only chats assigned to me"
-            >
-              {myOnly ? "My chats only" : "All chats"}
-            </button>
+            <span className="text-xs text-muted-foreground">Filter:</span>
+            <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All chats</SelectItem>
+                <SelectItem value="me">My chats</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>
+                    {m.full_name?.trim() || `User ${m.user_id.slice(0, 6)}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => setShowAutomations(true)}>
+              Automations
+            </Button>
             <Button size="sm" onClick={() => setShowNew(true)}>
               <Plus className="w-4 h-4 mr-1" /> New deal
             </Button>
