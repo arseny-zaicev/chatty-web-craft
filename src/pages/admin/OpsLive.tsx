@@ -346,6 +346,17 @@ export default function OpsLive() {
                 {formatTime(lastUpdated)} · next {nextRefreshIn}
               </div>
             </div>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLinkDialogOpen(true)}
+                className="border border-[hsl(152_65%_35%/0.4)] bg-[hsl(152_65%_35%/0.06)] hover:bg-[hsl(152_65%_35%/0.12)] text-[hsl(152_65%_28%)] rounded-full px-3 lg:px-4 h-8"
+              >
+                <Link2 className="h-3.5 w-3.5 lg:mr-2" />
+                <span className="hidden lg:inline">TV link</span>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
