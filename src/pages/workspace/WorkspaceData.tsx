@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon, Wand2, ShieldCheck, ShieldAlert,
+  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon, Wand2, ShieldCheck, ShieldAlert, RefreshCw, ClipboardCopy,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ import {
 } from "@/lib/audienceData";
 import {
   prepProfileKeys, listPrepProfiles, applyDerivedVariables, validateRowAgainstProfile,
+  buildPrepPrompt, buildFallbackPrompt,
   type PrepProfile,
 } from "@/lib/prepProfiles";
 import type { WorkspaceContext } from "./WorkspaceLayout";
@@ -84,14 +85,24 @@ export default function WorkspaceData() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" title="Refresh"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: audienceKeys.batches(workspace.id) });
+                qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace.id) });
+                qc.invalidateQueries({ queryKey: prepProfileKeys.list(workspace.id) });
+              }}>
+              <RefreshCw className="w-4 h-4" />
+            </Button>
             <Button asChild variant="outline">
               <Link to={`/ws/${workspace.slug}/data/profiles`}><Wand2 className="w-4 h-4 mr-1" />Prep Profiles</Link>
             </Button>
             <Button onClick={() => setOpenUpload(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Upload audience
+              <Upload className="w-4 h-4 mr-1" /> Upload audience (fallback)
             </Button>
           </div>
         </div>
+
+        <PrepPromptsSection workspaceName={workspace.name} workspaceId={workspace.id} workspaceSlug={workspace.slug} />
 
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
           {batchesQ.isLoading && (
@@ -171,6 +182,69 @@ function Stat({ label, value, className }: { label: string; value: number; class
     <div className="rounded-md bg-muted/40 px-2 py-1.5">
       <div className="text-[10px] text-muted-foreground uppercase">{label}</div>
       <div className={`font-mono ${className ?? ""}`}>{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+function PrepPromptsSection({
+  workspaceName, workspaceId, workspaceSlug,
+}: { workspaceName: string; workspaceId: string; workspaceSlug: string }) {
+  const profilesQ = useQuery({
+    queryKey: prepProfileKeys.list(workspaceId),
+    queryFn: () => listPrepProfiles(workspaceId),
+  });
+  const profiles = profilesQ.data ?? [];
+
+  const copy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Clipboard blocked - select text manually");
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card/30 p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Wand2 className="w-4 h-4 text-primary" />
+        <h2 className="font-medium text-sm">Prep prompts</h2>
+        <Badge variant="outline" className="text-[10px]">primary path: Codex -&gt; Supabase</Badge>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Copy a prompt, prepare the audience in Codex against the profile rules, then insert validated rows into this workspace's batch. Use the fallback CSV/XLSX upload only when Codex isn't available.
+      </p>
+
+      {profiles.length === 0 ? (
+        <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-4 text-center">
+          No prep profiles yet. <Link to={`/ws/${workspaceSlug}/data/profiles`} className="text-primary underline">Create one</Link> to enable the primary workflow.
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {profiles.map((p) => (
+            <div key={p.id} className="rounded-md border border-border p-3 bg-background/40">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm truncate">{p.name}</span>
+                <Badge variant="outline" className="text-[10px]">{p.campaign_type}</Badge>
+                {p.template_label && <Badge variant="outline" className="text-[10px] text-muted-foreground">{p.template_label}</Badge>}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">
+                required: {p.required_fields.join(", ") || "none"} · derives: {p.derived_variables.map((d) => d.key).join(", ") || "none"}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <Button size="sm" variant="outline"
+                  onClick={() => copy(buildPrepPrompt(p, { workspaceName, workspaceId }), "Prep prompt")}>
+                  <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
+                </Button>
+                <Button size="sm" variant="ghost"
+                  onClick={() => copy(buildFallbackPrompt(p), "Fallback prompt")}>
+                  <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy fallback
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
