@@ -20,11 +20,13 @@ export async function evaluateAdminAccess(): Promise<AdminGuardResult> {
     return { state: "redirect", to: "/admin-auth", reason: "not-admin" };
   }
 
-  const { data: factors } = await supabase.auth.mfa.listFactors();
+  // Run MFA factor + AAL checks in parallel — they're independent network calls.
+  const [{ data: factors }, { data: aal }] = await Promise.all([
+    supabase.auth.mfa.listFactors(),
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+  ]);
   const verifiedTotp = factors?.totp?.find((f) => f.status === "verified");
   if (!verifiedTotp) return { state: "redirect", to: "/admin/mfa-setup" };
-
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aal?.currentLevel !== "aal2") return { state: "redirect", to: "/admin/mfa-verify" };
 
   return { state: "ok" };
