@@ -330,6 +330,9 @@ export type Database = {
       }
       conversations: {
         Row: {
+          active_responder_at: string | null
+          active_responder_id: string | null
+          assigned_user_id: string | null
           contact_name: string | null
           contact_phone: string
           created_at: string
@@ -345,6 +348,9 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          active_responder_at?: string | null
+          active_responder_id?: string | null
+          assigned_user_id?: string | null
           contact_name?: string | null
           contact_phone: string
           created_at?: string
@@ -360,6 +366,9 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          active_responder_at?: string | null
+          active_responder_id?: string | null
+          assigned_user_id?: string | null
           contact_name?: string | null
           contact_phone?: string
           created_at?: string
