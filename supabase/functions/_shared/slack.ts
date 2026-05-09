@@ -20,7 +20,7 @@ export async function sendSlackMessage(channel: string, text: string): Promise<v
         channel,
         text,
         username: "Iskra",
-        icon_url: "https://iskra.ae/iskra-favicon-v2.svg",
+        icon_url: "https://iskra.ae/iskra-favicon-v2.png",
         unfurl_links: false,
         unfurl_media: false,
       }),
