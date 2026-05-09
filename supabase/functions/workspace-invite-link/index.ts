@@ -107,7 +107,20 @@ Deno.serve(async (req) => {
 
       if (existing) {
         userId = existing.id;
-        // If they already exist, do not change their password silently. Just attach to workspace.
+        // If they have never signed in (e.g. created by a previous invite with no password set),
+        // we accept this signup as their first one and set the password they typed.
+        // If they have signed in before, we do NOT overwrite their password — just attach to workspace.
+        if (!existing.last_sign_in_at) {
+          const { error: updErr } = await admin.auth.admin.updateUserById(existing.id, {
+            password,
+            email_confirm: true,
+            user_metadata: { ...(existing.user_metadata ?? {}), full_name: fullName, first_name: firstName, last_name: lastName },
+          });
+          if (updErr) return json({ error: updErr.message }, 500);
+          await admin
+            .from("profiles")
+            .upsert({ user_id: existing.id, full_name: fullName }, { onConflict: "user_id" });
+        }
       } else {
         const { data: created, error: createErr } = await admin.auth.admin.createUser({
           email,
