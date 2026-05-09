@@ -89,6 +89,7 @@ export async function upsertPrepProfile(
     fallback_rules: p.fallback_rules ?? {},
     quick_replies: p.quick_replies ?? [],
     sample_payload: p.sample_payload ?? {},
+    sample_message_template: p.sample_message_template ?? null,
   };
   const tbl = supabase.from("audience_prep_profiles" as never) as any;
   const q = p.id
