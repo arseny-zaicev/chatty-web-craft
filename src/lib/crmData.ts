@@ -91,20 +91,26 @@ export async function fetchPipelineBase(workspaceId?: string) {
     .from("deals")
     .select("id, title, contact_name, contact_phone, amount, currency, notes, stage_id, workspace_id, position, conversation_id, updated_at")
     .order("position");
+  let conversationsQuery = supabase
+    .from("conversations")
+    .select("id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at");
 
   if (workspaceId) {
     stagesQuery = stagesQuery.eq("workspace_id", workspaceId);
     dealsQuery = dealsQuery.eq("workspace_id", workspaceId);
+    conversationsQuery = conversationsQuery.eq("workspace_id", workspaceId);
   }
 
-  const [{ data: stages, error: stagesError }, { data: deals, error: dealsError }] = await Promise.all([
-    stagesQuery,
-    dealsQuery,
-  ]);
+  const [stagesRes, dealsRes, convRes] = await Promise.all([stagesQuery, dealsQuery, conversationsQuery]);
 
-  if (stagesError) throw stagesError;
-  if (dealsError) throw dealsError;
-  return { stages: (stages ?? []) as Stage[], deals: (deals ?? []) as Deal[] };
+  if (stagesRes.error) throw stagesRes.error;
+  if (dealsRes.error) throw dealsRes.error;
+  if (convRes.error) throw convRes.error;
+  return {
+    stages: (stagesRes.data ?? []) as Stage[],
+    deals: (dealsRes.data ?? []) as Deal[],
+    conversations: (convRes.data ?? []) as Conversation[],
+  };
 }
 
 export async function fetchCampaignBase(workspaceId?: string) {
