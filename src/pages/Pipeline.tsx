@@ -62,7 +62,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const wsSlug = wsSlugMatch?.[1];
   const inboxPath = (conversationId: string) =>
     wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
-  const queryClient = useQueryClient();
+  const _queryClient = useQueryClient(); void _queryClient;
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
