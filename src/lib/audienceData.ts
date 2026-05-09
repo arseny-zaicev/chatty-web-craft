@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
+import { applyDerivedVariables, validateRowAgainstProfile, type PrepProfile } from "./prepProfiles";
 
 export type AudienceBatch = {
   id: string;
