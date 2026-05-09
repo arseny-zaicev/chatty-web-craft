@@ -438,4 +438,76 @@ const MiniStat = ({ label, value, highlight }: { label: string; value: number | 
   </div>
 );
 
+function ClientSettingsRow({ ws }: { ws: Workspace }) {
+  const [open, setOpen] = useState(false);
+  const [slug, setSlug] = useState(ws.slug);
+  const [channel, setChannel] = useState(ws.slack_channel_id ?? "");
+  const [enabled, setEnabled] = useState(!!ws.inbox_alerts_enabled);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setSlug(ws.slug);
+    setChannel(ws.slack_channel_id ?? "");
+    setEnabled(!!ws.inbox_alerts_enabled);
+  }, [ws.slug, ws.slack_channel_id, ws.inbox_alerts_enabled]);
+
+  const save = async () => {
+    const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]+/g, "").slice(0, 32);
+    const cleanChannel = channel.trim() || null;
+    if (!cleanSlug) { toast.error("Slug required"); return; }
+    setSaving(true);
+    const { error } = await supabase
+      .from("workspaces")
+      .update({ slug: cleanSlug, slack_channel_id: cleanChannel, inbox_alerts_enabled: enabled })
+      .eq("id", ws.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Saved");
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <div className="px-6 -mt-1 mb-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <button type="button" onClick={() => setOpen(true)} className="hover:text-primary underline-offset-2 hover:underline">
+          Settings
+        </button>
+        {ws.inbox_alerts_enabled && <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />alerts on</span>}
+        {ws.slack_channel_id && <span className="truncate">· #{ws.slack_channel_id.slice(0, 11)}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 -mt-1 mb-2 space-y-2 rounded-md bg-muted/30 py-2">
+      <div>
+        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">URL slug</label>
+        <input
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="iskra-is"
+          className="w-full text-sm bg-background border border-border rounded px-2 py-1 mt-0.5"
+        />
+      </div>
+      <div>
+        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Slack channel ID</label>
+        <input
+          value={channel}
+          onChange={(e) => setChannel(e.target.value)}
+          placeholder="C0XXXXXXXX"
+          className="w-full text-sm bg-background border border-border rounded px-2 py-1 mt-0.5 font-mono"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="accent-primary" />
+        Inbox alerts enabled (positive leads + unread spike)
+      </label>
+      <div className="flex gap-2 justify-end pt-1">
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+      </div>
+    </div>
+  );
+}
+
 export default AdminPanel;
