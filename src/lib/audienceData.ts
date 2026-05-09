@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
-import { applyDerivedVariables, validateRowAgainstProfile, type PrepProfile } from "./prepProfiles";
+import { applyDerivedVariables, applyColumnMapping, validateRowAgainstProfile, type PrepProfile } from "./prepProfiles";
 
 export type AudienceBatch = {
   id: string;
@@ -154,8 +154,17 @@ export async function uploadBatch(params: {
   phoneColumn: string;
   sourceFilename: string | null;
   prepProfile?: PrepProfile | null;
+  /** sourceColumn -> profileField (e.g. "Full Name" -> "first_name") */
+  columnMapping?: Record<string, string>;
 }): Promise<{ batchId: string; summary: ValidationSummary; isLaunchReady: boolean }> {
-  const variableSchema = params.parsed.headers.filter((h) => h !== params.phoneColumn);
+  const mapping = params.columnMapping ?? {};
+  // The variable_schema we store should reflect the mapped field names actually used downstream.
+  const mappedFields = new Set<string>();
+  for (const h of params.parsed.headers) {
+    if (h === params.phoneColumn) continue;
+    mappedFields.add(mapping[h] && mapping[h] !== "" ? mapping[h] : h);
+  }
+  const variableSchema = Array.from(mappedFields);
   const profile = params.prepProfile ?? null;
 
   const seen = new Set<string>();
@@ -173,8 +182,16 @@ export async function uploadBatch(params: {
   for (const r of params.parsed.rows) {
     const rawPhone = r[params.phoneColumn];
     const norm = normalizePhone(rawPhone);
+    // 1) Apply column mapping deterministically (raw col -> profile field)
+    const sourceMinusPhone: Record<string, string> = {};
+    for (const h of params.parsed.headers) {
+      if (h === params.phoneColumn) continue;
+      sourceMinusPhone[h] = r[h] ?? "";
+    }
+    const mapped = applyColumnMapping(sourceMinusPhone, mapping);
+    // 2) The stored payload uses the mapped field names (so downstream sees expected keys)
     const payload: Record<string, string> = {};
-    for (const v of variableSchema) payload[v] = r[v] ?? "";
+    for (const v of variableSchema) payload[v] = mapped[v] ?? "";
 
     let derived: Record<string, string> = {};
     let profileFail = false;
@@ -236,6 +253,7 @@ export async function uploadBatch(params: {
       prep_profile_id: profile?.id ?? null,
       is_launch_ready: isLaunchReady,
       derived_variables_preview: derivedPreview,
+      column_mapping: mapping,
     })
     .select("id")
     .single();

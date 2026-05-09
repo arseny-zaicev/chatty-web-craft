@@ -20,7 +20,8 @@ import {
   type ParsedAudience,
 } from "@/lib/audienceData";
 import {
-  prepProfileKeys, listPrepProfiles, applyDerivedVariables, validateRowAgainstProfile,
+  prepProfileKeys, listPrepProfiles, applyDerivedVariables, applyColumnMapping,
+  validateRowAgainstProfile, renderSampleMessage,
   buildPrepPrompt, buildFallbackPrompt,
   type PrepProfile,
 } from "@/lib/prepProfiles";
@@ -194,6 +195,7 @@ function PrepPromptsSection({
     queryFn: () => listPrepProfiles(workspaceId),
   });
   const profiles = profilesQ.data ?? [];
+  const [viewing, setViewing] = useState<PrepProfile | null>(null);
 
   const copy = async (text: string, label: string) => {
     try {
@@ -209,10 +211,10 @@ function PrepPromptsSection({
       <div className="flex items-center gap-2 mb-1">
         <Wand2 className="w-4 h-4 text-primary" />
         <h2 className="font-medium text-sm">Prep prompts</h2>
-        <Badge variant="outline" className="text-[10px]">primary path: Codex -&gt; Supabase</Badge>
+        <Badge variant="outline" className="text-[10px]">generated from saved recipe</Badge>
       </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Copy a prompt, prepare the audience in Codex against the profile rules, then insert validated rows into this workspace's batch. Use the fallback CSV/XLSX upload only when Codex isn't available.
+        Each prompt is built deterministically from the prep profile fields - never guessed from the name. Copy a prompt, prepare the audience in Codex against the recipe, then insert validated rows into this workspace's batch.
       </p>
 
       {profiles.length === 0 ? (
@@ -232,7 +234,10 @@ function PrepPromptsSection({
                 required: {p.required_fields.join(", ") || "none"} · derives: {p.derived_variables.map((d) => d.key).join(", ") || "none"}
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                <Button size="sm" variant="outline"
+                <Button size="sm" variant="outline" onClick={() => setViewing(p)}>
+                  <Eye className="w-3.5 h-3.5 mr-1" /> View prompt
+                </Button>
+                <Button size="sm" variant="ghost"
                   onClick={() => copy(buildPrepPrompt(p, { workspaceName, workspaceId }), "Prep prompt")}>
                   <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
                 </Button>
@@ -245,6 +250,29 @@ function PrepPromptsSection({
           ))}
         </div>
       )}
+
+      <Dialog open={!!viewing} onOpenChange={(o) => { if (!o) setViewing(null); }}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Prompt generated from "{viewing?.name}"</DialogTitle>
+            <DialogDescription>
+              Built from this profile's required fields, derived variables, validation rules, fallbacks, and sample message body.
+            </DialogDescription>
+          </DialogHeader>
+          {viewing && (
+            <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap font-mono">
+{buildPrepPrompt(viewing, { workspaceName, workspaceId })}
+            </pre>
+          )}
+          <DialogFooter>
+            {viewing && (
+              <Button onClick={() => copy(buildPrepPrompt(viewing, { workspaceName, workspaceId }), "Prep prompt")}>
+                <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -269,6 +297,7 @@ function UploadDialog({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [prepProfileId, setPrepProfileId] = useState<string>("");
+  const [mapping, setMapping] = useState<Record<string, string>>({});
 
   const profilesQ = useQuery({
     queryKey: prepProfileKeys.list(workspaceId),
@@ -281,6 +310,7 @@ function UploadDialog({
     setFile(null); setParsed(null); setPhoneColumn("");
     setName(""); setCountry(""); setCampaignType("marketing");
     setCopyProfile(""); setNotes(""); setBusy(false); setPrepProfileId("");
+    setMapping({});
   };
 
   const handleFile = async (f: File) => {
@@ -299,6 +329,29 @@ function UploadDialog({
     }
   };
 
+  // Auto-suggest column mapping (case-insensitive exact match) when profile or headers change.
+  const expectedFields = useMemo(
+    () => prepProfile ? Array.from(new Set([...prepProfile.required_fields, ...prepProfile.optional_fields])) : [],
+    [prepProfile],
+  );
+  const sourceColumns = useMemo(
+    () => parsed ? parsed.headers.filter((h) => h !== phoneColumn) : [],
+    [parsed, phoneColumn],
+  );
+  useMemo(() => {
+    if (!parsed || !prepProfile) return;
+    const next: Record<string, string> = { ...mapping };
+    let changed = false;
+    for (const src of sourceColumns) {
+      if (next[src]) continue;
+      const lower = src.toLowerCase().replace(/[\s_-]+/g, "");
+      const hit = expectedFields.find((f) => f.toLowerCase().replace(/[\s_-]+/g, "") === lower);
+      if (hit) { next[src] = hit; changed = true; }
+    }
+    if (changed) setMapping(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsed?.headers.join("|"), phoneColumn, prepProfile?.id]);
+
   const previewSummary = useMemo(() => {
     if (!parsed || !phoneColumn) return null;
     const seen = new Set<string>();
@@ -310,24 +363,28 @@ function UploadDialog({
       if (seen.has(cleaned)) { dup++; continue; }
       seen.add(cleaned);
       if (prepProfile) {
-        const payload: Record<string, string> = {};
-        for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
-        const vr = validateRowAgainstProfile(prepProfile, payload);
+        const raw: Record<string, string> = {};
+        for (const h of parsed.headers) if (h !== phoneColumn) raw[h] = r[h] ?? "";
+        const mapped = applyColumnMapping(raw, mapping);
+        const vr = validateRowAgainstProfile(prepProfile, mapped);
         if (!vr.ok) { invalid++; continue; }
       }
       valid++;
     }
     return { total: parsed.rows.length, valid, invalid, duplicates: dup };
-  }, [parsed, phoneColumn, prepProfile]);
+  }, [parsed, phoneColumn, prepProfile, mapping]);
 
-  const derivedSamples = useMemo(() => {
-    if (!parsed || !prepProfile) return [];
-    return parsed.rows.slice(0, 3).map((r) => {
-      const payload: Record<string, string> = {};
-      for (const h of parsed.headers) if (h !== phoneColumn) payload[h] = r[h] ?? "";
-      return applyDerivedVariables(prepProfile, payload);
-    });
-  }, [parsed, prepProfile, phoneColumn]);
+  const sampleRender = useMemo(() => {
+    if (!parsed || !prepProfile || parsed.rows.length === 0) return null;
+    const r = parsed.rows[0];
+    const raw: Record<string, string> = {};
+    for (const h of parsed.headers) if (h !== phoneColumn) raw[h] = r[h] ?? "";
+    const mapped = applyColumnMapping(raw, mapping);
+    return {
+      derived: applyDerivedVariables(prepProfile, mapped),
+      message: renderSampleMessage(prepProfile, mapped),
+    };
+  }, [parsed, prepProfile, phoneColumn, mapping]);
 
   const submit = async () => {
     if (!parsed || !phoneColumn || !name.trim()) {
@@ -354,6 +411,7 @@ function UploadDialog({
         phoneColumn,
         sourceFilename: file?.name ?? null,
         prepProfile,
+        columnMapping: mapping,
       });
       toast.success(`Uploaded ${result.summary.valid} valid · ${result.summary.invalid} invalid · ${result.summary.duplicates} duplicates${result.isLaunchReady ? " · launch-ready" : ""}`);
       reset();
@@ -438,6 +496,47 @@ function UploadDialog({
                 </div>
               </div>
 
+              {prepProfile && sourceColumns.length > 0 && (
+                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                  <div className="text-sm font-medium">Map source columns to expected fields</div>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-matched by name where possible. Override below. Unmapped columns are kept as-is in <code>payload</code>.
+                  </p>
+                  <div className="grid gap-1.5">
+                    {sourceColumns.map((src) => (
+                      <div key={src} className="grid grid-cols-12 gap-2 items-center">
+                        <code className="col-span-5 text-xs truncate" title={src}>{src}</code>
+                        <span className="col-span-1 text-center text-muted-foreground text-xs">→</span>
+                        <Select value={mapping[src] ?? "__same"} onValueChange={(v) => {
+                          const next = { ...mapping };
+                          if (v === "__same") delete next[src]; else next[src] = v;
+                          setMapping(next);
+                        }}>
+                          <SelectTrigger className="col-span-6 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__same">(keep as &quot;{src}&quot;)</SelectItem>
+                            {expectedFields.map((f) => {
+                              const required = prepProfile.required_fields.includes(f);
+                              return <SelectItem key={f} value={f}>{f}{required ? " *" : ""}</SelectItem>;
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                  {(() => {
+                    const usedTargets = new Set(Object.values(mapping));
+                    const missing = prepProfile.required_fields.filter((f) => !usedTargets.has(f) && !sourceColumns.includes(f));
+                    if (missing.length === 0) return null;
+                    return (
+                      <div className="text-xs text-amber-600 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Missing required fields: {missing.join(", ")}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               {previewSummary && (
                 <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
                   <div className="font-medium mb-1">Preview</div>
@@ -448,8 +547,24 @@ function UploadDialog({
                     <Stat label="Duplicates" value={previewSummary.duplicates} className="text-amber-600" />
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Variables to be stored: {parsed.headers.filter((h) => h !== phoneColumn).join(", ") || "none"}
+                    Variables to be stored: {parsed.headers.filter((h) => h !== phoneColumn).map((h) => mapping[h] && mapping[h] !== "" ? mapping[h] : h).join(", ") || "none"}
                   </div>
+                </div>
+              )}
+
+              {sampleRender && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                  <div className="text-sm font-medium flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" /> First-row rendered preview</div>
+                  <div className="font-mono text-xs space-y-0.5">
+                    {Object.entries(sampleRender.derived).map(([k, v]) => (
+                      <div key={k}><span className="text-primary">{k}</span> = {v || <em className="text-muted-foreground">(empty)</em>}</div>
+                    ))}
+                  </div>
+                  {sampleRender.message != null && (
+                    <div className="rounded-md bg-background border border-border p-2 whitespace-pre-wrap text-xs">
+                      {sampleRender.message || <em className="text-muted-foreground">(empty render — add a sample message body to the prep profile)</em>}
+                    </div>
+                  )}
                 </div>
               )}
             </>

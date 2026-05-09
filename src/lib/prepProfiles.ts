@@ -31,6 +31,8 @@ export type PrepProfile = {
   fallback_rules: Record<string, string>;
   quick_replies: string[];
   sample_payload: Record<string, string>;
+  /** The actual WhatsApp message body, with {var_1}, {first_name}, etc. Used to render a deterministic preview. */
+  sample_message_template: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -54,6 +56,7 @@ const fromRow = (r: Record<string, unknown>): PrepProfile => ({
   fallback_rules: (r.fallback_rules as Record<string, string>) ?? {},
   quick_replies: Array.isArray(r.quick_replies) ? (r.quick_replies as string[]) : [],
   sample_payload: (r.sample_payload as Record<string, string>) ?? {},
+  sample_message_template: (r.sample_message_template as string) ?? null,
   created_at: r.created_at as string,
   updated_at: r.updated_at as string,
 });
@@ -86,6 +89,7 @@ export async function upsertPrepProfile(
     fallback_rules: p.fallback_rules ?? {},
     quick_replies: p.quick_replies ?? [],
     sample_payload: p.sample_payload ?? {},
+    sample_message_template: p.sample_message_template ?? null,
   };
   const tbl = supabase.from("audience_prep_profiles" as never) as any;
   const q = p.id
@@ -171,6 +175,36 @@ export function validateRowAgainstProfile(
   return { ok: errors.length === 0, errors };
 }
 
+/**
+ * Apply a column mapping (sourceColumn -> profileField) to a raw row.
+ * Unmapped columns are passed through unchanged so nothing is lost.
+ */
+export function applyColumnMapping(
+  row: Record<string, string>,
+  mapping: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = { ...row };
+  for (const [src, dest] of Object.entries(mapping)) {
+    if (!dest || src === dest) continue;
+    if (row[src] != null && (out[dest] == null || out[dest] === "")) out[dest] = row[src];
+  }
+  return out;
+}
+
+/**
+ * Render the saved sample_message_template using a row's payload + derived vars.
+ * Returns null if no template is defined on the profile.
+ */
+export function renderSampleMessage(
+  profile: PrepProfile,
+  row: Record<string, string>,
+): string | null {
+  if (!profile.sample_message_template) return null;
+  const derived = applyDerivedVariables(profile, row);
+  const merged: Record<string, string> = { ...row, ...derived };
+  return renderTemplate(profile.sample_message_template, merged, profile.fallback_rules);
+}
+
 /* ---------- Prompt builders (Codex / fallback) ---------- */
 
 const ph = (s: string | null | undefined, fb = "—") =>
@@ -234,6 +268,7 @@ ${derivedLines}
 
 QUICK REPLIES (informational only)
 ${quick}
+${profile.sample_message_template ? `\nSAMPLE MESSAGE BODY (template; placeholders are derived variables and source fields)\n"""\n${profile.sample_message_template}\n"""\n` : ""}
 
 OUTPUT (one JSON array; one object per valid row)
 [

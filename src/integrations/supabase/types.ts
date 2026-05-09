@@ -56,6 +56,7 @@ export type Database = {
       audience_batches: {
         Row: {
           campaign_type: string
+          column_mapping: Json
           copy_profile: string | null
           country: string | null
           created_at: string
@@ -73,6 +74,7 @@ export type Database = {
         }
         Insert: {
           campaign_type?: string
+          column_mapping?: Json
           copy_profile?: string | null
           country?: string | null
           created_at?: string
@@ -90,6 +92,7 @@ export type Database = {
         }
         Update: {
           campaign_type?: string
+          column_mapping?: Json
           copy_profile?: string | null
           country?: string | null
           created_at?: string
@@ -128,6 +131,7 @@ export type Database = {
           optional_fields: Json
           quick_replies: Json
           required_fields: Json
+          sample_message_template: string | null
           sample_payload: Json
           template_label: string | null
           updated_at: string
@@ -146,6 +150,7 @@ export type Database = {
           optional_fields?: Json
           quick_replies?: Json
           required_fields?: Json
+          sample_message_template?: string | null
           sample_payload?: Json
           template_label?: string | null
           updated_at?: string
@@ -164,6 +169,7 @@ export type Database = {
           optional_fields?: Json
           quick_replies?: Json
           required_fields?: Json
+          sample_message_template?: string | null
           sample_payload?: Json
           template_label?: string | null
           updated_at?: string

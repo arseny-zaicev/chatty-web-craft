@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   prepProfileKeys, listPrepProfiles, upsertPrepProfile, deletePrepProfile,
-  applyDerivedVariables, validateRowAgainstProfile,
+  applyDerivedVariables, validateRowAgainstProfile, renderSampleMessage,
   type PrepProfile, type DerivedVariable, type InvalidRule,
 } from "@/lib/prepProfiles";
 import type { WorkspaceContext } from "./WorkspaceLayout";
@@ -53,7 +53,7 @@ export default function WorkspacePrepProfiles() {
               <Badge variant="outline" className="text-[10px]">Internal · managers only</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-              Reusable rules that turn raw uploads into launch-ready audience batches: required source fields, derived launch variables, validation, fallbacks, and a sample render preview.
+              A Prep Profile is a <strong>saved recipe</strong>. The system never guesses a prompt from a name - the prompt and the rendered message are generated deterministically from the recipe's fields below: required input columns, derived launch variables, validation rules, fallbacks, and a sample message body.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -141,6 +141,7 @@ function ProfileEditor({
   const [fallbacks, setFallbacks] = useState<Record<string, string>>(initial?.fallback_rules ?? {});
   const [quickReplies, setQuickReplies] = useState<string[]>(initial?.quick_replies ?? []);
   const [sample, setSample] = useState<Record<string, string>>(initial?.sample_payload ?? {});
+  const [sampleMessageTemplate, setSampleMessageTemplate] = useState<string>(initial?.sample_message_template ?? "");
   const [busy, setBusy] = useState(false);
 
   const allFields = useMemo(
@@ -157,12 +158,14 @@ function ProfileEditor({
       required_fields: requiredFields, optional_fields: optionalFields,
       derived_variables: derived, invalid_rules: invalidRules,
       fallback_rules: fallbacks, quick_replies: quickReplies, sample_payload: sample,
+      sample_message_template: sampleMessageTemplate || null,
       created_at: "", updated_at: "",
     };
     const validation = validateRowAgainstProfile(profile, sample);
     const derivedOut = applyDerivedVariables(profile, sample);
-    return { validation, derivedOut };
-  }, [initial?.id, workspaceId, name, description, campaignType, templateLabel, requiredFields, optionalFields, derived, invalidRules, fallbacks, quickReplies, sample]);
+    const renderedMessage = renderSampleMessage(profile, sample);
+    return { validation, derivedOut, renderedMessage };
+  }, [initial?.id, workspaceId, name, description, campaignType, templateLabel, requiredFields, optionalFields, derived, invalidRules, fallbacks, quickReplies, sample, sampleMessageTemplate]);
 
   const submit = async () => {
     if (!name.trim()) { toast.error("Name is required"); return; }
@@ -185,6 +188,7 @@ function ProfileEditor({
         fallback_rules: fallbacks,
         quick_replies: quickReplies,
         sample_payload: sample,
+        sample_message_template: sampleMessageTemplate.trim() || null,
       });
       toast.success(initial ? "Profile updated" : "Profile created");
       onSaved();
@@ -318,17 +322,26 @@ function ProfileEditor({
             <ChipInput label="Buttons" values={quickReplies} onChange={setQuickReplies} placeholder="Yes" />
           </Section>
 
+          <Section title="Sample message body (template)">
+            <p className="text-xs text-muted-foreground">
+              The actual WhatsApp message body. Use <code>{"{var_1}"}</code>, <code>{"{first_name}"}</code>, etc. - source fields and derived variables both work. This drives the rendered preview below.
+            </p>
+            <Textarea rows={4} value={sampleMessageTemplate}
+              onChange={(e) => setSampleMessageTemplate(e.target.value)}
+              placeholder={"Hi {first_name}, {var_1}.\nReply YES to book a slot."} />
+          </Section>
+
           <Section title="Sample row & rendered preview">
             <KeyValueEditor values={sample} onChange={setSample} keyPlaceholder="field" valuePlaceholder="value" suggestions={allFields} />
-            <div className="rounded-md border border-border bg-muted/30 p-3 mt-2">
-              <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1.5"><Eye className="w-3.5 h-3.5" />Live preview</div>
+            <div className="rounded-md border border-border bg-muted/30 p-3 mt-2 space-y-2">
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" />Live preview (deterministic)</div>
               <div className="text-xs">
                 <span className="text-muted-foreground">Validation: </span>
                 {livePreview.validation.ok
                   ? <span className="text-emerald-600">OK</span>
                   : <span className="text-amber-600">{livePreview.validation.errors.join("; ")}</span>}
               </div>
-              <div className="mt-2 space-y-1 font-mono text-xs">
+              <div className="space-y-1 font-mono text-xs">
                 {Object.keys(livePreview.derivedOut).length === 0 && (
                   <span className="text-muted-foreground">No derived variables to show.</span>
                 )}
@@ -336,6 +349,11 @@ function ProfileEditor({
                   <div key={k}><span className="text-primary">{k}</span> = <span>{v || <em className="text-muted-foreground">(empty)</em>}</span></div>
                 ))}
               </div>
+              {livePreview.renderedMessage != null && (
+                <div className="rounded-md bg-background border border-border p-2 whitespace-pre-wrap text-xs">
+                  {livePreview.renderedMessage || <em className="text-muted-foreground">(empty render)</em>}
+                </div>
+              )}
             </div>
           </Section>
         </div>
