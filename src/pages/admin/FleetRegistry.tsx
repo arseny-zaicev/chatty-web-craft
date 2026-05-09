@@ -642,16 +642,13 @@ const dnTone: Record<DnStatus, string> = {
 function InlineStatusSelect({ value, onChange }: { value: Status; onChange: (v: Status) => void }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as Status)}>
-      <SelectTrigger className={`h-6 px-2 text-[10px] w-[110px] border ${statusTone[value]}`}>
-        <SelectValue />
+      <SelectTrigger className={`h-6 px-2 text-[10px] w-[140px] border ${statusTone[value]}`}>
+        <span className="truncate">{statusLabel(value)}</span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="ready">ready</SelectItem>
-        <SelectItem value="warming">warming</SelectItem>
-        <SelectItem value="draft">draft (stock)</SelectItem>
-        <SelectItem value="restricted">restricted (30d)</SelectItem>
-        <SelectItem value="banned">banned</SelectItem>
-        <SelectItem value="inactive">inactive</SelectItem>
+        {STATUS_OPTIONS.map(([v, l]) => (
+          <SelectItem key={v} value={v}>{l}</SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
