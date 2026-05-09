@@ -272,6 +272,8 @@ export default function OpsLive() {
       toast.error("Could not copy");
     }
   };
+
+  const nextRefreshIn = useMemo(() => {
     const elapsed = now.getTime() - lastUpdated.getTime();
     const remaining = Math.max(0, REFRESH_INTERVAL_MS - elapsed);
     const m = Math.floor(remaining / 60000);
