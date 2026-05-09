@@ -278,28 +278,58 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const rows: any[] = [];
 
   if (scheduledDates.length === 0) {
-    // Send-now path: distribute starting in 5s, using poisson or uniform spacing
-    let cursorMs = Date.now() + 5_000 + bucketShiftSec * 1000;
+    // Send-now path: respect [windowStart, windowEnd] in each recipient's TZ.
+    // If a send would land after windowEnd, roll cursor to next day's windowStart.
+    const nowMs = Date.now();
+    const startMs0 = nowMs + 5_000 + bucketShiftSec * 1000;
+    // Group by recipient TZ to keep per-TZ cursor independent
+    const perTz = new Map<string, typeof cleanRecipients>();
     for (const r of cleanRecipients) {
-      let gapSec: number;
-      if (schedulerKind === "poisson") {
-        // Treat avgDelay as 1/rate
-        gapSec = exponentialGap(1 / avgDelay);
-        // Clamp to [minDelay, max(minDelay+1, maxDelay*3)]
-        gapSec = Math.max(minDelay, Math.min(Math.max(minDelay + 1, maxDelay * 3), gapSec));
-      } else {
-        gapSec = randomDelay(minDelay, maxDelay);
-      }
-      cursorMs += gapSec * 1000;
-      rows.push({
-        ...r,
-        user_id: number.user_id,
-        workspace_id: number.workspace_id,
-        campaign_id: campaign.id,
-        status: "scheduled",
-        scheduled_at: new Date(cursorMs).toISOString(),
-      });
+      const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
+      if (!perTz.has(tz)) perTz.set(tz, []);
+      perTz.get(tz)!.push(r);
     }
+    const dayKey = (ms: number, tz: string) => {
+      try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms)); }
+      catch { return new Date(ms).toISOString().slice(0, 10); }
+    };
+    for (const [tz, list] of perTz) {
+      let cursorMs = startMs0;
+      // If we're past windowEnd today, jump to tomorrow's windowStart
+      const ensureInsideWindow = () => {
+        const today = dayKey(cursorMs, tz);
+        const todayStart = dateAtTzToUTC(today, windowStart, tz).getTime();
+        const todayEnd = dateAtTzToUTC(today, windowEnd, tz).getTime();
+        if (cursorMs < todayStart) cursorMs = todayStart;
+        if (cursorMs >= todayEnd) {
+          // jump to next day windowStart
+          const next = new Date(cursorMs + 24 * 3600_000);
+          const nextDate = dayKey(next.getTime(), tz);
+          cursorMs = dateAtTzToUTC(nextDate, windowStart, tz).getTime();
+        }
+      };
+      ensureInsideWindow();
+      for (const r of list) {
+        let gapSec: number;
+        if (schedulerKind === "poisson") {
+          gapSec = exponentialGap(1 / avgDelay);
+          gapSec = Math.max(minDelay, Math.min(Math.max(minDelay + 1, maxDelay * 3), gapSec));
+        } else {
+          gapSec = randomDelay(minDelay, maxDelay);
+        }
+        cursorMs += gapSec * 1000;
+        ensureInsideWindow();
+        rows.push({
+          ...r,
+          user_id: number.user_id,
+          workspace_id: number.workspace_id,
+          campaign_id: campaign.id,
+          status: "scheduled",
+          scheduled_at: new Date(cursorMs).toISOString(),
+        });
+      }
+    }
+    rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
   } else {
     // Multi-day path: split recipients evenly across dates, schedule inside window
     const perDay = Math.ceil(cleanRecipients.length / scheduledDates.length);
