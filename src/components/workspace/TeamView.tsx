@@ -202,20 +202,52 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
         {!isLoading && (members ?? []).length === 0 && (
           <div className="p-6 text-sm text-muted-foreground text-center">No members yet. Invite the first one.</div>
         )}
-        {(members ?? []).map((m) => (
-          <div key={m.id} className="p-3 flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium truncate">{m.email ?? `User ${m.user_id.slice(0, 8)}`}</div>
-              <div className="text-[10px] text-muted-foreground">Added {new Date(m.created_at).toLocaleDateString()}</div>
+        {(members ?? []).map((m) => {
+          const displayName = m.full_name?.trim() || (m.email ? m.email.split("@")[0] : `User ${m.user_id.slice(0, 8)}`);
+          const initials = displayName
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((s) => s[0]?.toUpperCase())
+            .join("") || "?";
+          const minutes = m.minutes_30d ?? 0;
+          const activeLabel = minutes >= 60 ? `${(minutes / 60).toFixed(1)}h` : `${minutes}m`;
+          return (
+            <div key={m.id} className="p-3 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                {initials}
+              </div>
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="text-sm font-medium truncate">{displayName}</div>
+                  <Badge variant="outline" className={m.role === "client" ? "bg-blue-500/10 text-blue-500 border-blue-500/30" : "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"}>
+                    {m.role}
+                  </Badge>
+                </div>
+                {m.email && (
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+                    <Mail className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{m.email}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground">
+                  <span>Joined {new Date(m.joined_at).toLocaleDateString()}</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Last seen {fmtRelative(m.last_seen_at ?? m.last_sign_in_at)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Activity className="w-3 h-3" />
+                    {activeLabel} active · {m.sessions_30d ?? 0} {m.sessions_30d === 1 ? "session" : "sessions"} (30d)
+                  </span>
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
+                <Trash2 className="w-4 h-4 text-muted-foreground" />
+              </Button>
             </div>
-            <Badge variant="outline" className={m.role === "client" ? "bg-blue-500/10 text-blue-500 border-blue-500/30" : "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"}>
-              {m.role}
-            </Badge>
-            <Button size="icon" variant="ghost" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
-              <Trash2 className="w-4 h-4 text-muted-foreground" />
-            </Button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
