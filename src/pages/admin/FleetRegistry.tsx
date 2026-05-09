@@ -582,11 +582,14 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
       <TableCell className="text-xs">{r.messaging_limit ?? <span className="text-muted-foreground">—</span>}</TableCell>
       {!hideClientCol && (
         <TableCell className="text-xs">
-          {r.workspace_id ? (
-            <Link to={`/ws/${r.workspace_slug}/settings`} className="hover:underline">{r.workspace_name}</Link>
-          ) : (
-            <span className="text-amber-700">Unassigned</span>
-          )}
+          <div className="flex items-center gap-1">
+            <ReassignInline value={r.workspace_id} workspaces={workspaces} onChange={(wid) => onReassign(r.id, wid)} />
+            {r.workspace_slug && (
+              <Button asChild size="icon" variant="ghost" className="h-6 w-6" title="Open client">
+                <Link to={`/ws/${r.workspace_slug}/settings`}><ExternalLink className="w-3 h-3" /></Link>
+              </Button>
+            )}
+          </div>
         </TableCell>
       )}
       <TableCell>
