@@ -252,7 +252,7 @@ export default function OpsLive() {
         toast.error(error?.message ?? "Failed to generate link");
         return;
       }
-      const url = `${window.location.origin}/admin/ops-live?token=${data.token}`;
+      const url = `${window.location.origin}/tv/${data.token}`;
       setGeneratedUrl(url);
       setCopied(false);
       toast.success("Link generated · valid 7 days");
