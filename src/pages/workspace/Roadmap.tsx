@@ -214,6 +214,13 @@ export default function Roadmap() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Roadmap</h1>
           <p className="text-sm text-muted-foreground">Drop ideas, track what's planned, shipped. Private to the team.</p>
+        </div>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
+          <DialogTrigger asChild>
+            <Button onClick={() => setEditing(null)}><Plus className="w-4 h-4 mr-2" />New idea</Button>
+          </DialogTrigger>
+          <ItemDialog initial={editing} onSave={saveItem} />
+        </Dialog>
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -236,14 +243,6 @@ export default function Roadmap() {
             </button>
           );
         })}
-      </div>
-
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditing(null)}><Plus className="w-4 h-4 mr-2" />New idea</Button>
-          </DialogTrigger>
-          <ItemDialog initial={editing} onSave={saveItem} />
-        </Dialog>
       </div>
 
       {isLoading ? (
