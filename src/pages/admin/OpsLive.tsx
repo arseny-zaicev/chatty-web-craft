@@ -314,7 +314,7 @@ export default function OpsLive() {
             <div className="hidden sm:flex items-center gap-2">
               <Radio className="h-3.5 w-3.5 text-[hsl(152_65%_35%)] animate-pulse" />
               <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(152_65%_28%)]">
-                Live · Operations
+                Live · Operations{tokenMode ? " · View only" : ""}
               </span>
             </div>
             <div className="hidden md:block h-6 w-px bg-[hsl(38_25%_60%/0.5)]" />
