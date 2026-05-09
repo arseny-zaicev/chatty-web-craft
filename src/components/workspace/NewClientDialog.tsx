@@ -17,8 +17,20 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [color, setColor] = useState("#10b981");
+  const [website, setWebsite] = useState("");
+  const [logo, setLogo] = useState("");
 
-  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); };
+  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); setWebsite(""); setLogo(""); };
+
+  const normalizeUrl = (s: string) => {
+    const v = s.trim();
+    if (!v) return null;
+    if (/^https?:\/\//i.test(v)) return v;
+    return `https://${v}`;
+  };
+  const domainOf = (s: string) => {
+    try { return new URL(normalizeUrl(s) ?? "").hostname.replace(/^www\./, ""); } catch { return null; }
+  };
 
   const create = useMutation({
     mutationFn: async () => {
@@ -27,9 +39,12 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
       const finalSlug = slug || slugify(name);
       if (!name.trim()) throw new Error("Name is required");
       if (!finalSlug) throw new Error("Slug is required");
+      const websiteUrl = normalizeUrl(website);
+      const dom = domainOf(website);
+      const logoUrl = logo.trim() || (dom ? `https://logo.clearbit.com/${dom}` : null);
       const { data, error } = await supabase
         .from("workspaces")
-        .insert({ name: name.trim(), slug: finalSlug, color, owner_user_id: auth.user.id })
+        .insert({ name: name.trim(), slug: finalSlug, color, owner_user_id: auth.user.id, website_url: websiteUrl, logo_url: logoUrl })
         .select("slug")
         .single();
       if (error) {
