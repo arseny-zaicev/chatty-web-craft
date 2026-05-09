@@ -1,115 +1,60 @@
-# Client Portal Access - Implementation Plan
+# Pipeline ↔ Inbox sync, deal actions, assignee system
 
-## Goal
+## 1. База (migration)
 
-Дать возможность приглашать сотрудников клиентов в конкретные воркспейсы (Company15, и любые новые). Они логинятся, видят **только** свой воркспейс, и **только** разрешённые разделы: Overview, Inbox, Pipeline, Campaigns. Скрываем технические детали: app name, имя/тело шаблона, provider IDs.
+Расширяем `conversations`:
+- `assigned_user_id uuid` - ответственный сеттер (постоянная привязка)
+- `active_responder_id uuid` - кто прямо сейчас отвечает (presence)
+- `active_responder_at timestamptz` - когда последний раз был активен (TTL ~2 минуты)
 
----
+Backfill: для каждой `conversation` без `deal` вызываем `ensure_deal_for_conversation()`. Триггер уже создаёт deal на новую беседу, так что в будущем это покрыто.
 
-## Phase 1 - Backend: roles & access
+Realtime publication для `conversations` (если ещё нет) - чтобы видеть presence обновления.
 
-**1.1 Роль `client` в `workspace_members`**
-- Используем существующую таблицу `workspace_members` (поле `role text`).
-- Зафиксируем 2 роли: `manager` (полный доступ) и `client` (ограниченный просмотр).
-- Дополним RLS только там, где нужно: `whatsapp_numbers`, `message_templates` - для роли `client` запрещаем чтение (они и так по `is_workspace_member` сейчас видят, нужно сузить через новую функцию `is_workspace_manager`).
+## 2. Pipeline карточка (DealCard)
 
-**1.2 Новая SQL-функция**
-```sql
-is_workspace_manager(_workspace_id, _user_id) -- admin OR owner OR member.role = 'manager'
-```
-Подменим `is_workspace_member` на `is_workspace_manager` в SELECT-политиках для:
-- `whatsapp_numbers`
-- `message_templates`
-- `workspace_library_fields`
-- `workspace_saved_replies`
+Добавляем на карточку (видно без открытия Sheet):
+- Кнопка "Open chat" → ведёт в `/ws/{slug}/inbox?conversation={id}` (если есть)
+- Кнопка "Copy phone" → копирует `contact_phone` в clipboard
+- Аватар/инициалы assignee в углу
 
-Оставляем `is_workspace_member` для: `conversations`, `messages`, `campaigns`, `campaign_recipients`, `deals`, `pipeline_stages` (эти нужны клиенту).
+## 3. Pipeline Sheet (Deal details)
 
-**1.3 Edge function `invite-workspace-member`**
-- Вход: `{ workspace_id, email, role }`. Проверяет, что вызывающий - admin или owner воркспейса.
-- Создаёт пользователя через service role (`admin.createUser` с временным паролем + `inviteUserByEmail` для отправки письма) **или** возвращает ошибку, если email уже зарегистрирован - тогда просто добавляем `workspace_members`.
-- Записывает строку в `workspace_members`.
+Добавляем кнопки в действиях:
+- "Open chat" (есть)
+- "Copy phone"
+- "Copy details" → копирует name+phone+amount+stage+notes как plain-text блок
+- Селект "Assigned to" - выбрать сеттера из workspace_members (+ "Unassigned")
 
----
+## 4. Inbox (CRM)
 
-## Phase 2 - Admin/Workspace UI: members management
+В шапке открытой беседы:
+- "Active: {name}" - кто сейчас в чате (если `active_responder_at` < 2 мин назад и это не я)
+- Селект "Assigned to" - смена ответственного
 
-**2.1 Раздел "Team" в Workspace Settings (`/ws/:slug/settings`)**
-- Список текущих членов (email, роль, дата добавления).
-- Кнопка "Invite member" - модалка: email + select роль (Manager / Client).
-- Кнопка удалить (только для admin/owner).
+При открытии беседы / отправке сообщения автоматически проставляем `active_responder_id = me, active_responder_at = now()`.
 
-**2.2 В админке `/admin` карточки клиента**
-- Маленький бейдж "N members" со ссылкой на settings.
+В списке бесед слева:
+- Toggle "My chats only" - фильтрует по `assigned_user_id = me`
+- Счётчик "Mine: X / All: Y" в шапке
 
----
+## 5. Pipeline списка
 
-## Phase 3 - Client login flow
+- Toggle "My chats only" в шапке Pipeline (тот же фильтр).
+- Все беседы теперь имеют deal → колонки покажут реальный поток.
 
-**3.1 Новая страница `/portal-auth`** (отдельная от `/admin-auth` и старой `/client-auth`, которую трогать не будем - она для Google Sheets портала).
-- Email/password форма + "Forgot password" → `/reset-password`.
-- После логина: запрос `workspace_members` для текущего юзера. Если есть запись - редирект на `/ws/{slug}/overview`. Если нет - "No access yet, ask your account manager".
+## 6. Технические детали
 
-**3.2 Страница `/reset-password`** - стандартная (есть в инструкциях).
+- `assigned_user_id` хранится на `conversations` (источник правды) - `deals.user_id` остаётся владельцем записи. Pipeline показывает `deal.conversation.assigned_user_id`.
+- Members для селекта тащим из `workspace_members` + `profiles.full_name` (fallback на email из auth - но т.к. emails в auth не доступны клиенту, добавим `display_name` через профиль или просто email хранить в `workspace_members`). Вариант проще: храним `display_name` прямо в `workspace_members` через join с `profiles`, а если нет имени - покажем "User abc12345".
+- RLS: всё это видят те же роли (workspace_member). Update assignee может только manager+ или сам себе (для самопринятия).
 
-**3.3 `WorkspaceLayout` гард**
-- Сейчас пускает только `arseny@iskra.ae`. Меняем: пропускаем admin **или** членов воркспейса (по `workspace_members`). Не-членов - кикаем на `/portal-auth`.
+## Файлы
 
----
-
-## Phase 4 - Restricted UI for `role=client`
-
-**4.1 Хук `useWorkspaceRole(workspaceId)`** - возвращает `'admin' | 'manager' | 'client'`. Кэшируется в react-query.
-
-**4.2 Sidebar (`WorkspaceSidebar.tsx`)**
-- Для `client`: показываем только Overview, Inbox, Pipeline, Campaigns. Скрываем Library, Launch, Settings.
-- Список клиентов в верхней секции - тоже фильтруем (показываем только те воркспейсы, где он состоит).
-
-**4.3 Inbox**
-- В шапке чата и списке: убрать "via {whatsapp_number.display_name / app_id}". Оставить только номер телефона контакта и имя контакта.
-- Скрыть "sender number" в metadata.
-
-**4.4 Campaigns**
-- Скрыть колонки/поля: template name, template body preview, app/number ID.
-- Оставить: Campaign name (то, что мы вводим при запуске), статус, дата, прогресс (sent/total/replies).
-
-**4.5 Overview & Pipeline**
-- Overview: убрать секции с numbers health и templates - оставить KPIs и recent launches (без template name).
-- Pipeline: оставить как есть (там нет технических деталей).
-
-**4.6 Роуты-защитники**
-- `/ws/:slug/library`, `/ws/:slug/settings`, `/ws/:slug/launch` - для `client` редирект на `/ws/:slug/overview`.
-
----
-
-## Phase 5 - Polish
-
-- Бейдж "Client view" в верхнем хедере, чтобы было понятно, что это ограниченная сессия.
-- "Sign out" в хедере.
-- В админке кнопка "Open as client" (preview-режим - опционально, могу пропустить).
-
----
-
-## Execution order (последовательно)
-
-1. **Migration**: `is_workspace_manager` + обновлённые RLS политики.
-2. **Edge function**: `invite-workspace-member`.
-3. **Settings → Team UI** + интеграция с edge function.
-4. **`/portal-auth`** + `/reset-password` страницы.
-5. **WorkspaceLayout гард** - пускать членов воркспейса.
-6. **`useWorkspaceRole` + Sidebar/route фильтры**.
-7. **UI sanitization**: Inbox, Campaigns, Overview.
-8. **Бейдж "Client view"** + sign out.
-
-После каждого шага - проверяю, что admin (`arseny@iskra.ae`) ничего не потерял.
-
----
-
-## Open questions (одобри/поправь перед стартом)
-
-1. **Способ приглашения**: отправлять magic-link письмо (Supabase invite email) или давать админу временный пароль показать клиенту вручную? (рекомендую magic-link).
-2. **В Campaigns**: показывать клиенту **тело сообщения** в отчёте или вообще скрыть превью? (Сейчас план - скрыть полностью).
-3. **Inbox**: показывать клиенту исходящее тело сообщения (то, что мы написали) или только статус "Outbound message"? (Рекомендую показывать тело - иначе бесполезно).
-4. **Pipeline**: клиент может **двигать** карточки между стадиями или только смотреть? (Рекомендую: двигать может, чтобы вести лидов).
-
-Подтверди ответы (или скажи "по умолчанию"), и я начинаю с Phase 1.
+- `supabase/migrations/...` - новые колонки + backfill + realtime
+- `src/lib/conversations.ts` - helpers (assignConversation, claimResponder)
+- `src/lib/workspaceMembers.ts` - useWorkspaceMembers hook
+- `src/components/workspace/AssigneeSelect.tsx` - переиспользуемый селект
+- `src/pages/Pipeline.tsx` - кнопки на карточке + sheet + filter
+- `src/pages/CRM.tsx` - active responder + assignee + filter
+- `src/lib/crmData.ts` - расширить типы Deal/Conversation
