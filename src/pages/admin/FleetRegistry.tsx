@@ -947,3 +947,27 @@ const Field = ({ label, required, children }: { label: string; required?: boolea
     {children}
   </div>
 );
+
+function CopyableField({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      toast.success("Webhook URL copied");
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <code className="flex-1 text-[11px] px-2 py-1.5 rounded bg-muted/40 border border-border break-all font-mono">
+        {value}
+      </code>
+      <Button type="button" size="sm" variant="outline" onClick={copy} className="shrink-0">
+        {copied ? <><Check className="w-3.5 h-3.5 mr-1" />Copied</> : <><Copy className="w-3.5 h-3.5 mr-1" />Copy</>}
+      </Button>
+    </div>
+  );
+}
