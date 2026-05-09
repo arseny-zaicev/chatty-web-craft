@@ -18,10 +18,26 @@ type Member = {
 };
 
 const membersKey = (wsId: string) => ["workspace", wsId, "members"] as const;
+const linksKey = (wsId: string) => ["workspace", wsId, "invite-links"] as const;
+
+type InviteLink = {
+  id: string;
+  token: string;
+  role: "manager" | "client";
+  max_uses: number;
+  used_count: number;
+  expires_at: string;
+  revoked_at: string | null;
+  created_at: string;
+};
 
 export default function TeamView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkRole, setLinkRole] = useState<"manager" | "client">("manager");
+  const [linkSeats, setLinkSeats] = useState(4);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"manager" | "client">("client");
 
