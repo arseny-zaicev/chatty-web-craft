@@ -548,7 +548,7 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
   const wh = r.webhook_connected ? "connected" : "missing";
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
   return (
-    <TableRow className="[&>td]:align-middle [&>td]:whitespace-nowrap [&>td]:py-2">
+    <TableRow className="h-12 [&>td]:align-middle [&>td]:whitespace-nowrap [&>td]:py-0 [&>td]:h-12 [&>td]:leading-none">
       <TableCell className="font-mono text-xs whitespace-nowrap">+{r.phone_number}</TableCell>
       <TableCell className="text-xs">{r.label ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">
