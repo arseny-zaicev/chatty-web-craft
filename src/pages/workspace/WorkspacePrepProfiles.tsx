@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   prepProfileKeys, listPrepProfiles, upsertPrepProfile, deletePrepProfile,
-  applyDerivedVariables, validateRowAgainstProfile,
+  applyDerivedVariables, validateRowAgainstProfile, renderSampleMessage,
   type PrepProfile, type DerivedVariable, type InvalidRule,
 } from "@/lib/prepProfiles";
 import type { WorkspaceContext } from "./WorkspaceLayout";
