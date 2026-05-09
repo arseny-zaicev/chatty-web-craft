@@ -121,10 +121,41 @@ export default function LaunchWizard() {
     setMapping(saved);
   }, [workspace, logicalKey]);
 
+  // ----- Database batches (internal-only audience source) -----
+  const dbBatchesQ = useQuery({
+    queryKey: audienceKeys.batches(workspace?.id),
+    queryFn: () => fetchBatches(workspace!.id),
+    enabled: Boolean(workspace) && audienceSource === "database",
+  });
+  const dbStatsQ = useQuery({
+    queryKey: audienceKeys.stats(workspace?.id),
+    queryFn: () => fetchBatchStats(workspace!.id),
+    enabled: Boolean(workspace) && audienceSource === "database",
+  });
+  const dbBatch: AudienceBatch | undefined = (dbBatchesQ.data ?? []).find((b) => b.id === dbBatchId);
+  const dbStats: AudienceBatchStats | undefined = (dbStatsQ.data ?? []).find((s) => s.batch_id === dbBatchId);
+  const dbAvailable = dbStats?.unused ?? 0;
+  const dbTargetCount = audienceSource === "database"
+    ? (dbAllUnused ? dbAvailable : Math.min(Math.max(0, Number(dbQty) || 0), dbAvailable))
+    : 0;
+
+  // Auto-pick first batch when entering db mode
+  useEffect(() => {
+    if (audienceSource !== "database") return;
+    if (!dbBatchId && (dbBatchesQ.data?.length ?? 0) > 0) {
+      setDbBatchId(dbBatchesQ.data![0].id);
+    }
+  }, [audienceSource, dbBatchesQ.data, dbBatchId]);
+
   // ----- Audience parsing & mapping -----
-  const recipients = useMemo(() => parseCsv(csv), [csv]);
-  const columns = useMemo(() => detectColumns(recipients), [recipients]);
-  const variableNames = activeLogical?.variables ?? [];
+  const csvRecipients = useMemo(() => parseCsv(csv), [csv]);
+  const csvColumns = useMemo(() => detectColumns(csvRecipients), [csvRecipients]);
+  // When the database source is active, columns come from the batch's variable schema.
+  // Recipient count is virtual until we actually reserve rows on launch.
+  const recipients = audienceSource === "database"
+    ? Array.from({ length: dbTargetCount }, () => ({ phone: "", variables: {} } as Recipient))
+    : csvRecipients;
+  const columns = audienceSource === "database" ? (dbBatch?.variable_schema ?? []) : csvColumns;
 
   // Auto-map variables by name match
   useEffect(() => {
