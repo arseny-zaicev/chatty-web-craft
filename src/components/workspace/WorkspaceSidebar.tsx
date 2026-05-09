@@ -26,6 +26,7 @@ const managerExtras = [
   { key: "library", label: "Library", icon: BookOpen },
 ];
 const setupTabs = [
+  { key: "roadmap", label: "Roadmap", icon: Map },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
