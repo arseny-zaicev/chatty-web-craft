@@ -108,7 +108,7 @@ export default function WorkspaceOverview() {
             {(() => {
               const infraIssue = data.numbers_total === 0 || (data.numbers_total > 0 && data.numbers_ready === 0);
               const inboxIssue = data.numbers_ready > 0 && data.unread_replies > 20;
-              const showAttention = canManage ? data.health !== "healthy" : inboxIssue;
+              const showAttention = canManage ? (data.health === "blocked" || data.health === "attention") : inboxIssue;
               if (!showAttention) return null;
               return (
                 <div className={`rounded-md border p-2.5 text-xs ${H.cls}`}>
