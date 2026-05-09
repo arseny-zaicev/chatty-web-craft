@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { Conversation, Deal, Stage, crmKeys, fetchPipelineBase } from "@/lib/crmData";
@@ -48,7 +48,6 @@ import {
   Trash2,
   GripVertical,
   Copy,
-  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -62,7 +61,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const wsSlug = wsSlugMatch?.[1];
   const inboxPath = (conversationId: string) =>
     wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
-  const _queryClient = useQueryClient(); void _queryClient;
+  
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
