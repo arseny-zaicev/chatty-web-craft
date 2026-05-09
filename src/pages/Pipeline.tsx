@@ -329,7 +329,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         <meta name="robots" content="noindex,nofollow" />
       </Helmet>
 
-      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-background text-foreground`}>
+      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col bg-background text-foreground relative`}>
         {!embedded && <header className="h-14 px-6 border-b border-border flex items-center justify-between bg-card/40 backdrop-blur">
           <div className="flex items-center gap-3">
             <KanbanSquare className="w-5 h-5 text-primary" />
