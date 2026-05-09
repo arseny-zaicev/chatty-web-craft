@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Loader2, LogOut, Plus, Sparkles, Building2, Rocket, Inbox, Megaphone, FileText,
   Activity, ArrowRight, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, BarChart3,
-  Phone, LayoutDashboard, Clock, Globe, Users,
+  Phone, LayoutDashboard, Clock, Globe, Users, Map as MapIcon, Wrench,
 } from "lucide-react";
 import { IskraLoader } from "@/components/IskraLoader";
 import { User } from "@supabase/supabase-js";
@@ -32,7 +32,8 @@ type Section =
   | "companies.analytics"
   | "forms.submissions"
   | "forms.analytics"
-  | "site.analytics";
+  | "site.analytics"
+  | "internal.roadmap";
 
 type NavGroup = {
   id: string;
@@ -61,6 +62,12 @@ const NAV: NavGroup[] = [
     id: "site", label: "Site", icon: Globe,
     items: [
       { id: "site.analytics", label: "Site analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    id: "internal", label: "Internal", icon: Wrench,
+    items: [
+      { id: "internal.roadmap", label: "Product roadmap", icon: MapIcon, external: "/admin/roadmap" },
     ],
   },
 ];

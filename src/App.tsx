@@ -163,6 +163,7 @@ const App = () => (
               <Route path="/join/:token" element={<JoinTeam />} />
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/admin/roadmap" element={<Navigate to="/ws/iskra/roadmap" replace />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
               <Route path="/admin/analytics" element={<FleetAnalytics />} />
               <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
