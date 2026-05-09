@@ -166,15 +166,18 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     };
   }, [workspaceId]);
 
-  const isMine = (d: Deal) => {
-    if (!d.conversation_id || !meId) return false;
-    const c = convById.get(d.conversation_id);
-    return c?.assigned_user_id === meId;
+  const dealMatchesAssignee = (d: Deal): boolean => {
+    if (assigneeFilter === "all") return true;
+    const c = d.conversation_id ? convById.get(d.conversation_id) : null;
+    const aid = c?.assigned_user_id ?? null;
+    if (assigneeFilter === "unassigned") return !aid;
+    if (assigneeFilter === "me") return !!meId && aid === meId;
+    return aid === assigneeFilter;
   };
   const visibleDeals = useMemo(
-    () => (myOnly && meId ? deals.filter(isMine) : deals),
+    () => deals.filter(dealMatchesAssignee),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deals, myOnly, meId, convById],
+    [deals, assigneeFilter, meId, convById],
   );
 
   const dealsByStage = useMemo(() => {
