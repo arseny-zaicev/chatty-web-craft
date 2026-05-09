@@ -64,6 +64,7 @@ const WorkspaceOverview = lazyWithRetry(() => import("./pages/workspace/Workspac
 const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/WorkspaceSettings"));
 const LaunchWizard = lazyWithRetry(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazyWithRetry(() => import("./pages/workspace/NewClient"));
+const WorkspacePrepProfiles = lazyWithRetry(() => import("./pages/workspace/WorkspacePrepProfiles"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const CustomCursor = lazyWithRetry(() => import("@/components/CustomCursor"));
 const CookieConsent = lazyWithRetry(() => import("@/components/CookieConsent"));
@@ -145,6 +146,7 @@ const App = () => (
                 <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
                 <Route path=":slug/library" element={<WorkspaceSection section="library" />} />
                 <Route path=":slug/data" element={<WorkspaceSection section="data" />} />
+                <Route path=":slug/data/profiles" element={<WorkspacePrepProfiles />} />
                 <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
                 <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
