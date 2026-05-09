@@ -21,6 +21,8 @@ const HEALTH = {
 
 export default function WorkspaceOverview() {
   const { workspace } = useOutletContext<WorkspaceContext>();
+  const { data: role } = useWorkspaceRole(workspace?.id);
+  const canManage = isManagerLike(role);
   const { data, isLoading } = useQuery({
     queryKey: portfolioKeys.workspaceOverview(workspace?.id ?? ""),
     queryFn: () => fetchWorkspaceOverview(workspace!.id),
