@@ -214,7 +214,30 @@ export default function Roadmap() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Roadmap</h1>
           <p className="text-sm text-muted-foreground">Drop ideas, track what's planned, shipped. Private to the team.</p>
-        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          onClick={() => setSectionFilter("all")}
+          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${sectionFilter === "all" ? "bg-foreground text-background border-foreground" : "bg-background text-muted-foreground border-border hover:text-foreground"}`}
+        >
+          All ({(items ?? []).length})
+        </button>
+        {sections.map((s) => {
+          const count = (items ?? []).filter((it) => it.tags?.[0] === s).length;
+          const active = sectionFilter === s;
+          return (
+            <button
+              key={s}
+              onClick={() => setSectionFilter(s)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? "bg-foreground text-background border-foreground" : "bg-background text-muted-foreground border-border hover:text-foreground"}`}
+            >
+              {s} ({count})
+            </button>
+          );
+        })}
+      </div>
+
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
           <DialogTrigger asChild>
             <Button onClick={() => setEditing(null)}><Plus className="w-4 h-4 mr-2" />New idea</Button>
