@@ -160,16 +160,58 @@ function formatDate(d: Date) {
 
 export default function OpsLive() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tokenParam = searchParams.get("token") ?? "";
   const [authChecked, setAuthChecked] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [tokenMode, setTokenMode] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
   const [now, setNow] = useState<Date>(new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
+      // Token-based public access path
+      if (tokenParam) {
+        try {
+          const { data, error } = await supabase.functions.invoke("tv-token?action=verify", {
+            body: { token: tokenParam },
+          });
+          if (!mounted) return;
+          if (error || !data?.valid) {
+            navigate("/admin-auth");
+            return;
+          }
+          setTokenMode(true);
+          setAuthChecked(true);
+          return;
+        } catch {
+          navigate("/admin-auth");
+          return;
+        }
+      }
       const [{ data: { session } }, r] = await Promise.all([
+        supabase.auth.getSession(),
+        evaluateAdminAccess(),
+      ]);
+      if (!mounted) return;
+      if (!session || r.state === "redirect") {
+        navigate(r.state === "redirect" ? r.to : "/admin-auth");
+        return;
+      }
+      setIsAdmin(true);
+      setAuthChecked(true);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [navigate, tokenParam]);
         supabase.auth.getSession(),
         evaluateAdminAccess(),
       ]);
