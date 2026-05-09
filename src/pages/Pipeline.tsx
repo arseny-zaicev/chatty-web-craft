@@ -214,9 +214,28 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     const { active, over } = event;
     if (!over) return;
     const dealId = String(active.id);
-    const targetStageId = String(over.id);
+    const overId = String(over.id);
     const deal = deals.find((d) => d.id === dealId);
-    if (!deal || deal.stage_id === targetStageId) return;
+    if (!deal) return;
+
+    // Special: delete drop zone
+    if (overId === "__delete__") {
+      const ok = confirm("Delete this deal?");
+      if (!ok) return;
+      const prev = deals;
+      setDeals((p) => p.filter((d) => d.id !== dealId));
+      const { error } = await supabase.from("deals").delete().eq("id", dealId);
+      if (error) {
+        toast.error("Failed to delete");
+        setDeals(prev);
+      } else {
+        toast.success("Deal deleted");
+      }
+      return;
+    }
+
+    const targetStageId = overId;
+    if (deal.stage_id === targetStageId) return;
 
     // optimistic
     const prevStageId = deal.stage_id;
@@ -236,6 +255,9 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       setDeals((prev) =>
         prev.map((d) => (d.id === dealId ? { ...d, stage_id: prevStageId } : d)),
       );
+    } else {
+      const stageName = stages.find((s) => s.id === targetStageId)?.name;
+      if (stageName) toast.success(`Moved to ${stageName}`);
     }
   };
 
