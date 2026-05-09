@@ -21,6 +21,7 @@ import {
 } from "@/lib/audienceData";
 import {
   prepProfileKeys, listPrepProfiles, applyDerivedVariables, validateRowAgainstProfile,
+  buildPrepPrompt, buildFallbackPrompt,
   type PrepProfile,
 } from "@/lib/prepProfiles";
 import type { WorkspaceContext } from "./WorkspaceLayout";
