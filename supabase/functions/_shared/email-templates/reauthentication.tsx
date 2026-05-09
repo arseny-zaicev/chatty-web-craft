@@ -14,7 +14,7 @@ export const ReauthenticationEmail = ({ token, siteUrl = 'https://iskra.ae' }: P
     <Body style={styles.main}>
       <Container style={styles.container}>
         <Section style={styles.header}>
-          <Img src={BRAND.logoUrl} alt={BRAND.name} width="40" height="40" style={styles.logo} />
+          <Img src={BRAND.logoUrl} alt={BRAND.name} width={BRAND.logoWidth} height={BRAND.logoHeight} style={{ display: "block" }} />
         </Section>
         <Section style={styles.body}>
           <Text style={styles.eyebrow}>{BRAND.name} · Verification</Text>
