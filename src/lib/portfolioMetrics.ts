@@ -192,6 +192,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
   }
 
   const numbers_total = (numbers ?? []).length;
+  const numbers_active = (numbers ?? []).filter((n) => n.is_active).length;
   const numbers_ready = (numbers ?? []).filter((n) => n.is_active && n.connected_in_gupshup && n.connected_in_iskra).length;
   const unread_replies = (convs ?? []).reduce((s, c) => s + (c.unread_count ?? 0), 0);
   const active_campaigns = (campaigns ?? []).filter((c) => c.status === "scheduled" || c.status === "running").length;
@@ -200,9 +201,11 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     .sort((a, b) => (a.scheduled_start_at! > b.scheduled_start_at! ? 1 : -1))[0]?.scheduled_start_at ?? null;
   const last_activity = (convs ?? []).reduce<string | null>((acc, c) => (c.last_message_at && (!acc || c.last_message_at > acc) ? c.last_message_at : acc), null);
 
-  let health: WorkspaceMetrics["health"] = "healthy";
-  if (numbers_total === 0 || numbers_ready === 0) health = "blocked";
-  else if (unread_replies > 20 || numbers_ready < numbers_total) health = "attention";
+  let health: WorkspaceHealth = "idle";
+  if (numbers_active === 0) health = "blocked";
+  else if ((campaigns ?? []).some((c) => c.status === "running")) health = "running";
+  else if (next_launch) health = "scheduled";
+  else if (unread_replies >= 20) health = "attention";
 
   return {
     workspace_id: workspaceId,
@@ -210,10 +213,14 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     active_campaigns,
     numbers_total,
     numbers_ready,
+    numbers_active,
     delivered_today,
     replies_today,
     last_activity,
     next_launch,
+    campaign_end: null,
+    running_campaign_name: null,
+    scheduled_campaign_name: null,
     health,
     templates_approved: (templates ?? []).length,
     recent_launches: (recent ?? []).map((r) => ({ id: r.id, name: r.name, status: r.status, created_at: r.created_at, sent_count: r.sent_count ?? 0, total: r.total_recipients ?? 0 })),
