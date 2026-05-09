@@ -18,10 +18,17 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+// Short, TV-friendly token: 10 chars from Crockford-like alphabet (no 0/O/1/I/L)
+// ~50 bits of entropy, enough for short-lived URLs with DB lookup.
+const TOKEN_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 function generateToken(): string {
-  const bytes = new Uint8Array(24);
+  const bytes = new Uint8Array(10);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += TOKEN_ALPHABET[bytes[i] % TOKEN_ALPHABET.length];
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {
@@ -37,7 +44,7 @@ Deno.serve(async (req) => {
     if (action === "verify") {
       const body = await req.json().catch(() => ({}));
       const token = String(body?.token ?? "").trim();
-      if (!token || token.length < 16 || token.length > 128) {
+      if (!token || token.length < 6 || token.length > 128) {
         return jsonResponse({ valid: false, error: "Invalid token" }, 400);
       }
       const { data, error } = await admin
