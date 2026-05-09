@@ -148,6 +148,14 @@ export default function LaunchWizard() {
     }
   }, [audienceSource, dbBatchesQ.data, dbBatchId]);
 
+  // Auto-fill audience name from selected DB batch (unless user typed their own)
+  useEffect(() => {
+    if (audienceSource !== "database") return;
+    if (audienceDirty) return;
+    const n = (dbBatch?.name ?? "").trim();
+    if (n && n !== audience) setAudience(n);
+  }, [audienceSource, dbBatch?.name, audienceDirty]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ----- Audience parsing & mapping -----
   const csvRecipients = useMemo(() => parseCsv(csv), [csv]);
   const csvColumns = useMemo(() => detectColumns(csvRecipients), [csvRecipients]);
