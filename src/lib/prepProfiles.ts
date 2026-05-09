@@ -238,6 +238,7 @@ ${derivedLines}
 
 QUICK REPLIES (informational only)
 ${quick}
+${profile.sample_message_template ? `\nSAMPLE MESSAGE BODY (template; placeholders are derived variables and source fields)\n"""\n${profile.sample_message_template}\n"""\n` : ""}
 
 OUTPUT (one JSON array; one object per valid row)
 [
