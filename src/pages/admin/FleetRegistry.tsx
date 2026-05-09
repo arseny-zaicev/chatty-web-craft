@@ -644,8 +644,8 @@ function InlineDnSelect({ value, checkedAt, onChange }: { value: DnStatus; check
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="pending">pending</SelectItem>
         <SelectItem value="approved">approved</SelectItem>
+        <SelectItem value="pending">pending</SelectItem>
         <SelectItem value="rejected">rejected</SelectItem>
       </SelectContent>
     </Select>
