@@ -843,24 +843,41 @@ export default function LaunchWizard() {
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Recipient TZ">
+                <Field label="Time zone basis">
                   <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">Respect (per phone)</SelectItem>
-                      <SelectItem value="no">Workspace TZ</SelectItem>
+                      <SelectItem value="yes">Recipient local (per phone prefix)</SelectItem>
+                      <SelectItem value="no">My time zone (browser)</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
               </div>
 
-              <div className="text-[11px] text-muted-foreground">
-                {scheduleMode === "now"
-                  ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson-distributed inter-arrivals" : "Uniform delays"} within ${delayMin}-${delayMax}s.`
-                  : `${scheduledDates.length || 0} day(s) × window ${windowStart}-${windowEnd}${respectTz ? " (recipient local time)" : ""}. Cross-number stagger applied.`}
+              {/* Recipient region clock */}
+              {recipientTz && recipientNow && (
+                <div className={`text-[11px] flex items-center gap-2 px-2 py-1.5 rounded-md border ${inWindow ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500"}`}>
+                  <span className="font-mono font-semibold">{recipientNow}</span>
+                  <span className="opacity-70">in {poolCountry} ({recipientTz.split("/")[1].replace("_", " ")})</span>
+                  <span className="ml-auto">{inWindow ? `✓ inside ${windowStart}-${windowEnd}` : `outside ${windowStart}-${windowEnd}`}</span>
+                </div>
+              )}
+
+              <div className="text-[11px] text-muted-foreground space-y-1">
+                <div>
+                  {scheduleMode === "now"
+                    ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson (organic gaps)" : "Uniform fixed gaps"} of ${delayMin}-${delayMax}s between sends per number.`
+                    : `${scheduledDates.length || 0} day(s) × ${windowStart}-${windowEnd} ${respectTz ? "in each recipient's local time" : "in your time zone"}. Numbers fire staggered (no two at the same second).`}
+                </div>
+                {scheduleMode === "scheduled" && pacing && pacing.perNumber > 1 && (
+                  <div>
+                    Math: {pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h window ≈ <b>1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average. Min/max delays ({delayMin}-{delayMax}s) only act as the floor between two consecutive sends.
+                  </div>
+                )}
               </div>
             </div>
           </Step>
+
 
           {/* Step 4: Audience */}
           <Step n={4} icon={Users} title="Audience">
