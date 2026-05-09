@@ -72,6 +72,7 @@ export default function LaunchWizard() {
   const [dbQty, setDbQty] = useState<string>("100");
 
   const [audience, setAudience] = useState("");
+  const [audienceDirty, setAudienceDirty] = useState(false);
   const [ctaPreset, setCtaPreset] = useState<string>("Call");
   const [ctaCustom, setCtaCustom] = useState("");
   const cta = ctaPreset === "Other" ? ctaCustom : ctaPreset;
