@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1584 396" width="1584" height="396">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0a"/>
+      <stop offset="55%" stop-color="#0d3b27"/>
+      <stop offset="100%" stop-color="#1f8f5e"/>
+    </linearGradient>
+    <linearGradient id="markBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1f8f5e"/>
+      <stop offset="100%" stop-color="#166b45"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#20b873" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#20b873" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1584" height="396" fill="url(#bg)"/>
+  <circle cx="1280" cy="200" r="280" fill="url(#glow)"/>
+
+  <!-- Subtle grid -->
+  <g stroke="#ffffff" stroke-opacity="0.04" stroke-width="1">
+    <line x1="0" y1="99" x2="1584" y2="99"/>
+    <line x1="0" y1="198" x2="1584" y2="198"/>
+    <line x1="0" y1="297" x2="1584" y2="297"/>
+  </g>
+
+  <!-- Logo mark: emerald rounded square + lucide Sparkles -->
+  <g transform="translate(120, 138)">
+    <rect width="120" height="120" rx="26" ry="26" fill="url(#markBg)"/>
+    <g transform="translate(60, 60) scale(2.5) translate(-12, -12)" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+      <path d="M20 3v4"/>
+      <path d="M22 5h-4"/>
+      <path d="M4 17v2"/>
+      <path d="M5 18H3"/>
+    </g>
+  </g>
+
+  <!-- Wordmark + tagline -->
+  <g transform="translate(280, 168)">
+    <text x="0" y="0" font-family="Outfit, system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="700" font-size="96" letter-spacing="-3" fill="#ffffff">ISKRA</text>
+    <text x="0" y="48" font-family="Inter, system-ui, sans-serif" font-weight="500" font-size="22" letter-spacing="3" fill="#20b873">REVENUE FROM YOUR EXISTING DATABASE</text>
+  </g>
+
+  <!-- Right meta -->
+  <g transform="translate(1464, 348)" text-anchor="end" font-family="Inter, system-ui, sans-serif" fill="#ffffff" fill-opacity="0.6" font-size="16" letter-spacing="2">
+    <text>ISKRA.AE</text>
+  </g>
+</svg>
