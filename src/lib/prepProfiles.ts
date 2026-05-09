@@ -56,6 +56,7 @@ const fromRow = (r: Record<string, unknown>): PrepProfile => ({
   fallback_rules: (r.fallback_rules as Record<string, string>) ?? {},
   quick_replies: Array.isArray(r.quick_replies) ? (r.quick_replies as string[]) : [],
   sample_payload: (r.sample_payload as Record<string, string>) ?? {},
+  sample_message_template: (r.sample_message_template as string) ?? null,
   created_at: r.created_at as string,
   updated_at: r.updated_at as string,
 });
