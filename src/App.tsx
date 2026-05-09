@@ -102,6 +102,7 @@ const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/Workspac
 const LaunchWizard = lazyWithRetry(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazyWithRetry(() => import("./pages/workspace/NewClient"));
 const Roadmap = lazyWithRetry(() => import("./pages/workspace/Roadmap"));
+const WorkspaceMaterials = lazyWithRetry(() => import("./pages/workspace/WorkspaceMaterials"));
 const WorkspacePrepProfiles = lazyWithRetry(() => import("./pages/workspace/WorkspacePrepProfiles"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const CustomCursor = lazyWithRetry(() => import("@/components/CustomCursor"));
