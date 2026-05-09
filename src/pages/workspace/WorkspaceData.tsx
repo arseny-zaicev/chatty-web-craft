@@ -195,6 +195,7 @@ function PrepPromptsSection({
     queryFn: () => listPrepProfiles(workspaceId),
   });
   const profiles = profilesQ.data ?? [];
+  const [viewing, setViewing] = useState<PrepProfile | null>(null);
 
   const copy = async (text: string, label: string) => {
     try {
@@ -210,10 +211,10 @@ function PrepPromptsSection({
       <div className="flex items-center gap-2 mb-1">
         <Wand2 className="w-4 h-4 text-primary" />
         <h2 className="font-medium text-sm">Prep prompts</h2>
-        <Badge variant="outline" className="text-[10px]">primary path: Codex -&gt; Supabase</Badge>
+        <Badge variant="outline" className="text-[10px]">generated from saved recipe</Badge>
       </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Copy a prompt, prepare the audience in Codex against the profile rules, then insert validated rows into this workspace's batch. Use the fallback CSV/XLSX upload only when Codex isn't available.
+        Each prompt is built deterministically from the prep profile fields - never guessed from the name. Copy a prompt, prepare the audience in Codex against the recipe, then insert validated rows into this workspace's batch.
       </p>
 
       {profiles.length === 0 ? (
@@ -233,7 +234,10 @@ function PrepPromptsSection({
                 required: {p.required_fields.join(", ") || "none"} · derives: {p.derived_variables.map((d) => d.key).join(", ") || "none"}
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                <Button size="sm" variant="outline"
+                <Button size="sm" variant="outline" onClick={() => setViewing(p)}>
+                  <Eye className="w-3.5 h-3.5 mr-1" /> View prompt
+                </Button>
+                <Button size="sm" variant="ghost"
                   onClick={() => copy(buildPrepPrompt(p, { workspaceName, workspaceId }), "Prep prompt")}>
                   <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
                 </Button>
@@ -246,6 +250,29 @@ function PrepPromptsSection({
           ))}
         </div>
       )}
+
+      <Dialog open={!!viewing} onOpenChange={(o) => { if (!o) setViewing(null); }}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Prompt generated from "{viewing?.name}"</DialogTitle>
+            <DialogDescription>
+              Built from this profile's required fields, derived variables, validation rules, fallbacks, and sample message body.
+            </DialogDescription>
+          </DialogHeader>
+          {viewing && (
+            <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap font-mono">
+{buildPrepPrompt(viewing, { workspaceName, workspaceId })}
+            </pre>
+          )}
+          <DialogFooter>
+            {viewing && (
+              <Button onClick={() => copy(buildPrepPrompt(viewing, { workspaceName, workspaceId }), "Prep prompt")}>
+                <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
