@@ -19,15 +19,8 @@ const SellerLeadsApply = () => {
         {/* Header */}
         <header className="py-6 border-b border-background/10">
           <div className="container mx-auto px-4">
-            <Link to="/seller-leads" className="flex items-center gap-2 w-fit">
-              <div className="relative">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-iskra-emerald to-iskra-emerald/70 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <span className="font-display text-xl font-bold tracking-tight text-background">
-                ISKRA
-              </span>
+            <Link to="/seller-leads" className="w-fit">
+              <IskraLogo size={32} textClass="text-xl text-background font-bold" />
             </Link>
           </div>
         </header>
