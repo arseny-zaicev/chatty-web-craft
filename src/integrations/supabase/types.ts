@@ -1187,6 +1187,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activity: {
+        Row: {
+          created_at: string
+          day: string
+          id: string
+          last_seen_at: string
+          minutes_active: number
+          sessions: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          id?: string
+          last_seen_at?: string
+          minutes_active?: number
+          sessions?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          id?: string
+          last_seen_at?: string
+          minutes_active?: number
+          sessions?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1631,6 +1661,7 @@ export type Database = {
           read_ct: number
         }[]
       }
+      record_heartbeat: { Args: never; Returns: undefined }
       release_audience_rows: { Args: { _row_ids: string[] }; Returns: number }
       reserve_audience_rows: {
         Args: { _batch_id: string; _quantity: number }
