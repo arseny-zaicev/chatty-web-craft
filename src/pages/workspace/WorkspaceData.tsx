@@ -333,7 +333,7 @@ function PresetsSection({
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Country (optional)</label>
-                  <Input value={batchCountry} onChange={(e) => setBatchCountry(e.target.value)} placeholder="e.g. AE" disabled={!!createdBatchId} />
+                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE" disabled={!!createdBatchId} />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Campaign type</label>
