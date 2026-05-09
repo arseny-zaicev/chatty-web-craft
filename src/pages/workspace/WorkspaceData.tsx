@@ -20,7 +20,8 @@ import {
   type ParsedAudience,
 } from "@/lib/audienceData";
 import {
-  prepProfileKeys, listPrepProfiles, applyDerivedVariables, validateRowAgainstProfile,
+  prepProfileKeys, listPrepProfiles, applyDerivedVariables, applyColumnMapping,
+  validateRowAgainstProfile, renderSampleMessage,
   buildPrepPrompt, buildFallbackPrompt,
   type PrepProfile,
 } from "@/lib/prepProfiles";
