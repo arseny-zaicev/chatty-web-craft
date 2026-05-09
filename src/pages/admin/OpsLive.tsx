@@ -166,6 +166,7 @@ export default function OpsLive() {
   const [authChecked, setAuthChecked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [tokenMode, setTokenMode] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
   const [now, setNow] = useState<Date>(new Date());
