@@ -285,22 +285,22 @@ function PrepPromptsSection({
     }
   };
 
+  if (profiles.length === 0) return null;
+
   return (
     <div className="rounded-lg border border-border bg-card/30 p-4">
       <div className="flex items-center gap-2 mb-1">
-        <Wand2 className="w-4 h-4 text-primary" />
-        <h2 className="font-medium text-sm">Prep prompts</h2>
-        <Badge variant="outline" className="text-[10px]">generated from saved recipe</Badge>
+        <Wand2 className="w-4 h-4 text-muted-foreground" />
+        <h2 className="font-medium text-sm">Custom prep profiles</h2>
+        <Badge variant="outline" className="text-[10px]">advanced</Badge>
       </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Each prompt is built deterministically from the prep profile fields - never guessed from the name. Copy a prompt, prepare the audience in Codex against the recipe, then insert validated rows into this workspace's batch.
+        Optional: hand-built recipes for edge cases the presets above don't cover. Manage them in <Link to={`/ws/${workspaceSlug}/data/profiles`} className="text-primary underline">Prep Profiles</Link>.
       </p>
 
-      {profiles.length === 0 ? (
-        <div className="text-xs text-muted-foreground border border-dashed border-border rounded-md p-4 text-center">
-          No prep profiles yet. <Link to={`/ws/${workspaceSlug}/data/profiles`} className="text-primary underline">Create one</Link> to enable the primary workflow.
-        </div>
-      ) : (
+      {(
+        <></>
+      )}
         <div className="grid gap-2 sm:grid-cols-2">
           {profiles.map((p) => (
             <div key={p.id} className="rounded-md border border-border p-3 bg-background/40">
