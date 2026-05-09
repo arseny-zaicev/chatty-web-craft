@@ -53,7 +53,7 @@ import {
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
-import { fetchWorkspaceMembers, memberDisplayName, memberInitials, workspaceMembersKey } from "@/lib/workspaceMembers";
+import { fetchWorkspaceMembers, workspaceMembersKey } from "@/lib/workspaceMembers";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
