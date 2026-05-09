@@ -166,6 +166,7 @@ export default function OpsLive() {
   const [authChecked, setAuthChecked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [tokenMode, setTokenMode] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
   const [now, setNow] = useState<Date>(new Date());
@@ -180,20 +181,31 @@ export default function OpsLive() {
     (async () => {
       // Token-based public access path
       if (tokenParam) {
+        // Guard against placeholder URLs like /tv/:token
+        const looksValid = /^[A-Za-z0-9_-]{16,}$/.test(tokenParam);
+        if (!looksValid) {
+          if (!mounted) return;
+          setTokenError("This TV link is invalid. Generate a new one from the admin panel.");
+          setAuthChecked(true);
+          return;
+        }
         try {
           const { data, error } = await supabase.functions.invoke("tv-token?action=verify", {
             body: { token: tokenParam },
           });
           if (!mounted) return;
           if (error || !data?.valid) {
-            navigate("/admin-auth");
+            setTokenError("This TV link has expired or was revoked. Please generate a new one.");
+            setAuthChecked(true);
             return;
           }
           setTokenMode(true);
           setAuthChecked(true);
           return;
         } catch {
-          navigate("/admin-auth");
+          if (!mounted) return;
+          setTokenError("Could not verify TV link. Please try again.");
+          setAuthChecked(true);
           return;
         }
       }
@@ -284,6 +296,20 @@ export default function OpsLive() {
 
   if (!authChecked) {
     return <IskraLoader message="Loading mission control…" />;
+  }
+
+  if (tokenError) {
+    return (
+      <div className="min-h-screen w-full bg-background text-foreground flex items-center justify-center p-8">
+        <div className="max-w-md text-center space-y-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(152_65%_28%)]">
+            Ops Live · TV access
+          </div>
+          <h1 className="text-2xl font-semibold">Link unavailable</h1>
+          <p className="text-sm text-muted-foreground">{tokenError}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
