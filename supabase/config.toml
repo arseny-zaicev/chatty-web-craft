@@ -28,5 +28,3 @@ project_id = "xglfamaaotmwulglwcui"
   [functions.whatsapp-webhook]
     verify_jwt = false
 
-[functions.create-test-client]
-verify_jwt = false
