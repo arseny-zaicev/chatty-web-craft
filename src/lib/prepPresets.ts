@@ -114,9 +114,35 @@ ${variableSpec}
 
 VALIDATION RULES
   - phone: digits only (strip +, spaces, dashes); length 7-15; otherwise drop the row
-  - first_name: trim; if empty, drop the row
+  - first_name: trim; if empty, use the fallback "there" (do NOT drop the row)
   - drop in-batch duplicate phones (keep first occurrence)
-  - never invent values; if an optional field is missing leave the variable empty
+  - trim every string value before using it (no leading/trailing whitespace, ever)
+
+NESTED VARIABLES (CRITICAL)
+  - The operator's instructions for a variable may themselves contain placeholders
+    referencing source columns, written as {Column Name} (case-insensitive, spaces allowed).
+    Example: var_2 = "a demo booking system for {Company Name}"
+    -> for each row, substitute {Company Name} with that row's "Company Name" value.
+  - Resolve EVERY {Placeholder} before writing the row. The final derived_payload value
+    must NEVER contain a literal "{...}" token, a trailing space, or a double space.
+  - If a referenced column is missing, empty, or whitespace-only for a row, replace the
+    placeholder with a smooth natural-language fallback so the sentence still reads clean.
+    Suggested fallbacks:
+      {Company Name}     -> "your team"
+      {company}          -> "your team"
+      {City}             -> "your area"
+      {Role} / {Title}   -> "your role"
+      {Industry}         -> "your space"
+      {First Name}       -> "there"
+      anything else      -> pick a neutral noun phrase that fits the surrounding sentence
+  - After substitution, collapse repeated whitespace to a single space and trim the result.
+  - NEVER leave a literal "{Company Name}" (or any other placeholder) inside derived_payload.
+  - NEVER drop a row just because an optional/nested field is missing - apply the fallback instead.
+
+PER-FIELD FALLBACKS
+  - Apply fallbacks at the variable level too: if a derived variable resolves to an empty
+    string after substitution, use the same neutral fallback rules above so the message
+    never has a blank gap.
 
 OUTPUT (single JSON array, one object per VALID row)
 [
