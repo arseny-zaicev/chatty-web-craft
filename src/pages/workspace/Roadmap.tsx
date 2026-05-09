@@ -106,7 +106,7 @@ export default function Roadmap() {
     })();
   }, [ws?.id, items, isLoading, qc]);
 
-  async function saveItem(payload: Partial<RoadmapItem>) {
+  async function saveItem(payload: Partial<RoadmapItem>): Promise<void> {
     if (!ws?.id) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -122,7 +122,7 @@ export default function Roadmap() {
           priority: payload.priority,
         })
         .eq("id", editing.id);
-      if (error) return toast.error(error.message);
+      if (error) { toast.error(error.message); return; }
       toast.success("Updated");
     } else {
       const { error } = await supabase.from("roadmap_items").insert({
