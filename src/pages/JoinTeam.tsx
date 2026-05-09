@@ -33,6 +33,7 @@ export default function JoinTeam() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
   useEffect(() => {
     let mounted = true;
