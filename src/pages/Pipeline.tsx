@@ -52,6 +52,7 @@ import {
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
+import StageAutomationsDialog from "@/components/workspace/StageAutomationsDialog";
 import { fetchWorkspaceMembers, workspaceMembersKey } from "@/lib/workspaceMembers";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
@@ -68,7 +69,8 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Deal | null>(null);
-  const [myOnly, setMyOnly] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // 'all' | 'me' | 'unassigned' | userId
+  const [showAutomations, setShowAutomations] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
 
   const [showNew, setShowNew] = useState(false);
@@ -165,15 +167,18 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     };
   }, [workspaceId]);
 
-  const isMine = (d: Deal) => {
-    if (!d.conversation_id || !meId) return false;
-    const c = convById.get(d.conversation_id);
-    return c?.assigned_user_id === meId;
+  const dealMatchesAssignee = (d: Deal): boolean => {
+    if (assigneeFilter === "all") return true;
+    const c = d.conversation_id ? convById.get(d.conversation_id) : null;
+    const aid = c?.assigned_user_id ?? null;
+    if (assigneeFilter === "unassigned") return !aid;
+    if (assigneeFilter === "me") return !!meId && aid === meId;
+    return aid === assigneeFilter;
   };
   const visibleDeals = useMemo(
-    () => (myOnly && meId ? deals.filter(isMine) : deals),
+    () => deals.filter(dealMatchesAssignee),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deals, myOnly, meId, convById],
+    [deals, assigneeFilter, meId, convById],
   );
 
   const dealsByStage = useMemo(() => {
@@ -339,17 +344,25 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
 
         {!embedded ? null : (
           <div className="px-4 py-2 border-b border-border flex items-center justify-end gap-2 bg-card/30">
-            <button
-              onClick={() => setMyOnly((v) => !v)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition ${
-                myOnly
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border text-muted-foreground hover:border-primary/40"
-              }`}
-              title="Show only chats assigned to me"
-            >
-              {myOnly ? "My chats only" : "All chats"}
-            </button>
+            <span className="text-xs text-muted-foreground">Filter:</span>
+            <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All chats</SelectItem>
+                <SelectItem value="me">My chats</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>
+                    {m.full_name?.trim() || `User ${m.user_id.slice(0, 6)}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => setShowAutomations(true)}>
+              Automations
+            </Button>
             <Button size="sm" onClick={() => setShowNew(true)}>
               <Plus className="w-4 h-4 mr-1" /> New deal
             </Button>
@@ -569,6 +582,13 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         </SheetContent>
       </Sheet>
 
+      <StageAutomationsDialog
+        open={showAutomations}
+        onOpenChange={setShowAutomations}
+        workspaceId={workspaceId}
+        stages={stages}
+      />
+
       {/* New deal dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>
@@ -780,10 +800,12 @@ const DealCard = ({
           </button>
         </div>
       </div>
-      {(deal.contact_name || phone) && (
-        <div className="text-xs text-muted-foreground mt-1 truncate flex items-center gap-1">
-          {phone && <Phone className="w-3 h-3" />}
-          {deal.contact_name || (phone ? `+${phone}` : "")}
+      {deal.contact_name && (
+        <div className="text-xs text-foreground/80 mt-1 truncate">{deal.contact_name}</div>
+      )}
+      {phone && (
+        <div className="text-[11px] text-muted-foreground mt-0.5 truncate flex items-center gap-1 font-mono">
+          <Phone className="w-3 h-3" />+{phone}
         </div>
       )}
       {deal.amount != null && (
