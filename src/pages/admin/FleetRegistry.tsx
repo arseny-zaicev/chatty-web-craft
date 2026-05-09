@@ -489,29 +489,30 @@ function BanCell({ r }: { r: Row }) {
 }
 
 function FleetHeaders({ showClient }: { showClient: boolean }) {
+  const cls = "whitespace-nowrap align-middle";
   return (
     <>
-      <TableHead>Phone</TableHead>
-      <TableHead>App name</TableHead>
-      <TableHead>Display name</TableHead>
-      <TableHead>Avatar</TableHead>
-      <TableHead>App ID</TableHead>
-      <TableHead>API key</TableHead>
-      <TableHead>WABA ID</TableHead>
-      <TableHead>Limit</TableHead>
-      {showClient && <TableHead>Client</TableHead>}
-      <TableHead>Warm</TableHead>
-      <TableHead>Use</TableHead>
-      <TableHead>Provided by</TableHead>
-      <TableHead>Country</TableHead>
-      <TableHead>Status</TableHead>
-      <TableHead>Auth</TableHead>
-      <TableHead>Webhook</TableHead>
-      <TableHead>Templates</TableHead>
-      <TableHead>Sent</TableHead>
-      <TableHead>Errors</TableHead>
-      <TableHead>Ban</TableHead>
-      <TableHead>Last campaign</TableHead>
+      <TableHead className={cls}>Phone</TableHead>
+      <TableHead className={cls}>App name</TableHead>
+      <TableHead className={cls}>Display name</TableHead>
+      <TableHead className={cls}>Avatar</TableHead>
+      <TableHead className={cls}>App ID</TableHead>
+      <TableHead className={cls}>API key</TableHead>
+      <TableHead className={cls}>WABA ID</TableHead>
+      <TableHead className={cls}>Limit</TableHead>
+      {showClient && <TableHead className={cls}>Client</TableHead>}
+      <TableHead className={cls}>Warm</TableHead>
+      <TableHead className={cls}>Use</TableHead>
+      <TableHead className={cls}>Provided by</TableHead>
+      <TableHead className={cls}>Country</TableHead>
+      <TableHead className={cls}>Status</TableHead>
+      <TableHead className={cls}>Auth</TableHead>
+      <TableHead className={cls}>Webhook</TableHead>
+      <TableHead className={cls}>Templates</TableHead>
+      <TableHead className={cls}>Sent</TableHead>
+      <TableHead className={cls}>Errors</TableHead>
+      <TableHead className={cls}>Ban</TableHead>
+      <TableHead className={cls}>Last campaign</TableHead>
       <TableHead></TableHead>
     </>
   );
