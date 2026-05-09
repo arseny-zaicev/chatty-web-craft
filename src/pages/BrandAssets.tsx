@@ -183,15 +183,15 @@ const BrandAssets = () => {
           <section className="mb-20">
             <div className="flex items-center gap-3 mb-8 border-b border-border pb-3">
               <Sparkles className="w-5 h-5 text-primary" />
-              <h2 className="font-display text-2xl font-bold">Spark Logo - Transparent Background</h2>
+              <h2 className="font-display text-2xl font-bold">Spark Mark - Transparent Background</h2>
             </div>
-            <p className="text-muted-foreground mb-6">The 4-pointed spark mark on transparent background. Perfect for overlays, watermarks, and flexible placement on any surface.</p>
+            <p className="text-muted-foreground mb-6">The official Sparkles mark on a transparent canvas. Perfect for overlays, watermarks, and flexible placement on any surface.</p>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {sparkVariants.map((v) => (
                 <div key={v.name} className="bg-card border border-border rounded-xl p-5">
                   <div className="flex justify-center items-center mb-4 rounded-lg aspect-square" style={{ background: v.preview }}>
-                    <IskraSparkSVG size={80} color={v.color} />
+                    <IskraMarkPreview size={120} glyphColor={v.color} />
                   </div>
                   <p className="font-semibold text-sm text-center mb-3">{v.name}</p>
                   <div className="flex flex-wrap gap-1.5 justify-center mb-2">
