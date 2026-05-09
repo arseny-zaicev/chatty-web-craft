@@ -898,11 +898,17 @@ export default function LaunchWizard() {
               )}
 
               <div className="text-[11px] text-muted-foreground space-y-1">
-                {scheduleMode === "now" ? (
-                  <div>
-                    Starts immediately. {schedulerKind === "poisson" ? "Poisson (organic, jittered)" : "Uniform fixed"} gaps of <b>{delayMin}-{delayMax}s</b> between sends per number. Total run ≈ <b>{Math.round(((delayMin + delayMax) / 2 * Math.max(1, pacing?.perNumber || 1)) / 60)} min</b> per number.
-                  </div>
-                ) : pacing && pacing.perNumber > 1 ? (
+                {scheduleMode === "now" ? (() => {
+                  const perNumber = pacing?.perNumber || 1;
+                  const avgSec = perNumber * (delayMin + delayMax) / 2;
+                  const maxSec = perNumber * delayMax;
+                  return (
+                    <div>
+                      Starts immediately. {schedulerKind === "poisson" ? "Poisson (organic, jittered)" : "Uniform fixed"} gaps of <b>{delayMin}-{delayMax}s</b> between sends per number.
+                      Per number: <b>{perNumber} msgs</b> → ≈ <b>{fmtDur(Math.round(avgSec))} avg</b>, up to <b>{fmtDur(Math.round(maxSec))} max</b>. So yes - 50/number at 60-120s comfortably fits within an hour or two; numbers send in parallel so total wall-clock = same as one number.
+                    </div>
+                  );
+                })() : pacing && pacing.perNumber > 1 ? (
                   <div>
                     {scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. <b>{pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h ≈ 1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average (jittered ±20% for organic feel). The 60-120s "Min/Max delay" field does not apply here - gaps are derived from the window so messages spread across the full session.
                   </div>
