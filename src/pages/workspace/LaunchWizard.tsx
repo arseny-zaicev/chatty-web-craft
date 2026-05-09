@@ -426,6 +426,7 @@ export default function LaunchWizard() {
           const subname = targets.length > 1
             ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
             : campaignName;
+          const bucketIndex = targets.indexOf(t);
           const { data: res, error } = await supabase.functions.invoke("campaigns", {
             body: {
               action: "launch",
@@ -435,6 +436,14 @@ export default function LaunchWizard() {
               delay_min_seconds: delayMin,
               delay_max_seconds: delayMax,
               recipients: list,
+              // Scheduling
+              scheduler_kind: schedulerKind,
+              scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
+              window_start: windowStart,
+              window_end: windowEnd,
+              respect_recipient_tz: respectTz,
+              bucket_index: bucketIndex,
+              bucket_count: targets.length,
             },
           });
           if (error) results.push({ ok: false, numberId: t.numberId, error: error.message, rowIds: bucketRowIds });
