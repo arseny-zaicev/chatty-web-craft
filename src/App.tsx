@@ -151,6 +151,7 @@ const App = () => (
                 <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
                 <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
+                <Route path=":slug/roadmap" element={<Roadmap />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
