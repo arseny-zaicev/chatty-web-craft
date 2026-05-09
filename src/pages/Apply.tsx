@@ -1,7 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { QualificationForm } from "@/components/QualificationForm";
-import { Sparkles } from "lucide-react";
+import { IskraLogo } from "@/components/IskraLogo";
 
 const Apply = () => {
   return (
