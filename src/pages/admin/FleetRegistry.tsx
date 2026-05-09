@@ -314,13 +314,29 @@ export default function FleetRegistry() {
       if (patch.display_name_status && patch.display_name_status !== row.display_name_status) {
         update.display_name_checked_at = new Date().toISOString();
       }
-      const { error } = await supabase.from("whatsapp_numbers").update(update).eq("id", row.id);
+      const { error, data } = await supabase.from("whatsapp_numbers").update(update).eq("id", row.id).select();
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No row updated (permission denied?)");
+      return data;
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+    onMutate: async ({ row, patch }) => {
+      await qc.cancelQueries({ queryKey: ["fleet-registry"] });
+      const prev = qc.getQueriesData<Row[]>({ queryKey: ["fleet-registry"] });
+      qc.setQueriesData<Row[]>({ queryKey: ["fleet-registry"] }, (old) =>
+        old?.map((r) => (r.id === row.id ? { ...r, ...patch } : r)) ?? old,
+      );
+      return { prev };
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
+    onSuccess: () => {
+      toast.success("Updated");
+    },
+    onError: (e, _v, ctx) => {
+      ctx?.prev?.forEach(([key, data]) => qc.setQueryData(key, data));
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+    },
   });
 
   if (!authChecked || isLoading) {
