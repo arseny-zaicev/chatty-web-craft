@@ -112,11 +112,8 @@ const AdminPanel = () => {
       <header className="border-b bg-card/60 backdrop-blur sticky top-0 z-20">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-iskra-emerald to-iskra-emerald/70 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-display text-base font-semibold tracking-tight">ISKRA</span>
+            <Link to="/" className="flex items-center">
+              <IskraLogo size={32} textClass="text-base" />
             </Link>
             <div className="w-px h-5 bg-border" />
             <div className="text-xs">
