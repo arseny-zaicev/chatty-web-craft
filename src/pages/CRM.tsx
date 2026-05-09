@@ -194,13 +194,15 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     await supabase.from("conversations").update({ unread_count: 0 }).eq("id", conv.id);
   };
 
-  // Auth gate
+  // Auth gate + me id
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) navigate("/admin-auth");
+      else setMeId(data.session.user.id);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) navigate("/admin-auth");
+      else setMeId(session.user.id);
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
