@@ -402,7 +402,7 @@ type RowActions = {
   onReassign: (id: string, workspaceId: string | null) => void;
   onEdit: (r: Row) => void;
   onDelete: (id: string) => void;
-  onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status">>) => void;
+  onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => void;
 };
 
 function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
