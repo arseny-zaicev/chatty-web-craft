@@ -706,6 +706,7 @@ function AddNumberDrawer({
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
+  const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
   
 
   const reset = () => {
@@ -713,6 +714,7 @@ function AddNumberDrawer({
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
     setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
+    setWebhookConnected(false);
   };
 
   useEffect(() => {
