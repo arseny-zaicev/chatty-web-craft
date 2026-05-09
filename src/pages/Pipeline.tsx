@@ -485,6 +485,28 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                   />
                 </Field>
 
+                {activeDeal.conversation_id && (
+                  <Field label="Assigned to">
+                    <AssigneeSelect
+                      workspaceId={workspaceId}
+                      value={convById.get(activeDeal.conversation_id)?.assigned_user_id ?? null}
+                      onChange={async (uid) => {
+                        const cid = activeDeal.conversation_id!;
+                        // Optimistic
+                        setConversations((prev) =>
+                          prev.map((c) => (c.id === cid ? { ...c, assigned_user_id: uid } : c)),
+                        );
+                        const { error } = await supabase
+                          .from("conversations")
+                          .update({ assigned_user_id: uid })
+                          .eq("id", cid);
+                        if (error) toast.error(error.message);
+                        else toast.success("Assignee updated");
+                      }}
+                    />
+                  </Field>
+                )}
+
                 <div className="text-xs text-muted-foreground">
                   Updated {formatDistanceToNow(new Date(activeDeal.updated_at), { addSuffix: true })}
                 </div>
@@ -499,6 +521,37 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       <MessageSquare className="w-4 h-4 mr-1" /> Open chat
                     </Button>
                   )}
+                  {activeDeal.contact_phone && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`+${activeDeal.contact_phone}`);
+                        toast.success("Phone copied");
+                      }}
+                    >
+                      <Phone className="w-4 h-4 mr-1" /> Copy phone
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const stageName = stages.find((s) => s.id === activeDeal.stage_id)?.name ?? "";
+                      const lines = [
+                        `Title: ${activeDeal.title}`,
+                        activeDeal.contact_name ? `Contact: ${activeDeal.contact_name}` : null,
+                        activeDeal.contact_phone ? `Phone: +${activeDeal.contact_phone}` : null,
+                        activeDeal.amount != null ? `Amount: $${Number(activeDeal.amount).toLocaleString()}` : null,
+                        `Stage: ${stageName}`,
+                        activeDeal.notes ? `Notes: ${activeDeal.notes}` : null,
+                      ].filter(Boolean);
+                      navigator.clipboard.writeText(lines.join("\n"));
+                      toast.success("Details copied");
+                    }}
+                  >
+                    <Copy className="w-4 h-4 mr-1" /> Copy details
+                  </Button>
                   <Button size="sm" onClick={saveDeal} disabled={!editing}>
                     Save
                   </Button>
