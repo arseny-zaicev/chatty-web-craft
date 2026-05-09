@@ -53,6 +53,11 @@ import { formatDistanceToNow } from "date-fns";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const wsSlugMatch = location.pathname.match(/^\/ws\/([^/]+)/);
+  const wsSlug = wsSlugMatch?.[1];
+  const inboxPath = (conversationId: string) =>
+    wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
   const queryClient = useQueryClient();
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
