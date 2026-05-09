@@ -580,12 +580,51 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         )}
                         {active.pinned_at && <Pin className="w-3.5 h-3.5 text-primary" />}
                       </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Phone className="w-3 h-3" />+{active.contact_phone}
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />+{active.contact_phone}</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`+${active.contact_phone}`);
+                            toast.success("Phone copied");
+                          }}
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:border-primary/40 hover:text-primary transition"
+                        >
+                          Copy
+                        </button>
+                        {activeAssignee && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                            Assigned: {memberDisplayName(activeAssignee)}
+                          </span>
+                        )}
+                        {activeResponder && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30 animate-pulse">
+                            {memberDisplayName(activeResponder)} is replying...
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {workspaceId && (
+                      <div className="hidden md:block w-44">
+                        <AssigneeSelect
+                          workspaceId={workspaceId}
+                          value={active.assigned_user_id}
+                          onChange={async (uid) => {
+                            setConversations((prev) =>
+                              prev.map((c) => (c.id === active.id ? { ...c, assigned_user_id: uid } : c)),
+                            );
+                            const { error } = await supabase
+                              .from("conversations")
+                              .update({ assigned_user_id: uid })
+                              .eq("id", active.id);
+                            if (error) toast.error(error.message);
+                          }}
+                          placeholder="Assign..."
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    )}
                     {activeNumber && (
                       <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5" title="Sending number">
                         <Phone className="w-3 h-3" />
