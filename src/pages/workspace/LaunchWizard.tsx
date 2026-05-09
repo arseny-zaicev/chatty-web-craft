@@ -3,7 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Loader2, Play, RefreshCw, Rocket, Users, FileText, Phone, Clock, Zap, Timer,
-  Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2,
+  Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2, Database,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,10 @@ import {
   loadMapping, saveMapping, listSavedAudiences, saveAudience, deleteSavedAudience,
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
+import {
+  audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows,
+  type AudienceBatch, type AudienceBatchStats, type AudienceRow,
+} from "@/lib/audienceData";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
