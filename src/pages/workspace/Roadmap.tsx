@@ -69,14 +69,28 @@ export default function Roadmap() {
     enabled: !!ws?.id,
   });
 
+  const [sectionFilter, setSectionFilter] = useState<string>("all");
+
+  const sections = useMemo(() => {
+    const s = new Set<string>();
+    (items ?? []).forEach((it) => { if (it.tags?.[0]) s.add(it.tags[0]); });
+    return Array.from(s).sort();
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    if (sectionFilter === "all") return items ?? [];
+    return (items ?? []).filter((it) => it.tags?.[0] === sectionFilter);
+  }, [items, sectionFilter]);
+
   const grouped = useMemo(() => {
     const map: Record<Status, RoadmapItem[]> = { idea: [], planned: [], in_progress: [], shipped: [] };
-    (items ?? []).forEach((it) => map[it.status].push(it));
+    filteredItems.forEach((it) => map[it.status].push(it));
     return map;
-  }, [items]);
+  }, [filteredItems]);
 
   const [editing, setEditing] = useState<RoadmapItem | null>(null);
   const [open, setOpen] = useState(false);
+
 
   // Auto-seed from chat ideas (only first time, when board is empty)
   useEffect(() => {
