@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Trash2, Users } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X } from "lucide-react";
 
 type Member = {
   id: string;
