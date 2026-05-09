@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { geoFromPhone } from "@/lib/launchData";
 
-type NumberStatus = "draft" | "ready" | "warming" | "restricted" | "banned" | "inactive";
+type NumberStatus = "active" | "ready" | "stock" | "warming" | "restricted" | "banned" | "draft" | "inactive";
 type NumberUsage = "marketing" | "utility" | "both";
 
 type NumberRow = {
