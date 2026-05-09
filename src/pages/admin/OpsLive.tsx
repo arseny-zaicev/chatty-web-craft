@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { RefreshCw, Activity, CheckCircle2, Radio, Maximize2 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { RefreshCw, Activity, CheckCircle2, Radio, Maximize2, Link2, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { evaluateAdminAccess } from "@/lib/adminGuard";
 import { IskraLoader } from "@/components/IskraLoader";
 import { IskraLogo } from "@/components/IskraLogo";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
