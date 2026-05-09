@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WorkspaceSidebar } from "@/components/workspace/WorkspaceSidebar";
@@ -12,6 +12,15 @@ import { toast } from "sonner";
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
 export type WorkspaceContext = { workspace: Workspace };
+
+const WorkspaceMainFallback = () => (
+  <div className="h-full flex items-start justify-center p-10">
+    <div className="flex items-center gap-3 rounded-md border border-border bg-card/70 px-4 py-3 text-sm text-muted-foreground shadow-sm">
+      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+      Loading workspace...
+    </div>
+  </div>
+);
 
 export default function WorkspaceLayout() {
   const { slug } = useParams<{ slug?: string }>();
@@ -89,9 +98,11 @@ export default function WorkspaceLayout() {
             </header>
             <main className="flex-1 min-h-0 overflow-hidden">
               {isLoading ? (
-                <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+                <WorkspaceMainFallback />
               ) : (
-                <Outlet context={{ workspace } satisfies Partial<WorkspaceContext>} />
+                <Suspense fallback={<WorkspaceMainFallback />}>
+                  <Outlet context={{ workspace } satisfies Partial<WorkspaceContext>} />
+                </Suspense>
               )}
             </main>
           </div>
