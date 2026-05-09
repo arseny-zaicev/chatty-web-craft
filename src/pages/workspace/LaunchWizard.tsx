@@ -595,11 +595,12 @@ export default function LaunchWizard() {
           {/* Step 4: Audience */}
           <Step n={4} icon={Users} title="Audience">
             <Tabs value={audienceSource} onValueChange={(v) => setAudienceSource(v as any)}>
-              <TabsList className="grid grid-cols-4 w-full">
+              <TabsList className="grid grid-cols-5 w-full">
                 <TabsTrigger value="paste"><FileText className="w-3.5 h-3.5 mr-1" />Paste</TabsTrigger>
                 <TabsTrigger value="upload"><Upload className="w-3.5 h-3.5 mr-1" />Upload</TabsTrigger>
                 <TabsTrigger value="chats"><MessagesSquare className="w-3.5 h-3.5 mr-1" />Chats</TabsTrigger>
                 <TabsTrigger value="saved"><Bookmark className="w-3.5 h-3.5 mr-1" />Saved</TabsTrigger>
+                <TabsTrigger value="database"><Database className="w-3.5 h-3.5 mr-1" />Database</TabsTrigger>
               </TabsList>
 
               <TabsContent value="paste" className="mt-3">
