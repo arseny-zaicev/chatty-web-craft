@@ -406,6 +406,7 @@ export default function LaunchWizard() {
       if (failed === 0) toast.success(`Launched ${ok} campaign${ok === 1 ? "" : "s"}`);
       else toast.error(`Launched ${ok}, failed ${failed}: ${results.find((r) => !r.ok)?.error ?? ""}`);
       qc.invalidateQueries({ queryKey: ["crm", "campaigns"] });
+      qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace?.id) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Launch failed"),
   });
