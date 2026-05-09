@@ -288,9 +288,9 @@ export async function fetchBatchStats(workspaceId: string): Promise<AudienceBatc
 }
 
 export async function fetchBatchRows(batchId: string, limit = 200): Promise<AudienceRow[]> {
-  const { data, error } = await supabase
-    .from("audience_rows")
-    .select("id, batch_id, workspace_id, phone, payload, validation_status, usage_status, used_in_campaign_id, created_at")
+  const { data, error } = await (supabase
+    .from("audience_rows") as any)
+    .select("id, batch_id, workspace_id, phone, payload, validation_status, usage_status, used_in_campaign_id, created_at, derived_payload")
     .eq("batch_id", batchId)
     .order("created_at")
     .limit(limit);
