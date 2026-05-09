@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import { RefreshCw, Activity, CheckCircle2, Radio, Maximize2, Link2, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { evaluateAdminAccess } from "@/lib/adminGuard";
