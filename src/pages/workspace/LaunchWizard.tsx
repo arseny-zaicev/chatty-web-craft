@@ -871,15 +871,16 @@ export default function LaunchWizard() {
               )}
 
               <div className="text-[11px] text-muted-foreground space-y-1">
-                <div>
-                  {scheduleMode === "now"
-                    ? `Starts immediately. ${schedulerKind === "poisson" ? "Poisson (organic gaps)" : "Uniform fixed gaps"} of ${delayMin}-${delayMax}s between sends per number.`
-                    : `${scheduledDates.length || 0} day(s) × ${windowStart}-${windowEnd} ${respectTz ? "in each recipient's local time" : "in your time zone"}. Numbers fire staggered (no two at the same second).`}
-                </div>
-                {scheduleMode === "scheduled" && pacing && pacing.perNumber > 1 && (
+                {scheduleMode === "now" ? (
                   <div>
-                    Math: {pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h window ≈ <b>1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average. Min/max delays ({delayMin}-{delayMax}s) only act as the floor between two consecutive sends.
+                    Starts immediately. {schedulerKind === "poisson" ? "Poisson (organic, jittered)" : "Uniform fixed"} gaps of <b>{delayMin}-{delayMax}s</b> between sends per number. Total run ≈ <b>{Math.round(((delayMin + delayMax) / 2 * Math.max(1, pacing?.perNumber || 1)) / 60)} min</b> per number.
                   </div>
+                ) : pacing && pacing.perNumber > 1 ? (
+                  <div>
+                    {scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. <b>{pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h ≈ 1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average (jittered ±20% for organic feel). The 60-120s "Min/Max delay" field does not apply here - gaps are derived from the window so messages spread across the full session.
+                  </div>
+                ) : (
+                  <div>{scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in recipient's local time" : "in your time zone"}.</div>
                 )}
               </div>
             </div>
