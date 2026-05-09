@@ -182,8 +182,16 @@ export async function uploadBatch(params: {
   for (const r of params.parsed.rows) {
     const rawPhone = r[params.phoneColumn];
     const norm = normalizePhone(rawPhone);
+    // 1) Apply column mapping deterministically (raw col -> profile field)
+    const sourceMinusPhone: Record<string, string> = {};
+    for (const h of params.parsed.headers) {
+      if (h === params.phoneColumn) continue;
+      sourceMinusPhone[h] = r[h] ?? "";
+    }
+    const mapped = applyColumnMapping(sourceMinusPhone, mapping);
+    // 2) The stored payload uses the mapped field names (so downstream sees expected keys)
     const payload: Record<string, string> = {};
-    for (const v of variableSchema) payload[v] = r[v] ?? "";
+    for (const v of variableSchema) payload[v] = mapped[v] ?? "";
 
     let derived: Record<string, string> = {};
     let profileFail = false;
