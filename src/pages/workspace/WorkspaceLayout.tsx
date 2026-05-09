@@ -28,22 +28,37 @@ export default function WorkspaceLayout() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    const guard = (email?: string | null) => {
-      if (!email) {
-        navigate("/admin-auth", { replace: true });
+    let cancelled = false;
+    const guard = async (uid?: string | null, email?: string | null) => {
+      if (!uid) {
+        navigate("/portal-auth", { replace: true });
         return;
       }
-      if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-        supabase.auth.signOut();
-        toast.error("Access denied. Admin only.");
-        navigate("/admin-auth", { replace: true });
+      // Admin always passes
+      if (email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        if (!cancelled) setAuthChecked(true);
+        return;
+      }
+      // Otherwise must be a member of at least one workspace
+      const { count } = await supabase
+        .from("workspace_members")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", uid);
+      if (cancelled) return;
+      if (!count || count === 0) {
+        await supabase.auth.signOut();
+        toast.error("No workspace access. Ask your account manager to invite you.");
+        navigate("/portal-auth", { replace: true });
         return;
       }
       setAuthChecked(true);
     };
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => guard(session?.user?.email));
-    supabase.auth.getSession().then(({ data: { session } }) => guard(session?.user?.email));
-    return () => subscription.unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") return;
+      guard(session?.user?.id, session?.user?.email);
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => guard(session?.user?.id, session?.user?.email));
+    return () => { cancelled = true; subscription.unsubscribe(); };
   }, [navigate]);
 
   const { data, isLoading } = useQuery({ queryKey: workspaceKeys.list, queryFn: fetchWorkspaces, enabled: authChecked });
