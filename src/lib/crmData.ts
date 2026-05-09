@@ -28,6 +28,9 @@ export type Conversation = Pick<
   | "workspace_id"
   | "is_starred"
   | "pinned_at"
+  | "assigned_user_id"
+  | "active_responder_id"
+  | "active_responder_at"
 >;
 
 export type Stage = Pick<Tables<"pipeline_stages">, "id" | "name" | "color" | "position" | "stage_type" | "workspace_id">;
