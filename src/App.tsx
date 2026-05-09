@@ -36,6 +36,8 @@ const Privacy = lazyWithRetry(() => import("./pages/Privacy"));
 const Terms = lazyWithRetry(() => import("./pages/Terms"));
 const ClientAuth = lazyWithRetry(() => import("./pages/ClientAuth"));
 const ClientPortal = lazyWithRetry(() => import("./pages/ClientPortal"));
+const PortalAuth = lazyWithRetry(() => import("./pages/PortalAuth"));
+const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const ClientStats = lazyWithRetry(() => import("./pages/ClientStats"));
 const AISeoReport = lazyWithRetry(() => import("./pages/AISeoReport"));
 const AdminAuth = lazyWithRetry(() => import("./pages/AdminAuth"));
@@ -119,6 +121,8 @@ const App = () => (
               <Route path="/client-portal" element={<ClientPortal />} />
               <Route path="/client-stats" element={<ClientStats />} />
               <Route path="/client-portal/ai-seo" element={<AISeoReport />} />
+              <Route path="/portal-auth" element={<PortalAuth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/admin-auth" element={<AdminAuth />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
