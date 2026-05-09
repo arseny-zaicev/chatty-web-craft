@@ -412,7 +412,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(`/crm?conversation=${activeDeal.conversation_id}`)}
+                      onClick={() => navigate(inboxPath(activeDeal.conversation_id!))}
                     >
                       <MessageSquare className="w-4 h-4 mr-1" /> Open chat
                     </Button>
