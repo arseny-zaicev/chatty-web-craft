@@ -113,6 +113,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const handleSend = async () => {
     if (!activeId || !draft.trim() || sending) return;
     setSending(true);
+    void touchResponder(activeId);
     try {
       const { data, error } = await supabase.functions.invoke("send-whatsapp", {
         body: { conversation_id: activeId, text: draft.trim() },
