@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import { RefreshCw, Activity, CheckCircle2, Radio, Maximize2, Link2, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { evaluateAdminAccess } from "@/lib/adminGuard";
@@ -161,7 +161,8 @@ function formatDate(d: Date) {
 export default function OpsLive() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const tokenParam = searchParams.get("token") ?? "";
+  const { token: tokenFromPath } = useParams<{ token?: string }>();
+  const tokenParam = tokenFromPath ?? searchParams.get("token") ?? "";
   const [authChecked, setAuthChecked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [tokenMode, setTokenMode] = useState(false);
@@ -251,7 +252,7 @@ export default function OpsLive() {
         toast.error(error?.message ?? "Failed to generate link");
         return;
       }
-      const url = `${window.location.origin}/admin/ops-live?token=${data.token}`;
+      const url = `${window.location.origin}/tv/${data.token}`;
       setGeneratedUrl(url);
       setCopied(false);
       toast.success("Link generated · valid 7 days");
