@@ -904,7 +904,7 @@ export default function LaunchWizard() {
           <Step n={6} icon={Bookmark} title="Campaign name">
             <div className="grid sm:grid-cols-2 gap-2">
               <Field label="Audience">
-                <Input value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="GTM Professionals" />
+                <Input value={audience} onChange={(e) => { setAudience(e.target.value); setAudienceDirty(true); }} placeholder="GTM Professionals" />
               </Field>
               <Field label="CTA">
                 <div className="flex gap-2">
