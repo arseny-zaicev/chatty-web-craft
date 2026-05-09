@@ -712,7 +712,7 @@ function AddNumberDrawer({
       setUsage(editing.usage_type);
       setProvidedBy(editing.provided_by || "");
       setAssignedRef(editing.assigned_ref || "");
-      setStatus(editing.status);
+      setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
     } else {
       reset();
