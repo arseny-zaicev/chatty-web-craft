@@ -768,14 +768,12 @@ const DraggableDeal = ({
 const DealCard = ({
   deal,
   dragging,
-  dragHandleProps,
   onOpenChat,
   conversation,
   assignee,
 }: {
   deal: Deal;
   dragging?: boolean;
-  dragHandleProps?: Record<string, unknown>;
   onOpenChat?: (conversationId: string) => void;
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
