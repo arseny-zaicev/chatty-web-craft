@@ -264,15 +264,17 @@ export async function uploadBatch(params: {
 /* ---------- Queries ---------- */
 
 export async function fetchBatches(workspaceId: string): Promise<AudienceBatch[]> {
-  const { data, error } = await supabase
-    .from("audience_batches")
-    .select("id, workspace_id, name, country, campaign_type, copy_profile, notes, variable_schema, source_filename, created_at")
+  const { data, error } = await (supabase
+    .from("audience_batches") as any)
+    .select("id, workspace_id, name, country, campaign_type, copy_profile, notes, variable_schema, source_filename, created_at, prep_profile_id, is_launch_ready, derived_variables_preview")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((b) => ({
+  return (data ?? []).map((b: any) => ({
     ...b,
     variable_schema: Array.isArray(b.variable_schema) ? (b.variable_schema as string[]) : [],
+    is_launch_ready: !!b.is_launch_ready,
+    derived_variables_preview: Array.isArray(b.derived_variables_preview) ? b.derived_variables_preview : [],
   })) as AudienceBatch[];
 }
 
