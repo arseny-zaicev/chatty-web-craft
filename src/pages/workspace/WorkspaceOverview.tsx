@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { fetchWorkspaceOverview, portfolioKeys } from "@/lib/portfolioMetrics";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const HEALTH = {
