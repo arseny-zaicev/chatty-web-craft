@@ -423,6 +423,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
             <DragOverlay>
               {draggingDeal ? <DealCard deal={draggingDeal} dragging /> : null}
             </DragOverlay>
+            <BottomActionBar visible={!!draggingDeal} stages={stages} />
           </DndContext>
         )}
       </div>
