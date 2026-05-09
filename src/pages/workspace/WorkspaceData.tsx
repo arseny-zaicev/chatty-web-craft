@@ -211,12 +211,23 @@ function PresetsSection({
     }
   };
 
+  const buildBatchName = (p: PrepPreset, country: string) => {
+    const date = new Date().toISOString().slice(0, 10);
+    const c = country.trim().toUpperCase() || "ALL";
+    return `${date} | ${c} | ${p.name}`;
+  };
+
   const startCreate = (p: PrepPreset) => {
     setCreating(p);
-    setBatchName(`${p.name} - ${new Date().toISOString().slice(0, 10)}`);
     setBatchCountry("");
     setBatchNotes("");
+    setBatchName(buildBatchName(p, ""));
     setCreatedBatchId(null);
+  };
+
+  const onCountryChange = (val: string) => {
+    setBatchCountry(val);
+    if (creating && !createdBatchId) setBatchName(buildBatchName(creating, val));
   };
 
   const submitBatch = async () => {
