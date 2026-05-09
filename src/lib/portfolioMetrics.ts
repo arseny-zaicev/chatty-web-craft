@@ -52,14 +52,12 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     { data: numbers },
     { data: campaigns },
     { data: msgsToday },
-    { data: nextLaunches },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
     supabase.from("conversations").select("id, workspace_id, unread_count, last_message_at"),
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
-    supabase.from("campaigns").select("workspace_id, status, scheduled_start_at").in("status", ["scheduled", "running", "paused", "draft"]),
+    supabase.from("campaigns").select("workspace_id, name, status, scheduled_start_at, scheduled_dates, recurrence_end_at").in("status", ["scheduled", "running", "paused", "draft"]),
     supabase.from("messages").select("conversation_id, direction, created_at, status").gte("created_at", today),
-    supabase.from("campaigns").select("workspace_id, scheduled_start_at").in("status", ["scheduled", "draft"]).gte("scheduled_start_at", new Date().toISOString()).order("scheduled_start_at", { ascending: true }),
   ]);
   const bookedToday: { id: string }[] = [];
 
@@ -72,11 +70,15 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
         active_campaigns: 0,
         numbers_total: 0,
         numbers_ready: 0,
+        numbers_active: 0,
         delivered_today: 0,
         replies_today: 0,
         last_activity: null,
         next_launch: null,
-        health: "healthy",
+        campaign_end: null,
+        running_campaign_name: null,
+        scheduled_campaign_name: null,
+        health: "idle",
       };
     }
     return byWorkspace[id];
@@ -84,7 +86,6 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
 
   (workspaces ?? []).forEach((w) => ensure(w.id));
 
-  // Map conversation_id -> workspace_id for messages
   const convWs = new Map<string, string>();
   (convs ?? []).forEach((c) => {
     const m = ensure(c.workspace_id);
@@ -98,17 +99,28 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
   (numbers ?? []).forEach((n) => {
     const m = ensure(n.workspace_id);
     m.numbers_total += 1;
+    if (n.is_active) m.numbers_active += 1;
     if (n.is_active && n.connected_in_gupshup && n.connected_in_iskra) m.numbers_ready += 1;
   });
 
+  const nowIso = new Date().toISOString();
   (campaigns ?? []).forEach((c) => {
     const m = ensure(c.workspace_id);
     if (c.status === "scheduled" || c.status === "running") m.active_campaigns += 1;
-  });
 
-  (nextLaunches ?? []).forEach((c) => {
-    const m = ensure(c.workspace_id);
-    if (!m.next_launch && c.scheduled_start_at) m.next_launch = c.scheduled_start_at;
+    const dates = (c.scheduled_dates as string[] | null) ?? [];
+    const endDate = c.recurrence_end_at || (dates.length ? dates[dates.length - 1] : null);
+
+    if (c.status === "running") {
+      if (!m.running_campaign_name) m.running_campaign_name = c.name ?? null;
+      if (endDate && (!m.campaign_end || endDate > m.campaign_end)) m.campaign_end = endDate;
+    } else if (c.status === "scheduled" && c.scheduled_start_at && c.scheduled_start_at > nowIso) {
+      if (!m.next_launch || c.scheduled_start_at < m.next_launch) {
+        m.next_launch = c.scheduled_start_at;
+        m.scheduled_campaign_name = c.name ?? null;
+      }
+      if (endDate && (!m.campaign_end || endDate > m.campaign_end)) m.campaign_end = endDate;
+    }
   });
 
   (msgsToday ?? []).forEach((msg) => {
@@ -122,11 +134,18 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     }
   });
 
-  // Health rule
+  // Health rule (realistic):
+  // - blocked: zero active numbers (literally cannot send)
+  // - running: campaign currently running
+  // - scheduled: future launch queued
+  // - attention: many unread replies and no active campaign
+  // - idle: numbers ready, nothing scheduled — "ready to launch"
   Object.values(byWorkspace).forEach((m) => {
-    if (m.numbers_total === 0 || m.numbers_ready === 0) m.health = "blocked";
-    else if (m.unread_replies > 20 || m.numbers_ready < m.numbers_total) m.health = "attention";
-    else m.health = "healthy";
+    if (m.numbers_active === 0) m.health = "blocked";
+    else if (m.running_campaign_name) m.health = "running";
+    else if (m.next_launch) m.health = "scheduled";
+    else if (m.unread_replies >= 20) m.health = "attention";
+    else m.health = "idle";
   });
 
   const totals = {
@@ -136,7 +155,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     delivered_today: Object.values(byWorkspace).reduce((s, m) => s + m.delivered_today, 0),
     replies_today: Object.values(byWorkspace).reduce((s, m) => s + m.replies_today, 0),
     booked_calls_today: bookedToday.length,
-    issues: Object.values(byWorkspace).filter((m) => m.health !== "healthy").length,
+    issues: Object.values(byWorkspace).filter((m) => m.health === "blocked" || m.health === "attention").length,
   };
 
   return { totals, byWorkspace };
