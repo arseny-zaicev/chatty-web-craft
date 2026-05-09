@@ -102,6 +102,7 @@ const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/Workspac
 const LaunchWizard = lazyWithRetry(() => import("./pages/workspace/LaunchWizard"));
 const NewClient = lazyWithRetry(() => import("./pages/workspace/NewClient"));
 const Roadmap = lazyWithRetry(() => import("./pages/workspace/Roadmap"));
+const WorkspaceMaterials = lazyWithRetry(() => import("./pages/workspace/WorkspaceMaterials"));
 const WorkspacePrepProfiles = lazyWithRetry(() => import("./pages/workspace/WorkspacePrepProfiles"));
 const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
 const CustomCursor = lazyWithRetry(() => import("@/components/CustomCursor"));
@@ -189,6 +190,7 @@ const App = () => (
                 <Route path=":slug/pipeline" element={<WorkspaceSection section="pipeline" />} />
                 <Route path=":slug/campaigns" element={<WorkspaceSection section="campaigns" />} />
                 <Route path=":slug/library" element={<WorkspaceSection section="library" />} />
+                <Route path=":slug/materials" element={<WorkspaceMaterials />} />
                 <Route path=":slug/data" element={<WorkspaceSection section="data" />} />
                 <Route path=":slug/data/profiles" element={<WorkspacePrepProfiles />} />
                 <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />

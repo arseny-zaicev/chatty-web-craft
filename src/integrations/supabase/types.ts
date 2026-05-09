@@ -1385,6 +1385,39 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_files: {
+        Row: {
+          created_at: string
+          id: string
+          mime_type: string | null
+          name: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_invite_links: {
         Row: {
           created_at: string
@@ -1494,6 +1527,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      workspace_notes: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          position: number
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          position?: number
+          title?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          position?: number
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       workspace_saved_replies: {
         Row: {
