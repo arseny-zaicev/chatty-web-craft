@@ -234,15 +234,12 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     <Input value={draft.country_code ?? ""} onChange={(e) => update(n.id, { country_code: e.target.value.toUpperCase() })} placeholder="US / UK / AE" maxLength={4} />
                   </Field>
                   <Field label="Status">
-                    <Select value={draft.status} onValueChange={(v) => update(n.id, { status: v as NumberStatus })}>
+                    <Select value={(draft.status === "draft" || draft.status === "inactive") ? "stock" : draft.status} onValueChange={(v) => update(n.id, { status: v as NumberStatus })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="draft">draft</SelectItem>
-                        <SelectItem value="ready">ready</SelectItem>
-                        <SelectItem value="warming">warming</SelectItem>
-                        <SelectItem value="restricted">restricted</SelectItem>
-                        <SelectItem value="banned">banned</SelectItem>
-                        <SelectItem value="inactive">inactive</SelectItem>
+                        {STATUS_OPTIONS.map(([v, l]) => (
+                          <SelectItem key={v} value={v}>{l}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </Field>
