@@ -487,10 +487,9 @@ function BanCell({ r }: { r: Row }) {
     const elapsedDays = Math.floor((Date.now() - startedMs) / 86400000);
     const remaining = Math.max(0, BAN_DURATION_DAYS - elapsedDays);
     return (
-      <div className="flex flex-col leading-tight">
-        <span className="text-red-700 font-medium">Unban in {remaining}d</span>
-        <span className="text-[10px] text-muted-foreground">restricted {elapsedDays}d ago</span>
-      </div>
+      <span className="text-red-700 font-medium" title={`restricted ${elapsedDays}d ago`}>
+        Unban in {remaining}d
+      </span>
     );
   }
   if (isBanned) {
@@ -498,12 +497,7 @@ function BanCell({ r }: { r: Row }) {
   }
   if (r.unrestricted_at) {
     const days = Math.floor((Date.now() - new Date(r.unrestricted_at).getTime()) / 86400000);
-    return (
-      <div className="flex flex-col leading-tight">
-        <span className="text-emerald-700">Clean {days}d</span>
-        <span className="text-[10px] text-muted-foreground">since unban</span>
-      </div>
-    );
+    return <span className="text-emerald-700" title="since unban">Clean {days}d</span>;
   }
   return <span className="text-muted-foreground">—</span>;
 }
