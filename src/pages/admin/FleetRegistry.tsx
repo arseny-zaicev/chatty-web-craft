@@ -585,7 +585,16 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
         <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
       </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
-      <TableCell><Badge variant="outline" className={`text-[10px] ${wh === "connected" ? statusTone.ready : statusTone.warming}`}>{wh}</Badge></TableCell>
+      <TableCell>
+        <button
+          type="button"
+          onClick={() => onQuickPatch(r, { webhook_connected: !r.webhook_connected })}
+          title="Click to toggle (manual)"
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] hover:opacity-80 transition ${r.webhook_connected ? statusTone.ready : statusTone.warming}`}
+        >
+          {r.webhook_connected ? "connected" : "missing"}
+        </button>
+      </TableCell>
       <TableCell className="text-xs">{r.templates_approved}/{r.templates_total}</TableCell>
       <TableCell className="text-xs font-medium tabular-nums">{(r.total_sent ?? 0).toLocaleString()}</TableCell>
       <TableCell className="text-xs tabular-nums">
