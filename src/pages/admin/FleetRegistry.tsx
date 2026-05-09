@@ -734,7 +734,7 @@ function AddNumberDrawer({
       setAssignedRef(editing.assigned_ref || "");
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
-    } else {
+      setWebhookConnected(Boolean(editing.webhook_connected));
       reset();
     }
   }, [open, editing]);
