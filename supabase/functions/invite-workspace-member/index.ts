@@ -61,7 +61,8 @@ Deno.serve(async (req) => {
     if (existing) {
       invitedUserId = existing.id;
     } else {
-      const redirectTo = `${new URL(req.url).origin.replace("supabase.co", "lovable.app")}/portal-auth`;
+      const APP_BASE_URL = Deno.env.get("APP_BASE_URL") || "https://iskra.ae";
+      const redirectTo = `${APP_BASE_URL.replace(/\/$/, "")}/accept-invite`;
       const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
         redirectTo,
       });
