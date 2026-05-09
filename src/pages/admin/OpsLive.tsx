@@ -182,7 +182,7 @@ export default function OpsLive() {
       // Token-based public access path
       if (tokenParam) {
         // Guard against placeholder URLs like /tv/:token
-        const looksValid = /^[A-Za-z0-9_-]{16,}$/.test(tokenParam);
+        const looksValid = /^[A-Za-z0-9_-]{6,}$/.test(tokenParam);
         if (!looksValid) {
           if (!mounted) return;
           setTokenError("This TV link is invalid. Generate a new one from the admin panel.");
