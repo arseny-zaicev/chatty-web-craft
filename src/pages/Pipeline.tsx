@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
-import { Deal, Stage, crmKeys, fetchPipelineBase } from "@/lib/crmData";
+import { Conversation, Deal, Stage, crmKeys, fetchPipelineBase } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,9 +47,13 @@ import {
   Phone,
   Trash2,
   GripVertical,
+  Copy,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import AssigneeSelect from "@/components/workspace/AssigneeSelect";
+import { fetchWorkspaceMembers, memberDisplayName, memberInitials, workspaceMembersKey } from "@/lib/workspaceMembers";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
