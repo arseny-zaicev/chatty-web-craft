@@ -188,12 +188,32 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
 };
 
 const statusTone: Record<Status, string> = {
+  active: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
   ready: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+  stock: "bg-muted text-muted-foreground border-border",
   warming: "bg-amber-500/15 text-amber-700 border-amber-500/30",
-  draft: "bg-muted text-muted-foreground border-border",
-  inactive: "bg-muted text-muted-foreground border-border",
   restricted: "bg-red-500/15 text-red-700 border-red-500/30",
   banned: "bg-red-500/15 text-red-700 border-red-500/30",
+  draft: "bg-muted text-muted-foreground border-border",
+  inactive: "bg-muted text-muted-foreground border-border",
+};
+
+const STATUS_OPTIONS: Array<[Status, string]> = [
+  ["active", "Active"],
+  ["ready", "Ready"],
+  ["stock", "Stock"],
+  ["warming", "Warming"],
+  ["restricted", "Restricted (30 days)"],
+  ["banned", "Banned"],
+];
+
+const statusLabel = (s: Status): string => {
+  const found = STATUS_OPTIONS.find(([v]) => v === s);
+  if (found) return found[1];
+  // legacy values
+  if (s === "draft") return "Stock";
+  if (s === "inactive") return "Stock";
+  return s;
 };
 
 type ViewMode = "all" | "by-client" | "unassigned";
