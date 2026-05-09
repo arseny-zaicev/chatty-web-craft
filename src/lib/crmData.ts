@@ -85,6 +85,42 @@ export async function fetchCrmBase(workspaceId?: string) {
   return { numbers: (numbers ?? []) as WhatsAppNumber[], conversations: (conversations ?? []) as Conversation[] };
 }
 
+const DEFAULT_WORKSPACE_STAGES: Array<{ name: string; color: string; stage_type: "open" | "won" | "lost" }> = [
+  { name: "New chats", color: "#10b981", stage_type: "open" },
+  { name: "Qualified", color: "#3b82f6", stage_type: "open" },
+  { name: "Follow-up", color: "#f59e0b", stage_type: "open" },
+  { name: "Booked", color: "#8b5cf6", stage_type: "open" },
+  { name: "Won", color: "#22c55e", stage_type: "won" },
+  { name: "Lost", color: "#ef4444", stage_type: "lost" },
+];
+
+async function seedDefaultStagesForWorkspace(workspaceId: string): Promise<Stage[]> {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) return [];
+  const rows = DEFAULT_WORKSPACE_STAGES.map((s, i) => ({
+    workspace_id: workspaceId,
+    user_id: u.user!.id,
+    name: s.name,
+    color: s.color,
+    stage_type: s.stage_type,
+    position: i,
+  }));
+  const { data, error } = await supabase
+    .from("pipeline_stages")
+    .insert(rows)
+    .select("id, name, color, position, stage_type, workspace_id");
+  if (error) {
+    // Race with another tab seeding at the same time -> just refetch
+    const { data: again } = await supabase
+      .from("pipeline_stages")
+      .select("id, name, color, position, stage_type, workspace_id")
+      .eq("workspace_id", workspaceId)
+      .order("position");
+    return (again ?? []) as Stage[];
+  }
+  return (data ?? []) as Stage[];
+}
+
 export async function fetchPipelineBase(workspaceId?: string) {
   let stagesQuery = supabase.from("pipeline_stages").select("id, name, color, position, stage_type, workspace_id").order("position");
   let dealsQuery = supabase
@@ -106,8 +142,15 @@ export async function fetchPipelineBase(workspaceId?: string) {
   if (stagesRes.error) throw stagesRes.error;
   if (dealsRes.error) throw dealsRes.error;
   if (convRes.error) throw convRes.error;
+
+  let stages = (stagesRes.data ?? []) as Stage[];
+  // Auto-seed default stages the first time a workspace pipeline is opened.
+  if (workspaceId && stages.length === 0) {
+    stages = await seedDefaultStagesForWorkspace(workspaceId);
+  }
+
   return {
-    stages: (stagesRes.data ?? []) as Stage[],
+    stages,
     deals: (dealsRes.data ?? []) as Deal[],
     conversations: (convRes.data ?? []) as Conversation[],
   };
