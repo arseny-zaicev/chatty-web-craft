@@ -3,18 +3,20 @@ import { lazy, Suspense, type ComponentType } from "react";
 // Retry dynamic imports once and reload on stale chunks (fixes "Failed to fetch dynamically imported module" after deploys/HMR)
 const lazyWithRetry = <T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) =>
   lazy(async () => {
+    const key = "__lovable_chunk_reload__";
     try {
-      return await factory();
+      const mod = await factory();
+      if (typeof window !== "undefined") sessionStorage.removeItem(key);
+      return mod;
     } catch (err) {
       try {
-        return await factory();
+        const mod = await factory();
+        if (typeof window !== "undefined") sessionStorage.removeItem(key);
+        return mod;
       } catch (err2) {
-        if (typeof window !== "undefined") {
-          const key = "__lovable_chunk_reload__";
-          if (!sessionStorage.getItem(key)) {
-            sessionStorage.setItem(key, "1");
-            window.location.reload();
-          }
+        if (typeof window !== "undefined" && !sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          window.location.reload();
         }
         throw err2;
       }
