@@ -333,7 +333,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manager">Manager - full access</SelectItem>
-                  <SelectItem value="client">Client - read-only</SelectItem>
+                  <SelectItem value="client">Client - Inbox + Pipeline only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
