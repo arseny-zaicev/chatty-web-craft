@@ -202,8 +202,12 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
   const { data: snapshot } = useQuery<PortfolioSnapshot>({
     queryKey: portfolioKeys.snapshot,
     queryFn: fetchPortfolioSnapshot,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 2 * 60_000,
+    // Slowed from 60s -> 5min and paused while the tab is hidden. The query reads every
+    // conversation + every today-message in the org; constant polling is the dominant DB load.
+    refetchInterval: () => (typeof document !== "undefined" && document.visibilityState === "hidden" ? false : 5 * 60_000),
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading) {
