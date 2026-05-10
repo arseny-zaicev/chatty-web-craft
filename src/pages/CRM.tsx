@@ -838,7 +838,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                               </span>
                               {isOut && m.sent_by_user_id && (
                                 <span className="opacity-90">
-                                  · by {memberDisplayName(memberById.get(m.sent_by_user_id) ?? null)}
+                                  · by {memberDisplayName(resolveSender(m.sent_by_user_id))}
                                 </span>
                               )}
                               {isOut && <span>· {m.status}</span>}
