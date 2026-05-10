@@ -10,12 +10,15 @@ import {
   Loader2, Copy, ChevronDown, ChevronRight, Settings2, Pencil, Sparkles,
 } from "lucide-react";
 import {
-  BUILTIN_FIELDS, LibraryField, SavedReply,
+  BUILTIN_FIELDS, LibraryField, SavedReply, SavedReplyScope,
   fetchLibraryFields, fetchSavedReplies, libraryKeys,
 } from "@/lib/workspaceLibrary";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 
 const ALL = "__all__";
 const FAV = "__fav__";
+const SCOPE_ALL = "all" as const;
+type ScopeFilter = typeof SCOPE_ALL | SavedReplyScope;
 
 type Draft = Partial<SavedReply> & { url?: string };
 
