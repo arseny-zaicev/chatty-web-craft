@@ -22,8 +22,7 @@ import {
   Download,
 } from "lucide-react";
 import { User } from "@supabase/supabase-js";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+// jspdf (~300 KB) and html2canvas (~200 KB) are loaded on demand from the export handler below.
 
 const ALLOWED_EMAILS = new Set<string>(["paras@pndigital.co.uk"]);
 const PN_BRAND = {

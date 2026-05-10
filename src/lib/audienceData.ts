@@ -84,6 +84,7 @@ export async function parseAudienceFile(file: File): Promise<ParsedAudience> {
     return parseDelimited(text);
   }
   const buf = await file.arrayBuffer();
+  const XLSX = await loadXLSX();
   const wb = XLSX.read(buf, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "", raw: false });
