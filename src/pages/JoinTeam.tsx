@@ -96,6 +96,11 @@ export default function JoinTeam() {
         setSubmitting(false);
         return;
       }
+      if (result?.already_existed) {
+        toast.success("You're already added. Sign in with that account password.");
+        navigate("/portal-auth", { replace: true });
+        return;
+      }
 
       // Remember email for the sign-in page (prefill on next visit)
       try { localStorage.setItem("iskra:lastEmail", mail); } catch { /* ignore */ }
