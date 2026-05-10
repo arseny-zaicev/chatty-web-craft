@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceRole, useWorkspaceAccess, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 import { IskraLoader } from "@/components/IskraLoader";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 
