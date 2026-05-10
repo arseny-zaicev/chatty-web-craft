@@ -208,7 +208,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       if (!ok) return;
       const prev = deals;
       setDeals((p) => p.filter((d) => d.id !== dealId));
-      const { error } = await supabase.from("deals").delete().eq("id", dealId);
+      const { error } = await deleteDealApi(dealId).then(() => ({ error: null as any })).catch((e) => ({ error: e }));
       if (error) {
         toast.error("Failed to delete");
         setDeals(prev);
@@ -230,10 +230,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       ),
     );
 
-    const { error } = await supabase
-      .from("deals")
-      .update({ stage_id: targetStageId, position: newPosition })
-      .eq("id", dealId);
+    const { error } = await moveDeal(dealId, targetStageId, newPosition).then(() => ({ error: null as any })).catch((e) => ({ error: e }));
     if (error) {
       toast.error("Failed to move deal");
       setDeals((prev) =>
@@ -245,23 +242,24 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     }
   };
 
-  const createDeal = async () => {
+  const handleCreateDeal = async () => {
     if (!newTitle.trim() || !newStageId) return;
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
     const stageDeals = dealsByStage.get(newStageId) ?? [];
-    const { error } = await supabase.from("deals").insert({
-      user_id: userData.user.id,
-      workspace_id: workspaceId ?? null,
-      title: newTitle.trim(),
-      contact_name: newContact.trim() || null,
-      contact_phone: newPhone.trim() || null,
-      amount: newAmount ? Number(newAmount) : null,
-      stage_id: newStageId,
-      position: stageDeals.length,
-    });
-    if (error) {
-      toast.error(error.message);
+    try {
+      await createDeal({
+        userId: userData.user.id,
+        workspaceId: workspaceId ?? null,
+        title: newTitle.trim(),
+        contactName: newContact.trim() || null,
+        contactPhone: newPhone.trim() || null,
+        amount: newAmount ? Number(newAmount) : null,
+        stageId: newStageId,
+        position: stageDeals.length,
+      });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
       return;
     }
     toast.success("Deal created");
@@ -274,32 +272,31 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
 
   const saveDeal = async () => {
     if (!editing) return;
-    const { error } = await supabase
-      .from("deals")
-      .update({
+    try {
+      await updateDeal(editing.id, {
         title: editing.title,
         contact_name: editing.contact_name,
         contact_phone: editing.contact_phone,
         amount: editing.amount,
         notes: editing.notes,
         stage_id: editing.stage_id,
-      })
-      .eq("id", editing.id);
-    if (error) toast.error(error.message);
-    else {
+      });
       toast.success("Saved");
       setEditing(null);
       setActiveDealId(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
     }
   };
 
-  const deleteDeal = async (id: string) => {
+  const handleDeleteDeal = async (id: string) => {
     if (!confirm("Delete this deal?")) return;
-    const { error } = await supabase.from("deals").delete().eq("id", id);
-    if (error) toast.error(error.message);
-    else {
+    try {
+      await deleteDealApi(id);
       setActiveDealId(null);
       setEditing(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
     }
   };
 
