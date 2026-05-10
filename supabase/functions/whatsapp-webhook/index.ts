@@ -37,6 +37,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   // and was the source of silent misrouting at >1 number.
   let number: { id: string; user_id: string; workspace_id: string; phone_number: string; display_name: string | null; provider_app_id: string | null } | null = null;
   let matchStrategy: "provider_app_id" | "label" | "phone_number" | null = null;
+  let ambiguousReason: string | null = null;
 
   if (appName) {
     const { data, error } = await supabase
