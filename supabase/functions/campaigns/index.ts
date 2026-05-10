@@ -270,6 +270,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       schedule_window_end: windowEnd + ":00",
       respect_recipient_tz: respectTz,
       scheduled_dates: scheduledDates,
+      pipeline_id: pipelineId,
     })
     .select("id")
     .single();
