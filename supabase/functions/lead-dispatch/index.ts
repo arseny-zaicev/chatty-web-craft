@@ -119,15 +119,16 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return blocked(admin, pipeline, "daily_cap_reached", null);
   }
 
-  // Claim pending OR awaiting_manual leads. When auto-outreach is enabled,
-  // older `awaiting_manual` rows (imported while auto was off) should also be
-  // picked up - status guard allows awaiting_manual -> queued.
+  // Claim pending OR awaiting_manual leads that DO NOT yet have a recipient.
+  // The campaign_recipient_id guard prevents the cron from re-queuing the same
+  // lead every minute when an earlier update missed.
   const claimLimit = Math.min(200, availableCapacity);
   const { data: leads } = await admin
     .from("lead_imports")
-    .select("id, pipeline_id, workspace_id, phone, name, status")
+    .select("id, pipeline_id, workspace_id, phone, name, status, payload, campaign_recipient_id")
     .eq("pipeline_id", pipeline.id)
     .in("status", ["pending", "awaiting_manual"])
+    .is("campaign_recipient_id", null)
     .order("imported_at", { ascending: true })
     .limit(claimLimit);
   if (!leads || leads.length === 0) return { processed: 0 };
