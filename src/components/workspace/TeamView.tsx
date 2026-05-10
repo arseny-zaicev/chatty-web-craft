@@ -65,9 +65,25 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkRole, setLinkRole] = useState<"manager" | "client">("manager");
   const [linkSeats, setLinkSeats] = useState(4);
+  const [linkPipelineIds, setLinkPipelineIds] = useState<string[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"manager" | "client">("client");
+
+  const { data: pipelines } = useQuery({
+    queryKey: ["workspace", workspaceId, "pipelines-list"] as const,
+    queryFn: async (): Promise<WsPipeline[]> => {
+      const { data, error } = await supabase
+        .from("pipelines")
+        .select("id, name, color")
+        .eq("workspace_id", workspaceId)
+        .order("position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as WsPipeline[];
+    },
+  });
+  const pipelineById = new Map((pipelines ?? []).map((p) => [p.id, p] as const));
+
 
   const { data: members, isLoading } = useQuery({
     queryKey: membersKey(workspaceId),
