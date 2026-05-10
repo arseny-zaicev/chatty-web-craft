@@ -39,6 +39,8 @@ const NAME_EXAMPLES = [
 
 export default function PipelinesView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
+  const { data: role } = useWorkspaceRole(workspaceId);
+  const canManage = isManagerLike(role);
   const { data: pipelines = [], isLoading } = useQuery({
     queryKey: pipelinesKey(workspaceId),
     queryFn: () => fetchPipelines(workspaceId),
