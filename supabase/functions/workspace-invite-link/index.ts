@@ -177,11 +177,20 @@ Deno.serve(async (req) => {
         .eq("user_id", userId)
         .maybeSingle();
 
+      const linkPipes = (link as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null;
+      const memberPipes = link.role === "client" && linkPipes && linkPipes.length > 0 ? linkPipes : null;
+
       if (!existingMem) {
         const { error: insErr } = await admin
           .from("workspace_members")
-          .insert({ workspace_id: link.workspace_id, user_id: userId, role: link.role });
+          .insert({
+            workspace_id: link.workspace_id,
+            user_id: userId,
+            role: link.role,
+            allowed_pipeline_ids: memberPipes,
+          });
         if (insErr) return json({ error: insErr.message }, 500);
+
 
         // Increment used_count only when a NEW membership was added
         await admin
