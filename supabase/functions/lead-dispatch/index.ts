@@ -18,9 +18,12 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 // ---- scheduling helpers (subset of campaigns/index.ts) ----
-const hhmmToMin = (s: string) => {
-  const [h, m] = String(s || "09:00").split(":").map((x) => parseInt(x, 10) || 0);
-  return Math.max(0, Math.min(24 * 60 - 1, h * 60 + m));
+const hhmmToMin = (s: string, isEnd = false) => {
+  const raw = String(s || (isEnd ? "18:00" : "09:00"));
+  const [h, m] = raw.split(":").map((x) => parseInt(x, 10) || 0);
+  // Treat "00:00" as end-of-day when used as window end.
+  if (isEnd && h === 0 && m === 0) return 24 * 60;
+  return Math.max(0, Math.min(24 * 60, h * 60 + m));
 };
 const tzOffsetMinutes = (tz: string, at: Date): number => {
   try {
