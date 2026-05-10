@@ -386,6 +386,38 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // Heartbeat (best-effort)
+    admin.from("system_heartbeats").upsert({
+      name: "lead-dispatch",
+      last_run_at: new Date().toISOString(),
+    }).then(() => {}, () => {});
+
+    // Stuck queued recovery: any lead in `queued` >10m without sent_at goes back
+    // to `pending` so the next tick can re-attempt. Orphan recipient is marked failed.
+    const stuckCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+    const { data: stuck } = await admin
+      .from("lead_imports")
+      .select("id, campaign_recipient_id")
+      .eq("status", "queued")
+      .is("sent_at", null)
+      .lt("scheduled_at", stuckCutoff)
+      .limit(200);
+    if (stuck && stuck.length > 0) {
+      const stuckIds = stuck.map((s: any) => s.id);
+      const stuckRecIds = stuck.map((s: any) => s.campaign_recipient_id).filter(Boolean);
+      console.log(`[lead-dispatch] recovering ${stuckIds.length} stuck queued lead(s)`);
+      if (stuckRecIds.length) {
+        await admin.from("campaign_recipients")
+          .update({ status: "failed", error_message: "stuck queued >10m, recovered" })
+          .in("id", stuckRecIds)
+          .in("status", ["scheduled", "pending"]);
+      }
+      await admin.from("lead_imports")
+        .update({ status: "pending", campaign_recipient_id: null, scheduled_at: null, error: "recovered from stuck queued" })
+        .in("id", stuckIds)
+        .eq("status", "queued");
+    }
+
     // Find pipelines with auto_outreach_enabled AND at least one pending or
     // awaiting_manual lead (the latter covers leads imported while auto was off).
     const { data: pipelinesNeedingWork } = await admin
