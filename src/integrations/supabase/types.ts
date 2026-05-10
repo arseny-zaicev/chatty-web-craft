@@ -1701,6 +1701,15 @@ export type Database = {
         Returns: string
       }
       ensure_pipeline_stage: { Args: { _user_id: string }; Returns: string }
+      get_workspace_member_display: {
+        Args: { _workspace_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          role: string
+          user_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
