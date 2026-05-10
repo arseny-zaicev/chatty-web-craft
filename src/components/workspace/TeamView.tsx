@@ -329,6 +329,58 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     />
                   </label>
                 )}
+                {m.role === "client" && (
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1 flex-wrap">
+                    <Layers className="w-3 h-3" />
+                    <span>
+                      Access:{" "}
+                      {(m.allowed_pipeline_ids?.length ?? 0) === 0
+                        ? "All pipelines"
+                        : m.allowed_pipeline_ids!
+                            .map((id) => pipelineById.get(id)?.name ?? "?")
+                            .join(", ")}
+                    </span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="inline-flex items-center gap-1 hover:text-foreground transition" type="button">
+                          <Pencil className="w-3 h-3" />
+                          Edit
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-3 space-y-2" align="start">
+                        <div className="text-xs font-medium">Pipeline access</div>
+                        <p className="text-[10px] text-muted-foreground">Leave empty for full access.</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(pipelines ?? []).map((p) => {
+                            const selected = (m.allowed_pipeline_ids ?? []).includes(p.id);
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  const cur = m.allowed_pipeline_ids ?? [];
+                                  const next = selected ? cur.filter((id) => id !== p.id) : [...cur, p.id];
+                                  updateAccess.mutate({ id: m.id, ids: next });
+                                }}
+                                className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
+                              >
+                                {p.name}
+                              </button>
+                            );
+                          })}
+                          {(pipelines ?? []).length === 0 && (
+                            <div className="text-[10px] text-muted-foreground">No pipelines yet.</div>
+                          )}
+                        </div>
+                        {(m.allowed_pipeline_ids?.length ?? 0) > 0 && (
+                          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => updateAccess.mutate({ id: m.id, ids: [] })}>
+                            Clear (all pipelines)
+                          </Button>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
               </div>
               <Button size="icon" variant="ghost" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
                 <Trash2 className="w-4 h-4 text-muted-foreground" />
