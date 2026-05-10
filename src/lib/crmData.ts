@@ -31,9 +31,9 @@ export type Conversation = Pick<
   | "assigned_user_id"
   | "active_responder_id"
   | "active_responder_at"
->;
+> & { pipeline_id: string | null };
 
-export type Stage = Pick<Tables<"pipeline_stages">, "id" | "name" | "color" | "position" | "stage_type" | "workspace_id">;
+export type Stage = Pick<Tables<"pipeline_stages">, "id" | "name" | "color" | "position" | "stage_type" | "workspace_id"> & { pipeline_id: string | null };
 
 export type Deal = Pick<
   Tables<"deals">,
@@ -49,7 +49,7 @@ export type Deal = Pick<
   | "position"
   | "conversation_id"
   | "updated_at"
->;
+> & { pipeline_id: string | null };
 
 export const crmKeys = {
   base: (workspaceId?: string) => ["crm", "base", workspaceId ?? "all"] as const,
