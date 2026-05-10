@@ -99,8 +99,9 @@ export const ClientLogos = () => (
               <img
                 src={client.logo}
                 alt={`${client.name} logo`}
-                loading="lazy"
+                loading="eager"
                 decoding="async"
+                fetchPriority={i < 8 ? "high" : "auto"}
                 draggable={false}
                 width={160}
                 height={h}
@@ -110,8 +111,6 @@ export const ClientLogos = () => (
                   width: "auto",
                   maxWidth: "160px",
                   objectFit: "contain",
-                  opacity: 0.92,
-                  transition: "opacity 0.3s ease",
                   imageRendering: "auto",
                   backfaceVisibility: "hidden",
                   WebkitBackfaceVisibility: "hidden",
