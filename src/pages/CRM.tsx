@@ -748,6 +748,39 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         />
                       </div>
                     )}
+                    {workspaceId && pipelines.length > 0 && (
+                      <div className="hidden md:block w-40">
+                        <Select
+                          value={active.pipeline_id ?? "__none__"}
+                          onValueChange={async (v) => {
+                            if (v === "__none__") return;
+                            const prev = active.pipeline_id;
+                            setConversations((p) => p.map((c) => (c.id === active.id ? { ...c, pipeline_id: v } : c)));
+                            try {
+                              await moveConversationToPipeline(active.id, v);
+                              toast.success("Moved to pipeline");
+                            } catch (e) {
+                              setConversations((p) => p.map((c) => (c.id === active.id ? { ...c, pipeline_id: prev } : c)));
+                              toast.error(e instanceof Error ? e.message : "Failed to move");
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Pipeline..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {pipelines.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                <span className="inline-flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                                  {p.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     {activeNumber && (
                       <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5" title="Sending number">
                         <Phone className="w-3 h-3" />
