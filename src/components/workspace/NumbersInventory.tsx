@@ -126,6 +126,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
   const numbers = data?.numbers ?? [];
   const syncByNumber = data?.syncByNumber ?? new Map();
   const workspaces = data?.workspaces ?? [];
+  const bms = data?.bms ?? [];
   const workspaceName = useMemo(
     () => workspaces.find((w) => w.id === workspaceId)?.name ?? "this client",
     [workspaces, workspaceId],
