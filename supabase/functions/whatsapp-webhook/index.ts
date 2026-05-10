@@ -51,8 +51,8 @@ async function handleInbound(payload: Record<string, unknown>) {
       number = data[0];
       matchStrategy = "provider_app_id";
     } else if (data && data.length > 1) {
+      ambiguousReason = `ambiguous_provider_app_id:${data.length}`;
       console.error("Ambiguous provider_app_id - multiple numbers share the same Gupshup app id", { appName, count: data.length });
-      return; // refuse to guess
     }
   }
   // Fallback: provider_app_id stores the Gupshup app UUID, but the webhook payload
