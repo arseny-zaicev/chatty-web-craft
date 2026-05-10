@@ -1,132 +1,181 @@
-# Performance audit — Iskra CRM
 
-Read-only audit. Focus: duplicate fetches, N+1, re-renders, list size, lazy loading, realtime/polling, bundle.
+# Multi-Pipeline MVP - Implementation Plan
 
----
+## Recommended MVP Scope (cut line)
 
-## Headline diagnosis
+In:
+- Pipeline-aware deal creation (correctness fix)
+- Pipeline management UI in Settings (create / rename / recolor / set default / delete)
+- Pipeline selector on Pipeline page (single pipeline at a time, URL-driven)
+- Pipeline filter in Inbox (specific pipeline / Unassigned / All)
+- "Move to pipeline" action on a conversation and on a deal
+- Backfill of `NULL` `pipeline_id` to the workspace default
+- Launch Wizard already sends `pipeline_id`; only add an inline "Create board" link
 
-The "sluggish" feel comes from a small number of structural choices, in this order of impact:
-
-1. **The Inbox loads every conversation in the workspace and then pulls every inbound message for those conversations** in a second round-trip — on every mount. Payload grows linearly with workspace age.
-2. **Realtime channels in Inbox and Pipeline subscribe to every row of `conversations`/`deals` globally** (no workspace filter). Each event from any other client also re-renders the page, and because the channel deps include state that changes on those events, the channel **tears down and re-subscribes** under load.
-3. **AdminPanel polls `fetchPortfolioSnapshot` every 60 s**, which reads *all* conversations + *all* today's messages across the entire org. This runs continuously while a manager keeps the tab open.
-4. **Large lists (Inbox conversation list, Pipeline cards, Fleet table) render every row** — no virtualization, no pagination, no `React.memo` on row components.
-5. **Initial bundle ships `xlsx`, `html2canvas`, `jspdf`, `framer-motion`, `recharts` even on routes that do not use them**. Several PNG assets in `public/` and `src/assets` are 1–4 MB.
-6. **State is duplicated** between react-query cache and local `useState` in CRM/Pipeline, so each realtime tick triggers two updates plus a `queryClient.setQueryData` that **overwrites** the cached object shape and discards `conversationStageType` / `repliedConversationIds` maps.
-
----
-
-## P0 — Ship first, biggest user-visible wins
-
-### P0.1 — Inbox base query: paginate + remove the inbound-messages N+1
-- **File:** `src/lib/crmData.ts → fetchCrmBase`
-- **Now:** `select * from conversations` (no limit, no pagination) + a second `select conversation_id from messages where direction='inbound' and conversation_id in (…all of them…)` purely to compute a "Replied" badge.
-- **Why slow:** payload + roundtrip grow with conversation count. On a workspace with 5 000 conversations this is two large queries on every Inbox mount.
-- **Fix direction:** (a) cap the conversation list to the most recent 200 with `.range()` + cursor pagination on scroll; (b) replace the second query with a denormalised `has_inbound` boolean (or `last_inbound_at`) on `conversations`, maintained by the existing webhook trigger.
-- **Impact:** Inbox open time drops from O(N) to O(1); no more big "in-list" query.
-
-### P0.2 — Scope realtime subscriptions to the workspace + stop re-subscribing
-- **Files:** `src/pages/CRM.tsx`, `src/pages/Pipeline.tsx`, `src/hooks/useRealtimeTable.ts`
-- **Now:** `useRealtimeTable({ channel: "crm-conversations", table: "conversations" })` — no `filter`, so Postgres streams **every** row change for every workspace. The deps array is `[numbers, queryClient, workspaceId]`; `numbers` changes on every refetch, which causes the channel to tear down / re-subscribe (expensive, and drops in-flight events).
-- **Fix direction:** pass `filter: workspace_id=eq.${workspaceId}` (and the same for `pipeline-deals`/`pipeline-conversations`); remove `numbers`/`queryClient` from the dep list and use refs inside the callback instead so the channel persists for the page's lifetime.
-- **Impact:** ~10× fewer wake-ups for managers running multiple workspaces; no more lost realtime events; CPU drops noticeably while idle.
-
-### P0.3 — Throttle/scope the Portfolio snapshot
-- **File:** `src/lib/portfolioMetrics.ts → fetchPortfolioSnapshot`, called from `AdminPanel.tsx` with `refetchInterval: 60_000`.
-- **Now:** Reads all conversations + all today's messages across every workspace, every minute. Heaviest single query in the app.
-- **Fix direction:**
-  - Move the aggregation server-side: a Postgres view or `rpc("portfolio_snapshot")` that returns one row per workspace already aggregated.
-  - Until that exists: lower polling to 5 minutes, only refetch on tab focus, and pause when the tab is hidden (`document.visibilityState`).
-- **Impact:** removes the steady-state DB load that slows everyone (including the inbox tab in another window) and shrinks the admin payload from MBs to KBs.
-
-### P0.4 — Cap message history on conversation open
-- **File:** `src/lib/inbox.ts → fetchConversationMessages`
-- **Now:** `select … from messages where conversation_id=… order by created_at asc` — no limit. Long-running conversations (months of broadcasts + replies) load thousands of rows on every click.
-- **Fix direction:** load the most recent ~50 with `order desc + limit + reverse`, then "Load earlier" on scroll-up.
-- **Impact:** message-pane open latency becomes constant, not "longer the older the chat".
+Out (post-MVP):
+- Per-pipeline stage customization UI (stages stay default-seeded only)
+- Drag-to-reorder pipelines (use up/down buttons or a `position` numeric input)
+- Bulk multi-conversation move
+- Per-pipeline analytics / KPIs
+- Sub-pipeline hierarchy (we use flat names with `/` convention instead)
 
 ---
 
-## P1 — Visible after P0 lands
+## Product Decisions
 
-### P1.1 — Virtualize the three big lists
-- **Inbox conversation list** (`src/pages/CRM.tsx`), **Pipeline cards** (`src/pages/Pipeline.tsx`), **Fleet Registry table** (`src/pages/admin/FleetRegistry.tsx`). Each `.map()`s the entire array into the DOM. With >300 items the list scrolls jankily; with >1 000 it freezes the main thread on filter/sort.
-- **Fix direction:** `@tanstack/react-virtual` (already paired well with TanStack Query); keep current markup, just wrap the scroll container.
-- **Impact:** smooth scroll regardless of size; sort/filter cost drops to visible window only.
-
-### P1.2 — Stop duplicating server state into local state
-- **Files:** `CRM.tsx` (`setConversations`), `Pipeline.tsx` (`setDeals`, `setConversations`).
-- **Now:** Data lives in both `useQuery` cache *and* local `useState`. Realtime handler updates state and *also* calls `queryClient.setQueryData(crmKeys.base(...), { numbers, conversations: next })`, **dropping** `conversationStageType` and `repliedConversationIds` keys → next refetch sees a malformed cache.
-- **Fix direction:** keep the source of truth in the query cache; use `setQueryData(key, (old) => ({ ...old, conversations: merge(old, payload) }))`; derive everything via `useMemo` on `data`. Delete the parallel `useState` arrays.
-- **Impact:** half the re-render passes per realtime event; no more "stale stage type" bugs after a realtime burst.
-
-### P1.3 — Memoize row components and heavy derivations
-- Inbox `ConversationRow`, Pipeline `DealCard`, Fleet `Row` are inline JSX inside the parent's render. Every parent setState (filter, search keystroke, realtime tick) re-renders the entire list.
-- **Fix direction:** extract row components and wrap in `React.memo` with a shallow comparator on the row id + a couple of presentation props. Memoize `dealsByStage`, `sorted`, `negativeCount`, `repliedCount` already done — keep that pattern and extend.
-- **Impact:** typing in the search box no longer re-renders 500 rows.
-
-### P1.4 — Lazy-load heavy libraries
-- `xlsx` (~600 KB), `html2canvas` (~200 KB), `jspdf` (~300 KB) are imported statically from `WorkspaceData.tsx`, `lib/audienceData.ts`, `AISeoReport.tsx`. Even though those pages are route-lazy, **the page chunk itself becomes huge** and parse/eval blocks the UI when first opened.
-- `framer-motion` (~150 KB) is only used in 1 file.
-- `recharts` (~400 KB) only used in `components/ui/chart.tsx`.
-- **Fix direction:** convert these to dynamic `await import(...)` inside the action handlers (`onClick={() => import("xlsx").then(...)}`). Same for `html2canvas` / `jspdf` (only needed when "Export PDF" is clicked).
-- **Impact:** the first paint of WorkspaceData / Inbox drops by 1–2 MB of JS to download + parse.
-
-### P1.5 — Replace the per-message `extraSenders` profile lookup
-- **File:** `src/pages/CRM.tsx` lines ~110-138.
-- **Now:** Every time `messages` updates, scans for unknown `sent_by_user_id` and runs a `profiles` `.in("user_id", …)` query, then merges into a Map kept in `useState`. On a busy thread this fires multiple times.
-- **Fix direction:** prefetch admin/manager profiles once per workspace (already done for members) and union them into `memberById`. If the user really isn't a member, fall back to "Iskra team". Eliminates 1 round-trip per new responder seen.
+1. **Flat pipelines, slash-named.** "Ads / India", "Ads / Bangladesh", "Ads / Germany" are independent rows in `pipelines`. No parent/child relationship in the schema. The `/` is purely a display convention; the UI groups visually by splitting on the first `/`. This avoids a tree model we don't need yet.
+2. **Stages are per-pipeline (already true in schema).** New pipelines get the same 9 default stages seeded by `createPipeline` in `src/lib/pipelines.ts`. No shared/global stages. Trade-off: stage edits don't propagate; acceptable because stage names are stable.
+3. **Launch Wizard - pipeline is mandatory.** Default to workspace `is_default`. The Wizard never lets a campaign launch with `pipeline_id = NULL`.
+4. **Inbound with no campaign match → workspace default pipeline.** Never leave inbound `conversations.pipeline_id = NULL` going forward. Legacy nulls stay queryable via the "Unassigned" filter bucket.
+5. **One pipeline visible at a time on the Pipeline page.** No "All pipelines" mixed view in MVP - that view caused undefined ordering and confusion in the audit.
+6. **Default pipeline cannot be deleted** (already enforced by RLS). Deleting a non-default pipeline reassigns its deals/conversations to the default (already implemented in `deletePipeline`).
 
 ---
 
-## P2 — Polish & infra
+## Phase 0 - P0 Correctness (ship first, no UI)
 
-### P2.1 — Asset weight
-| File | Size | Suggestion |
-|---|---|---|
-| `public/iskra-og-v3.png` | 2.4 MB | Convert to optimized JPG/webp; OG only needs ~150 KB |
-| `public/videos/*` | 11 MB | Confirm any are eagerly fetched; otherwise `preload="none"` |
-| `src/assets/founder/arsenijs-zaicevs.png` | 2.3 MB | Convert to webp; provide srcset 480/960/1440 |
-| `src/assets/logo/iskra-from-pdf-{1,4,5,7}.png` | 1–1.4 MB each | Brand-asset gallery only — should be on-demand or pre-compressed |
-| `public/iskra-favicon*.png` | 34 KB | Replace with `iskra-favicon.svg` already present |
+### 0.1 Pipeline-aware stage selection on deal auto-creation
+Patch `public.ensure_deal_for_conversation`:
+- Resolve target pipeline as: `conversations.pipeline_id` → workspace default pipeline (`pipelines.is_default = true`) → existing fallback (`ensure_pipeline_stage`).
+- Pick the first `pipeline_stages` row WHERE `pipeline_id = <resolved>` ORDER BY `position`, `created_at`.
+- Set `deals.pipeline_id` explicitly (don't rely solely on `sync_deal_pipeline_from_stage` trigger, but keep it as a safety net).
 
-### P2.2 — Pipeline.tsx assigneeFilter eslint-disabled
-The `useMemo` for `visibleDeals` has an `eslint-disable react-hooks/exhaustive-deps`. `convById` is mutated each render; the deps lie. Fix the deps and the recomputation will be correct *and* cheaper.
+### 0.2 Inbound fallback when no campaign match
+In `whatsapp-webhook` (or via a `BEFORE INSERT` trigger on `conversations`):
+- If `pipeline_id` is null at insert time, set it to the workspace default pipeline id.
+- Order of operations is critical: `conversations.pipeline_id` must be populated BEFORE `create_deal_for_new_conversation` fires. Easiest path: a `BEFORE INSERT` trigger on `conversations` that fills `pipeline_id` (mirrors the existing `fill_conversation_workspace_id` pattern).
 
-### P2.3 — Heartbeat / clocks
-`useHeartbeat` every 60 s + `OpsLive` setInterval 1 s for a clock + `LaunchWizard` 30 s tick + `AISeoReport` poll. Each fine in isolation, but together with realtime they create constant churn. Centralize with `requestIdleCallback` and skip when `document.hidden`.
+### 0.3 Realtime behavior with a selected pipeline
+- Realtime subscriptions stay **workspace-scoped** (already fixed in last refactor). Do NOT add a `pipeline_id` filter on the channel - users switch pipelines often, and recreating the channel on every switch causes flicker.
+- Filter by `pipeline_id` **client-side** in the React Query selector. Cache key includes `pipelineId`, but the websocket channel does not.
+- On payload arrival: invalidate the active pipeline's query if `payload.new.pipeline_id` matches the selected pipeline OR `payload.old.pipeline_id` matched (to handle "moved out" case).
 
-### P2.4 — `react-helmet-async` per-page
-Every lazy page imports its own Helmet. Fine, but verify there is exactly one `HelmetProvider` (App.tsx — ✅) and that titles don't fight inside transitions.
-
-### P2.5 — `lovable-tagger` in production build
-`devDependencies` includes `lovable-tagger`. Confirm it is dev-only in `vite.config.ts` (typical setup is `mode === "development" && componentTagger()`). If it ever runs in production it will inflate bundle and slow render.
-
-### P2.6 — Suspense fallbacks
-Route fallback `IskraLoader` runs an animation and `setInterval` of its own. Cheap, but consider a static skeleton for first paint.
+### 0.4 Legacy `NULL` safety
+- All new pipeline-filter queries use: `WHERE pipeline_id = $1 OR (pipeline_id IS NULL AND $1 = <default_id>)` for the default pipeline view, so legacy rows surface there until backfill runs.
+- "Unassigned" filter option in Inbox explicitly queries `pipeline_id IS NULL`.
 
 ---
 
-## What to implement first (recommended order)
+## Phase 1 - Data Migration (run after 0.1-0.2 deployed)
 
-1. **P0.2** — add workspace `filter` and stable deps to `useRealtimeTable` calls. **One-day change, biggest perceived smoothness win**, especially for Iskra (multiple workspaces open).
-2. **P0.1 + P0.4** — cap conversations to 200 + cap messages to 50 with cursor pagination, drop the inbound N+1 (or replace with `last_inbound_at` column). Inbox open time drops dramatically.
-3. **P0.3** — slow the AdminPanel poll and gate it on tab visibility; plan a server-side aggregator next.
-4. **P1.4** — convert `xlsx`/`html2canvas`/`jspdf` to dynamic imports. Free 1–2 MB of initial JS for free.
-5. **P1.1 + P1.3** — virtualize Inbox + Pipeline + Fleet, memoize their row components.
-6. **P1.2** — collapse duplicate server-state into the query cache.
-7. **P1.5** — fold `extraSenders` into `memberById`.
-8. **P2** items as time allows.
+### 1.1 Ensure every workspace has a default pipeline
+- One-shot migration that calls the equivalent of `ensureDefaultPipeline` for every workspace lacking a default.
+
+### 1.2 Backfill nulls
+```
+UPDATE conversations c SET pipeline_id = p.id
+  FROM pipelines p
+  WHERE c.pipeline_id IS NULL AND p.workspace_id = c.workspace_id AND p.is_default;
+
+UPDATE deals d SET pipeline_id = p.id
+  FROM pipelines p
+  WHERE d.pipeline_id IS NULL AND p.workspace_id = d.workspace_id AND p.is_default;
+```
+- Run as a migration. Reversible (set back to NULL only if needed - not planned).
+- Safety: run inside a transaction; report row counts; verify each affected workspace has exactly one `is_default = true`.
+
+### 1.3 Stage repair
+- For deals where `deals.stage_id`'s `pipeline_id` doesn't match `deals.pipeline_id`, move them to the first stage of `deals.pipeline_id`. Should be rare after 0.1, but the migration covers pre-fix rows.
 
 ---
 
-## Expected user impact
+## Phase 2 - P1 MVP UI
 
-- **Inbox open**: p95 from "few seconds + visible jank" → near-instant on workspaces of any size.
-- **Background CPU/network** while Inbox/Admin tabs are open: roughly **−70 %** from realtime scoping + poll throttling alone.
-- **Initial app load** (first time hitting `/ws/.../data` or `/admin`): **−1 to −2 MB** of JS, faster Time-to-Interactive.
-- **Sidebar / Pipeline scrolling**: 60 fps regardless of list size after virtualization + memoization.
-- **Realtime correctness**: no more lost events from channel re-subscriptions and no more dropped cache fields.
+### 2.1 Settings → Pipelines tab
+- New tab in `WorkspaceSettings.tsx` (alongside Team/Brand/Numbers/Templates).
+- List pipelines with: color swatch, name, "default" badge, deal count, position controls, rename, delete.
+- "New pipeline" dialog: name + color → calls `createPipeline` (already seeds default stages).
+- "Set as default" action (only one default per workspace; toggling moves the flag).
+- Delete confirmation that explains "all deals and conversations on this board will move to <default board name>".
 
-I have NOT made any code changes — this is a read-only audit. Tell me which slice to implement first and I'll start with concrete edits.
+### 2.2 Pipeline page selector
+- URL: `/ws/:slug/pipeline?pipeline=<id>`. If absent, redirect to default.
+- Top-of-page tab strip (or `<Select>` if >5 pipelines) listing all workspace pipelines.
+- `fetchPipelineBase` updated to accept `pipelineId` and filter both stages and deals on it.
+
+### 2.3 Inbox pipeline filter
+- New filter control in `CRM.tsx` filter row: pipeline `<Select>` with options: each pipeline + "Unassigned" + "All".
+- Default to workspace default pipeline (saves user click; matches Pipeline page behavior).
+- Persist last-selected per workspace in `localStorage`.
+
+### 2.4 "Move to pipeline" action
+- Conversation: action in conversation header dropdown → `<Select>` of pipelines → on confirm, update `conversations.pipeline_id`. The `propagate_deal_pipeline_to_conversation` trigger pattern works in reverse via existing `sync_deal_pipeline_from_stage`; we additionally need to move the linked deal to the first stage of the new pipeline (do it in app code, single transaction).
+- Deal: same dropdown on the deal card / drawer → updates `deals.pipeline_id` AND `deals.stage_id` to the first stage of the target pipeline. Trigger `propagate_deal_pipeline_to_conversation` then syncs the conversation.
+
+### 2.5 Launch Wizard polish
+- Inline "+ Create new pipeline" link in the pipeline `<Select>` that opens a small dialog and then re-selects the new pipeline (no full page navigation).
+
+---
+
+## Risks & Trade-offs
+
+| Risk | Mitigation |
+|---|---|
+| Backfill mis-assigns historical conversations to "default" when they belong elsewhere | Acceptable for MVP (no other signal exists); users can move them via the new action. |
+| Two `is_default = true` rows for one workspace | Add a partial unique index `(workspace_id) WHERE is_default` in the same migration. |
+| Realtime payload arrives without `pipeline_id` populated (race with trigger) | Trigger fills `pipeline_id` BEFORE INSERT, so the realtime payload always carries it. |
+| Stage drift between pipelines confuses users | Out of MVP scope; document that stages are independent per pipeline. |
+| Moving a conversation also reassigns its deal silently | Show a toast: "Conversation and linked deal moved to <pipeline>". |
+| Deleting a pipeline with thousands of deals | Existing `deletePipeline` does it in two `UPDATE`s; fine up to ~50k rows. Add a confirm count. |
+
+---
+
+## Acceptance Criteria - Manual Test Checklist
+
+Setup: ISKRA workspace, fresh login as workspace manager.
+
+1. **Create pipeline**
+   - Settings → Pipelines → New → "Ads / India" + color → appears in list with 9 default stages.
+2. **Rename pipeline**
+   - Inline rename "Ads / India" → "Ads / India PRO" → reflects on Pipeline page selector and Inbox filter immediately.
+3. **Set default**
+   - Toggle "Other" as default → "US" loses badge → only one default exists (verify in DB).
+4. **Launch campaign into pipeline**
+   - Launch Wizard → pick "Ads / Bangladesh" → schedule → `campaigns.pipeline_id` is set.
+5. **Receive reply (campaign match)**
+   - Simulate inbound from a campaign recipient → conversation appears with `pipeline_id = Ads / Bangladesh` → linked deal lands on the first stage of "Ads / Bangladesh".
+6. **Receive reply (no campaign match)**
+   - Inbound from unknown number → conversation gets `pipeline_id = workspace default` → deal lands in default's first stage.
+7. **Inbox filter**
+   - Switch filter to "Ads / Bangladesh" → only matching conversations visible. Switch to "Unassigned" → only legacy null-pipeline conversations visible. Switch to "All" → everything.
+8. **Pipeline page**
+   - URL `?pipeline=<US id>` → only US deals visible. Switch tab to "Ads / India PRO" → URL updates → only those deals shown.
+9. **Move conversation**
+   - From conversation header in Inbox → Move to → pick "US" → conversation disappears from current filter, reappears under US filter; linked deal now on US's first stage.
+10. **Move deal**
+    - On Pipeline page, deal action → Move to "Other" → deal disappears, reappears in Other; linked conversation's `pipeline_id` updated.
+11. **Legacy rows**
+    - Pre-backfill: open Inbox with default filter → legacy null conversations still appear.
+    - Post-backfill: same conversations now appear under their workspace's default filter (not "Unassigned").
+12. **Delete pipeline**
+    - Delete "Ads / Germany" (non-default) → confirmation shows N deals will move → after confirm, those deals visible under default pipeline.
+13. **Realtime**
+    - Two browsers, same workspace, same default filter → mark a deal moved in browser A → browser B's Inbox/Pipeline updates without manual refresh.
+
+---
+
+## Implementation Phases (delivery order)
+
+```
+Phase 0 (DB only, no UI-visible change)
+  0.1 ensure_deal_for_conversation patch
+  0.2 BEFORE INSERT trigger: fill conversations.pipeline_id
+  0.3 unique partial index: one default per workspace
+
+Phase 1 (data migration, run once)
+  1.1 ensure default exists per workspace
+  1.2 backfill nulls on conversations + deals
+  1.3 stage repair for mismatched deals
+
+Phase 2 (UI)
+  2.1 Settings → Pipelines tab
+  2.2 Pipeline page selector + URL state
+  2.3 Inbox pipeline filter (with Unassigned + All)
+  2.4 Move-to-pipeline actions
+  2.5 Launch Wizard inline create-pipeline
+
+Phase 3 (verify)
+  Run the 13-step manual checklist above on staging workspace.
+```
+
+Each phase is independently shippable. Phase 0 is invisible but unblocks everything else and stops new bad data. Phase 1 cleans history. Phase 2 ships the user-visible MVP.

@@ -53,7 +53,8 @@ export type Deal = Pick<
 
 export const crmKeys = {
   base: (workspaceId?: string) => ["crm", "base", workspaceId ?? "all"] as const,
-  pipeline: (workspaceId?: string) => ["crm", "pipeline", workspaceId ?? "all"] as const,
+  pipeline: (workspaceId?: string, pipelineId?: string | null) =>
+    ["crm", "pipeline", workspaceId ?? "all", pipelineId ?? "all"] as const,
   campaigns: (workspaceId?: string) => ["crm", "campaigns", workspaceId ?? "all"] as const,
   allBase: ["crm", "base", "all"] as const,
   allPipeline: ["crm", "pipeline", "all"] as const,
@@ -174,7 +175,7 @@ async function seedDefaultStagesForWorkspace(workspaceId: string): Promise<Stage
   return (data ?? []) as Stage[];
 }
 
-export async function fetchPipelineBase(workspaceId?: string) {
+export async function fetchPipelineBase(workspaceId?: string, pipelineId?: string | null) {
   let stagesQuery = supabase.from("pipeline_stages").select("id, name, color, position, stage_type, workspace_id, pipeline_id").order("position");
   let dealsQuery = supabase
     .from("deals")
@@ -189,6 +190,12 @@ export async function fetchPipelineBase(workspaceId?: string) {
     dealsQuery = dealsQuery.eq("workspace_id", workspaceId);
     conversationsQuery = conversationsQuery.eq("workspace_id", workspaceId);
   }
+  if (pipelineId) {
+    stagesQuery = stagesQuery.eq("pipeline_id", pipelineId);
+    dealsQuery = dealsQuery.eq("pipeline_id", pipelineId);
+    // Conversations are not filtered by pipeline here — Pipeline.tsx only uses
+    // conversations for assignee/responder lookup, which is independent of pipeline.
+  }
 
   const [stagesRes, dealsRes, convRes] = await Promise.all([stagesQuery, dealsQuery, conversationsQuery]);
 
@@ -198,7 +205,7 @@ export async function fetchPipelineBase(workspaceId?: string) {
 
   let stages = (stagesRes.data ?? []) as Stage[];
   // Auto-seed default stages the first time a workspace pipeline is opened.
-  if (workspaceId && stages.length === 0) {
+  if (workspaceId && !pipelineId && stages.length === 0) {
     stages = await seedDefaultStagesForWorkspace(workspaceId);
   }
 

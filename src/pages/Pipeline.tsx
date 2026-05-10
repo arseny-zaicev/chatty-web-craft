@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,16 +54,35 @@ import AssigneeSelect from "@/components/workspace/AssigneeSelect";
 import StageAutomationsDialog from "@/components/workspace/StageAutomationsDialog";
 import { fetchWorkspaceMembers, workspaceMembersKey } from "@/lib/workspaceMembers";
 import { createDeal, updateDeal, deleteDeal as deleteDealApi, moveDeal } from "@/lib/deals";
+import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipelines";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const wsSlugMatch = location.pathname.match(/^\/ws\/([^/]+)/);
   const wsSlug = wsSlugMatch?.[1];
   const inboxPath = (conversationId: string) =>
     wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
+
+  const { data: pipelines = [] } = useQuery({
+    queryKey: pipelinesKey(workspaceId),
+    queryFn: () => fetchPipelines(workspaceId),
+    enabled: !!workspaceId,
+  });
+  const urlPipeline = searchParams.get("pipeline");
+  const defaultPipeline = pipelines.find((p) => p.is_default) ?? pipelines[0] ?? null;
+  const selectedPipelineId =
+    (urlPipeline && pipelines.some((p) => p.id === urlPipeline)) ? urlPipeline : defaultPipeline?.id ?? null;
+  // Sync URL to default once pipelines load
+  useEffect(() => {
+    if (!urlPipeline && defaultPipeline) {
+      setSearchParams((prev) => { prev.set("pipeline", defaultPipeline.id); return prev; }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultPipeline?.id]);
   
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -101,8 +120,9 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   }, [conversations]);
 
   const { data: pipelineData, isLoading } = useQuery({
-    queryKey: crmKeys.pipeline(workspaceId),
-    queryFn: () => fetchPipelineBase(workspaceId),
+    queryKey: crmKeys.pipeline(workspaceId, selectedPipelineId),
+    queryFn: () => fetchPipelineBase(workspaceId, selectedPipelineId),
+    enabled: !!workspaceId ? !!selectedPipelineId : true,
   });
 
   // Auth gate + me id
@@ -117,7 +137,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (pipelineData.stages[0] && !newStageId) setNewStageId(pipelineData.stages[0].id);
   }, [pipelineData, newStageId]);
 
-  // Realtime deals — workspace-scoped
+  // Realtime deals — workspace-scoped channel; client filters to selected pipeline.
   useRealtimeTable<Deal>(
     {
       channel: `pipeline-deals-${workspaceId ?? "all"}`,
@@ -129,13 +149,17 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       setDeals((prev) => {
         if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
         const incoming = payload.new as Deal;
+        // Drop events for other pipelines; remove if previously belonged here.
+        if (selectedPipelineId && incoming.pipeline_id && incoming.pipeline_id !== selectedPipelineId) {
+          return prev.filter((d) => d.id !== incoming.id);
+        }
         const idx = prev.findIndex((d) => d.id === incoming.id);
         return idx >= 0
           ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
           : [...prev, incoming];
       });
     },
-    [workspaceId],
+    [workspaceId, selectedPipelineId],
   );
 
   // Realtime conversations (assignee / responder updates) — workspace-scoped
@@ -354,7 +378,29 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         </header>}
 
         {!embedded ? null : (
-          <div className="px-4 py-2 border-b border-border flex items-center justify-end gap-2 bg-card/30">
+          <div className="px-4 py-2 border-b border-border flex items-center gap-2 bg-card/30 flex-wrap">
+            {pipelines.length > 0 && (
+              <div className="flex items-center gap-1 mr-auto flex-wrap">
+                {pipelines.map((p) => {
+                  const active = p.id === selectedPipelineId;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setSearchParams((prev) => { prev.set("pipeline", p.id); return prev; }, { replace: true })}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition flex items-center gap-1.5 ${
+                        active
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground hover:border-primary/40"
+                      }`}
+                      title={p.name}
+                    >
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <span className="text-xs text-muted-foreground">Filter:</span>
             <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
               <SelectTrigger className="h-8 w-44 text-xs">
