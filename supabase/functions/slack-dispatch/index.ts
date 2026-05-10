@@ -154,12 +154,14 @@ Deno.serve(async (req) => {
         if (workspaceChannel) targets.add(workspaceChannel);
         for (const ch of targets) await postSlack(ch, msg);
       } else if (ev.event_type === "positive_lead") {
-        if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
+        const p = ev.payload as any;
+        const pipelineChannel = (p?.slack_channel_id as string) || workspaceChannel;
+        if (!ws || !pipelineChannel) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
-        const msg = buildPositiveLeadBlocks({ ws, payload: ev.payload as any });
-        await postSlack(workspaceChannel, msg);
+        const msg = buildPositiveLeadBlocks({ ws, payload: p });
+        await postSlack(pipelineChannel, msg);
       } else if (ev.event_type === "inbox_unread_spike") {
         if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
@@ -168,6 +170,15 @@ Deno.serve(async (req) => {
         const p = ev.payload as any;
         const msg = buildInboxSpikeBlocks({ ws, unreadCount: p.unread_total || 0, conversations: p.conversations || [] });
         await postSlack(workspaceChannel, msg);
+      } else if (ev.event_type === "lead.imported" || ev.event_type === "lead.import_failed" || ev.event_type === "lead.dispatched" || ev.event_type === "lead.dispatch_blocked") {
+        const p = ev.payload as any;
+        const pipelineChannel = (p?.slack_channel_id as string) || workspaceChannel;
+        if (!pipelineChannel) {
+          await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
+          continue;
+        }
+        const msg = buildLeadEventBlocks(ev.event_type, ws, p);
+        await postSlack(pipelineChannel, msg);
       } else if (ev.event_type === "gupshup_mail_alert") {
         const p = ev.payload as any;
         const msg = buildGupshupMailAlertBlocks({
