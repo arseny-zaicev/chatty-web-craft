@@ -33,10 +33,13 @@ const tzOffsetMinutes = (tz: string, at: Date): number => {
     return Math.round((asUTC - at.getTime()) / 60000);
   } catch { return 0; }
 };
-const dateAtTzToUTC = (dateStr: string, hhmm: string, tz: string): Date => {
+const dateAtTzToUTC = (dateStr: string, hhmm: string, tz: string, isEnd = false): Date => {
   const [Y, M, D] = dateStr.split("-").map((x) => parseInt(x, 10));
-  const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10) || 0);
-  const naive = Date.UTC(Y, (M || 1) - 1, D || 1, h || 0, m || 0, 0);
+  let [h, m] = hhmm.split(":").map((x) => parseInt(x, 10) || 0);
+  // "00:00" as end-of-day means next day 00:00.
+  let dayOffset = 0;
+  if (isEnd && h === 0 && m === 0) { dayOffset = 1; }
+  const naive = Date.UTC(Y, (M || 1) - 1, (D || 1) + dayOffset, h || 0, m || 0, 0);
   return new Date(naive - tzOffsetMinutes(tz, new Date(naive)) * 60_000);
 };
 const dayKey = (ms: number, tz: string) =>
