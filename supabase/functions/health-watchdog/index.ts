@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
   // 1) Surface persistent sync errors
   const { data: sheets } = await supabase
     .from("source_connections")
-    .select("id,name,last_error")
+    .select("id,name,last_error,last_ingest_at,created_at")
     .eq("kind", "google_sheet")
     .eq("status", "active");
   const errored = (sheets ?? []).filter((s) => s.last_error);
@@ -34,6 +34,18 @@ Deno.serve(async (req) => {
     alerts.push({
       kind: "sheets_sync_error",
       text: `:rotating_light: Google Sheets sync errors on ${errored.length} source(s): ${errored.map((s) => `${s.name}: ${s.last_error}`).join(" | ")}`,
+    });
+  }
+
+  const staleCutoff = Date.now() - STALE_SYNC_MIN * 60_000;
+  const staleSheets = (sheets ?? []).filter((s) => {
+    const baseline = s.last_ingest_at || s.created_at;
+    return baseline && new Date(baseline).getTime() < staleCutoff;
+  });
+  if (staleSheets.length > 0) {
+    alerts.push({
+      kind: "sheets_sync_stale",
+      text: `:rotating_light: Google Sheets sync stalled — no successful sync in ${STALE_SYNC_MIN}m for ${staleSheets.length} active source(s): ${staleSheets.map((s) => `${s.name}: ${s.last_ingest_at ?? "never"}`).join(" | ")}`,
     });
   }
 

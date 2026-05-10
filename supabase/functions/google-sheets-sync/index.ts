@@ -185,6 +185,17 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     if (!spreadsheetId) return { error: "config.spreadsheet_id missing" };
     if (!phoneSpec) return { error: "config.phone_column missing" };
 
+    const markHealthySync = async (nextConfig = cfg) => {
+      await admin
+        .from("source_connections")
+        .update({
+          config: nextConfig,
+          last_ingest_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .eq("id", source.id);
+    };
+
     const { data: pipeline } = await admin
       .from("pipelines")
       .select("id, auto_outreach_enabled, slack_channel_id")
@@ -212,18 +223,24 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     const sheetData = await sheetResp.json();
     const rows: string[][] = (sheetData?.values ?? []) as string[][];
     if (rows.length === 0) {
+      await markHealthySync();
       return { ok: true, total: 0, accepted: 0, rejected: 0, message: "Sheet empty" };
     }
 
     const headers = rows[headerRow - 1] ?? [];
     const phoneIdx = resolveColumnIndex(phoneSpec, headers);
     const nameIdx = resolveColumnIndex(nameSpec, headers);
-    if (phoneIdx < 0) return { error: `phone_column "${phoneSpec}" not found` };
+    if (phoneIdx < 0) {
+      const error = `phone_column "${phoneSpec}" not found`;
+      await admin.from("source_connections").update({ last_error: error }).eq("id", source.id);
+      return { error };
+    }
 
     // Slice new rows: 1-based row number > lastSyncedRow
     const startIdx = Math.max(headerRow, lastSyncedRow); // 1-based last processed row
     const newRows = rows.slice(startIdx); // these are rows with 1-based index startIdx+1..rows.length
     if (newRows.length === 0) {
+      await markHealthySync();
       return { ok: true, total: 0, accepted: 0, rejected: 0, message: "No new rows" };
     }
 
