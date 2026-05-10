@@ -23,24 +23,18 @@ Deno.serve(async (req) => {
 
   const alerts: { kind: string; text: string }[] = [];
 
-  // 1) Sheets sync health: at least one active sheet should have ingested in last STALE_SYNC_MIN
+  // 1) Surface persistent sync errors
   const { data: sheets } = await supabase
     .from("source_connections")
-    .select("id,name,last_ingest_at,last_error")
+    .select("id,name,last_error")
     .eq("kind", "google_sheet")
     .eq("status", "active");
-  if (sheets && sheets.length > 0) {
-    const now = Date.now();
-    const stale = sheets.filter((s) => {
-      const t = s.last_ingest_at ? new Date(s.last_ingest_at).getTime() : 0;
-      return now - t > STALE_SYNC_MIN * 60_000;
+  const errored = (sheets ?? []).filter((s) => s.last_error);
+  if (errored.length > 0) {
+    alerts.push({
+      kind: "sheets_sync_error",
+      text: `:rotating_light: Google Sheets sync errors on ${errored.length} source(s): ${errored.map((s) => `${s.name}: ${s.last_error}`).join(" | ")}`,
     });
-    if (stale.length === sheets.length) {
-      alerts.push({
-        kind: "sheets_sync_stale",
-        text: `:rotating_light: Google Sheets sync stalled — no successful ingest in ${STALE_SYNC_MIN}m across ${sheets.length} active source(s). Last errors: ${stale.map((s) => `${s.name}: ${s.last_error ?? "n/a"}`).join(" | ")}`,
-      });
-    }
   }
 
   // 2) Pending leads piling up
