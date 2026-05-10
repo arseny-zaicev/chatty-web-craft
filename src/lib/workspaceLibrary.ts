@@ -58,7 +58,7 @@ export async function fetchLibraryFields(workspaceId: string): Promise<LibraryFi
 export async function fetchSavedReplies(workspaceId: string): Promise<SavedReply[]> {
   const { data, error } = await supabase
     .from("workspace_saved_replies")
-    .select("id, workspace_id, user_id, title, body, folder, tags, is_favorite, last_used_at, position")
+    .select("id, workspace_id, user_id, scope, title, body, folder, tags, is_favorite, last_used_at, position")
     .eq("workspace_id", workspaceId)
     .order("is_favorite", { ascending: false })
     .order("title", { ascending: true });
