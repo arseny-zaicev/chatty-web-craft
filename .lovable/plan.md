@@ -1,66 +1,101 @@
-## Scope
+## Цель
 
-Finish the multi-pipeline MVP with four tightly-scoped UI additions. No schema changes, no refactors, no work outside the listed items.
+Каждые 5 минут читать новые письма от Gupshup на `iskra.gupshup.alerts@gmail.com`, классифицировать их (quality drop / restriction / template rejected / billing / прочее), привязывать к нашему `whatsapp_numbers` по номеру или WABA ID, и слать структурированный алерт в Slack-канал `SLACK_OPS_NUMBERS_CHANNEL_ID` (тот же, что используют существующие алерты `enqueue_number_slack_event`).
 
----
+## Архитектура
 
-## 1. Inbox pipeline filter (`src/pages/CRM.tsx`)
+```text
+Gupshup -> Gmail (iskra.gupshup.alerts@gmail.com)
+                |
+                v
+   gupshup-mail-poll (Edge Function, cron */5 мин)
+                |
+                v
+   public.gupshup_mail_log  (idempotency, status, raw)
+                |
+                v
+   public.slack_event_queue  (event_type='gupshup_mail_alert')
+                |
+                v
+   slack-dispatch -> SLACK_OPS_NUMBERS_CHANNEL_ID
+```
 
-- Load workspace pipelines via `useQuery(pipelinesKey, fetchPipelines)` (only when `workspaceId`).
-- Add new state `pipelineFilter: "all" | "unassigned" | <pipelineId>`, default `"all"`.
-- Render a `<Select>` (or compact pill-row, matching the existing filter chip style) in the left aside header alongside the number/starred/my chats chips. Order: `All pipelines`, `Unassigned`, then each pipeline (with color dot + name).
-- Extend the existing `filtered` computation:
-  - `"all"` -> no constraint
-  - `"unassigned"` -> `c.pipeline_id == null`
-  - `<id>` -> `c.pipeline_id === id`
-- `Conversation` type already has `pipeline_id` (verified in `src/lib/crmData.ts`); no data-layer change required.
-- Backward compat: legacy rows with `pipeline_id = null` are reachable via `Unassigned`.
+## Что сделаем
 
-## 2. Move conversation to pipeline (`src/pages/CRM.tsx`)
+### 1. Шаг настройки в Gupshup (вручную пользователем)
+Прежде чем разворачивать функцию, ты заходишь в Gupshup → Account / Notification settings и ставишь `iskra.gupshup.alerts@gmail.com` как notification email на всех аккаунтах/WABA. Я укажу точные шаги в чате.
 
-- In the active conversation header (right of the existing AssigneeSelect / number badge), add a small `<Select>` labeled by current pipeline color+name.
-- On change, call `moveConversationToPipeline(active.id, newPipelineId)` (already exists in `src/lib/pipelines.ts`; it also moves linked deal to first stage of target pipeline).
-- Optimistic update of local `conversations` state; on error rollback + toast. Realtime will reconcile.
-- Hidden when no pipelines loaded or no `workspaceId`.
+### 2. БД (одна миграция)
+- `public.gupshup_mail_log` — таблица:
+  - `gmail_id` (text, unique) — `id` сообщения Gmail для идемпотентности
+  - `received_at` (timestamptz)
+  - `from_address`, `subject`, `snippet`
+  - `category` enum: `quality_drop` | `restriction` | `block` | `template_rejected` | `template_approved` | `billing` | `account_review` | `other`
+  - `severity` enum: `info` | `warning` | `critical`
+  - `whatsapp_number_id` (uuid, nullable, FK)
+  - `workspace_id` (uuid, nullable)
+  - `parsed` jsonb (вытащенные phone, waba_id, template_name и т.д.)
+  - `slack_event_id` (uuid, nullable, FK → slack_event_queue)
+- RLS: только `is_admin(auth.uid())` читает; запись только service_role.
+- `public.gupshup_mail_state` (single row) — хранит `last_history_id` или `last_internal_date_ms` курсора Gmail.
 
-## 3. Move deal to pipeline (`src/pages/Pipeline.tsx`)
+### 3. Edge Function `gupshup-mail-poll`
+- Идём через connector gateway: `https://connector-gateway.lovable.dev/google_mail/gmail/v1/users/me/messages?q=from:gupshup.io OR from:gupshup.com newer_than:1d&maxResults=50`.
+- Для каждого `id` сверяемся с `gupshup_mail_log.gmail_id`; новые — берём `messages/{id}?format=full`, парсим headers + body.
+- Парсер по subject/keywords:
+  - `quality.*low|medium|high|drop` → `quality_drop`
+  - `restrict|throttle|messaging limit` → `restriction`
+  - `block|disabled|banned` → `block`
+  - `template.*rejected|approved|paused` → `template_rejected/approved`
+  - `payment|invoice|low balance|funds` → `billing`
+  - `policy review|account review` → `account_review`
+- Извлекаем `phone_number` (regex `\+?\d{10,15}`) и `waba_id`. По `phone_number` ищем `whatsapp_numbers` → получаем `whatsapp_number_id`, `workspace_id`.
+- Severity: `block`, `restriction`, `billing` → `critical`; `quality_drop`, `template_rejected`, `account_review` → `warning`; остальное → `info`.
+- Вставляем строку в `gupshup_mail_log` (ON CONFLICT DO NOTHING по `gmail_id`).
+- Для `severity != 'info'` (или всё, если попросишь) — вставляем событие в `slack_event_queue` с `event_type = 'gupshup_mail_alert'` и payload `{ category, severity, phone_number, whatsapp_number_id, subject, snippet, gmail_link }`.
+- Возвращаем `{ scanned, new, alerts }` для логов.
 
-- In the deal side `<Sheet>` body, add a `Field label="Pipeline"` with a `<Select>` of workspace pipelines (color dot + name). Default value = `activeDeal.pipeline_id ?? selectedPipelineId`.
-- On change, call `moveDealToPipeline(activeDeal.id, newPipelineId)` (already exists). Show toast and close the sheet (deal will leave current board view via realtime filter).
-- Pipelines list is already loaded in `Pipeline.tsx`; reuse it. No new fetch.
+### 4. Slack handler
+В `supabase/functions/slack-dispatch/index.ts` добавить обработчик `gupshup_mail_alert`:
+- Канал: `SLACK_OPS_NUMBERS_CHANNEL_ID`.
+- Блок: emoji по severity (🔴/🟠/🔵), категория, номер (если найден — со ссылкой на CRM), subject, выдержка из письма, кнопка "Открыть в Gmail" (`https://mail.google.com/mail/u/0/#inbox/{gmail_id}`).
+- Использовать существующий хелпер `slackBlocks.ts`.
 
-## 4. Inline "Create pipeline" in Launch Wizard (`src/pages/workspace/LaunchWizard.tsx`)
+### 5. Cron
+Через `pg_cron` поднять расписание `*/5 * * * *` → `select net.http_post(...gupshup-mail-poll...)` с service-role auth (тот же паттерн, что у `numbers-health-sync`, посмотрю как он запланирован и повторю).
 
-- The wizard already tracks `pipelineId` and sends it on launch, but there is no UI to pick it. Add a compact pipeline picker (no new step number — embed at the top of Step 6 "Campaign name", labeled `Pipeline`) with:
-  - `<Select>` listing pipelines with color dot. Mandatory: prevents `pipelineId = null` going forward.
-  - A trailing `+ New pipeline` button (ghost size sm) opening a small inline `<Dialog>` with `name` + `color` inputs.
-  - On submit: `createPipeline(workspace.id, { name, color })`, then `qc.invalidateQueries(pipelinesKey(workspace.id))`, set `pipelineId` to the returned id, close dialog, toast.
-- Launch button gets a guard: disable if `!pipelineId` (cannot happen in practice once pipelines load, but defensive).
+### 6. UI (минимум, опционально)
+В `AdminPanel` (или Workspace Settings → Provider/Debug) добавить маленькую таблицу "Последние Gupshup-уведомления" с фильтром по severity, чтобы быстро глазами проверять. Можно отложить.
 
----
+## Технические детали
 
-## Out of scope (explicitly not changing)
+- Gmail-коннектор использует `gmail.readonly` — этого достаточно. Никаких write-операций.
+- Для идемпотентности используем Gmail `messages.id` (стабильный per-mailbox).
+- Курсор `last_internal_date_ms` нужен только для оптимизации; первичная защита — unique index на `gmail_id`.
+- Лимит первого запуска: `newer_than:7d` чтобы не разлить старые письма.
+- Все запросы к Gmail — через gateway: заголовки `Authorization: Bearer ${LOVABLE_API_KEY}`, `X-Connection-Api-Key: ${GOOGLE_MAIL_API_KEY}`.
+- Никаких новых секретов. Всё уже есть.
 
-- DB migrations, RLS, triggers (`ensure_deal_for_conversation` fix already shipped).
-- Pipeline management UI (already in Settings).
-- Pipeline page selector (already done).
-- `crmData.ts` shape changes — `pipeline_id` already selected on conversations and deals.
-- Security linter warnings unrelated to these changes.
+## Что вне scope
 
-## Files to change
+- Парсинг вложений (PDF-репорты Gupshup) — пока просто игнорим.
+- Авто-действия (пауза кампаний при block) — только алерт.
+- Ответ на письма из Gmail — нет, read-only.
 
-- `src/pages/CRM.tsx` — filter + header move-to-pipeline select.
-- `src/pages/Pipeline.tsx` — pipeline select inside deal sheet.
-- `src/pages/workspace/LaunchWizard.tsx` — pipeline picker + inline create dialog inside Step 6.
+## Acceptance criteria
 
-## Manual QA checklist (post-implementation)
+1. Письмо от `noreply@gupshup.io` с темой "Phone number quality update" приходит → в течение ≤5 мин в Slack-канале появляется сообщение с категорией `quality_drop`, найденным номером и выдержкой.
+2. Повторный запуск polling не дублирует алерт (unique по `gmail_id`).
+3. В `gupshup_mail_log` видно все обработанные письма с категорией.
+4. Письма не от Gupshup игнорируются.
+5. Если номер из письма не найден в `whatsapp_numbers` — алерт всё равно уходит, поле "Number" = "Unmatched".
 
-1. Inbox: switch pipeline filter -> list updates; "Unassigned" shows legacy null rows; "All pipelines" restores full list.
-2. Open a conversation -> change pipeline in header -> conversation disappears from current pipeline filter; linked deal appears in target board's first stage; legacy rows still openable.
-3. Pipeline page: open a deal -> change pipeline in sheet -> card removed from current board; appears in target board's first stage; linked conversation now reports new pipeline in Inbox header.
-4. Launch Wizard: pipeline select pre-fills with default; click `+ New pipeline`, create one, it auto-selects; launch a campaign; verify `campaigns.pipeline_id` set and resulting conversations land on selected pipeline (visible via Inbox filter).
-5. Build/typecheck/lint: harness runs automatically; report results.
+## Ручной чеклист после деплоя
 
-## Reporting after implementation
+- [ ] В Gupshup notification email = `iskra.gupshup.alerts@gmail.com` (на всех аккаунтах).
+- [ ] Отправить тестовое письмо себе с темой "Phone number quality update" с номером из БД → ждать 5 мин → проверить Slack.
+- [ ] `select * from gupshup_mail_log order by received_at desc limit 10;` — есть строки.
+- [ ] `select * from slack_event_queue where event_type='gupshup_mail_alert' order by created_at desc limit 10;` — есть события и `processed_at` проставлен.
+- [ ] Удалить тестовое письмо в Gmail → повторный poll не должен заново его слать.
 
-Return: files changed, behaviors added, remaining gaps (none expected within scope), build/typecheck/lint status, and the QA checklist above.
+Жми "Approve plan" — и я разверну: миграция → edge function → расписание cron → доработка `slack-dispatch`.
