@@ -7,6 +7,79 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchCampaignSummaries } from "@/lib/launchData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+
+// Sibling campaigns launched across multiple WhatsApp numbers share a base name
+// in the form "<base> :: <numberLabel>". Clients should see them merged.
+const splitBase = (full: string): { base: string; numberLabel: string | null } => {
+  const idx = full.indexOf(" :: ");
+  if (idx === -1) return { base: full, numberLabel: null };
+  return { base: full.slice(0, idx).trim(), numberLabel: full.slice(idx + 4).trim() || null };
+};
+
+type CampaignRow = {
+  id: string;
+  name: string;
+  status: string;
+  total_recipients: number | null;
+  sent_count: number | null;
+  failed_count: number | null;
+  created_at: string;
+  whatsapp_number_id: string | null;
+  template_id: string | null;
+};
+
+type CampaignGroup = {
+  key: string;
+  displayName: string;
+  status: string;
+  total: number;
+  sent: number;
+  failed: number;
+  created_at: string;
+  template_id: string | null;
+  whatsapp_number_ids: string[];
+  campaigns: CampaignRow[];
+};
+
+// Pick the "most active" status across siblings: running > scheduled > paused > failed > completed > draft
+const statusRank: Record<string, number> = {
+  running: 6, scheduled: 5, paused: 4, failed: 3, completed: 2, draft: 1,
+};
+
+const groupCampaigns = (rows: CampaignRow[]): CampaignGroup[] => {
+  const map = new Map<string, CampaignGroup>();
+  for (const c of rows) {
+    const { base } = splitBase(c.name);
+    const key = base;
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        displayName: base,
+        status: c.status,
+        total: 0,
+        sent: 0,
+        failed: 0,
+        created_at: c.created_at,
+        template_id: c.template_id,
+        whatsapp_number_ids: [],
+        campaigns: [],
+      };
+      map.set(key, g);
+    }
+    g.total += c.total_recipients ?? 0;
+    g.sent += c.sent_count ?? 0;
+    g.failed += c.failed_count ?? 0;
+    if ((statusRank[c.status] ?? 0) > (statusRank[g.status] ?? 0)) g.status = c.status;
+    if (c.created_at < g.created_at) g.created_at = c.created_at;
+    if (c.whatsapp_number_id && !g.whatsapp_number_ids.includes(c.whatsapp_number_id)) {
+      g.whatsapp_number_ids.push(c.whatsapp_number_id);
+    }
+    g.campaigns.push(c);
+  }
+  return Array.from(map.values()).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+};
 
 const statusTone: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
@@ -50,7 +123,9 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
     queryFn: () => fetchCampaignSummaries(workspaceId),
     staleTime: 30_000,
   });
-  const [openId, setOpenId] = useState<string | null>(null);
+  const { data: role } = useWorkspaceRole(workspaceId);
+  const canManage = isManagerLike(role);
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
   const numberIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.whatsapp_number_id).filter(Boolean))) as string[], [campaigns]);
   const templateIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.template_id).filter(Boolean))) as string[], [campaigns]);
@@ -63,6 +138,10 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const numberById = meta?.numbers ?? new Map();
   const templateById = meta?.templates ?? new Map();
 
+  // Clients see merged groups (one row per logical campaign).
+  // Managers see every individual campaign so they can drill into a specific number.
+  const groups = useMemo(() => groupCampaigns(campaigns as CampaignRow[]), [campaigns]);
+
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
@@ -73,46 +152,57 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />Refresh
           </Button>
-          <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />New launch</Link></Button>
+          {canManage && (
+            <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />New launch</Link></Button>
+          )}
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">Campaign history and live monitoring. Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</p>
+      <p className="text-sm text-muted-foreground">
+        Campaign history and live monitoring.
+        {canManage && <> Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</>}
+      </p>
 
-      {campaigns.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
           No campaigns yet.
-          <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>
+          {canManage && <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>}
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
-          {campaigns.map((c: any) => {
-            const number = numberById.get(c.whatsapp_number_id);
-            const template = templateById.get(c.template_id);
-            const total = c.total_recipients ?? 0;
-            const sent = c.sent_count ?? 0;
-            const failed = c.failed_count ?? 0;
-            const open = openId === c.id;
-            const tone = statusTone[c.status] ?? statusTone.draft;
+          {groups.map((g) => {
+            const template = templateById.get(g.template_id ?? "");
+            // For multi-number groups, show "X numbers" instead of one number label
+            const numberLabel = g.whatsapp_number_ids.length === 1
+              ? (() => { const n = numberById.get(g.whatsapp_number_ids[0]); return n ? (n.label ?? `+${n.phone_number}`) : null; })()
+              : (canManage ? `${g.whatsapp_number_ids.length} numbers` : null);
+            const open = openKey === g.key;
+            const tone = statusTone[g.status] ?? statusTone.draft;
             return (
-              <div key={c.id}>
+              <div key={g.key}>
                 <button
                   className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
-                  onClick={() => setOpenId(open ? null : c.id)}
+                  onClick={() => setOpenKey(open ? null : g.key)}
                 >
                   {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate text-sm">{c.name}</div>
+                    <div className="font-medium truncate text-sm">{g.displayName}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {[template?.name, number ? (number.label ?? `+${number.phone_number}`) : null, formatDistanceToNow(new Date(c.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
+                      {[template?.name, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                    <Stat label="Sent" value={`${sent}/${total}`} />
-                    {failed > 0 && <Stat label="Failed" value={failed} tone="bad" />}
+                    <Stat label="Sent" value={`${g.sent}/${g.total}`} />
+                    {g.failed > 0 && <Stat label="Failed" value={g.failed} tone="bad" />}
                   </div>
-                  <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{c.status}</Badge>
+                  <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>
-                {open && <CampaignDetail campaignId={c.id} />}
+                {open && (
+                  <CampaignDetail
+                    group={g}
+                    canManage={canManage}
+                    numberById={numberById}
+                  />
+                )}
               </div>
             );
           })}
@@ -122,10 +212,27 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   );
 }
 
-function CampaignDetail({ campaignId }: { campaignId: string }) {
+function CampaignDetail({
+  group,
+  canManage,
+  numberById,
+}: {
+  group: CampaignGroup;
+  canManage: boolean;
+  numberById: Map<string, { id: string; phone_number: string; label: string | null }>;
+}) {
+  // Aggregate recipients across every sibling campaign in the group
+  const campaignIds = group.campaigns.map((c) => c.id);
   const { data, isLoading } = useQuery({
-    queryKey: ["campaign-recipients", campaignId],
-    queryFn: () => fetchRecipients(campaignId),
+    queryKey: ["campaign-recipients-group", group.key, campaignIds.join(",")],
+    queryFn: async () => {
+      const all: Array<RecipientRow & { campaign_id: string }> = [];
+      for (const id of campaignIds) {
+        const rows = await fetchRecipients(id);
+        rows.forEach((r) => all.push({ ...r, campaign_id: id }));
+      }
+      return all;
+    },
   });
 
   const stats = useMemo(() => {
@@ -141,6 +248,13 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
 
   if (isLoading) return <div className="p-4 text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading…</div>;
 
+  const numberLabelFor = (campaignId: string) => {
+    const c = group.campaigns.find((x) => x.id === campaignId);
+    if (!c?.whatsapp_number_id) return "—";
+    const n = numberById.get(c.whatsapp_number_id);
+    return n ? (n.label ?? `+${n.phone_number}`) : "—";
+  };
+
   return (
     <div className="px-4 pb-4 pt-2 bg-background/40">
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
@@ -150,12 +264,30 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
         <Stat label="Pending" value={stats.pending} />
         <Stat label="Failed" value={stats.failed} tone={stats.failed > 0 ? "bad" : undefined} />
       </div>
+
+      {/* Per-number breakdown is internal info — only show to managers */}
+      {canManage && group.campaigns.length > 1 && (
+        <div className="mb-3 rounded-md border border-border bg-card/30 p-2">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Per number</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {group.campaigns.map((c) => (
+              <div key={c.id} className="flex items-center justify-between text-xs">
+                <span className="truncate">{numberLabelFor(c.id)}</span>
+                <span className="text-muted-foreground shrink-0">{c.sent_count ?? 0}/{c.total_recipients ?? 0}{(c.failed_count ?? 0) > 0 ? ` · ${c.failed_count} failed` : ""}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="text-[11px] text-muted-foreground mb-2">Delivered / read / reply tracking will appear once provider receipts are wired in.</p>
       {(data ?? []).length > 0 && (
         <div className="rounded-md border border-border bg-card/30 max-h-64 overflow-auto">
           <table className="w-full text-xs">
             <thead className="bg-muted/40 sticky top-0"><tr className="text-left text-muted-foreground">
-              <th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Status</th><th className="px-2 py-1.5">Sent at</th><th className="px-2 py-1.5">Error</th>
+              <th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Status</th><th className="px-2 py-1.5">Sent at</th>
+              {canManage && <th className="px-2 py-1.5">Number</th>}
+              <th className="px-2 py-1.5">Error</th>
             </tr></thead>
             <tbody>
               {(data ?? []).slice(0, 200).map((r) => (
@@ -163,6 +295,7 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
                   <td className="px-2 py-1 font-mono">{r.contact_phone}</td>
                   <td className="px-2 py-1 capitalize">{r.status}</td>
                   <td className="px-2 py-1">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}</td>
+                  {canManage && <td className="px-2 py-1 text-muted-foreground">{numberLabelFor(r.campaign_id)}</td>}
                   <td className="px-2 py-1 text-red-600 truncate max-w-[260px]">{r.error_message ?? ""}</td>
                 </tr>
               ))}
