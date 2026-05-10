@@ -30,7 +30,7 @@ export type Conversation = Pick<
   | "pinned_at"
   | "assigned_user_id"
   | "active_responder_id"
-  | "active_responder_at"
+  | "active_responder_at, pipeline_id"
 > & { pipeline_id: string | null };
 
 export type Stage = Pick<Tables<"pipeline_stages">, "id" | "name" | "color" | "position" | "stage_type" | "workspace_id"> & { pipeline_id: string | null };
@@ -65,7 +65,7 @@ export async function fetchCrmBase(workspaceId?: string) {
   let conversationsQuery = supabase
     .from("conversations")
     .select(
-      "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at",
+      "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id",
     )
     .order("last_message_at", { ascending: false, nullsFirst: false });
 
@@ -156,12 +156,12 @@ async function seedDefaultStagesForWorkspace(workspaceId: string): Promise<Stage
   const { data, error } = await supabase
     .from("pipeline_stages")
     .insert(rows)
-    .select("id, name, color, position, stage_type, workspace_id");
+    .select("id, name, color, position, stage_type, workspace_id, pipeline_id");
   if (error) {
     // Race with another tab seeding at the same time -> just refetch
     const { data: again } = await supabase
       .from("pipeline_stages")
-      .select("id, name, color, position, stage_type, workspace_id")
+      .select("id, name, color, position, stage_type, workspace_id, pipeline_id")
       .eq("workspace_id", workspaceId)
       .order("position");
     return (again ?? []) as Stage[];
@@ -170,14 +170,14 @@ async function seedDefaultStagesForWorkspace(workspaceId: string): Promise<Stage
 }
 
 export async function fetchPipelineBase(workspaceId?: string) {
-  let stagesQuery = supabase.from("pipeline_stages").select("id, name, color, position, stage_type, workspace_id").order("position");
+  let stagesQuery = supabase.from("pipeline_stages").select("id, name, color, position, stage_type, workspace_id, pipeline_id").order("position");
   let dealsQuery = supabase
     .from("deals")
-    .select("id, title, contact_name, contact_phone, amount, currency, notes, stage_id, workspace_id, position, conversation_id, updated_at")
+    .select("id, title, contact_name, contact_phone, amount, currency, notes, stage_id, workspace_id, position, conversation_id, updated_at, pipeline_id")
     .order("position");
   let conversationsQuery = supabase
     .from("conversations")
-    .select("id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at");
+    .select("id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id");
 
   if (workspaceId) {
     stagesQuery = stagesQuery.eq("workspace_id", workspaceId);
