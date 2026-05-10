@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 5) Inbound webhook silence (no inbound msg in last 30 min while we have active numbers)
+    // 5) Inbound webhook silence (no inbound msg in last INBOUND_SILENCE_MIN min while we have active numbers)
     const { count: activeNumCount } = await supabase
       .from("whatsapp_numbers")
       .select("id", { count: "exact", head: true })
@@ -121,11 +121,11 @@ Deno.serve(async (req) => {
         .from("messages")
         .select("id", { count: "exact", head: true })
         .eq("direction", "inbound")
-        .gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString());
+        .gte("created_at", new Date(Date.now() - INBOUND_SILENCE_MIN * 60_000).toISOString());
       if ((recentInbound ?? 0) === 0) {
         alerts.push({
           kind: "inbound_silence",
-          text: `:warning: No inbound WhatsApp messages received in last 30m across ${activeNumCount} active number(s). Webhook may be down or templates not opt-in.\n\n_Hint: re-set Gupshup callback via gupshup-set-callback._`,
+          text: `:warning: No inbound WhatsApp messages received in last ${INBOUND_SILENCE_MIN}m across ${activeNumCount} active number(s). Webhook may be down.\n\n_Hint: re-set Gupshup callback via gupshup-set-callback._`,
         });
       }
     }
