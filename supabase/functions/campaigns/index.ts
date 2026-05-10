@@ -652,6 +652,7 @@ function renderTemplateBody(body: string | null | undefined, variableNames: stri
 async function ensureCampaignConversation(admin: any, recipient: any): Promise<string | null> {
   const number = recipient.campaigns?.whatsapp_numbers;
   const numberId = recipient.campaigns?.whatsapp_number_id;
+  const campaignPipelineId = recipient.campaigns?.pipeline_id ?? null;
   const workspaceId = recipient.workspace_id;
   const phone = String(recipient.contact_phone || "").replace(/[^\d]/g, "");
   if (!numberId || !phone) return recipient.conversation_id ?? null;
@@ -660,11 +661,17 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
 
   const { data: existing } = await admin
     .from("conversations")
-    .select("id")
+    .select("id, pipeline_id")
     .eq("whatsapp_number_id", numberId)
     .eq("contact_phone", phone)
     .maybeSingle();
-  if (existing) return existing.id;
+  if (existing) {
+    // Heal stale pipeline assignment if conversation exists but pipeline differs.
+    if (campaignPipelineId && existing.pipeline_id !== campaignPipelineId) {
+      await admin.from("conversations").update({ pipeline_id: campaignPipelineId }).eq("id", existing.id);
+    }
+    return existing.id;
+  }
 
   const { data: created, error } = await admin
     .from("conversations")
@@ -674,6 +681,7 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
       whatsapp_number_id: numberId,
       contact_phone: phone,
       contact_name: recipient.contact_name ?? null,
+      pipeline_id: campaignPipelineId,
       unread_count: 0,
     })
     .select("id")
@@ -711,7 +719,7 @@ async function processQueue(admin: any) {
 
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, campaigns!inner(id, status, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", horizonIso)
     .eq("campaigns.status", "running")

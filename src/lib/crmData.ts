@@ -7,12 +7,14 @@ export type WhatsAppNumber = Pick<
 >;
 
 /** Friendly, human-facing sender label for use in normal chat UI.
- * Never exposes the technical Gupshup app name (display_name).
- * Order: explicit label -> +phone. */
-export const friendlySenderLabel = (n: Pick<WhatsAppNumber, "label" | "phone_number"> | null | undefined) => {
+ * Shows the operator/profile name (display_name) with phone fallback.
+ * `label` is an internal fleet/admin handle (e.g. "01Ashik02") and must NOT
+ * appear in operator-facing chat UI.
+ * Order: display_name -> +phone. */
+export const friendlySenderLabel = (n: Pick<WhatsAppNumber, "display_name" | "phone_number"> | null | undefined) => {
   if (!n) return "WhatsApp";
-  const l = n.label?.trim();
-  if (l) return l;
+  const d = n.display_name?.trim();
+  if (d) return d;
   return `+${n.phone_number}`;
 };
 

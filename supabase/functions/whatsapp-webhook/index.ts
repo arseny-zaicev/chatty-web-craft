@@ -145,6 +145,21 @@ async function handleInbound(payload: Record<string, unknown>) {
       })
       .eq("id", conversationId);
   } else {
+    // Resolve pipeline from the most recent first_touch campaign recipient for this
+    // (number, phone), so the new conversation lands in the source pipeline rather
+    // than the workspace default that the BEFORE INSERT trigger would otherwise set.
+    let inferredPipelineId: string | null = null;
+    const { data: rec } = await supabase
+      .from("campaign_recipients")
+      .select("campaigns!inner(pipeline_id, kind)")
+      .eq("whatsapp_number_id", number.id)
+      .eq("contact_phone", source)
+      .eq("campaigns.kind", "first_touch")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    inferredPipelineId = (rec as any)?.campaigns?.pipeline_id ?? null;
+
     const { data: created, error } = await supabase
       .from("conversations")
       .insert({
@@ -153,6 +168,7 @@ async function handleInbound(payload: Record<string, unknown>) {
         whatsapp_number_id: number.id,
         contact_phone: source,
         contact_name: contactName,
+        pipeline_id: inferredPipelineId,
         last_message_text: body ?? `[${messageType}]`,
         last_message_at: new Date().toISOString(),
         unread_count: 1,
