@@ -268,7 +268,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     setLoadingMessages(true);
     supabase
       .from("messages")
-      .select("id, direction, body, media_url, status, created_at")
+      .select("id, direction, body, media_url, status, created_at, sent_by_user_id")
       .eq("conversation_id", activeId)
       .order("created_at", { ascending: true })
       .then(({ data }) => {
