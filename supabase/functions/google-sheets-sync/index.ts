@@ -247,14 +247,17 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     let rejected = 0;
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
+    const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
 
     // 3. Validate + dedupe + import
     for (let i = 0; i < newRows.length; i++) {
       const sheetRowNumber = startIdx + i + 1; // 1-based
       const row = newRows[i] ?? [];
       const phoneRaw = row[phoneIdx];
-      const phone = normalizePhone(phoneRaw);
-      const name = nameIdx >= 0 ? (row[nameIdx] ? String(row[nameIdx]).slice(0, 200) : null) : null;
+      const phone = normalizePhone(phoneRaw, defaultCC);
+      const nameRawCell = nameIdx >= 0 ? row[nameIdx] : null;
+      const name = nameRawCell && !isTestLeadValue(nameRawCell)
+        ? String(nameRawCell).slice(0, 200) : null;
       const externalId = `row-${sheetRowNumber}`;
       const payload: Record<string, unknown> = { _sheet_row: sheetRowNumber };
       headers.forEach((h, idx) => {
@@ -262,6 +265,24 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       });
 
       lastProcessedRow = sheetRowNumber;
+
+      // Skip Meta test-lead rows entirely (do not pollute lead_imports as invalid)
+      if (isTestLeadValue(phoneRaw) || isTestLeadValue(nameRawCell)) {
+        rejected++;
+        await admin.from("lead_imports").insert({
+          workspace_id: source.workspace_id,
+          pipeline_id: source.pipeline_id,
+          batch_id: batch.id,
+          source_connection_id: source.id,
+          external_id: externalId,
+          phone: String(phoneRaw ?? ""),
+          name,
+          payload,
+          status: "invalid",
+          error: "Test lead (skipped)",
+        });
+        continue;
+      }
 
       if (!phone) {
         rejected++;
