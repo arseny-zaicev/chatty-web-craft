@@ -368,6 +368,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (numberFilter !== "all" && c.whatsapp_number_id !== numberFilter) return false;
     if (starredOnly && !c.is_starred) return false;
     if (myOnly && meId && c.assigned_user_id !== meId) return false;
+    if (repliedOnly && !repliedSet.has(c.id)) return false;
     if (search) {
       const q = search.toLowerCase();
       const hay = `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`.toLowerCase();
