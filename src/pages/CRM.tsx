@@ -112,6 +112,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     queryFn: () => fetchWorkspaceMembers(workspaceId),
     enabled: !!workspaceId,
   });
+  const { data: pipelines = [] } = useQuery({
+    queryKey: pipelinesKey(workspaceId),
+    queryFn: () => fetchPipelines(workspaceId),
+    enabled: !!workspaceId,
+  });
   const memberById = useMemo(() => {
     const m = new Map<string, (typeof members)[number]>();
     members.forEach((x) => m.set(x.user_id, x));
