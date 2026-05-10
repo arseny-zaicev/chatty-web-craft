@@ -115,6 +115,12 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // Heartbeat (best-effort)
+    admin.from("system_heartbeats").upsert({
+      name: "google-sheets-sync",
+      last_run_at: new Date().toISOString(),
+    }).then(() => {}, () => {});
+
     // Authorize: workspace manager OR source secret token / service-role bearer.
     const authHeader = req.headers.get("Authorization") || "";
     const isService = authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
