@@ -22,6 +22,7 @@ type NumberRow = {
   label: string | null;
   partner_source: string | null;
   bm_name: string | null;
+  business_manager_id: string | null;
   notes: string | null;
   provider_app_id: string | null;
   provider_api_key: string | null;
@@ -33,6 +34,8 @@ type NumberRow = {
   country_code: string | null;
   webhook_connected: boolean;
 };
+
+type BMOption = { id: string; name: string; status: string };
 
 type Workspace = { id: string; name: string };
 
