@@ -24,7 +24,9 @@ import {
   audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows,
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
 } from "@/lib/audienceData";
-import { fetchPipelines, pipelinesKey } from "@/lib/pipelines";
+import { fetchPipelines, pipelinesKey, createPipeline } from "@/lib/pipelines";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
@@ -100,6 +102,26 @@ export default function LaunchWizard() {
       setPipelineId(pipelines.find((p) => p.is_default)?.id ?? pipelines[0].id);
     }
   }, [pipelines, pipelineId]);
+  const [showCreatePipeline, setShowCreatePipeline] = useState(false);
+  const [newPipelineName, setNewPipelineName] = useState("");
+  const [newPipelineColor, setNewPipelineColor] = useState("#6366f1");
+  const [creatingPipeline, setCreatingPipeline] = useState(false);
+  const handleCreatePipeline = async () => {
+    if (!workspace || !newPipelineName.trim()) return;
+    setCreatingPipeline(true);
+    try {
+      const p = await createPipeline(workspace.id, { name: newPipelineName.trim(), color: newPipelineColor });
+      await qc.invalidateQueries({ queryKey: pipelinesKey(workspace.id) });
+      setPipelineId(p.id);
+      setShowCreatePipeline(false);
+      setNewPipelineName("");
+      toast.success("Pipeline created");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create pipeline");
+    } finally {
+      setCreatingPipeline(false);
+    }
+  };
 
   const [logicalKey, setLogicalKey] = useState<string>("");
   const [poolCountry, setPoolCountry] = useState<string>("");
@@ -1128,7 +1150,27 @@ export default function LaunchWizard() {
 
           {/* Step 6: Naming */}
           <Step n={6} icon={Bookmark} title="Campaign name">
-            <div className="grid sm:grid-cols-2 gap-2">
+            <Field label="Pipeline (board where replies will land)">
+              <div className="flex gap-2">
+                <Select value={pipelineId} onValueChange={setPipelineId}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Pick a pipeline" /></SelectTrigger>
+                  <SelectContent>
+                    {pipelines.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                          {p.name}{p.is_default && <span className="text-[10px] text-muted-foreground">(default)</span>}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={() => setShowCreatePipeline(true)}>
+                  <Plus className="w-3.5 h-3.5 mr-1" />New
+                </Button>
+              </div>
+            </Field>
+            <div className="grid sm:grid-cols-2 gap-2 mt-2">
               <Field label="Audience">
                 <Input value={audience} onChange={(e) => { setAudience(e.target.value); setAudienceDirty(true); }} placeholder="GTM Professionals" />
               </Field>
@@ -1208,7 +1250,7 @@ export default function LaunchWizard() {
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
@@ -1217,6 +1259,26 @@ export default function LaunchWizard() {
           </p>
         </aside>
       </div>
+
+      <Dialog open={showCreatePipeline} onOpenChange={setShowCreatePipeline}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>New pipeline</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Field label="Name">
+              <Input value={newPipelineName} onChange={(e) => setNewPipelineName(e.target.value)} placeholder="e.g. Ads / Germany" autoFocus />
+            </Field>
+            <Field label="Color">
+              <Input type="color" value={newPipelineColor} onChange={(e) => setNewPipelineColor(e.target.value)} className="h-10 w-20 p-1" />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCreatePipeline(false)}>Cancel</Button>
+            <Button onClick={handleCreatePipeline} disabled={!newPipelineName.trim() || creatingPipeline}>
+              {creatingPipeline ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

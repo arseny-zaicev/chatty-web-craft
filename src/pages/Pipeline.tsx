@@ -545,6 +545,38 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                     </Select>
                   </Field>
                 </div>
+                {pipelines.length > 1 && (
+                  <Field label="Pipeline">
+                    <Select
+                      value={(editing ?? activeDeal).pipeline_id ?? selectedPipelineId ?? ""}
+                      onValueChange={async (v) => {
+                        if (!v || v === activeDeal.pipeline_id) return;
+                        try {
+                          await moveDealToPipeline(activeDeal.id, v);
+                          toast.success("Deal moved to pipeline");
+                          setActiveDealId(null);
+                          setEditing(null);
+                        } catch (e: any) {
+                          toast.error(e?.message ?? "Failed to move");
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pipelines.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                              {p.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
                 <Field label="Notes">
                   <Textarea
                     rows={5}

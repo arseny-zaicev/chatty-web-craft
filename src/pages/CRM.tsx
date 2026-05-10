@@ -35,6 +35,8 @@ import {
   setConversationStarred,
   touchResponder as touchResponderApi,
 } from "@/lib/inbox";
+import { fetchPipelines, pipelinesKey, moveConversationToPipeline } from "@/lib/pipelines";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
@@ -63,6 +65,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [activeId, setActiveId] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [myOnly, setMyOnly] = useState(false);
+  const [pipelineFilter, setPipelineFilter] = useState<string>("all"); // "all" | "unassigned" | <pipelineId>
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
@@ -107,6 +110,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const { data: members = [] } = useQuery({
     queryKey: workspaceMembersKey(workspaceId),
     queryFn: () => fetchWorkspaceMembers(workspaceId),
+    enabled: !!workspaceId,
+  });
+  const { data: pipelines = [] } = useQuery({
+    queryKey: pipelinesKey(workspaceId),
+    queryFn: () => fetchPipelines(workspaceId),
     enabled: !!workspaceId,
   });
   const memberById = useMemo(() => {
@@ -387,6 +395,11 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (starredOnly && !c.is_starred) return false;
     if (myOnly && meId && c.assigned_user_id !== meId) return false;
     if (repliedOnly && !repliedSet.has(c.id)) return false;
+    if (pipelineFilter === "unassigned") {
+      if (c.pipeline_id) return false;
+    } else if (pipelineFilter !== "all") {
+      if (c.pipeline_id !== pipelineFilter) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       const hay = `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`.toLowerCase();
@@ -536,6 +549,20 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   <option value="unread">Unread first</option>
                   <option value="oldest">Oldest</option>
                 </select>
+                {pipelines.length > 0 && (
+                  <select
+                    value={pipelineFilter}
+                    onChange={(e) => setPipelineFilter(e.target.value)}
+                    className="text-xs px-2 py-1 rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary/40 transition"
+                    title="Filter by pipeline"
+                  >
+                    <option value="all">All pipelines</option>
+                    <option value="unassigned">Unassigned</option>
+                    {pipelines.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -719,6 +746,39 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                           placeholder="Assign..."
                           className="h-8 text-xs"
                         />
+                      </div>
+                    )}
+                    {workspaceId && pipelines.length > 0 && (
+                      <div className="hidden md:block w-40">
+                        <Select
+                          value={active.pipeline_id ?? "__none__"}
+                          onValueChange={async (v) => {
+                            if (v === "__none__") return;
+                            const prev = active.pipeline_id;
+                            setConversations((p) => p.map((c) => (c.id === active.id ? { ...c, pipeline_id: v } : c)));
+                            try {
+                              await moveConversationToPipeline(active.id, v);
+                              toast.success("Moved to pipeline");
+                            } catch (e) {
+                              setConversations((p) => p.map((c) => (c.id === active.id ? { ...c, pipeline_id: prev } : c)));
+                              toast.error(e instanceof Error ? e.message : "Failed to move");
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Pipeline..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {pipelines.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                <span className="inline-flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                                  {p.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                     {activeNumber && (
