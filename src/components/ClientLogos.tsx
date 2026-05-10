@@ -26,18 +26,18 @@ type Client = {
 
 const clients: Client[] = [
   { name: "Salesforge", logo: salesforgeLogo, url: "https://salesforge.ai", scale: 1.05 },
-  { name: "Goflow", logo: goflowLogo, url: "https://goflow.com", scale: 0.95 },
-  { name: "Underground Ecom", logo: undergroundEcomLogo, url: "https://www.undergroundecom.com", scale: 1.0 },
+  { name: "Goflow", logo: goflowLogo, url: "https://goflow.com", scale: 1.0 },
+  { name: "Underground Ecom", logo: undergroundEcomLogo, url: "https://www.undergroundecom.com", scale: 1.25 },
   { name: "RedRover", logo: redroverLogo, url: "https://tryredrover.com", scale: 0.95 },
   { name: "The Revenue", logo: revbizLogo, url: "https://therevenue.biz", scale: 1.0 },
   { name: "PN Digital", logo: pnDigitalLogo, url: "https://pndigital.co.uk", scale: 1.0 },
-  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv", scale: 0.85 },
+  { name: "Key Digital", logo: keyDigitalLogo, url: "https://key-digital.lv", scale: 1.1 },
   { name: "RecruitCloud", logo: recruitcloudLogo, url: "https://www.recruitcloud.io", scale: 1.0 },
   { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com", scale: 1.05 },
   { name: "Cleon1", logo: cleon1Logo, url: "https://cleon1.com", scale: 1.0 },
-  { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com", scale: 0.95 },
+  { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com", scale: 1.0 },
   { name: "Sophias", logo: sophiasLogo, url: "https://sophias.io", scale: 1.0 },
-  { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://www.hffinteriors.ae", scale: 0.9 },
+  { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://www.hffinteriors.ae", scale: 0.95 },
   { name: "KoldLeads", logo: koldleadsLogo, url: "https://www.youtube.com/@karstonfox", scale: 1.0 },
   { name: "FB Marketing", logo: fbMarketingLogo, url: "https://instagram.com/f.b.marketing", scale: 1.0 },
 ];

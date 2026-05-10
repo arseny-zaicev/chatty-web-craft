@@ -13,7 +13,7 @@ export const WhatsAppFloat = () => {
   if (dismissed || !visible) return null;
 
   return (
-    <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[60] flex flex-col items-end gap-3 animate-fade-in">
+    <div className="fixed bottom-24 right-4 md:bottom-20 md:right-6 z-[60] flex flex-col items-end gap-3 animate-fade-in">
       {/* Tooltip - desktop only to avoid overlapping content on tablets/laptops */}
       <div className="relative glass-card rounded-xl px-4 py-3 max-w-[200px] border-iskra-emerald/20 shadow-xl hidden xl:block">
         <button
