@@ -473,6 +473,27 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                 >
                   My chats
                 </button>
+                <button
+                  onClick={() => setShowNegative((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
+                    showNegative
+                      ? "bg-red-500/15 text-red-600 border-red-500/40"
+                      : "border-border text-muted-foreground hover:border-red-500/40"
+                  }`}
+                  title={showNegative ? "Show active conversations" : "Show negative replies (Not interested / Lost)"}
+                >
+                  Negative{negativeCount > 0 && ` · ${negativeCount}`}
+                </button>
+                <select
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+                  className="text-xs px-2 py-1 rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary/40 transition"
+                  title="Sort conversations"
+                >
+                  <option value="recent">Recent</option>
+                  <option value="unread">Unread first</option>
+                  <option value="oldest">Oldest</option>
+                </select>
               </div>
             </div>
 
