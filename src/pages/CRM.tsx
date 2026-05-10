@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase, friendlySenderLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ type Message = {
 const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const queryClient = useQueryClient();
+  // queryClient no longer needed: realtime updates flow through local state, react-query stays the cache.
   const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
   const [numberFilter, setNumberFilter] = useState<string>("all");
   const [starredOnly, setStarredOnly] = useState(false);
