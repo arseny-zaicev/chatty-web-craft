@@ -37,6 +37,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   // and was the source of silent misrouting at >1 number.
   let number: { id: string; user_id: string; workspace_id: string; phone_number: string; display_name: string | null; provider_app_id: string | null } | null = null;
   let matchStrategy: "provider_app_id" | "label" | "phone_number" | null = null;
+  let ambiguousReason: string | null = null;
 
   if (appName) {
     const { data, error } = await supabase
@@ -50,8 +51,8 @@ async function handleInbound(payload: Record<string, unknown>) {
       number = data[0];
       matchStrategy = "provider_app_id";
     } else if (data && data.length > 1) {
+      ambiguousReason = `ambiguous_provider_app_id:${data.length}`;
       console.error("Ambiguous provider_app_id - multiple numbers share the same Gupshup app id", { appName, count: data.length });
-      return; // refuse to guess
     }
   }
   // Fallback: provider_app_id stores the Gupshup app UUID, but the webhook payload
@@ -68,8 +69,8 @@ async function handleInbound(payload: Record<string, unknown>) {
       number = data[0];
       matchStrategy = "label";
     } else if (data && data.length > 1) {
+      ambiguousReason = `ambiguous_label:${data.length}`;
       console.error("Ambiguous label - multiple numbers share the same Gupshup app name", { appName, count: data.length });
-      return;
     }
   }
   if (!number && destination) {
@@ -84,12 +85,22 @@ async function handleInbound(payload: Record<string, unknown>) {
       number = data[0];
       matchStrategy = "phone_number";
     } else if (data && data.length > 1) {
+      ambiguousReason = `ambiguous_phone_number:${data.length}`;
       console.error("Ambiguous phone_number - duplicate rows for same number", { destination, count: data.length });
-      return;
     }
   }
   if (!number) {
-    console.warn("No matching whatsapp_number for inbound webhook", { appName, destination, source });
+    const reason = ambiguousReason ?? "no_match";
+    console.warn("No matching whatsapp_number for inbound webhook", { reason, appName, destination, source });
+    await supabase.from("whatsapp_webhook_failures").insert({
+      reason,
+      app_name: appName || null,
+      destination: destination || null,
+      source: source || null,
+      event_type: "message",
+      payload,
+      replay_status: "pending",
+    });
     return;
   }
   console.log("Matched inbound whatsapp_number", {

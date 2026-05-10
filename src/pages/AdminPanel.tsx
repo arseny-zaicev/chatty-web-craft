@@ -15,6 +15,7 @@ import { User } from "@supabase/supabase-js";
 import { AdminSubmissions } from "@/components/AdminSubmissions";
 import { FormAnalyticsDashboard } from "@/components/FormAnalyticsDashboard";
 import { SiteAnalytics } from "@/components/admin/SiteAnalytics";
+import { WebhookHealth } from "@/components/admin/WebhookHealth";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
 import { fetchPortfolioSnapshot, portfolioKeys, type PortfolioSnapshot } from "@/lib/portfolioMetrics";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ type Section =
   | "companies.portfolio"
   | "companies.fleet"
   | "companies.analytics"
+  | "companies.webhook_health"
   | "forms.submissions"
   | "forms.analytics"
   | "site.analytics"
@@ -49,6 +51,7 @@ const NAV: NavGroup[] = [
       { id: "companies.portfolio", label: "Portfolio", icon: LayoutDashboard },
       { id: "companies.fleet", label: "Fleet · Numbers", icon: Phone, external: "/admin/fleet" },
       { id: "companies.analytics", label: "Fleet analytics", icon: BarChart3, external: "/admin/analytics" },
+      { id: "companies.webhook_health", label: "Webhook health", icon: AlertTriangle },
     ],
   },
   {
@@ -187,6 +190,7 @@ const AdminPanel = () => {
           {section === "forms.submissions" && <AdminSubmissions />}
           {section === "forms.analytics" && <FormAnalyticsDashboard />}
           {section === "site.analytics" && <SiteAnalytics />}
+          {section === "companies.webhook_health" && <WebhookHealth />}
         </main>
       </div>
     </div>

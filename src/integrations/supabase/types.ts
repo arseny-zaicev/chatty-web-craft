@@ -1394,6 +1394,51 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_webhook_failures: {
+        Row: {
+          app_name: string | null
+          created_at: string
+          destination: string | null
+          event_type: string | null
+          id: string
+          matched_whatsapp_number_id: string | null
+          payload: Json
+          reason: string
+          replay_error: string | null
+          replay_status: string
+          replayed_at: string | null
+          source: string | null
+        }
+        Insert: {
+          app_name?: string | null
+          created_at?: string
+          destination?: string | null
+          event_type?: string | null
+          id?: string
+          matched_whatsapp_number_id?: string | null
+          payload: Json
+          reason: string
+          replay_error?: string | null
+          replay_status?: string
+          replayed_at?: string | null
+          source?: string | null
+        }
+        Update: {
+          app_name?: string | null
+          created_at?: string
+          destination?: string | null
+          event_type?: string | null
+          id?: string
+          matched_whatsapp_number_id?: string | null
+          payload?: Json
+          reason?: string
+          replay_error?: string | null
+          replay_status?: string
+          replayed_at?: string | null
+          source?: string | null
+        }
+        Relationships: []
+      }
       workspace_files: {
         Row: {
           created_at: string
