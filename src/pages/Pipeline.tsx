@@ -61,10 +61,28 @@ import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const wsSlugMatch = location.pathname.match(/^\/ws\/([^/]+)/);
   const wsSlug = wsSlugMatch?.[1];
   const inboxPath = (conversationId: string) =>
     wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
+
+  const { data: pipelines = [] } = useQuery({
+    queryKey: pipelinesKey(workspaceId),
+    queryFn: () => fetchPipelines(workspaceId),
+    enabled: !!workspaceId,
+  });
+  const urlPipeline = searchParams.get("pipeline");
+  const defaultPipeline = pipelines.find((p) => p.is_default) ?? pipelines[0] ?? null;
+  const selectedPipelineId =
+    (urlPipeline && pipelines.some((p) => p.id === urlPipeline)) ? urlPipeline : defaultPipeline?.id ?? null;
+  // Sync URL to default once pipelines load
+  useEffect(() => {
+    if (!urlPipeline && defaultPipeline) {
+      setSearchParams((prev) => { prev.set("pipeline", defaultPipeline.id); return prev; }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultPipeline?.id]);
   
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
