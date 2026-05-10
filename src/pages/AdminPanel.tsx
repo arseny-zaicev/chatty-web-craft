@@ -30,6 +30,7 @@ const ADMIN_EMAIL = "arseny@iskra.ae";
 type Section =
   | "companies.portfolio"
   | "companies.fleet"
+  | "companies.bms"
   | "companies.analytics"
   | "companies.webhook_health"
   | "forms.submissions"
