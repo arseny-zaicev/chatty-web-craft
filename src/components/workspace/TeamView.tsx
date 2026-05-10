@@ -182,7 +182,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1"><Users className="w-4 h-4 text-primary" /><h3 className="font-display text-lg font-semibold">Team & client access</h3></div>
-          <p className="text-xs text-muted-foreground">Invite teammates as <strong>Manager</strong> (full access) or the client as <strong>Client</strong> (read-only Overview, Inbox, Pipeline, Campaigns - no provider details).</p>
+          <p className="text-xs text-muted-foreground"><strong>Manager</strong> - full access (Inbox, Pipeline, Overview, Campaigns view, Quick replies, Settings). <strong>Client</strong> - Inbox + Pipeline only by default; toggle below to grant Overview + Campaigns view.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setLinkOpen(true)}><Link2 className="w-4 h-4 mr-2" />Invite link</Button>
