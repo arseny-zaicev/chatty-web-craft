@@ -166,14 +166,22 @@ export type WorkspaceOverview = WorkspaceMetrics & {
   recent_launches: Array<{ id: string; name: string; status: string; created_at: string; sent_count: number; total: number }>;
 };
 
+// Sibling campaigns launched across multiple WhatsApp numbers share a base
+// name in the form "<base> :: <numberLabel>". Clients should see them merged
+// into a single launch.
+const splitBase = (full: string): string => {
+  const idx = full.indexOf(" :: ");
+  return idx === -1 ? full : full.slice(0, idx).trim();
+};
+
 export async function fetchWorkspaceOverview(workspaceId: string): Promise<WorkspaceOverview> {
   const today = startOfDayIso();
   const [{ data: convs }, { data: numbers }, { data: campaigns }, { data: templates }, { data: recent }] = await Promise.all([
     supabase.from("conversations").select("id, unread_count, last_message_at").eq("workspace_id", workspaceId),
     supabase.from("whatsapp_numbers").select("is_active, connected_in_gupshup, connected_in_iskra").eq("workspace_id", workspaceId),
-    supabase.from("campaigns").select("status, scheduled_start_at").eq("workspace_id", workspaceId),
+    supabase.from("campaigns").select("name, status, scheduled_start_at").eq("workspace_id", workspaceId),
     supabase.from("message_templates").select("status").eq("workspace_id", workspaceId).eq("status", "approved"),
-    supabase.from("campaigns").select("id, name, status, created_at, sent_count, total_recipients").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(5),
+    supabase.from("campaigns").select("id, name, status, created_at, sent_count, total_recipients").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(20),
   ]);
 
   const convIds = (convs ?? []).map((c) => c.id);
