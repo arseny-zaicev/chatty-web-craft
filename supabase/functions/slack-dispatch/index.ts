@@ -18,6 +18,7 @@ const corsHeaders = {
 
 const OPS_CAMPAIGNS = Deno.env.get("SLACK_OPS_CAMPAIGNS_CHANNEL_ID") || "";
 const OPS_NUMBERS   = Deno.env.get("SLACK_OPS_NUMBERS_CHANNEL_ID") || "";
+const OPS_FINANCE   = Deno.env.get("SLACK_OPS_FINANCE_CHANNEL_ID") || "";
 
 const CAMPAIGN_EVENTS = new Set([
   "campaign_launched", "campaign_resumed", "campaign_paused",
