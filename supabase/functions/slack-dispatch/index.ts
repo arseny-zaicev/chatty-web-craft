@@ -28,6 +28,39 @@ const NUMBER_EVENTS = new Set([
   "number_restricted", "number_blocked", "number_recovered", "number_quality_changed",
 ]);
 
+function buildLeadEventBlocks(eventType: string, ws: any, p: any) {
+  const wsTag = ws?.name ? `${ws.name}${ws.internal_code ? `-${ws.internal_code}` : ""}` : "Workspace";
+  const meta: Record<string, { emoji: string; title: string }> = {
+    "lead.imported": { emoji: "📥", title: "Leads imported" },
+    "lead.import_failed": { emoji: "⚠️", title: "Lead import failed" },
+    "lead.dispatched": { emoji: "📤", title: "Leads dispatched" },
+    "lead.dispatch_blocked": { emoji: "🛑", title: "Auto first-touch blocked" },
+  };
+  const m = meta[eventType] || { emoji: "ℹ️", title: eventType };
+  const lines: string[] = [];
+  if (eventType === "lead.imported" || eventType === "lead.import_failed") {
+    lines.push(`*Source:* ${p?.source_name ?? "-"}`);
+    lines.push(`*New:* ${p?.accepted ?? 0}  ·  *Skipped:* ${p?.rejected ?? 0}  ·  *Total:* ${p?.total ?? 0}`);
+  } else if (eventType === "lead.dispatched") {
+    lines.push(`*Pipeline:* ${p?.pipeline_name ?? "-"}`);
+    lines.push(`*Queued for first-touch:* ${p?.queued ?? 0} on ${p?.sender_count ?? 0} number(s)`);
+  } else if (eventType === "lead.dispatch_blocked") {
+    lines.push(`*Pipeline:* ${p?.pipeline_name ?? "-"}`);
+    lines.push(`*Reason:* \`${p?.reason ?? "-"}\``);
+    if (p?.error) lines.push(`*Error:* ${String(p.error).slice(0, 240)}`);
+  }
+  const text = `${m.emoji} ${m.title} · ${wsTag}`;
+  return {
+    text,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: `${m.emoji} ${m.title}`, emoji: true } },
+      { type: "context", elements: [{ type: "mrkdwn", text: `*${wsTag}*` }] },
+      { type: "section", text: { type: "mrkdwn", text: lines.join("\n") || "-" } },
+    ],
+  };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
