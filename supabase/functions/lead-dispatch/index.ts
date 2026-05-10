@@ -185,7 +185,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
 
   // Schedule each lead
   const wsMin = hhmmToMin(winStart);
-  const wsMax = hhmmToMin(winEnd);
+  const wsMax = hhmmToMin(winEnd, true);
   const windowSec = Math.max(60, (wsMax - wsMin) * 60);
   const avgGap = Math.max(15, Math.min(120, windowSec / Math.max(1, leads.length)));
   // Per-sibling cursor
@@ -195,7 +195,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   const ensureInside = (ms: number): number => {
     const d = dayKey(ms, tz);
     const startUtc = dateAtTzToUTC(d, winStart, tz).getTime();
-    const endUtc = dateAtTzToUTC(d, winEnd, tz).getTime();
+    const endUtc = dateAtTzToUTC(d, winEnd, tz, true).getTime();
     if (ms < startUtc) return startUtc;
     if (ms >= endUtc) {
       const next = new Date(ms + 24 * 3600_000);
