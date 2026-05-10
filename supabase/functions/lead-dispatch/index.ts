@@ -264,7 +264,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
         scheduled_at: rec.scheduled_at,
       })
       .eq("id", lu.id)
-      .eq("status", "pending");
+      .in("status", ["pending", "awaiting_manual"]);
     if (!uErr) queued++;
   }
 
