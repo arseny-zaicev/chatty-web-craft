@@ -24,7 +24,9 @@ import {
   audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows,
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
 } from "@/lib/audienceData";
-import { fetchPipelines, pipelinesKey } from "@/lib/pipelines";
+import { fetchPipelines, pipelinesKey, createPipeline } from "@/lib/pipelines";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
