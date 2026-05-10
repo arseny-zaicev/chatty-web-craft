@@ -337,6 +337,51 @@ export function buildInboxSpikeBlocks(args: {
   };
 }
 
+export function buildGupshupMailAlertBlocks(args: {
+  category: string;
+  severity: "info" | "warning" | "critical";
+  ws: WorkspaceInfo | null;
+  payload: Record<string, unknown>;
+}): BlockMessage {
+  const { category, severity, ws, payload } = args;
+  const tag = ws ? brandTag(ws.name, ws.internal_code) : "Unmatched";
+  const sevEmoji = severity === "critical" ? "🔴" : severity === "warning" ? "🟠" : "🔵";
+  const catLabels: Record<string, string> = {
+    quality_drop: "Quality drop",
+    restriction: "Number restricted",
+    block: "Number blocked",
+    template_rejected: "Template rejected",
+    template_approved: "Template approved",
+    billing: "Billing alert",
+    account_review: "Account review",
+    other: "Gupshup notice",
+  };
+  const headline = `${sevEmoji}  ${tag}  ·  Gupshup: ${catLabels[category] || category}`;
+  const phone = String(payload.phone_number || "").trim();
+  const subject = String(payload.subject || "").slice(0, 200);
+  const snippet = String(payload.snippet || "").slice(0, 280);
+  const fields: { type: string; text: string }[] = [];
+  fields.push({ type: "mrkdwn", text: `*Number*\n${phone ? `+${phone}` : "_unmatched_"}` });
+  if (payload.template_name) fields.push({ type: "mrkdwn", text: `*Template*\n${payload.template_name}` });
+  if (payload.waba_id) fields.push({ type: "mrkdwn", text: `*WABA*\n${payload.waba_id}` });
+  fields.push({ type: "mrkdwn", text: `*Subject*\n${subject || "-"}` });
+
+  const blocks: unknown[] = [
+    { type: "header", text: { type: "plain_text", text: headline, emoji: true } },
+    { type: "section", fields: fields.slice(0, 10) },
+  ];
+  if (snippet) blocks.push({ type: "section", text: { type: "mrkdwn", text: `*Excerpt*\n>${snippet.replace(/\n/g, "\n>")}` } });
+  blocks.push({
+    type: "actions",
+    elements: [
+      { type: "button", text: { type: "plain_text", text: "Open in Gmail" }, url: `https://mail.google.com/mail/u/0/#inbox/${payload.gmail_id}` },
+      ...(ws ? [{ type: "button", text: { type: "plain_text", text: "Open numbers" }, url: `${workspaceUrl(ws.slug)}/numbers` }] : []),
+    ],
+  });
+  blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `_${tag} · ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dubai" })}_` }] });
+  return { text: `${headline}: ${subject || phone || "alert"}`, blocks };
+}
+
 export async function postSlack(channel: string, msg: BlockMessage): Promise<void> {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   const slackKey = Deno.env.get("SLACK_API_KEY");
