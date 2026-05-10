@@ -906,6 +906,7 @@ export type Database = {
           media_url: string | null
           metadata: Json
           provider_message_id: string | null
+          sent_by_user_id: string | null
           status: Database["public"]["Enums"]["message_status"]
           user_id: string
         }
@@ -919,6 +920,7 @@ export type Database = {
           media_url?: string | null
           metadata?: Json
           provider_message_id?: string | null
+          sent_by_user_id?: string | null
           status?: Database["public"]["Enums"]["message_status"]
           user_id: string
         }
@@ -932,6 +934,7 @@ export type Database = {
           media_url?: string | null
           metadata?: Json
           provider_message_id?: string | null
+          sent_by_user_id?: string | null
           status?: Database["public"]["Enums"]["message_status"]
           user_id?: string
         }

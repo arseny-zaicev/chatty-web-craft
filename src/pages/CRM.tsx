@@ -35,6 +35,7 @@ type Message = {
   media_url: string | null;
   status: string;
   created_at: string;
+  sent_by_user_id: string | null;
 };
 
 const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
@@ -103,6 +104,41 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     members.forEach((x) => m.set(x.user_id, x));
     return m;
   }, [members]);
+
+  // Fallback resolver: messages may be sent by admins (not in workspace_members).
+  // Fetch their profile.full_name for unknown sent_by_user_id values.
+  const [extraSenders, setExtraSenders] = useState<Map<string, { user_id: string; full_name: string | null; email?: string | null }>>(new Map());
+  useEffect(() => {
+    const unknown = new Set<string>();
+    messages.forEach((m) => {
+      if (m.sent_by_user_id && !memberById.has(m.sent_by_user_id) && !extraSenders.has(m.sent_by_user_id)) {
+        unknown.add(m.sent_by_user_id);
+      }
+    });
+    if (unknown.size === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, full_name")
+        .in("user_id", Array.from(unknown));
+      if (cancelled || !data) return;
+      setExtraSenders((prev) => {
+        const next = new Map(prev);
+        data.forEach((p) => next.set(p.user_id, { user_id: p.user_id, full_name: p.full_name, email: null }));
+        // Mark unresolved ids so we don't re-query
+        unknown.forEach((id) => { if (!next.has(id)) next.set(id, { user_id: id, full_name: null, email: null }); });
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, memberById]);
+
+  const resolveSender = (uid: string | null) => {
+    if (!uid) return null;
+    return memberById.get(uid) ?? extraSenders.get(uid) ?? null;
+  };
 
   /** Mark current user as the active responder on a conversation. */
   const touchResponder = async (conversationId: string) => {
@@ -267,7 +303,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     setLoadingMessages(true);
     supabase
       .from("messages")
-      .select("id, direction, body, media_url, status, created_at")
+      .select("id, direction, body, media_url, status, created_at, sent_by_user_id")
       .eq("conversation_id", activeId)
       .order("created_at", { ascending: true })
       .then(({ data }) => {
@@ -790,15 +826,22 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                               </a>
                             )}
                             <div
-                              className={`text-[10px] mt-1 ${
+                              className={`text-[10px] mt-1 flex items-center gap-1.5 ${
                                 isOut ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}
                             >
-                              {new Date(m.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                              {isOut && ` · ${m.status}`}
+                              <span>
+                                {new Date(m.created_at).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              {isOut && m.sent_by_user_id && (
+                                <span className="opacity-90">
+                                  · by {memberDisplayName(resolveSender(m.sent_by_user_id))}
+                                </span>
+                              )}
+                              {isOut && <span>· {m.status}</span>}
                             </div>
                           </div>
                         </div>

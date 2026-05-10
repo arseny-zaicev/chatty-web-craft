@@ -264,6 +264,7 @@ serve(async (req) => {
     if (!accepted) {
       await admin.from("messages").insert({
         user_id: conv.user_id,
+        sent_by_user_id: userId,
         conversation_id: conv.id,
         direction: "outbound",
         body: text,
@@ -280,6 +281,7 @@ serve(async (req) => {
       .from("messages")
       .insert({
         user_id: conv.user_id,
+        sent_by_user_id: userId,
         conversation_id: conv.id,
         direction: "outbound",
         body: text,
