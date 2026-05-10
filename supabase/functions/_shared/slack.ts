@@ -34,4 +34,4 @@ export async function sendSlackMessage(channel: string, text: string): Promise<v
   }
 }
 
-export const SLACK_BOOKINGS_CHANNEL = "delivery-partners";
+export const SLACK_BOOKINGS_CHANNEL = "delivery-leads";
