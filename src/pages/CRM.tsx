@@ -549,6 +549,20 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   <option value="unread">Unread first</option>
                   <option value="oldest">Oldest</option>
                 </select>
+                {pipelines.length > 0 && (
+                  <select
+                    value={pipelineFilter}
+                    onChange={(e) => setPipelineFilter(e.target.value)}
+                    className="text-xs px-2 py-1 rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary/40 transition"
+                    title="Filter by pipeline"
+                  >
+                    <option value="all">All pipelines</option>
+                    <option value="unassigned">Unassigned</option>
+                    {pipelines.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
