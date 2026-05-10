@@ -37,7 +37,10 @@ export default function WorkspaceOverview() {
     return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const H = HEALTH[data.health];
+  const isClient = role === "client";
+  // Hide the "blocked / no active numbers" badge from the client view —
+  // it's an internal infra signal and was confusing clients.
+  const H = isClient && data.health === "blocked" ? HEALTH.idle : HEALTH[data.health];
   const slug = workspace.slug;
 
   return (
@@ -58,14 +61,16 @@ export default function WorkspaceOverview() {
         </div>
       </div>
 
-      {/* KPI grid */}
+      {/* KPI grid — clients see only the high-level metrics they actually need.
+          Internal/operational KPIs (delivered today, numbers ready, approved templates)
+          are kept in the manager view only. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi icon={MessageSquare} label="Unread replies" value={data.unread_replies} accent={data.unread_replies > 0 ? "text-emerald-500" : undefined} />
         <Kpi icon={Megaphone} label="Active campaigns" value={data.active_campaigns} />
-        <Kpi icon={Send} label="Delivered today" value={data.delivered_today} />
+        {canManage && <Kpi icon={Send} label="Delivered today" value={data.delivered_today} />}
         <Kpi icon={MessageSquare} label="Replies today" value={data.replies_today} />
-        <Kpi icon={Phone} label="Numbers ready" value={`${data.numbers_ready}/${data.numbers_total}`} />
-        <Kpi icon={FileText} label="Approved templates" value={data.templates_approved} />
+        {canManage && <Kpi icon={Phone} label="Numbers ready" value={`${data.numbers_ready}/${data.numbers_total}`} />}
+        {canManage && <Kpi icon={FileText} label="Approved templates" value={data.templates_approved} />}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
