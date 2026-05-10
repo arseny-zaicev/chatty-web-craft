@@ -218,6 +218,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const respectTz: boolean = body.respect_recipient_tz !== false;
   const bucketIndex: number = Math.max(0, Number(body.bucket_index ?? 0) | 0);
   const bucketCount: number = Math.max(1, Number(body.bucket_count ?? 1) | 0);
+  const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
 
   if (!name || !uuidRegex.test(whatsappNumberId) || !uuidRegex.test(templateId)) {
     return json({ error: "Campaign name, number, and template are required" }, 400);
