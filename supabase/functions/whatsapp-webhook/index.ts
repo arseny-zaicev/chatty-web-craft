@@ -223,6 +223,8 @@ async function handleInbound(payload: Record<string, unknown>) {
     .eq("user_id", number.user_id)
     .eq("is_active", true);
 
+  let movedToStageId: string | null = null;
+
   if (automations && automations.length > 0) {
     const lowered = (body ?? "").toLowerCase();
     const loweredButton = (buttonReply ?? "").toLowerCase();
@@ -230,7 +232,6 @@ async function handleInbound(payload: Record<string, unknown>) {
     const matchKeyword = (kw: string) => {
       const k = kw.trim().toLowerCase();
       if (!k) return false;
-      // Whole-word match for alphanumeric tokens; fall back to substring for emoji/punctuation.
       if (/^[\p{L}\p{N}_]+$/u.test(k)) {
         const re = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRe(k)}([^\\p{L}\\p{N}_]|$)`, "u");
         return re.test(lowered);
@@ -255,6 +256,47 @@ async function handleInbound(payload: Record<string, unknown>) {
           .from("deals")
           .update({ stage_id: a.target_stage_id })
           .eq("conversation_id", conversationId);
+        movedToStageId = a.target_stage_id;
+      }
+    }
+  }
+
+  // Positive reply Slack alert: if automation moved this conversation to a "positive"-named stage,
+  // enqueue a positive_lead Slack event (deduped per 24h per conversation).
+  if (movedToStageId) {
+    const { data: stage } = await supabase
+      .from("pipeline_stages")
+      .select("id, name, pipeline_id")
+      .eq("id", movedToStageId)
+      .maybeSingle();
+    const stageName = (stage?.name ?? "").toLowerCase();
+    const isPositive = /positive|interested|booked|hot lead/.test(stageName);
+    if (isPositive) {
+      const { data: conv } = await supabase
+        .from("conversations")
+        .select("id, last_auto_positive_alert_at")
+        .eq("id", conversationId)
+        .maybeSingle();
+      const last = conv?.last_auto_positive_alert_at ? new Date(conv.last_auto_positive_alert_at).getTime() : 0;
+      const dedupeMs = 24 * 60 * 60 * 1000;
+      if (Date.now() - last > dedupeMs) {
+        await supabase.from("slack_event_queue").insert({
+          event_type: "positive_lead",
+          workspace_id: number.workspace_id,
+          payload: {
+            conversation_id: conversationId,
+            contact_phone: source,
+            contact_name: contactName,
+            last_message_text: body ?? `[${messageType}]`,
+            whatsapp_number_id: number.id,
+            stage_name: stage?.name ?? null,
+            source: "automation",
+          },
+        });
+        await supabase
+          .from("conversations")
+          .update({ last_auto_positive_alert_at: new Date().toISOString() })
+          .eq("id", conversationId);
       }
     }
   }

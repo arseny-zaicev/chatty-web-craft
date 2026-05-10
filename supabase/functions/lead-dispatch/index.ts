@@ -89,9 +89,10 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   }
   const { data: numbers } = await admin
     .from("whatsapp_numbers")
-    .select("id, phone_number, display_name, status, user_id")
+    .select("id, phone_number, display_name, status, user_id, is_active")
     .in("id", senderIds)
-    .eq("status", "active");
+    .in("status", ["active", "ready"])
+    .eq("is_active", true);
   if (!numbers || numbers.length === 0) {
     return blocked(admin, pipeline, "no_active_sender", null);
   }
