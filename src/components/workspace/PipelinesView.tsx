@@ -199,24 +199,28 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                     </div>
                     <div className="text-xs text-muted-foreground">{dealCount} deal{dealCount === 1 ? "" : "s"}</div>
                   </div>
-                  {!p.is_default && (
+                  {canManage && !p.is_default && (
                     <Button size="sm" variant="ghost" onClick={() => handleSetDefault(p)} title="Set as default">
                       <Star className="w-3.5 h-3.5 mr-1" /> Make default
                     </Button>
                   )}
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => startEdit(p)} title="Rename">
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => setDeleting(p)}
-                    disabled={p.is_default}
-                    title={p.is_default ? "Cannot delete the default board" : "Delete"}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {canManage && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => startEdit(p)} title="Rename">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(p)}
+                      disabled={p.is_default}
+                      title={p.is_default ? "Cannot delete the default board" : "Delete"}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </>
               )}
             </div>
