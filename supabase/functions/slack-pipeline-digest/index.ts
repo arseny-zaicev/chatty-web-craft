@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    const ws = (p as any).workspaces;
+    const ws = wsMap.get(p.workspace_id);
     const wsLabel = ws ? `${ws.name}${ws.internal_code ? `-${ws.internal_code}` : ""}` : "";
 
     const replyRate = sent > 0 ? Math.round((replied / sent) * 100) : 0;
