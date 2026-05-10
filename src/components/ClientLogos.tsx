@@ -1,4 +1,4 @@
-import salesforgeLogo from "@/assets/logos/salesforge.png";
+import salesforgeLogo from "@/assets/logos/salesforge.svg";
 import pathosLogo from "@/assets/logos/pathos.png";
 import fbMarketingLogo from "@/assets/logos/fb_marketing.png";
 import keyDigitalLogo from "@/assets/logos/key_digital.svg";
