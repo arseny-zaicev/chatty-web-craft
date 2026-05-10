@@ -276,19 +276,12 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return { processed: 0, error: recErr?.message };
   }
 
-  // Map back: leadUpdates was built in same order as recipientRows; rely on returned order
-  // but be defensive: match by (campaign_id, contact_phone, scheduled_at)
-  const recMap = new Map<string, { id: string; scheduled_at: string }>();
-  for (const r of inserted) {
-    recMap.set(`${r.campaign_id}|${r.contact_phone}|${r.scheduled_at}`, { id: r.id, scheduled_at: r.scheduled_at });
-  }
-
+  // PostgREST insert returns rows in the same order they were inserted.
+  // Linking by index avoids timestamp string mismatches (microsecond rounding).
   let queued = 0;
   for (let k = 0; k < leadUpdates.length; k++) {
     const lu = leadUpdates[k];
-    const rr = recipientRows[lu.recipient_idx];
-    const key = `${rr.campaign_id}|${rr.contact_phone}|${rr.scheduled_at}`;
-    const rec = recMap.get(key);
+    const rec = inserted[lu.recipient_idx];
     if (!rec) continue;
     const { error: uErr } = await admin
       .from("lead_imports")
@@ -300,7 +293,15 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
       })
       .eq("id", lu.id)
       .in("status", ["pending", "awaiting_manual"]);
-    if (!uErr) queued++;
+    if (uErr) {
+      // Couldn't claim the lead -> cancel the orphan recipient so cron does not double-send
+      await admin
+        .from("campaign_recipients")
+        .update({ status: "failed", error_message: `lead update failed: ${uErr.message}` })
+        .eq("id", rec.id);
+      continue;
+    }
+    queued++;
   }
 
   // Bump campaigns.total_recipients
