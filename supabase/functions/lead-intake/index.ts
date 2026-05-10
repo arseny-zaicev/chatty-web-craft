@@ -27,11 +27,19 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function normalizePhone(raw: unknown): string | null {
+function normalizePhone(raw: unknown, defaultCountryCode?: string | null): string | null {
   if (raw == null) return null;
-  const s = String(raw).replace(/[^\d+]/g, "");
+  let s = String(raw).trim();
   if (!s) return null;
-  const digits = s.startsWith("+") ? s.slice(1) : s;
+  if (/<\s*test\s+lead/i.test(s)) return null;
+  s = s.replace(/^\s*(p|P|П|tel|phone|whatsapp|wa)\s*[:：]\s*/i, "");
+  s = s.replace(/[^\d+]/g, "");
+  if (!s) return null;
+  let digits = s.startsWith("+") ? s.slice(1) : s;
+  const cc = (defaultCountryCode || "").replace(/\D/g, "");
+  if (cc && !digits.startsWith(cc) && digits.length >= 7 && digits.length <= 10) {
+    digits = cc + digits;
+  }
   if (digits.length < 7 || digits.length > 16) return null;
   return digits;
 }
