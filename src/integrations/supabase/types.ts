@@ -830,6 +830,100 @@ export type Database = {
         }
         Relationships: []
       }
+      gupshup_mail_log: {
+        Row: {
+          category: Database["public"]["Enums"]["gupshup_mail_category"]
+          created_at: string
+          from_address: string | null
+          gmail_id: string
+          id: string
+          parsed: Json
+          received_at: string
+          severity: Database["public"]["Enums"]["gupshup_mail_severity"]
+          slack_event_id: string | null
+          snippet: string | null
+          subject: string | null
+          thread_id: string | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["gupshup_mail_category"]
+          created_at?: string
+          from_address?: string | null
+          gmail_id: string
+          id?: string
+          parsed?: Json
+          received_at: string
+          severity?: Database["public"]["Enums"]["gupshup_mail_severity"]
+          slack_event_id?: string | null
+          snippet?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["gupshup_mail_category"]
+          created_at?: string
+          from_address?: string | null
+          gmail_id?: string
+          id?: string
+          parsed?: Json
+          received_at?: string
+          severity?: Database["public"]["Enums"]["gupshup_mail_severity"]
+          slack_event_id?: string | null
+          snippet?: string | null
+          subject?: string | null
+          thread_id?: string | null
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gupshup_mail_log_slack_event_id_fkey"
+            columns: ["slack_event_id"]
+            isOneToOne: false
+            referencedRelation: "slack_event_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gupshup_mail_log_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gupshup_mail_log_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gupshup_mail_state: {
+        Row: {
+          id: number
+          last_error: string | null
+          last_internal_date_ms: number
+          last_run_at: string | null
+        }
+        Insert: {
+          id?: number
+          last_error?: string | null
+          last_internal_date_ms?: number
+          last_run_at?: string | null
+        }
+        Update: {
+          id?: number
+          last_error?: string | null
+          last_internal_date_ms?: number
+          last_run_at?: string | null
+        }
+        Relationships: []
+      }
       message_templates: {
         Row: {
           body: string | null
@@ -1903,6 +1997,16 @@ export type Database = {
         | "failed"
         | "scheduled"
       form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access"
+      gupshup_mail_category:
+        | "quality_drop"
+        | "restriction"
+        | "block"
+        | "template_rejected"
+        | "template_approved"
+        | "billing"
+        | "account_review"
+        | "other"
+      gupshup_mail_severity: "info" | "warning" | "critical"
       message_direction: "inbound" | "outbound"
       message_status:
         | "queued"
@@ -2083,6 +2187,17 @@ export const Constants = {
         "scheduled",
       ],
       form_type: ["qualification", "seller_leads", "demo_request", "bm_access"],
+      gupshup_mail_category: [
+        "quality_drop",
+        "restriction",
+        "block",
+        "template_rejected",
+        "template_approved",
+        "billing",
+        "account_review",
+        "other",
+      ],
+      gupshup_mail_severity: ["info", "warning", "critical"],
       message_direction: ["inbound", "outbound"],
       message_status: [
         "queued",
