@@ -14,12 +14,13 @@ const STALE_DISPATCH_MIN = 10;      // alert if pending leads older than N min n
 const ALERT_DEBOUNCE_MIN = 30;      // don't repeat the same alert for N min
 
 // Heartbeat freshness expectations (minutes). 2x the cron interval.
+// Only include functions that run on a fixed schedule (not on-demand ones like `campaigns`).
 const HEARTBEAT_MAX_AGE_MIN: Record<string, number> = {
   "lead-dispatch": 5,
   "google-sheets-sync": 6,
-  "campaigns": 5,
   "health-watchdog": 12,
 };
+const INBOUND_SILENCE_MIN = 90; // widened to avoid off-peak false positives
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -71,16 +72,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3) Queued leads not sent
+    // 3) Queued leads not sent (excluding ones intentionally scheduled in the future)
     const { count: queuedOld } = await supabase
       .from("lead_imports")
       .select("id", { count: "exact", head: true })
       .eq("status", "queued")
-      .lt("imported_at", new Date(Date.now() - STALE_DISPATCH_MIN * 60_000).toISOString());
+      .lt("imported_at", new Date(Date.now() - STALE_DISPATCH_MIN * 60_000).toISOString())
+      .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`);
     if ((queuedOld ?? 0) > 0) {
       alerts.push({
         kind: "leads_queued_backlog",
-        text: `:warning: ${queuedOld} lead(s) stuck in 'queued' for >${STALE_DISPATCH_MIN}m. WhatsApp send pipeline may be blocked.\n\n_Hint: check campaigns function and Gupshup status._`,
+        text: `:warning: ${queuedOld} lead(s) stuck in 'queued' for >${STALE_DISPATCH_MIN}m (and scheduled_at already passed). WhatsApp send pipeline may be blocked.\n\n_Hint: check campaigns function and Gupshup status._`,
       });
     }
 
@@ -108,7 +110,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 5) Inbound webhook silence (no inbound msg in last 30 min while we have active numbers)
+    // 5) Inbound webhook silence (no inbound msg in last INBOUND_SILENCE_MIN min while we have active numbers)
     const { count: activeNumCount } = await supabase
       .from("whatsapp_numbers")
       .select("id", { count: "exact", head: true })
@@ -119,11 +121,11 @@ Deno.serve(async (req) => {
         .from("messages")
         .select("id", { count: "exact", head: true })
         .eq("direction", "inbound")
-        .gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString());
+        .gte("created_at", new Date(Date.now() - INBOUND_SILENCE_MIN * 60_000).toISOString());
       if ((recentInbound ?? 0) === 0) {
         alerts.push({
           kind: "inbound_silence",
-          text: `:warning: No inbound WhatsApp messages received in last 30m across ${activeNumCount} active number(s). Webhook may be down or templates not opt-in.\n\n_Hint: re-set Gupshup callback via gupshup-set-callback._`,
+          text: `:warning: No inbound WhatsApp messages received in last ${INBOUND_SILENCE_MIN}m across ${activeNumCount} active number(s). Webhook may be down.\n\n_Hint: re-set Gupshup callback via gupshup-set-callback._`,
         });
       }
     }
