@@ -212,10 +212,27 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   );
 }
 
-function CampaignDetail({ campaignId }: { campaignId: string }) {
+function CampaignDetail({
+  group,
+  canManage,
+  numberById,
+}: {
+  group: CampaignGroup;
+  canManage: boolean;
+  numberById: Map<string, { id: string; phone_number: string; label: string | null }>;
+}) {
+  // Aggregate recipients across every sibling campaign in the group
+  const campaignIds = group.campaigns.map((c) => c.id);
   const { data, isLoading } = useQuery({
-    queryKey: ["campaign-recipients", campaignId],
-    queryFn: () => fetchRecipients(campaignId),
+    queryKey: ["campaign-recipients-group", group.key, campaignIds.join(",")],
+    queryFn: async () => {
+      const all: Array<RecipientRow & { campaign_id: string }> = [];
+      for (const id of campaignIds) {
+        const rows = await fetchRecipients(id);
+        rows.forEach((r) => all.push({ ...r, campaign_id: id }));
+      }
+      return all;
+    },
   });
 
   const stats = useMemo(() => {
@@ -231,6 +248,13 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
 
   if (isLoading) return <div className="p-4 text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading…</div>;
 
+  const numberLabelFor = (campaignId: string) => {
+    const c = group.campaigns.find((x) => x.id === campaignId);
+    if (!c?.whatsapp_number_id) return "—";
+    const n = numberById.get(c.whatsapp_number_id);
+    return n ? (n.label ?? `+${n.phone_number}`) : "—";
+  };
+
   return (
     <div className="px-4 pb-4 pt-2 bg-background/40">
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
@@ -240,12 +264,30 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
         <Stat label="Pending" value={stats.pending} />
         <Stat label="Failed" value={stats.failed} tone={stats.failed > 0 ? "bad" : undefined} />
       </div>
+
+      {/* Per-number breakdown is internal info — only show to managers */}
+      {canManage && group.campaigns.length > 1 && (
+        <div className="mb-3 rounded-md border border-border bg-card/30 p-2">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Per number</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {group.campaigns.map((c) => (
+              <div key={c.id} className="flex items-center justify-between text-xs">
+                <span className="truncate">{numberLabelFor(c.id)}</span>
+                <span className="text-muted-foreground shrink-0">{c.sent_count ?? 0}/{c.total_recipients ?? 0}{(c.failed_count ?? 0) > 0 ? ` · ${c.failed_count} failed` : ""}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="text-[11px] text-muted-foreground mb-2">Delivered / read / reply tracking will appear once provider receipts are wired in.</p>
       {(data ?? []).length > 0 && (
         <div className="rounded-md border border-border bg-card/30 max-h-64 overflow-auto">
           <table className="w-full text-xs">
             <thead className="bg-muted/40 sticky top-0"><tr className="text-left text-muted-foreground">
-              <th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Status</th><th className="px-2 py-1.5">Sent at</th><th className="px-2 py-1.5">Error</th>
+              <th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Status</th><th className="px-2 py-1.5">Sent at</th>
+              {canManage && <th className="px-2 py-1.5">Number</th>}
+              <th className="px-2 py-1.5">Error</th>
             </tr></thead>
             <tbody>
               {(data ?? []).slice(0, 200).map((r) => (
@@ -253,6 +295,7 @@ function CampaignDetail({ campaignId }: { campaignId: string }) {
                   <td className="px-2 py-1 font-mono">{r.contact_phone}</td>
                   <td className="px-2 py-1 capitalize">{r.status}</td>
                   <td className="px-2 py-1">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}</td>
+                  {canManage && <td className="px-2 py-1 text-muted-foreground">{numberLabelFor(r.campaign_id)}</td>}
                   <td className="px-2 py-1 text-red-600 truncate max-w-[260px]">{r.error_message ?? ""}</td>
                 </tr>
               ))}
