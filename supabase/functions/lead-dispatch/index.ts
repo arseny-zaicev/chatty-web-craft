@@ -18,9 +18,12 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 // ---- scheduling helpers (subset of campaigns/index.ts) ----
-const hhmmToMin = (s: string) => {
-  const [h, m] = String(s || "09:00").split(":").map((x) => parseInt(x, 10) || 0);
-  return Math.max(0, Math.min(24 * 60 - 1, h * 60 + m));
+const hhmmToMin = (s: string, isEnd = false) => {
+  const raw = String(s || (isEnd ? "18:00" : "09:00"));
+  const [h, m] = raw.split(":").map((x) => parseInt(x, 10) || 0);
+  // Treat "00:00" as end-of-day when used as window end.
+  if (isEnd && h === 0 && m === 0) return 24 * 60;
+  return Math.max(0, Math.min(24 * 60, h * 60 + m));
 };
 const tzOffsetMinutes = (tz: string, at: Date): number => {
   try {
@@ -30,10 +33,13 @@ const tzOffsetMinutes = (tz: string, at: Date): number => {
     return Math.round((asUTC - at.getTime()) / 60000);
   } catch { return 0; }
 };
-const dateAtTzToUTC = (dateStr: string, hhmm: string, tz: string): Date => {
+const dateAtTzToUTC = (dateStr: string, hhmm: string, tz: string, isEnd = false): Date => {
   const [Y, M, D] = dateStr.split("-").map((x) => parseInt(x, 10));
-  const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10) || 0);
-  const naive = Date.UTC(Y, (M || 1) - 1, D || 1, h || 0, m || 0, 0);
+  let [h, m] = hhmm.split(":").map((x) => parseInt(x, 10) || 0);
+  // "00:00" as end-of-day means next day 00:00.
+  let dayOffset = 0;
+  if (isEnd && h === 0 && m === 0) { dayOffset = 1; }
+  const naive = Date.UTC(Y, (M || 1) - 1, (D || 1) + dayOffset, h || 0, m || 0, 0);
   return new Date(naive - tzOffsetMinutes(tz, new Date(naive)) * 60_000);
 };
 const dayKey = (ms: number, tz: string) =>
@@ -113,13 +119,15 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return blocked(admin, pipeline, "daily_cap_reached", null);
   }
 
-  // Claim pending leads
+  // Claim pending OR awaiting_manual leads. When auto-outreach is enabled,
+  // older `awaiting_manual` rows (imported while auto was off) should also be
+  // picked up - status guard allows awaiting_manual -> queued.
   const claimLimit = Math.min(200, availableCapacity);
   const { data: leads } = await admin
     .from("lead_imports")
-    .select("id, pipeline_id, workspace_id, phone, name")
+    .select("id, pipeline_id, workspace_id, phone, name, status")
     .eq("pipeline_id", pipeline.id)
-    .eq("status", "pending")
+    .in("status", ["pending", "awaiting_manual"])
     .order("imported_at", { ascending: true })
     .limit(claimLimit);
   if (!leads || leads.length === 0) return { processed: 0 };
@@ -179,7 +187,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
 
   // Schedule each lead
   const wsMin = hhmmToMin(winStart);
-  const wsMax = hhmmToMin(winEnd);
+  const wsMax = hhmmToMin(winEnd, true);
   const windowSec = Math.max(60, (wsMax - wsMin) * 60);
   const avgGap = Math.max(15, Math.min(120, windowSec / Math.max(1, leads.length)));
   // Per-sibling cursor
@@ -189,7 +197,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   const ensureInside = (ms: number): number => {
     const d = dayKey(ms, tz);
     const startUtc = dateAtTzToUTC(d, winStart, tz).getTime();
-    const endUtc = dateAtTzToUTC(d, winEnd, tz).getTime();
+    const endUtc = dateAtTzToUTC(d, winEnd, tz, true).getTime();
     if (ms < startUtc) return startUtc;
     if (ms >= endUtc) {
       const next = new Date(ms + 24 * 3600_000);
@@ -256,7 +264,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
         scheduled_at: rec.scheduled_at,
       })
       .eq("id", lu.id)
-      .eq("status", "pending");
+      .in("status", ["pending", "awaiting_manual"]);
     if (!uErr) queued++;
   }
 
@@ -311,11 +319,12 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Find pipelines with auto_outreach_enabled AND at least one pending lead
+    // Find pipelines with auto_outreach_enabled AND at least one pending or
+    // awaiting_manual lead (the latter covers leads imported while auto was off).
     const { data: pipelinesNeedingWork } = await admin
       .from("lead_imports")
       .select("pipeline_id")
-      .eq("status", "pending")
+      .in("status", ["pending", "awaiting_manual"])
       .limit(1000);
     const pipelineIds = Array.from(new Set((pipelinesNeedingWork ?? []).map((r: any) => r.pipeline_id).filter(Boolean)));
     if (pipelineIds.length === 0) return json({ ok: true, processed: 0, pipelines: 0 });

@@ -67,6 +67,13 @@ function resolveColumnIndex(spec: string | undefined, headers: string[]): number
   return -1;
 }
 
+// Sync logic for one source. Returns a result object.
+async function syncOne(admin: any, source: any): Promise<Record<string, unknown>> {
+  if (source.kind !== "google_sheet") return { source_id: source.id, error: "Not a Google Sheet source" };
+  if (source.status !== "active") return { source_id: source.id, error: `Source is ${source.status}` };
+  return await runSync(admin, source);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -77,13 +84,13 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const sourceId = body?.source_connection_id;
-    if (!sourceId || typeof sourceId !== "string") return json({ error: "source_connection_id required" }, 400);
+    const syncAll = body?.all === true;
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Authorize: workspace manager OR service-role bearer
+    // Authorize: workspace manager OR service-role bearer.
     const authHeader = req.headers.get("Authorization") || "";
     const isService = authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
     let userId: string | null = null;
@@ -95,6 +102,27 @@ Deno.serve(async (req) => {
       if (!u?.user) return json({ error: "Unauthorized" }, 401);
       userId = u.user.id;
     }
+
+    // Cron / service-role bulk sync of all active Google Sheet sources.
+    if (syncAll) {
+      if (!isService) return json({ error: "all=true requires service role" }, 403);
+      const { data: sources } = await admin
+        .from("source_connections")
+        .select("id, workspace_id, pipeline_id, kind, name, config, status")
+        .eq("kind", "google_sheet")
+        .eq("status", "active");
+      const results: any[] = [];
+      for (const s of sources ?? []) {
+        try {
+          results.push(await syncOne(admin, s));
+        } catch (e) {
+          results.push({ source_id: s.id, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+      return json({ ok: true, count: results.length, results });
+    }
+
+    if (!sourceId || typeof sourceId !== "string") return json({ error: "source_connection_id required" }, 400);
 
     const { data: source } = await admin
       .from("source_connections")
@@ -113,6 +141,16 @@ Deno.serve(async (req) => {
       if (!isManager) return json({ error: "Forbidden" }, 403);
     }
 
+    const out = await runSync(admin, source);
+    if ((out as any).error) return json(out, 502);
+    return json(out);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
+async function runSync(admin: any, source: any): Promise<Record<string, unknown>> {
+  try {
     const cfg = (source.config ?? {}) as Record<string, any>;
     const spreadsheetId = String(cfg.spreadsheet_id || "").trim();
     const sheetName = String(cfg.sheet_name || "Sheet1").trim();
@@ -121,15 +159,15 @@ Deno.serve(async (req) => {
     const headerRow = Number.isFinite(cfg.header_row) ? Math.max(1, Math.floor(cfg.header_row)) : 1;
     let lastSyncedRow = Number.isFinite(cfg.last_synced_row) ? Math.max(headerRow, Math.floor(cfg.last_synced_row)) : headerRow;
 
-    if (!spreadsheetId) return json({ error: "config.spreadsheet_id missing" }, 400);
-    if (!phoneSpec) return json({ error: "config.phone_column missing" }, 400);
+    if (!spreadsheetId) return { error: "config.spreadsheet_id missing" };
+    if (!phoneSpec) return { error: "config.phone_column missing" };
 
     const { data: pipeline } = await admin
       .from("pipelines")
       .select("id, auto_outreach_enabled, slack_channel_id")
       .eq("id", source.pipeline_id)
       .maybeSingle();
-    if (!pipeline) return json({ error: "Pipeline missing" }, 410);
+    if (!pipeline) return { error: "Pipeline missing" };
 
     // 1. Read whole sheet (A:Z is enough for MVP, ~26 cols).
     const range = `${sheetName}!A:Z`;
@@ -146,24 +184,24 @@ Deno.serve(async (req) => {
         .from("source_connections")
         .update({ last_error: `sheets_api_${sheetResp.status}: ${errText.slice(0, 300)}` })
         .eq("id", source.id);
-      return json({ error: `Sheets API ${sheetResp.status}: ${errText.slice(0, 300)}` }, 502);
+      return { error: `Sheets API ${sheetResp.status}: ${errText.slice(0, 300)}` };
     }
     const sheetData = await sheetResp.json();
     const rows: string[][] = (sheetData?.values ?? []) as string[][];
     if (rows.length === 0) {
-      return json({ ok: true, total: 0, accepted: 0, rejected: 0, message: "Sheet empty" });
+      return { ok: true, total: 0, accepted: 0, rejected: 0, message: "Sheet empty" };
     }
 
     const headers = rows[headerRow - 1] ?? [];
     const phoneIdx = resolveColumnIndex(phoneSpec, headers);
     const nameIdx = resolveColumnIndex(nameSpec, headers);
-    if (phoneIdx < 0) return json({ error: `phone_column "${phoneSpec}" not found` }, 400);
+    if (phoneIdx < 0) return { error: `phone_column "${phoneSpec}" not found` };
 
     // Slice new rows: 1-based row number > lastSyncedRow
     const startIdx = Math.max(headerRow, lastSyncedRow); // 1-based last processed row
     const newRows = rows.slice(startIdx); // these are rows with 1-based index startIdx+1..rows.length
     if (newRows.length === 0) {
-      return json({ ok: true, total: 0, accepted: 0, rejected: 0, message: "No new rows" });
+      return { ok: true, total: 0, accepted: 0, rejected: 0, message: "No new rows" };
     }
 
     // 2. Open import batch
@@ -179,7 +217,7 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
-    if (batchErr || !batch) return json({ error: batchErr?.message ?? "Could not open batch" }, 500);
+    if (batchErr || !batch) return { error: batchErr?.message ?? "Could not open batch" };
 
     let accepted = 0;
     let rejected = 0;
@@ -321,15 +359,17 @@ Deno.serve(async (req) => {
       },
     });
 
-    return json({
+    return {
       ok: true,
+      source_id: source.id,
+      source_name: source.name,
       batch_id: batch.id,
       total: newRows.length,
       accepted,
       rejected,
       last_synced_row: lastProcessedRow,
-    });
+    };
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return { error: e instanceof Error ? e.message : String(e) };
   }
-});
+}

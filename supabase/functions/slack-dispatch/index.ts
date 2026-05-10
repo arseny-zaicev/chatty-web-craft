@@ -28,6 +28,39 @@ const NUMBER_EVENTS = new Set([
   "number_restricted", "number_blocked", "number_recovered", "number_quality_changed",
 ]);
 
+function buildLeadEventBlocks(eventType: string, ws: any, p: any) {
+  const wsTag = ws?.name ? `${ws.name}${ws.internal_code ? `-${ws.internal_code}` : ""}` : "Workspace";
+  const meta: Record<string, { emoji: string; title: string }> = {
+    "lead.imported": { emoji: "📥", title: "Leads imported" },
+    "lead.import_failed": { emoji: "⚠️", title: "Lead import failed" },
+    "lead.dispatched": { emoji: "📤", title: "Leads dispatched" },
+    "lead.dispatch_blocked": { emoji: "🛑", title: "Auto first-touch blocked" },
+  };
+  const m = meta[eventType] || { emoji: "ℹ️", title: eventType };
+  const lines: string[] = [];
+  if (eventType === "lead.imported" || eventType === "lead.import_failed") {
+    lines.push(`*Source:* ${p?.source_name ?? "-"}`);
+    lines.push(`*New:* ${p?.accepted ?? 0}  ·  *Skipped:* ${p?.rejected ?? 0}  ·  *Total:* ${p?.total ?? 0}`);
+  } else if (eventType === "lead.dispatched") {
+    lines.push(`*Pipeline:* ${p?.pipeline_name ?? "-"}`);
+    lines.push(`*Queued for first-touch:* ${p?.queued ?? 0} on ${p?.sender_count ?? 0} number(s)`);
+  } else if (eventType === "lead.dispatch_blocked") {
+    lines.push(`*Pipeline:* ${p?.pipeline_name ?? "-"}`);
+    lines.push(`*Reason:* \`${p?.reason ?? "-"}\``);
+    if (p?.error) lines.push(`*Error:* ${String(p.error).slice(0, 240)}`);
+  }
+  const text = `${m.emoji} ${m.title} · ${wsTag}`;
+  return {
+    text,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: `${m.emoji} ${m.title}`, emoji: true } },
+      { type: "context", elements: [{ type: "mrkdwn", text: `*${wsTag}*` }] },
+      { type: "section", text: { type: "mrkdwn", text: lines.join("\n") || "-" } },
+    ],
+  };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -154,12 +187,14 @@ Deno.serve(async (req) => {
         if (workspaceChannel) targets.add(workspaceChannel);
         for (const ch of targets) await postSlack(ch, msg);
       } else if (ev.event_type === "positive_lead") {
-        if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
+        const p = ev.payload as any;
+        const pipelineChannel = (p?.slack_channel_id as string) || workspaceChannel;
+        if (!ws || !pipelineChannel) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
-        const msg = buildPositiveLeadBlocks({ ws, payload: ev.payload as any });
-        await postSlack(workspaceChannel, msg);
+        const msg = buildPositiveLeadBlocks({ ws, payload: p });
+        await postSlack(pipelineChannel, msg);
       } else if (ev.event_type === "inbox_unread_spike") {
         if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
@@ -168,6 +203,15 @@ Deno.serve(async (req) => {
         const p = ev.payload as any;
         const msg = buildInboxSpikeBlocks({ ws, unreadCount: p.unread_total || 0, conversations: p.conversations || [] });
         await postSlack(workspaceChannel, msg);
+      } else if (ev.event_type === "lead.imported" || ev.event_type === "lead.import_failed" || ev.event_type === "lead.dispatched" || ev.event_type === "lead.dispatch_blocked") {
+        const p = ev.payload as any;
+        const pipelineChannel = (p?.slack_channel_id as string) || workspaceChannel;
+        if (!pipelineChannel) {
+          await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
+          continue;
+        }
+        const msg = buildLeadEventBlocks(ev.event_type, ws, p);
+        await postSlack(pipelineChannel, msg);
       } else if (ev.event_type === "gupshup_mail_alert") {
         const p = ev.payload as any;
         const msg = buildGupshupMailAlertBlocks({

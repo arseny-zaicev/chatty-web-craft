@@ -217,6 +217,14 @@ async function handleInbound(payload: Record<string, unknown>) {
     triggers.push("button_click");
   }
 
+  // Resolve current conversation pipeline so automations remap to the right pipeline.
+  const { data: convPipeline } = await supabase
+    .from("conversations")
+    .select("pipeline_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  const conversationPipelineId = convPipeline?.pipeline_id ?? null;
+
   const { data: automations } = await supabase
     .from("stage_automations")
     .select("trigger, trigger_value, target_stage_id")
@@ -224,6 +232,46 @@ async function handleInbound(payload: Record<string, unknown>) {
     .eq("is_active", true);
 
   let movedToStageId: string | null = null;
+
+  // Cache of stage rows we've fetched while remapping cross-pipeline targets.
+  const stageCache = new Map<string, { id: string; name: string; pipeline_id: string | null; stage_type: string | null }>();
+  async function loadStage(id: string) {
+    if (stageCache.has(id)) return stageCache.get(id)!;
+    const { data } = await supabase
+      .from("pipeline_stages")
+      .select("id, name, pipeline_id, stage_type")
+      .eq("id", id)
+      .maybeSingle();
+    if (data) stageCache.set(id, data as any);
+    return data as any;
+  }
+  // Resolve target stage to one inside the conversation's pipeline (by name match, fallback to stage_type).
+  async function resolveTargetStage(rawTargetId: string): Promise<string | null> {
+    const target = await loadStage(rawTargetId);
+    if (!target) return null;
+    if (!conversationPipelineId || target.pipeline_id === conversationPipelineId) return target.id;
+    // Try by name within conversation pipeline.
+    const { data: byName } = await supabase
+      .from("pipeline_stages")
+      .select("id")
+      .eq("pipeline_id", conversationPipelineId)
+      .ilike("name", target.name ?? "")
+      .maybeSingle();
+    if (byName?.id) return byName.id;
+    // Fallback to stage_type match within conversation pipeline.
+    if (target.stage_type) {
+      const { data: byType } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", conversationPipelineId)
+        .eq("stage_type", target.stage_type)
+        .order("position", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (byType?.id) return byType.id;
+    }
+    return null;
+  }
 
   if (automations && automations.length > 0) {
     const lowered = (body ?? "").toLowerCase();
@@ -252,11 +300,16 @@ async function handleInbound(payload: Record<string, unknown>) {
         match = keywords.some(matchKeyword);
       }
       if (match) {
+        const resolvedStageId = await resolveTargetStage(a.target_stage_id);
+        if (!resolvedStageId) {
+          console.warn("Skip automation: target stage not in conversation pipeline", { automation_target: a.target_stage_id, conversation_pipeline: conversationPipelineId });
+          continue;
+        }
         await supabase
           .from("deals")
-          .update({ stage_id: a.target_stage_id })
+          .update({ stage_id: resolvedStageId })
           .eq("conversation_id", conversationId);
-        movedToStageId = a.target_stage_id;
+        movedToStageId = resolvedStageId;
       }
     }
   }
@@ -264,22 +317,30 @@ async function handleInbound(payload: Record<string, unknown>) {
   // Positive reply Slack alert: if automation moved this conversation to a "positive"-named stage,
   // enqueue a positive_lead Slack event (deduped per 24h per conversation).
   if (movedToStageId) {
-    const { data: stage } = await supabase
-      .from("pipeline_stages")
-      .select("id, name, pipeline_id")
-      .eq("id", movedToStageId)
-      .maybeSingle();
+    const stage = await loadStage(movedToStageId);
     const stageName = (stage?.name ?? "").toLowerCase();
     const isPositive = /positive|interested|booked|hot lead/.test(stageName);
     if (isPositive) {
       const { data: conv } = await supabase
         .from("conversations")
-        .select("id, last_auto_positive_alert_at")
+        .select("id, last_auto_positive_alert_at, pipeline_id")
         .eq("id", conversationId)
         .maybeSingle();
       const last = conv?.last_auto_positive_alert_at ? new Date(conv.last_auto_positive_alert_at).getTime() : 0;
       const dedupeMs = 24 * 60 * 60 * 1000;
       if (Date.now() - last > dedupeMs) {
+        // Pull pipeline slack channel so positive alert lands in the right channel.
+        let pipelineSlack: string | null = null;
+        let pipelineName: string | null = null;
+        if (conv?.pipeline_id) {
+          const { data: pipe } = await supabase
+            .from("pipelines")
+            .select("name, slack_channel_id")
+            .eq("id", conv.pipeline_id)
+            .maybeSingle();
+          pipelineSlack = (pipe?.slack_channel_id as string) ?? null;
+          pipelineName = (pipe?.name as string) ?? null;
+        }
         await supabase.from("slack_event_queue").insert({
           event_type: "positive_lead",
           workspace_id: number.workspace_id,
@@ -290,6 +351,9 @@ async function handleInbound(payload: Record<string, unknown>) {
             last_message_text: body ?? `[${messageType}]`,
             whatsapp_number_id: number.id,
             stage_name: stage?.name ?? null,
+            pipeline_id: conv?.pipeline_id ?? null,
+            pipeline_name: pipelineName,
+            slack_channel_id: pipelineSlack,
             source: "automation",
           },
         });
