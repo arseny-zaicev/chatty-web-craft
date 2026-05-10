@@ -70,20 +70,82 @@ Deno.serve(async (req) => {
       const targets = new Set<string>();
 
       if (CAMPAIGN_EVENTS.has(ev.event_type)) {
-        let numberPhone: string | null = null;
-        const numId = (ev.payload as any)?.whatsapp_number_id;
-        if (numId) {
-          const { data: n } = await supabase.from("whatsapp_numbers").select("phone_number").eq("id", numId).maybeSingle();
-          numberPhone = n?.phone_number || null;
-        }
         if (!ws) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
-        const msg = buildCampaignLifecycleBlocks({ event: ev.event_type, ws, payload: ev.payload as any, numberPhone });
-        if (OPS_CAMPAIGNS) targets.add(OPS_CAMPAIGNS);
-        if (workspaceChannel) targets.add(workspaceChannel);
-        for (const ch of targets) await postSlack(ch, msg);
+        const evPayload = ev.payload as any;
+        const campaignName = String(evPayload?.campaign_name || "Untitled");
+        const { base } = splitCampaignName(campaignName);
+
+        // Find sibling pending events: same workspace, same event_type, same base name, within ±5 min.
+        const evCreatedAt = new Date(ev.created_at).getTime();
+        const winStart = new Date(evCreatedAt - 5 * 60 * 1000).toISOString();
+        const winEnd = new Date(evCreatedAt + 5 * 60 * 1000).toISOString();
+        const { data: siblingsRaw } = await supabase
+          .from("slack_event_queue")
+          .select("*")
+          .eq("status", "pending")
+          .eq("event_type", ev.event_type)
+          .eq("workspace_id", ev.workspace_id)
+          .gte("created_at", winStart)
+          .lte("created_at", winEnd);
+        const siblings = (siblingsRaw || []).filter((s: any) => {
+          const n = String((s.payload as any)?.campaign_name || "");
+          return splitCampaignName(n).base === base;
+        });
+        // Ensure current event is included (it is, since we queried 'pending')
+        const groupEvents = siblings.length > 0 ? siblings : [ev];
+
+        // Resolve numbers in batch
+        const numIds = Array.from(new Set(groupEvents.map((g: any) => (g.payload as any)?.whatsapp_number_id).filter(Boolean)));
+        const phoneMap: Record<string, string> = {};
+        if (numIds.length) {
+          const { data: nums } = await supabase.from("whatsapp_numbers").select("id, phone_number").in("id", numIds as string[]);
+          for (const n of nums || []) phoneMap[(n as any).id] = (n as any).phone_number;
+        }
+
+        let totalSum = 0, sentSum = 0, failedSum = 0;
+        const parts: Array<{ phone: string | null; label: string | null; total: number; sent: number; failed: number }> = [];
+        for (const g of groupEvents) {
+          const p = g.payload as any;
+          const t = Number(p?.total_recipients || 0);
+          const s = Number(p?.sent_count || 0);
+          const f = Number(p?.failed_count || 0);
+          totalSum += t; sentSum += s; failedSum += f;
+          const numId = p?.whatsapp_number_id;
+          const { numberLabel } = splitCampaignName(String(p?.campaign_name || ""));
+          parts.push({
+            phone: numId ? (phoneMap[numId] || null) : null,
+            label: numberLabel,
+            total: t, sent: s, failed: f,
+          });
+        }
+
+        const opsMsg = buildCampaignGroupBlocks({
+          event: ev.event_type, ws, audience: "ops", baseName: base,
+          campaignId: String(evPayload.campaign_id),
+          totals: { total: totalSum, sent: sentSum, failed: failedSum },
+          parts, payload: evPayload,
+        });
+        const clientMsg = buildCampaignGroupBlocks({
+          event: ev.event_type, ws, audience: "client", baseName: base,
+          campaignId: String(evPayload.campaign_id),
+          totals: { total: totalSum, sent: sentSum, failed: failedSum },
+          parts, payload: evPayload,
+        });
+
+        if (OPS_CAMPAIGNS) await postSlack(OPS_CAMPAIGNS, opsMsg);
+        if (workspaceChannel) await postSlack(workspaceChannel, clientMsg);
+
+        // Mark all sibling events as sent (dedupe)
+        const sentAt = new Date().toISOString();
+        const ids = groupEvents.map((g: any) => g.id);
+        await supabase.from("slack_event_queue")
+          .update({ status: "sent", processed_at: sentAt })
+          .in("id", ids);
+        processed += ids.length;
+        continue;
       } else if (NUMBER_EVENTS.has(ev.event_type)) {
         const msg = buildNumberAlertBlocks({ event: ev.event_type, ws, payload: ev.payload as any });
         if (OPS_NUMBERS) targets.add(OPS_NUMBERS);
