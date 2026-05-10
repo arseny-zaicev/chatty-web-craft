@@ -345,41 +345,46 @@ export function buildGupshupMailAlertBlocks(args: {
 }): BlockMessage {
   const { category, severity, ws, payload } = args;
   const tag = ws ? brandTag(ws.name, ws.internal_code) : "Unmatched";
-  const sevEmoji = severity === "critical" ? "🔴" : severity === "warning" ? "🟠" : "🔵";
+  const sevEmoji = severity === "critical" ? "🔴" : severity === "warning" ? "🟠" : category === "billing" ? "💳" : "🟢";
   const catLabels: Record<string, string> = {
-    quality_drop: "Quality drop",
-    restriction: "Number restricted",
-    block: "Number blocked",
-    template_rejected: "Template rejected",
+    number_approved: "Number approved",
+    display_name_approved: "Display name approved",
+    display_name_rejected: "Display name rejected",
+    waba_restricted: "WABA restricted",
+    waba_blocked: "WABA blocked",
+    quality_changed: "Quality changed",
+    tier_upgraded: "Tier upgraded",
+    waba_status_other: "WABA status update",
     template_approved: "Template approved",
-    billing: "Billing alert",
-    account_review: "Account review",
+    template_rejected: "Template rejected",
+    billing: "Billing",
     other: "Gupshup notice",
   };
-  const headline = `${sevEmoji}  ${tag}  ·  Gupshup: ${catLabels[category] || category}`;
+  const label = catLabels[category] || category;
   const phone = String(payload.phone_number || "").trim();
+  const secondary = String(payload.secondary || "").trim();
+  const snippet = String(payload.snippet || "").slice(0, 220);
   const subject = String(payload.subject || "").slice(0, 200);
-  const snippet = String(payload.snippet || "").slice(0, 280);
-  const fields: { type: string; text: string }[] = [];
-  fields.push({ type: "mrkdwn", text: `*Number*\n${phone ? `+${phone}` : "_unmatched_"}` });
-  if (payload.template_name) fields.push({ type: "mrkdwn", text: `*Template*\n${payload.template_name}` });
-  if (payload.waba_id) fields.push({ type: "mrkdwn", text: `*WABA*\n${payload.waba_id}` });
-  fields.push({ type: "mrkdwn", text: `*Subject*\n${subject || "-"}` });
+
+  const headline = `${sevEmoji}  ${tag}  —  ${label}`;
+  const numberStr = phone ? `+${phone}` : "_unmatched_";
+  const line = secondary ? `*${numberStr}*  ·  ${secondary}` : `*${numberStr}*`;
+
+  const ctxBits: string[] = [];
+  ctxBits.push(`<https://mail.google.com/mail/u/0/#inbox/${payload.gmail_id}|Open in Gmail>`);
+  if (ws) ctxBits.push(`<${workspaceUrl(ws.slug)}/numbers|Open numbers>`);
+  ctxBits.push(new Date().toLocaleString("en-GB", { timeZone: "Asia/Dubai" }));
 
   const blocks: unknown[] = [
     { type: "header", text: { type: "plain_text", text: headline, emoji: true } },
-    { type: "section", fields: fields.slice(0, 10) },
+    { type: "section", text: { type: "mrkdwn", text: line } },
   ];
-  if (snippet) blocks.push({ type: "section", text: { type: "mrkdwn", text: `*Excerpt*\n>${snippet.replace(/\n/g, "\n>")}` } });
-  blocks.push({
-    type: "actions",
-    elements: [
-      { type: "button", text: { type: "plain_text", text: "Open in Gmail" }, url: `https://mail.google.com/mail/u/0/#inbox/${payload.gmail_id}` },
-      ...(ws ? [{ type: "button", text: { type: "plain_text", text: "Open numbers" }, url: `${workspaceUrl(ws.slug)}/numbers` }] : []),
-    ],
-  });
-  blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `_${tag} · ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dubai" })}_` }] });
-  return { text: `${headline}: ${subject || phone || "alert"}`, blocks };
+  if (severity === "critical" && snippet) {
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: `>${snippet.replace(/\n/g, " ").slice(0, 200)}` } });
+  }
+  blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: ctxBits.join("  ·  ") }] });
+
+  return { text: `${label} · ${numberStr}${secondary ? ` · ${secondary}` : ""}`, blocks };
 }
 
 export async function postSlack(channel: string, msg: BlockMessage): Promise<void> {
