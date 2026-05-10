@@ -88,6 +88,19 @@ export default function LaunchWizard() {
   const [type, setType] = useState<CampaignType>("marketing");
   const preset = TYPE_PRESETS[type];
 
+  const { data: pipelines = [] } = useQuery({
+    queryKey: pipelinesKey(workspace?.id),
+    queryFn: () => fetchPipelines(workspace?.id),
+    enabled: Boolean(workspace),
+    staleTime: 60_000,
+  });
+  const [pipelineId, setPipelineId] = useState<string>("");
+  useEffect(() => {
+    if (!pipelineId && pipelines.length > 0) {
+      setPipelineId(pipelines.find((p) => p.is_default)?.id ?? pipelines[0].id);
+    }
+  }, [pipelines, pipelineId]);
+
   const [logicalKey, setLogicalKey] = useState<string>("");
   const [poolCountry, setPoolCountry] = useState<string>("");
   const [numberIds, setNumberIds] = useState<string[]>([]);
