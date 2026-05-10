@@ -303,6 +303,7 @@ Deno.serve(async (req) => {
           user_id: r.user_id,
           role: r.role,
           can_view_stats: Boolean((r as { can_view_stats?: boolean }).can_view_stats),
+          allowed_pipeline_ids: ((r as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null) as string[] | null,
           joined_at: r.created_at,
           email: auth.email,
           full_name: prof.full_name,
