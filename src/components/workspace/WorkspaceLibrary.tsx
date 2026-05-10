@@ -97,12 +97,16 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sign in required");
       const folder = r.folder?.trim() || null;
+      const requestedScope: SavedReplyScope = (r.scope as SavedReplyScope) || defaultScope;
+      // Non-managers can only create/own personal replies.
+      const scope: SavedReplyScope = !canManageWorkspace ? "personal" : requestedScope;
       const payload = {
         title: r.title?.trim() ?? "",
         body: r.body ?? "",
         folder,
         tags: r.tags ?? [],
         is_favorite: !!r.is_favorite,
+        scope,
       };
       if (r.id) {
         const { error } = await supabase.from("workspace_saved_replies").update(payload).eq("id", r.id);
