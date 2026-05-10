@@ -19,6 +19,7 @@ interface LinkInfo {
   workspace_logo?: string | null;
   role?: string;
   seats_left?: number;
+  allowed_pipelines?: { id: string; name: string }[];
   error?: string;
 }
 
