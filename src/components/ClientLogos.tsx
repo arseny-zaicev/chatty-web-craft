@@ -10,7 +10,7 @@ import koldleadsLogo from "@/assets/logos/koldleads.png";
 import cleon1Logo from "@/assets/logos/cleon1.png";
 import pluralsalesLogo from "@/assets/logos/pluralsales.svg";
 import recruitcloudLogo from "@/assets/logos/recruitcloud.avif";
-import undergroundEcomLogo from "@/assets/logos/underground_ecom.png";
+import undergroundEcomLogo from "@/assets/logos/underground_ecom.svg";
 import pnDigitalLogo from "@/assets/logos/pn_digital.svg";
 import goflowLogo from "@/assets/logos/goflow.svg";
 
