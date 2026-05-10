@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
 
     // 2. Validate + dedupe + import each row
     for (const raw of rawLeads) {
-      const phone = normalizePhone(raw?.phone);
+      const phone = normalizePhone(raw?.phone, defaultCC);
       const name = raw?.name ? String(raw.name).slice(0, 200) : null;
       const externalId = raw?.external_id ? String(raw.external_id).slice(0, 200) : null;
       const payload = (raw?.payload && typeof raw.payload === "object") ? raw.payload : {};
