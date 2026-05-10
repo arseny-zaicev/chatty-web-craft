@@ -699,11 +699,19 @@ async function processQueue(admin: any) {
     perTickLimit = 200;
   }
 
+  // Look ahead window: pg_cron fires at minute boundaries, so fetch anything
+  // due within the next ~55s and pace sends inside the tick. This honors the
+  // configured min/max delay (which is randomized into scheduled_at) instead of
+  // collapsing every send to xx:01 (the cron tick).
+  const TICK_BUDGET_MS = 55_000;
+  const tickStartedAt = Date.now();
+  const horizonIso = new Date(tickStartedAt + TICK_BUDGET_MS).toISOString();
+
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, campaigns!inner(id, status, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, campaigns!inner(id, status, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
     .eq("status", "scheduled")
-    .lte("scheduled_at", new Date().toISOString())
+    .lte("scheduled_at", horizonIso)
     .eq("campaigns.status", "running")
     .order("scheduled_at", { ascending: true })
     .limit(perTickLimit);
@@ -712,6 +720,18 @@ async function processQueue(admin: any) {
   let sent = 0;
   let failed = 0;
   for (const recipient of due ?? []) {
+    // Honor the per-recipient scheduled_at: sleep up to the tick budget so
+    // sent_at lands at the actual randomized timestamp (preserves jitter
+    // configured via delay_min/max_seconds), not the cron minute boundary.
+    const targetMs = new Date(recipient.scheduled_at).getTime();
+    const nowMs = Date.now();
+    const waitMs = targetMs - nowMs;
+    const remainingBudget = TICK_BUDGET_MS - (nowMs - tickStartedAt);
+    if (waitMs > 0 && remainingBudget > 0) {
+      await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
+    }
+    if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
+
     const { data: locked } = await admin
       .from("campaign_recipients")
       .update({ status: "sending" })
