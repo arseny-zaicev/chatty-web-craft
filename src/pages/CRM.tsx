@@ -27,6 +27,16 @@ import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
 
 import { fetchWorkspaceMembers, memberDisplayName, workspaceMembersKey } from "@/lib/workspaceMembers";
+import {
+  fetchConversationMessages,
+  markConversationRead,
+  markConversationUnread,
+  setConversationPinned,
+  setConversationStarred,
+  touchResponder as touchResponderApi,
+} from "@/lib/inbox";
+import { useRequireAuth } from "@/hooks/useAuthSession";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 type Message = {
   id: string;
@@ -143,10 +153,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   /** Mark current user as the active responder on a conversation. */
   const touchResponder = async (conversationId: string) => {
     if (!meId) return;
-    await supabase
-      .from("conversations")
-      .update({ active_responder_id: meId, active_responder_at: new Date().toISOString() })
-      .eq("id", conversationId);
+    try { await touchResponderApi(conversationId, meId); } catch { /* non-blocking */ }
   };
 
   const handleSend = async () => {
@@ -191,11 +198,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     setConversations((prev) =>
       prev.map((c) => (c.id === conv.id ? { ...c, is_starred: next } : c)),
     );
-    const { error } = await supabase
-      .from("conversations")
-      .update({ is_starred: next })
-      .eq("id", conv.id);
-    if (error) {
+    try {
+      await setConversationStarred(conv.id, next);
+    } catch {
       toast.error("Failed to update star");
       setConversations((prev) =>
         prev.map((c) => (c.id === conv.id ? { ...c, is_starred: !next } : c)),
@@ -208,11 +213,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     setConversations((prev) =>
       prev.map((c) => (c.id === conv.id ? { ...c, pinned_at: next } : c)),
     );
-    const { error } = await supabase
-      .from("conversations")
-      .update({ pinned_at: next })
-      .eq("id", conv.id);
-    if (error) {
+    try {
+      await setConversationPinned(conv.id, next);
+    } catch {
       toast.error("Failed to update pin");
       setConversations((prev) =>
         prev.map((c) => (c.id === conv.id ? { ...c, pinned_at: conv.pinned_at } : c)),
@@ -221,16 +224,13 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   };
 
   const markUnread = async (conv: Conversation) => {
-    const { error } = await supabase
-      .from("conversations")
-      .update({ unread_count: Math.max(1, conv.unread_count) })
-      .eq("id", conv.id);
-    if (error) toast.error("Failed");
+    try { await markConversationUnread(conv.id, conv.unread_count); }
+    catch { toast.error("Failed"); }
   };
 
   const markRead = async (conv: Conversation) => {
     if (conv.unread_count === 0) return;
-    await supabase.from("conversations").update({ unread_count: 0 }).eq("id", conv.id);
+    try { await markConversationRead(conv.id); } catch { /* non-blocking */ }
   };
 
   // Auth gate + me id
