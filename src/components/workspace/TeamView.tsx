@@ -269,6 +269,17 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     {activeLabel} active · {m.sessions_30d ?? 0} {m.sessions_30d === 1 ? "session" : "sessions"} (30d)
                   </span>
                 </div>
+                {m.role === "client" && (
+                  <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mt-1">
+                    <BarChart3 className="w-3 h-3" />
+                    <span>Can view Overview & Campaigns</span>
+                    <Switch
+                      checked={m.can_view_stats}
+                      onCheckedChange={(v) => toggleStats.mutate({ id: m.id, value: v })}
+                      disabled={toggleStats.isPending}
+                    />
+                  </label>
+                )}
               </div>
               <Button size="icon" variant="ghost" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
                 <Trash2 className="w-4 h-4 text-muted-foreground" />
