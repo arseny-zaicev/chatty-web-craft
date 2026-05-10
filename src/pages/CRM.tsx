@@ -791,15 +791,22 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                               </a>
                             )}
                             <div
-                              className={`text-[10px] mt-1 ${
+                              className={`text-[10px] mt-1 flex items-center gap-1.5 ${
                                 isOut ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}
                             >
-                              {new Date(m.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                              {isOut && ` · ${m.status}`}
+                              <span>
+                                {new Date(m.created_at).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              {isOut && m.sent_by_user_id && (
+                                <span className="opacity-90">
+                                  · by {memberDisplayName(memberById.get(m.sent_by_user_id) ?? null)}
+                                </span>
+                              )}
+                              {isOut && <span>· {m.status}</span>}
                             </div>
                           </div>
                         </div>
