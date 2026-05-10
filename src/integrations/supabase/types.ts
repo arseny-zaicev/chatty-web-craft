@@ -1646,6 +1646,24 @@ export type Database = {
         }
         Relationships: []
       }
+      system_heartbeats: {
+        Row: {
+          last_run_at: string
+          name: string
+          payload: Json
+        }
+        Insert: {
+          last_run_at?: string
+          name: string
+          payload?: Json
+        }
+        Update: {
+          last_run_at?: string
+          name?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       tv_tokens: {
         Row: {
           created_at: string
