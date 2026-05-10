@@ -22,10 +22,19 @@ import {
   setDefaultPipeline,
 } from "@/lib/pipelines";
 import { supabase } from "@/integrations/supabase/client";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 
 const COLOR_PRESETS = [
   "#6366f1", "#3b82f6", "#10b981", "#f59e0b",
   "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4",
+];
+
+const NAME_EXAMPLES = [
+  "Ads / India",
+  "Outbound / UK",
+  "Utility / Existing Customers",
+  "Reactivation / Old Leads",
+  "Inbound / Website",
 ];
 
 export default function PipelinesView({ workspaceId }: { workspaceId: string }) {
