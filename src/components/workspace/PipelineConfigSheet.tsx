@@ -217,31 +217,58 @@ export default function PipelineConfigSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pipeline?.id]);
 
-  // Readiness checklist for auto-outreach
-  const activeNumbers = useMemo(
-    () => (numbers ?? []).filter((n) => n.status === "active" && senderIds.includes(n.id)),
+  // Sender-readiness: assigned & active, status active or ready,
+  // has API key, webhook connected, at least one approved template.
+  const blockersFor = (n: WaNumber): string[] => {
+    const r: string[] = [];
+    if (!n.is_active) r.push("disabled");
+    if (n.status !== "active" && n.status !== "ready") r.push(n.status);
+    if (!n.provider_api_key) r.push("no API key");
+    if (!n.webhook_connected) r.push("no webhook");
+    if (n.approved_templates === 0) r.push("no approved templates");
+    return r;
+  };
+  const readySenders = useMemo(
+    () => (numbers ?? []).filter((n) => senderIds.includes(n.id) && blockersFor(n).length === 0),
     [numbers, senderIds],
   );
   const readiness = useMemo(() => {
     const items = [
       { key: "template", label: "First-touch template selected", ok: Boolean(templateId) },
-      { key: "sender", label: "At least one active sender number", ok: activeNumbers.length > 0 },
-      { key: "window", label: "Sending window set", ok: Boolean(winStart && winEnd) },
+      { key: "sender", label: "At least one ready sender number", ok: readySenders.length > 0 },
+      { key: "window", label: "Sending window + timezone set", ok: Boolean(winStart && winEnd && timezone) },
       { key: "cap", label: "Daily cap set", ok: Boolean(dailyCap && parseInt(dailyCap, 10) > 0) },
       { key: "slack", label: "Slack channel for notifications", ok: Boolean(slackChannel.trim()) },
     ];
     const allOk = items.every((i) => i.ok);
     return { items, allOk };
-  }, [templateId, activeNumbers, winStart, winEnd, dailyCap, slackChannel]);
+  }, [templateId, readySenders, winStart, winEnd, timezone, dailyCap, slackChannel]);
+
+  const firstBlockerToast = () => {
+    const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
+    if (selected.length === 0) {
+      toast.error("Select at least one sender number");
+      return;
+    }
+    const blocked = selected
+      .map((n) => ({ n, reasons: blockersFor(n) }))
+      .filter((x) => x.reasons.length > 0);
+    if (blocked.length > 0 && blocked.length === selected.length) {
+      const ex = blocked[0];
+      toast.error(`${ex.n.display_name || ex.n.phone_number}: ${ex.reasons.join(", ")}`);
+      return;
+    }
+    toast.error("Complete the checklist below first");
+  };
 
   const saveOutreach = async () => {
     if (!pipeId) return;
     if (autoOutreach && !readiness.allOk) {
-      toast.error("Complete the checklist before enabling auto-outreach");
+      firstBlockerToast();
       return;
     }
     const sending_window =
-      winStart && winEnd ? { start: winStart, end: winEnd } : null;
+      winStart && winEnd ? { start: winStart, end: winEnd, timezone } : null;
     const { error } = await supabase
       .from("pipelines")
       .update({
@@ -256,6 +283,26 @@ export default function PipelineConfigSheet({
     if (error) return toast.error(error.message);
     toast.success("Pipeline saved");
     qc.invalidateQueries({ queryKey: ["pipelines", wsId] });
+    qc.invalidateQueries({ queryKey: ["pipeline-numbers", wsId] });
+  };
+
+  const refreshTemplates = async () => {
+    if (!wsId) return;
+    setSyncingTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("campaigns", {
+        body: { action: "sync_templates_all", workspace_id: wsId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Templates refreshed");
+      await qc.invalidateQueries({ queryKey: ["pipeline-templates", wsId] });
+      await refetchNumbers();
+    } catch (e: any) {
+      toast.error(e?.message || "Sync failed");
+    } finally {
+      setSyncingTemplates(false);
+    }
   };
 
   const createSource = async () => {
