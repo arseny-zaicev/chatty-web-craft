@@ -190,6 +190,7 @@ const AdminPanel = () => {
           {section === "forms.submissions" && <AdminSubmissions />}
           {section === "forms.analytics" && <FormAnalyticsDashboard />}
           {section === "site.analytics" && <SiteAnalytics />}
+          {section === "companies.webhook_health" && <WebhookHealth />}
         </main>
       </div>
     </div>
