@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
       // Lock-and-check the link
       const { data: link } = await admin
         .from("workspace_invite_links")
-        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at")
+        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at, allowed_pipeline_ids")
         .eq("token", token)
         .maybeSingle();
       if (!link) return json({ error: "Link not found" }, 404);
