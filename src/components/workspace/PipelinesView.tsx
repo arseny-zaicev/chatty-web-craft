@@ -22,14 +22,25 @@ import {
   setDefaultPipeline,
 } from "@/lib/pipelines";
 import { supabase } from "@/integrations/supabase/client";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 
 const COLOR_PRESETS = [
   "#6366f1", "#3b82f6", "#10b981", "#f59e0b",
   "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4",
 ];
 
+const NAME_EXAMPLES = [
+  "Ads / India",
+  "Outbound / UK",
+  "Utility / Existing Customers",
+  "Reactivation / Old Leads",
+  "Inbound / Website",
+];
+
 export default function PipelinesView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
+  const { data: role } = useWorkspaceRole(workspaceId);
+  const canManage = isManagerLike(role);
   const { data: pipelines = [], isLoading } = useQuery({
     queryKey: pipelinesKey(workspaceId),
     queryFn: () => fetchPipelines(workspaceId),
@@ -63,10 +74,21 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
     qc.invalidateQueries({ queryKey: ["pipelines", workspaceId, "deal-counts"] });
   };
 
+  const normalize = (s: string) => s.trim().replace(/\s+/g, " ");
+  const nameExists = (name: string, ignoreId?: string) => {
+    const n = normalize(name).toLowerCase();
+    return pipelines.some((p) => p.id !== ignoreId && p.name.trim().toLowerCase() === n);
+  };
+
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    const name = normalize(newName);
+    if (!name) return;
+    if (nameExists(name)) {
+      toast.error("A pipeline with this name already exists");
+      return;
+    }
     try {
-      await createPipeline(workspaceId, { name: newName.trim(), color: newColor });
+      await createPipeline(workspaceId, { name, color: newColor });
       toast.success("Pipeline created");
       setShowNew(false);
       setNewName("");
@@ -79,9 +101,15 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
     setEditingId(p.id); setEditName(p.name); setEditColor(p.color);
   };
   const saveEdit = async () => {
-    if (!editingId || !editName.trim()) return;
+    if (!editingId) return;
+    const name = normalize(editName);
+    if (!name) return;
+    if (nameExists(name, editingId)) {
+      toast.error("A pipeline with this name already exists");
+      return;
+    }
     try {
-      await updatePipeline(editingId, { name: editName.trim(), color: editColor });
+      await updatePipeline(editingId, { name, color: editColor });
       toast.success("Saved");
       setEditingId(null);
       invalidate();
@@ -120,12 +148,14 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
             <KanbanSquare className="w-4 h-4 text-primary" /> Pipelines
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Each pipeline is an independent board with its own stages. Use names like "Ads / India" to group visually.
+            Each pipeline is an independent board with its own stages. Use a short operational name like "Ads / India" or "Outbound / UK".
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowNew(true)}>
-          <Plus className="w-4 h-4 mr-1" /> New pipeline
-        </Button>
+        {canManage && (
+          <Button size="sm" onClick={() => setShowNew(true)}>
+            <Plus className="w-4 h-4 mr-1" /> New pipeline
+          </Button>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
@@ -169,24 +199,28 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                     </div>
                     <div className="text-xs text-muted-foreground">{dealCount} deal{dealCount === 1 ? "" : "s"}</div>
                   </div>
-                  {!p.is_default && (
+                  {canManage && !p.is_default && (
                     <Button size="sm" variant="ghost" onClick={() => handleSetDefault(p)} title="Set as default">
                       <Star className="w-3.5 h-3.5 mr-1" /> Make default
                     </Button>
                   )}
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => startEdit(p)} title="Rename">
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => setDeleting(p)}
-                    disabled={p.is_default}
-                    title={p.is_default ? "Cannot delete the default board" : "Delete"}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {canManage && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => startEdit(p)} title="Rename">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => setDeleting(p)}
+                      disabled={p.is_default}
+                      title={p.is_default ? "Cannot delete the default board" : "Delete"}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </>
               )}
             </div>
@@ -202,7 +236,7 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New pipeline</DialogTitle>
-            <DialogDescription>Creates an independent board pre-seeded with default stages.</DialogDescription>
+          <DialogDescription>Creates an independent board pre-seeded with default stages.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -213,6 +247,21 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                 placeholder="e.g. Ads / India"
                 autoFocus
               />
+              <p className="text-[11px] text-muted-foreground">
+                Use a short operational name like Ads / India or Outbound / UK. Pick something your whole team will recognise.
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {NAME_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    onClick={() => setNewName(ex)}
+                    className="text-[11px] px-2 py-0.5 rounded-full border border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/40 transition"
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Color</label>
