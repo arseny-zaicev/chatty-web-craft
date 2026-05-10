@@ -53,6 +53,9 @@ import { formatDistanceToNow } from "date-fns";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
 import StageAutomationsDialog from "@/components/workspace/StageAutomationsDialog";
 import { fetchWorkspaceMembers, workspaceMembersKey } from "@/lib/workspaceMembers";
+import { createDeal, updateDeal, deleteDeal as deleteDealApi, moveDeal } from "@/lib/deals";
+import { useRequireAuth } from "@/hooks/useAuthSession";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
@@ -103,17 +106,8 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   });
 
   // Auth gate + me id
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) navigate("/admin-auth");
-      else setMeId(data.session.user.id);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) navigate("/admin-auth");
-      else setMeId(session.user.id);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  const authedUserId = useRequireAuth("/admin-auth");
+  useEffect(() => { setMeId(authedUserId); }, [authedUserId]);
 
   useEffect(() => {
     if (!pipelineData) return;
@@ -124,47 +118,38 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   }, [pipelineData, newStageId]);
 
   // Realtime deals
-  useEffect(() => {
-    const channel = supabase
-      .channel("pipeline-deals")
-      .on("postgres_changes", { event: "*", schema: "public", table: "deals" }, (payload) => {
-        setDeals((prev) => {
-          if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
-          const incoming = payload.new as Deal;
-          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
-          const idx = prev.findIndex((d) => d.id === incoming.id);
-          const next = idx >= 0
-            ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
-            : [...prev, incoming];
-          return next;
-        });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [workspaceId]);
+  useRealtimeTable<Deal>(
+    { channel: "pipeline-deals", table: "deals" },
+    (payload) => {
+      setDeals((prev) => {
+        if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
+        const incoming = payload.new as Deal;
+        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
+        const idx = prev.findIndex((d) => d.id === incoming.id);
+        return idx >= 0
+          ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
+          : [...prev, incoming];
+      });
+    },
+    [workspaceId],
+  );
 
   // Realtime conversations (assignee / responder updates)
-  useEffect(() => {
-    const channel = supabase
-      .channel("pipeline-conversations")
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
-        setConversations((prev) => {
-          if (payload.eventType === "DELETE") return prev.filter((c) => c.id !== (payload.old as Conversation).id);
-          const incoming = payload.new as Conversation;
-          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
-          const idx = prev.findIndex((c) => c.id === incoming.id);
-          return idx >= 0
-            ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
-            : [...prev, incoming];
-        });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [workspaceId]);
+  useRealtimeTable<Conversation>(
+    { channel: "pipeline-conversations", table: "conversations" },
+    (payload) => {
+      setConversations((prev) => {
+        if (payload.eventType === "DELETE") return prev.filter((c) => c.id !== (payload.old as Conversation).id);
+        const incoming = payload.new as Conversation;
+        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
+        const idx = prev.findIndex((c) => c.id === incoming.id);
+        return idx >= 0
+          ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
+          : [...prev, incoming];
+      });
+    },
+    [workspaceId],
+  );
 
   const dealMatchesAssignee = (d: Deal): boolean => {
     if (assigneeFilter === "all") return true;
