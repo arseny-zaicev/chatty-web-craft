@@ -125,6 +125,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   });
   const { data: role } = useWorkspaceRole(workspaceId);
   const canManage = isManagerLike(role);
+  const canLaunch = isAdmin(role);
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   const numberIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.whatsapp_number_id).filter(Boolean))) as string[], [campaigns]);
