@@ -176,8 +176,14 @@ Deno.serve(async (req) => {
           ws,
           payload: p,
         });
-        if (OPS_NUMBERS) await postSlack(OPS_NUMBERS, msg);
-        if (workspaceChannel) await postSlack(workspaceChannel, msg);
+        const routing = String(p.routing || "numbers");
+        if (routing === "finance") {
+          const financeChan = OPS_FINANCE || OPS_NUMBERS;
+          if (financeChan) await postSlack(financeChan, msg);
+        } else {
+          if (OPS_NUMBERS) await postSlack(OPS_NUMBERS, msg);
+          if (workspaceChannel) await postSlack(workspaceChannel, msg);
+        }
       } else {
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
