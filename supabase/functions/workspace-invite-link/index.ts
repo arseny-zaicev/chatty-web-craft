@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
               error: "This email already has an account. Use the existing password, or reset it first.",
               code: "existing_account_password_invalid",
               already_existed: true,
-            }, 409);
+            });
           }
           await verifier.auth.signOut();
         }
