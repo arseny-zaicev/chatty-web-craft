@@ -652,6 +652,7 @@ function renderTemplateBody(body: string | null | undefined, variableNames: stri
 async function ensureCampaignConversation(admin: any, recipient: any): Promise<string | null> {
   const number = recipient.campaigns?.whatsapp_numbers;
   const numberId = recipient.campaigns?.whatsapp_number_id;
+  const campaignPipelineId = recipient.campaigns?.pipeline_id ?? null;
   const workspaceId = recipient.workspace_id;
   const phone = String(recipient.contact_phone || "").replace(/[^\d]/g, "");
   if (!numberId || !phone) return recipient.conversation_id ?? null;
@@ -660,11 +661,17 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
 
   const { data: existing } = await admin
     .from("conversations")
-    .select("id")
+    .select("id, pipeline_id")
     .eq("whatsapp_number_id", numberId)
     .eq("contact_phone", phone)
     .maybeSingle();
-  if (existing) return existing.id;
+  if (existing) {
+    // Heal stale pipeline assignment if conversation exists but pipeline differs.
+    if (campaignPipelineId && existing.pipeline_id !== campaignPipelineId) {
+      await admin.from("conversations").update({ pipeline_id: campaignPipelineId }).eq("id", existing.id);
+    }
+    return existing.id;
+  }
 
   const { data: created, error } = await admin
     .from("conversations")
@@ -674,6 +681,7 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
       whatsapp_number_id: numberId,
       contact_phone: phone,
       contact_name: recipient.contact_name ?? null,
+      pipeline_id: campaignPipelineId,
       unread_count: 0,
     })
     .select("id")
