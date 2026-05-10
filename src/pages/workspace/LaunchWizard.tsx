@@ -24,6 +24,7 @@ import {
   audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows,
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
 } from "@/lib/audienceData";
+import { fetchPipelines, pipelinesKey } from "@/lib/pipelines";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
@@ -86,6 +87,19 @@ export default function LaunchWizard() {
   // ----- State -----
   const [type, setType] = useState<CampaignType>("marketing");
   const preset = TYPE_PRESETS[type];
+
+  const { data: pipelines = [] } = useQuery({
+    queryKey: pipelinesKey(workspace?.id),
+    queryFn: () => fetchPipelines(workspace?.id),
+    enabled: Boolean(workspace),
+    staleTime: 60_000,
+  });
+  const [pipelineId, setPipelineId] = useState<string>("");
+  useEffect(() => {
+    if (!pipelineId && pipelines.length > 0) {
+      setPipelineId(pipelines.find((p) => p.is_default)?.id ?? pipelines[0].id);
+    }
+  }, [pipelines, pipelineId]);
 
   const [logicalKey, setLogicalKey] = useState<string>("");
   const [poolCountry, setPoolCountry] = useState<string>("");
@@ -535,6 +549,7 @@ export default function LaunchWizard() {
               respect_recipient_tz: respectTz,
               bucket_index: bucketIndex,
               bucket_count: targets.length,
+              pipeline_id: pipelineId || null,
             },
           });
           if (error) results.push({ ok: false, numberId: t.numberId, error: error.message, rowIds: bucketRowIds });

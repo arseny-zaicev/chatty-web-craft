@@ -1,103 +1,80 @@
-## Что строим
+# Multi-pipeline per workspace
 
-Большой блок: **Smart Scheduling + Notifications + Roadmap**. Разбиваю на 4 этапа, каждый можно мерджить отдельно.
+Today every workspace has one flat list of `pipeline_stages` and one Kanban. We introduce a `pipelines` (board) layer between the workspace and the stages, plumb it through Inbox, Pipeline, Launch and access control.
 
----
+## 1. Data model
 
-### Этап 1 - Scheduling UI + дни запуска
+New table `pipelines` (one workspace -> many boards):
 
-В Launch Wizard добавляю секцию **Schedule**:
-- **Старт:** "Сейчас" / "Запланировать"
-- **Дни запуска:** мульти-выбор дней (можно несколько дат, не только одна) - кампания дробится на под-кампании по дням
-- **Окно отправки:** `from` - `to` (default 09:00-18:00), с возможностью сдвинуть до 22:00
-- **Часовой пояс получателя:** toggle "respect recipient timezone" (определяется по префиксу телефона через `geoFromPhone` + map страна→TZ)
-- Превью: "200 сообщений будут отправлены 12 May с 09:00 до 18:00 по локальному TZ получателя"
+```text
+pipelines
+  id, workspace_id, user_id (creator)
+  name, color, position
+  is_default boolean
+  created_at, updated_at
+```
 
-DB: добавляю в `campaigns`:
-- `schedule_window_start time` (default 09:00)
-- `schedule_window_end time` (default 18:00)
-- `respect_recipient_tz boolean` (default true)
-- `scheduled_dates date[]` (массив дат для multi-day запуска)
+Schema changes:
+- `pipeline_stages.pipeline_id` (uuid, FK -> pipelines.id, NOT NULL after backfill)
+- `deals.pipeline_id` (uuid, denormalized from stage for fast filtering)
+- `conversations.pipeline_id` (uuid, nullable — set when conv is linked to a deal/stream)
+- `campaigns.pipeline_id` (uuid, nullable)
+- `workspace_members.allowed_pipeline_ids uuid[]` (nullable = all pipelines; non-empty = restricted) — prepares per-board access without enforcing yet
 
----
+Backfill:
+- For each existing workspace, create one default pipeline `"Main"` (`is_default = true`), assign all existing stages/deals/conversations/campaigns to it.
 
-### Этап 2 - Poisson scheduler (backend)
+RLS:
+- `pipelines`: workspace members can SELECT; managers manage.
+- Update existing stage/deal policies to keep working (no behavior change yet — `allowed_pipeline_ids` is read-only metadata for now; enforcement is a later task per requirement #6).
 
-Меняю логику в `send-whatsapp` / `campaigns` edge функции.
+## 2. Inbox (CRM page)
 
-Вместо равномерных `delay_min/delay_max` между сообщениями:
-1. На момент старта кампании (или cron-тика) - **раз** генерируем `scheduled_at` для каждого `campaign_recipient`:
-   - Внутри окна `[window_start, window_end]` в TZ получателя
-   - Распределение **Poisson** (экспоненциальные интервалы, не равномерные) - выглядит как естественный человеческий паттерн
-   - **Шаффл по номерам:** не "сначала все с номера A, потом B", а перемешать так, чтобы в любую секунду слали 1-2 разных номера (round-robin внутри отсортированной по времени очереди)
-2. Cron каждую минуту берёт `campaign_recipients` где `scheduled_at <= now()` и `status='pending'` и шлёт.
+- New `PipelineFilter` chip row at the top of the conversation list. Options: `All boards`, then one chip per pipeline (color dot + name).
+- Filter state stored in `useState` + URL param `?board=<id>` so it survives refresh.
+- Each conversation row gets a small colored **pipeline tag** (uses pipeline color + name) next to the contact name. Tag is hidden if the workspace has only one pipeline (keeps UI clean for single-board clients).
+- The active conversation header also shows the pipeline tag, with a popover to **move conversation to another board** (updates `conversations.pipeline_id` and the linked deal's stage to that board's first stage).
 
-Технически - Postgres функция `schedule_campaign_recipients(campaign_id)` + edge cron каждую минуту.
+## 3. Pipeline page
 
----
+- Add a **board switcher** at the top (Pipedrive-style dropdown): current board name + chevron, list of boards, `+ New board`, `Manage boards`.
+- Switching board re-queries stages/deals filtered by `pipeline_id`.
+- `New board` opens a dialog (name, color). On create, seeds the same default 12 stages used today (`DEFAULT_WORKSPACE_STAGES` in `crmData.ts`).
+- `Manage boards` dialog: rename, recolor, reorder, delete (delete blocked if it's the only/default board; otherwise reassigns deals to the default board first).
+- Stage CRUD continues to work, but every stage is now scoped to the active board.
 
-### Этап 3 - Slack + Google Calendar notifications
+## 4. Launch wizard
 
-**Slack:**
-- Connector уже подключён (`SLACK_API_KEY` в secrets)
-- На событие `campaign launched` - сообщение в канал (default `#campaigns` или настраиваемый)
-- На завершение кампании - сообщение со stats (sent / failed / read rate если есть)
-- Настройка канала: в Workspace Settings новое поле "Slack channel for campaign notifications" + кнопка "Test message"
-- Для будущих клиентов - в Settings можно будет добавить `client_slack_channel` (но пока пусто)
+- Add a **Step 0: Choose board** (skipped automatically if workspace has only one pipeline).
+- The selected `pipeline_id` is:
+  - persisted on the campaign (`campaigns.pipeline_id`),
+  - used to scope template suggestions if a template is tagged with a board (future), and to scope the "audience preview" against the board's existing conversations (so we can warn about overlaps within the same stream),
+  - propagated to every conversation created/touched by the launch so new chats land in the right Inbox filter and on the right Pipeline board.
+- Sender/number, copy and templates remain selectable as today, but defaults can later be remembered per board (out of scope here — we just pass the context through).
 
-**Google Calendar:**
-- Нужно подключить Google Calendar connector (попрошу одобрить)
-- На запуск - создаю event на дату запуска, `transparency=transparent` (без busy)
-- Title: `[Iskra] Launch: {campaign_name}` + описание со ссылкой на dashboard
+## 5. Access control readiness
 
----
+- `workspace_members.allowed_pipeline_ids` is added now, surfaced in the Team view as a multi-select per Client member ("All boards" by default).
+- No enforcement in this PR — UI hooks (Inbox filter, Pipeline switcher, Launch board step) read the column and will hide non-allowed boards in a follow-up.
 
-### Этап 4 - Roadmap / Vision page
+## 6. Files touched
 
-Новая страница `/ws/:slug/roadmap` (только admin), без публичного доступа:
-- Колонки kanban: **Idea / Planned / In Progress / Shipped**
-- Каждая карточка: title, description, tags (scheduling/notifications/ai/etc), priority, "why" поле
-- DB: таблица `roadmap_items` (workspace-scoped, RLS - только admin/owner)
-- Можно добавлять, перетаскивать между колонками, помечать shipped
-- На входе засеваю всё что обсуждали в чате (smart routing, A/B copy, stats page, slack reports, calendar, и т.д.)
+Frontend
+- `src/lib/pipelines.ts` (new) — list/create/update/delete boards, default-board helper
+- `src/lib/crmData.ts` — add `pipeline_id` to fetch shapes; filter by board
+- `src/lib/launchData.ts` — add `pipeline_id` to campaign create payload
+- `src/pages/CRM.tsx` — board filter chips, pipeline tag in rows + header, "move to board" action
+- `src/pages/Pipeline.tsx` — board switcher dropdown, new-board dialog, manage-boards dialog
+- `src/pages/workspace/LaunchWizard.tsx` — board step + propagation
+- `src/components/workspace/TeamView.tsx` — `allowed_pipeline_ids` multi-select for Clients
 
----
+Backend
+- One migration for the new table + columns + backfill + RLS
 
-## Технический раздел
+## 7. After-change explainer (will be in chat reply)
 
-**Миграции:**
-1. `campaigns` + поля schedule
-2. `campaign_recipients.scheduled_at` уже есть
-3. Новая таблица `roadmap_items (id, workspace_id, title, description, status, tags[], priority, why, position, created_at)`
-4. Опционально: `workspaces.slack_channel_id`, `workspaces.gcal_calendar_id`
-
-**Edge functions:**
-- `schedule-campaign` (новая) - генерит `scheduled_at` по Poisson
-- `process-campaign-queue` (новая, cron 1 min) - шлёт всё что `scheduled_at <= now()`
-- `notify-slack` хелпер (использует `_shared/slack.ts` который уже есть)
-- `notify-gcal` (новая, после connect Google Calendar)
-
-**Frontend:**
-- `LaunchWizard`: новая секция Schedule
-- `WorkspaceSettings`: поле Slack channel + test
-- `pages/workspace/Roadmap.tsx` (новая)
-- роут `/ws/:slug/roadmap` в `App.tsx`
-
----
-
-## Порядок ship
-
-1. **Roadmap страница** (быстро, изолировано, сразу даст тебе место копить идеи) - 1 итерация
-2. **Scheduling UI + DB поля + дни запуска** - 1 итерация
-3. **Poisson scheduler backend + cron** - 1 итерация (требует тестов)
-4. **Slack notifications** (campaign launched + completed) - 1 итерация
-5. **Google Calendar** (после connect) - 1 итерация
-
----
-
-## Что нужно от тебя
-
-1. **Стартуем с Roadmap** (быстрая победа + ты сразу засыпешь идеи), потом Scheduling? Или сначала Scheduling раз он критичнее для запусков?
-2. **Slack канал** - название канала (например `#iskra-campaigns`)? Создам код на отправку в этот канал, ты его подтвердишь.
-3. **Google Calendar** - подтверждаешь подключение connector'а? (попрошу авторизацию через Google)
-4. **Multi-day:** если ты выбрал 2 даты для одной аудитории в 200 контактов - делим 100/100 или дублируем 200/200? (думаю делим - дубликаты = бан)
+- **Multiple pipelines per client**: each workspace has N boards; default is one auto-created "Main" board. Managers create/rename/delete boards from Pipeline.
+- **Inbox switching/filtering**: chip row at the top of Inbox; `All boards` or pick one. Active filter is in the URL.
+- **Pipeline tag in Inbox**: each conversation row shows a small colored chip with the board name; only visible when the workspace has 2+ boards.
+- **Launch uses the board context**: the wizard asks which board the campaign belongs to; the campaign and every resulting conversation inherit that `pipeline_id`, so they appear on the right board and under the right Inbox filter.
+- **Access control**: per-member `allowed_pipeline_ids` is stored now and editable in Team; enforcement comes next.
