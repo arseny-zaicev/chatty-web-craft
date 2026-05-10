@@ -86,14 +86,15 @@ export async function fetchCrmBase(workspaceId?: string) {
 }
 
 const DEFAULT_WORKSPACE_STAGES: Array<{ name: string; color: string; stage_type: "open" | "won" | "lost" }> = [
+  { name: "Message sent",         color: "#64748b", stage_type: "open" },
   { name: "Other Reply",          color: "#94a3b8", stage_type: "open" },
-  { name: "Not interested/Block", color: "#ef4444", stage_type: "lost" },
   { name: "Positive reply",       color: "#10b981", stage_type: "open" },
   { name: "In progress",          color: "#f59e0b", stage_type: "open" },
   { name: "1st Call Attempt",     color: "#fbbf24", stage_type: "open" },
   { name: "2nd Call Attempt",     color: "#fb923c", stage_type: "open" },
   { name: "3rd Call Attempt",     color: "#f97316", stage_type: "open" },
   { name: "Follow Up",            color: "#6366f1", stage_type: "open" },
+  { name: "Not interested/Block", color: "#ef4444", stage_type: "lost" },
   { name: "Booked",               color: "#3b82f6", stage_type: "open" },
   { name: "Lost",                 color: "#dc2626", stage_type: "lost" },
   { name: "Won",                  color: "#059669", stage_type: "won" },
