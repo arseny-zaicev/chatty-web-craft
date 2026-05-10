@@ -123,7 +123,9 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
     queryFn: () => fetchCampaignSummaries(workspaceId),
     staleTime: 30_000,
   });
-  const [openId, setOpenId] = useState<string | null>(null);
+  const { data: role } = useWorkspaceRole(workspaceId);
+  const canManage = isManagerLike(role);
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
   const numberIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.whatsapp_number_id).filter(Boolean))) as string[], [campaigns]);
   const templateIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.template_id).filter(Boolean))) as string[], [campaigns]);
@@ -136,6 +138,10 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const numberById = meta?.numbers ?? new Map();
   const templateById = meta?.templates ?? new Map();
 
+  // Clients see merged groups (one row per logical campaign).
+  // Managers see every individual campaign so they can drill into a specific number.
+  const groups = useMemo(() => groupCampaigns(campaigns as CampaignRow[]), [campaigns]);
+
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
@@ -146,46 +152,57 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />Refresh
           </Button>
-          <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />New launch</Link></Button>
+          {canManage && (
+            <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />New launch</Link></Button>
+          )}
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">Campaign history and live monitoring. Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</p>
+      <p className="text-sm text-muted-foreground">
+        Campaign history and live monitoring.
+        {canManage && <> Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</>}
+      </p>
 
-      {campaigns.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
           No campaigns yet.
-          <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>
+          {canManage && <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>}
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
-          {campaigns.map((c: any) => {
-            const number = numberById.get(c.whatsapp_number_id);
-            const template = templateById.get(c.template_id);
-            const total = c.total_recipients ?? 0;
-            const sent = c.sent_count ?? 0;
-            const failed = c.failed_count ?? 0;
-            const open = openId === c.id;
-            const tone = statusTone[c.status] ?? statusTone.draft;
+          {groups.map((g) => {
+            const template = templateById.get(g.template_id ?? "");
+            // For multi-number groups, show "X numbers" instead of one number label
+            const numberLabel = g.whatsapp_number_ids.length === 1
+              ? (() => { const n = numberById.get(g.whatsapp_number_ids[0]); return n ? (n.label ?? `+${n.phone_number}`) : null; })()
+              : (canManage ? `${g.whatsapp_number_ids.length} numbers` : null);
+            const open = openKey === g.key;
+            const tone = statusTone[g.status] ?? statusTone.draft;
             return (
-              <div key={c.id}>
+              <div key={g.key}>
                 <button
                   className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
-                  onClick={() => setOpenId(open ? null : c.id)}
+                  onClick={() => setOpenKey(open ? null : g.key)}
                 >
                   {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate text-sm">{c.name}</div>
+                    <div className="font-medium truncate text-sm">{g.displayName}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {[template?.name, number ? (number.label ?? `+${number.phone_number}`) : null, formatDistanceToNow(new Date(c.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
+                      {[template?.name, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                    <Stat label="Sent" value={`${sent}/${total}`} />
-                    {failed > 0 && <Stat label="Failed" value={failed} tone="bad" />}
+                    <Stat label="Sent" value={`${g.sent}/${g.total}`} />
+                    {g.failed > 0 && <Stat label="Failed" value={g.failed} tone="bad" />}
                   </div>
-                  <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{c.status}</Badge>
+                  <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>
-                {open && <CampaignDetail campaignId={c.id} />}
+                {open && (
+                  <CampaignDetail
+                    group={g}
+                    canManage={canManage}
+                    numberById={numberById}
+                  />
+                )}
               </div>
             );
           })}
