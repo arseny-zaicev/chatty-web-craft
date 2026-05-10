@@ -1298,6 +1298,8 @@ export type Database = {
           is_active: boolean
           is_warming: boolean
           label: string | null
+          last_health_sync_at: string | null
+          last_health_sync_error: string | null
           messaging_limit: string | null
           notes: string | null
           partner_source: string | null
@@ -1308,6 +1310,7 @@ export type Database = {
           provider_api_key: string | null
           provider_app_id: string | null
           provider_waba_id: string | null
+          quality_rating: string | null
           restricted_at: string | null
           status: Database["public"]["Enums"]["whatsapp_number_status"]
           unrestricted_at: string | null
@@ -1331,6 +1334,8 @@ export type Database = {
           is_active?: boolean
           is_warming?: boolean
           label?: string | null
+          last_health_sync_at?: string | null
+          last_health_sync_error?: string | null
           messaging_limit?: string | null
           notes?: string | null
           partner_source?: string | null
@@ -1341,6 +1346,7 @@ export type Database = {
           provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
+          quality_rating?: string | null
           restricted_at?: string | null
           status?: Database["public"]["Enums"]["whatsapp_number_status"]
           unrestricted_at?: string | null
@@ -1364,6 +1370,8 @@ export type Database = {
           is_active?: boolean
           is_warming?: boolean
           label?: string | null
+          last_health_sync_at?: string | null
+          last_health_sync_error?: string | null
           messaging_limit?: string | null
           notes?: string | null
           partner_source?: string | null
@@ -1374,6 +1382,7 @@ export type Database = {
           provider_api_key?: string | null
           provider_app_id?: string | null
           provider_waba_id?: string | null
+          quality_rating?: string | null
           restricted_at?: string | null
           status?: Database["public"]["Enums"]["whatsapp_number_status"]
           unrestricted_at?: string | null
