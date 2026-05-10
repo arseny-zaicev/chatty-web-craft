@@ -321,6 +321,8 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     }
   }, [messages.length, activeId]);
 
+  const stageTypeByConv = baseData?.conversationStageType ?? new Map<string, string>();
+
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {
       // pinned first (newest pin first)
@@ -329,13 +331,29 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
       if (a.pinned_at && b.pinned_at) {
         return new Date(b.pinned_at).getTime() - new Date(a.pinned_at).getTime();
       }
+      if (sortMode === "unread") {
+        if ((a.unread_count > 0) !== (b.unread_count > 0)) {
+          return a.unread_count > 0 ? -1 : 1;
+        }
+      }
       const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
       const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return tb - ta;
+      return sortMode === "oldest" ? ta - tb : tb - ta;
     });
-  }, [conversations]);
+  }, [conversations, sortMode]);
+
+  const negativeCount = useMemo(
+    () => conversations.filter((c) => stageTypeByConv.get(c.id) === "lost").length,
+    [conversations, stageTypeByConv],
+  );
 
   const filtered = sorted.filter((c) => {
+    const isNegative = stageTypeByConv.get(c.id) === "lost";
+    if (showNegative) {
+      if (!isNegative) return false;
+    } else if (isNegative) {
+      return false;
+    }
     if (numberFilter !== "all" && c.whatsapp_number_id !== numberFilter) return false;
     if (starredOnly && !c.is_starred) return false;
     if (myOnly && meId && c.assigned_user_id !== meId) return false;
