@@ -35,6 +35,8 @@ import {
   setConversationStarred,
   touchResponder as touchResponderApi,
 } from "@/lib/inbox";
+import { fetchPipelines, pipelinesKey, moveConversationToPipeline } from "@/lib/pipelines";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
