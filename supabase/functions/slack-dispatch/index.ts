@@ -211,15 +211,19 @@ Deno.serve(async (req) => {
         const p = ev.payload as any;
         const msg = buildInboxSpikeBlocks({ ws, unreadCount: p.unread_total || 0, conversations: p.conversations || [] });
         await postSlack(workspaceChannel, msg);
-      } else if (ev.event_type === "lead.imported" || ev.event_type === "lead.import_failed" || ev.event_type === "lead.dispatched" || ev.event_type === "lead.dispatch_blocked") {
+      } else if (ev.event_type === "lead.first_reply") {
         const p = ev.payload as any;
         const pipelineChannel = (p?.slack_channel_id as string) || workspaceChannel;
         if (!pipelineChannel) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
-        const msg = buildLeadEventBlocks(ev.event_type, ws, p);
+        const msg = buildFirstReplyBlocks(ws, p);
         await postSlack(pipelineChannel, msg);
+      } else if (ev.event_type === "lead.imported" || ev.event_type === "lead.import_failed" || ev.event_type === "lead.dispatched" || ev.event_type === "lead.dispatch_blocked") {
+        // Operational noise: do not notify clients in their pipeline channel.
+        await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
+        continue;
       } else if (ev.event_type === "gupshup_mail_alert") {
         const p = ev.payload as any;
         const msg = buildGupshupMailAlertBlocks({
