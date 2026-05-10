@@ -135,6 +135,30 @@ export default function PipelineConfigSheet({
     },
   });
 
+  const { data: counters } = useQuery({
+    queryKey: ["pipeline-lead-counters", pipeId],
+    enabled: Boolean(pipeId && open),
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
+      const base = supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!);
+      const [pending, queued, sentToday, failedToday, repliedToday] = await Promise.all([
+        base.eq("status", "pending"),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "queued"),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "sent").gte("sent_at", todayStart.toISOString()),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "failed").gte("scheduled_at", todayStart.toISOString()),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "replied").gte("sent_at", todayStart.toISOString()),
+      ]);
+      return {
+        pending: pending.count ?? 0,
+        queued: queued.count ?? 0,
+        sent: sentToday.count ?? 0,
+        failed: failedToday.count ?? 0,
+        replied: repliedToday.count ?? 0,
+      };
+    },
+  });
+
   useEffect(() => {
     if (open && pipeline) hydrate(pipeline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
