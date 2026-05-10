@@ -143,13 +143,22 @@ function WorkspaceHeader({ workspace, slug, sectionLabel }: { workspace?: Worksp
 
 function RoleGuardedOutlet({ workspace }: { workspace?: Workspace }) {
   const location = useLocation();
-  const { data: role, isLoading } = useWorkspaceRole(workspace?.id);
+  const { data: access, isLoading } = useWorkspaceAccess(workspace?.id);
   if (!workspace) return <Outlet context={{ workspace }} />;
   if (isLoading) return <WorkspaceMainFallback />;
+  const role = access?.role;
   const seg = location.pathname.split("/").filter(Boolean)[2];
-  const restricted = seg === "library" || seg === "settings" || seg === "launch" || seg === "data";
-  if (restricted && !isManagerLike(role)) {
-    return <Navigate to={`/ws/${workspace.slug}/overview`} replace />;
+  const managerOnly = seg === "library" || seg === "settings" || seg === "data" || seg === "materials";
+  const adminOnly = seg === "launch";
+  const statsGated = seg === "overview" || seg === "campaigns" || !seg; // root → overview
+  if (adminOnly && !isAdmin(role)) {
+    return <Navigate to={`/ws/${workspace.slug}/inbox`} replace />;
+  }
+  if (managerOnly && !isManagerLike(role)) {
+    return <Navigate to={`/ws/${workspace.slug}/inbox`} replace />;
+  }
+  if (statsGated && role === "client" && !access?.canViewStats) {
+    return <Navigate to={`/ws/${workspace.slug}/inbox`} replace />;
   }
   return <Outlet context={{ workspace } satisfies Partial<WorkspaceContext>} />;
 }
