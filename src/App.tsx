@@ -85,6 +85,8 @@ const FleetAnalytics = lazyWithRetry(() => import("./pages/admin/FleetAnalytics"
 const AdminMfaSetup = lazyWithRetry(() => import("./pages/admin/AdminMfaSetup"));
 const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"));
 const OpsLive = lazyWithRetry(() => import("./pages/admin/OpsLive"));
+const BusinessManagers = lazyWithRetry(() => import("./pages/admin/BusinessManagers"));
+const BusinessManagerDetail = lazyWithRetry(() => import("./pages/admin/BusinessManagerDetail"));
 const Apply = lazyWithRetry(() => import("./pages/Apply"));
 const SellerLeadsApply = lazyWithRetry(() => import("./pages/SellerLeadsApply"));
 const WhatsAppApply = lazyWithRetry(() => import("./pages/WhatsAppApply"));
@@ -169,6 +171,8 @@ const App = () => (
               <Route path="/admin/roadmap" element={<Navigate to="/ws/iskra/roadmap" replace />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
               <Route path="/admin/analytics" element={<FleetAnalytics />} />
+              <Route path="/admin/business-managers" element={<BusinessManagers />} />
+              <Route path="/admin/business-managers/:id" element={<BusinessManagerDetail />} />
               <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
               <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
               <Route path="/admin/ops-live" element={<OpsLive />} />

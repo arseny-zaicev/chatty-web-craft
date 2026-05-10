@@ -1,148 +1,105 @@
-# План: запуск первой кампании на Nitish Ads India
+## Цель
 
-Цель: за один проход подключить Google Sheet к нужному пайплайну, запустить авто-отправку первого касания, выдать доступ delivery-пользователю с правильной атрибуцией ответов и нотификациями, и починить мелкий баг в фильтре пайплайна.
+Добавить в Operations отдельный реестр **Business Managers** с трекингом прогрева, чтобы видеть статус прогрева на уровне BM (а не только отдельных номеров) и какие номера к каждому BM привязаны.
 
----
+## Где это живёт
 
-## 1. Фикс блокера дispatch (обязательно перед запуском)
+Новая страница `/admin/fleet/business-managers` рядом с `FleetRegistry` и `FleetAnalytics`. Точка входа - таб "Business Managers" в навигации Operations / Fleet.
 
-В `lead-intake/index.ts` остался stub, который после приёма лида переводит его в `awaiting_manual` даже если на пайплайне `auto_outreach_enabled = true`. `lead-dispatch` забирает только `pending`, поэтому без этого фикса ни один лид из Google Sheet не уйдёт автоматически.
+## Модель данных
 
-**Действие:** убрать блок «flip to awaiting_manual when auto_outreach_enabled». Если `auto_outreach_enabled = true` — оставляем `pending` (заберёт dispatcher); если `false` — оставляем `awaiting_manual` для ручной отправки.
+Новая таблица `business_managers`:
+- `name` (уникальное в рамках workspace, например "BM-Iskra-01")
+- `provider` (gupshup / meta / other)
+- `external_id` (Meta BM ID)
+- `owner_email`, `notes`
+- `status`: `warming` / `active` / `paused` / `restricted` / `blocked` / `retired`
+- `warmup_started_at`, `warmup_target_date`, `warmup_stage` (day 1-30 / week 1-4 / "ready")
+- `last_warmup_action_at` (последнее действие, движущее прогрев - sent campaign, manual ping)
+- `daily_warmup_cap`, `current_day_sent` (для оркестратора)
+- `health_score` 0-100 (агрегат от номеров)
+- `workspace_id`, `created_by`, timestamps
 
----
+Связь с номерами: добавить `business_manager_id uuid` в `whatsapp_numbers` (мягкая ссылка). Старое текстовое поле `bm_name` оставляем как fallback и для миграции - скрипт смэтчит по имени.
 
-## 2. Подключение Google Sheet к Nitish Ads India
+Лог событий прогрева `business_manager_warmup_events`:
+- `business_manager_id`, `event_type` (`campaign_sent`, `number_added`, `number_restricted`, `manual_note`, `stage_advanced`), `payload jsonb`, `created_by`, `created_at`.
+Используется для таймлайна "когда был последний прогрев" и аудита.
 
-Текущий `source_connections` уже поддерживает webhook intake. Для Sheet нужен pull-сценарий.
+RLS: `is_workspace_manager` для записи, `is_workspace_member` для чтения. Admin видит всё.
 
-**Действие:**
-- В `PipelineConfigSheet` добавить тип источника **Google Sheet** с полями: spreadsheet URL, worksheet name, mapping колонок (`phone`, `name`, опц. `variables`), «start row» и режим (`one-shot import` / `poll every N min`).
-- Создать edge function `google-sheets-poll` (cron каждые 5 мин), которая:
-  1. Берёт активные `source_connections` типа `google_sheet`.
-  2. Через существующий connector `google_sheets` читает диапазон с `last_synced_row + 1`.
-  3. Дедуп по `phone` внутри `lead_imports` пайплайна (как webhook сейчас).
-  4. Создаёт `import_batch` + строки в `lead_imports` со статусом `pending`.
-  5. Пишет `last_synced_row` и счётчики в `import_batches`.
-- Для MVP допустим **only manual «Sync now»** + cron, без OAuth-per-user (используем dev-connection, как описано в guide).
+## UI
 
-**Контроль запуска (UI «Source status» внутри `PipelineConfigSheet`):**
-- последняя синхронизация, число `pending / queued / sent / replied / failed`,
-- кнопка `Sync now`,
-- ссылка на лог последних 10 `import_batches` с количествами и ошибками,
-- бейдж блокировок из `slack_event_queue` (`no_template`, `no_sender`, `daily_cap_reached`...).
+### Список BM (`/admin/fleet/business-managers`)
+Таблица:
+- Имя BM, провайдер, статус (бейдж), стадия прогрева (Day 7/30), health, число номеров (active / restricted / blocked), последнее действие прогрева, владелец.
+- Фильтры: статус, провайдер, workspace.
+- Поиск по имени / external_id.
+- Кнопка "Add BM".
 
----
+### Детальная страница BM (`/admin/fleet/business-managers/:id`)
+Секции:
+1. **Header** - имя, статус, стадия, health, кнопки `Advance stage`, `Pause`, `Mark active`, `Retire`.
+2. **Warmup plan** - прогресс-бар по дням, цель, daily cap, сколько отправлено сегодня (сумма по номерам).
+3. **Allocated numbers** - список `whatsapp_numbers`, привязанных к BM: телефон, статус, messaging_limit, sent today, последнее сообщение. Кнопки `Attach number` / `Detach`.
+4. **Timeline** - события из `business_manager_warmup_events` + автоматические события из `slack_event_queue` (number_restricted, number_blocked) отфильтрованные по принадлежности к BM.
+5. **Notes**.
 
-## 3. Подготовка пайплайна Nitish Ads India к авто-выдаче
+### Интеграция с FleetRegistry
+В `NumbersInventory` / `FleetRegistry` поле `bm_name` заменить на селект `business_manager_id` (с возможностью создать BM на лету). Колонка "BM" становится ссылкой на детальную BM.
 
-Чек-лист, который должен закрыться до старта (UI пометит зелёными галочками в `PipelineConfigSheet`):
-- approved `first_touch_template_id`;
-- ≥1 active `whatsapp_number` в `default_sender_number_ids`;
-- `sending_window` (start/end + timezone Дубая);
-- `daily_cap` (например 80);
-- `slack_channel_id` для нотификаций;
-- `auto_outreach_enabled = true`.
+### Интеграция с FleetAnalytics
+Добавить агрегаты по BM: средний health, % restricted, send volume per BM за период.
 
-Без всех галочек переключатель «Enable auto-outreach» дизейблим (сейчас включается без проверок).
+## Логика прогрева (минимальная, без авто-оркестрации)
 
----
+На этом этапе не строим автопрогрев. Только трекинг:
+- `current_day_sent` обновляется триггером/edge-функцией при инсерте `messages` outbound с номеров этого BM.
+- `health_score` пересчитывается раз в час cron-функцией: формула из доли active vs restricted/blocked номеров и тренда messaging_limit.
+- При переходе номера в `restricted`/`blocked` автоматически пишется событие в timeline BM и статус BM поднимается до `restricted`, если >= N% номеров деградировали (порог настраиваемый, по умолчанию 30%).
 
-## 4. Доступ delivery-пользователю (Nitish)
+Это даёт основу под будущий warmup-orchestrator (P2).
 
-Используем уже существующие invite-link с pipeline scope.
+## Slack
 
-**Действие:**
-- В `TeamView` для воркспейса iskra сгенерировать invite со scope **только** Nitish Ads India и ролью `member`.
-- Прислать ссылку Nitish, он регистрируется → попадает только в этот пайплайн (Inbox/Pipeline уже фильтруются по pipeline_scope).
-- Проверка: под его аккаунтом не видно других досок и чужих чатов.
+Новые события:
+- `bm.warmup_started`, `bm.stage_advanced`, `bm.degraded` (при пороге restricted), `bm.ready` (когда прогрев завершён).
+Канал - `SLACK_OPS_NUMBERS_CHANNEL_ID` (уже есть).
 
----
+## Миграция существующих данных
 
-## 5. Атрибуция ответов (кто кому написал)
+Скрипт (через `supabase--insert`):
+1. Сгруппировать `whatsapp_numbers.bm_name` -> создать запись в `business_managers` для каждого уникального непустого имени.
+2. Проставить `whatsapp_numbers.business_manager_id`.
+3. Статус каждого BM выставить на основании статусов номеров (active если все active, restricted если есть restricted, и т.д.).
 
-`messages` уже хранит `direction` и `sender_user_id` для исходящих от оператора. Нужно гарантировать:
-- При ответе из Inbox `sender_user_id = auth.uid()` (проверить, что это пишется во всех путях: composer, quick replies, AI suggest).
-- В UI чата выводить плашку отправителя для исходящих: аватар + имя (`memberDisplayName`), у входящих — имя контакта.
-- Mobile/Desktop одинаково.
+## Объём по этапам
 
----
+**P0 (сейчас)**
+- Таблицы `business_managers`, `business_manager_warmup_events`, FK на `whatsapp_numbers`.
+- Миграция данных из `bm_name`.
+- Страница списка + детальная + ручное управление статусом и стадией.
+- Замена `bm_name` инпута на селект BM в Numbers Inventory.
 
-## 6. Статистика по операторам
+**P1**
+- Авто health_score + cron.
+- Slack-события прогрева.
+- Виджет "BM warmup" на Ops Live.
 
-Добавить вкладку **Team activity** в `WorkspaceOverview` (или `TeamView`), per-pipeline scope:
-- среднее время первого ответа (по `messages.outbound_at - inbound_at` в рамках conversation),
-- кол-во ответов за день/неделю,
-- last seen / online (берём из существующего `useHeartbeat` → таблица `user_presence`; если её нет, добавить лёгкую таблицу с upsert каждые 30 c).
-
-MVP: только «avg first response», «replies today», «last active». Графики позже.
-
----
-
-## 7. Нотификации в Slack для Nitish
-
-Два уровня (оба уже частично есть в `slack-dispatch`):
-- **Pipeline channel** (`pipelines.slack_channel_id`) — общие события: `lead.dispatched`, `lead.dispatch_blocked`, `conversation.first_reply`, `deal.stage_changed`.
-- **Personal DM / private channel оператора** — события, где `assignee_user_id = его user_id`: новый ответ в его чате, назначение на него.
-
-**Действие:**
-- Добавить в `workspace_members` (или новой `member_notification_prefs`) поля `slack_user_id` и `dm_enabled`.
-- В `slack-dispatch` для `conversation.inbound_message` проверять assignee → если есть `slack_user_id`, слать DM, иначе fallback в pipeline-канал.
-- В UI `TeamView` форма «Slack handle» для каждого члена.
-
-Для Nitish: либо создать канал `#delivery-nitish` и положить его в `pipelines.slack_channel_id` для Nitish Ads India, либо привязать его Slack user → DM. Рекомендую **канал `#delivery-nitish`** — проще шарить контекст с админом.
-
----
-
-## 8. Баг: фильтр в pipeline показывает «User 18b05c»
-
-В `src/pages/Pipeline.tsx:415` используется инлайн-фолбэк `User ${user_id.slice(0,6)}`, минуя `memberDisplayName`. У Nitish скорее всего нет `full_name`, но есть `email` — нужно показать локальную часть email-а.
-
-**Действие:** заменить инлайн на `memberDisplayName(m)` (как уже сделано в `AssigneeSelect`). Дополнительно: при первом приёме invite ставить `full_name` из формы регистрации, если оно введено.
-
----
-
-## MVP scope
-
-**P0 — нужно сегодня для запуска Nitish:**
-1. Фикс stub в `lead-intake` (раздел 1).
-2. Фикс «User …» в фильтре (раздел 8).
-3. Чек-лист готовности пайплайна с дизейблом тоггла (раздел 3).
-4. Подключение Google Sheet: UI + edge function + `Sync now` + статус-панель (раздел 2).
-5. Invite-ссылка для Nitish со scope только этого пайплайна (раздел 4).
-6. Pipeline Slack channel для нотификаций dispatch / first reply (раздел 7, только канал, без DM).
-
-**P1 — следом, не блокирует запуск:**
-- Cron-поллинг Google Sheet (P0 = ручная синхронизация).
-- DM-нотификации по `slack_user_id`.
-- Team activity вкладка со статистикой ответов.
-- Plate с именем отправителя в UI чата (если ещё не везде).
-
-**P2:**
-- Несколько источников (CSV upload, Pipedrive sync) per pipeline.
-- Per-source override темплейта/окна.
-- Auto-rotate sender numbers с per-number daily cap.
-
----
+**P2**
+- Warmup-orchestrator: автоматическая отправка warmup-кампаний по плану дней.
+- Шаблоны warmup-сообщений на уровне BM.
+- Привязка кампаний к BM (а не только к отдельным номерам).
 
 ## Технические детали
 
-- **DB:** `source_connections` расширить полями `kind='google_sheet'`, `spreadsheet_id`, `worksheet`, `column_map jsonb`, `last_synced_row int`, `poll_interval_minutes`. Миграция + RLS как у текущих source_connections.
-- **Connector:** `google_sheets` уже сконфигурирован в проекте, запросы через `https://connector-gateway.lovable.dev/google_sheets/v4/spreadsheets/{id}/values/{range}`. Не двойного-encode-ить range.
-- **Cron:** новый job `google-sheets-poll-every-5-min` в `supabase/config.toml`.
-- **Slack DM:** `chat.postMessage` с `channel = slack_user_id` (требует scope `chat:write` на user-токене либо `im:write` для бота).
-- **Presence:** если `user_presence` отсутствует — таблица `(user_id pk, last_seen_at, workspace_id)` + RLS «members of workspace can read».
+- Триггер `propagate_number_status_to_bm` пересчитывает агрегаты при апдейте `whatsapp_numbers`.
+- Edge function `bm-health-recalc` (cron каждый час) - пересчёт health и `last_warmup_action_at`.
+- В `FleetRegistry` добавить колонку BM с навигацией.
+- Типы Supabase обновятся автоматически после миграции.
 
-## Edge cases / риски
+## Открытые вопросы
 
-- Google Sheet OAuth: connector привязан к dev-аккаунту. Если клиент захочет свой Sheet — нужен share на тот сервисный аккаунт или per-user OAuth (P2).
-- Daily cap считается в UTC, окно — в таймзоне пайплайна (известный баг). Для Дубая (UTC+4) расхождение проявится только если запуск идёт после 20:00 локального; для первого запуска не критично, но в P1 поправить на TZ-aware.
-- При большом Sheet (>500 строк) сначала бить на батчи по 200 чтобы не упереться в лимиты dispatcher.
-- Если Nitish зарегистрируется без full_name — фолбэк на email (фикс №8) это покрывает.
-- Дубликаты по phone дедупятся внутри пайплайна, между пайплайнами — нет (это by design).
-
-## Что остаётся ручным
-
-- Создать Slack-канал `#delivery-nitish` и положить его id в config пайплайна.
-- Заполнить approved-template, sender numbers, окно и cap для Nitish Ads India.
-- Шарить Google Sheet на сервисный gmail коннектора.
+1. Прогрев привязан к workspace или глобальный для всего Iskra? (по структуре `whatsapp_numbers` они уже workspace-scoped, предлагаю BM тоже workspace-scoped).
+2. Нужен ли warmup-плейбук (шаги по дням с целевым кол-вом сообщений), или пока хватит ручного advance stage?
+3. Health-score формула - оставить мою дефолтную или есть конкретные веса от тебя?

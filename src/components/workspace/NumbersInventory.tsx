@@ -22,6 +22,7 @@ type NumberRow = {
   label: string | null;
   partner_source: string | null;
   bm_name: string | null;
+  business_manager_id: string | null;
   notes: string | null;
   provider_app_id: string | null;
   provider_api_key: string | null;
@@ -34,17 +35,20 @@ type NumberRow = {
   webhook_connected: boolean;
 };
 
+type BMOption = { id: string; name: string; status: string };
+
 type Workspace = { id: string; name: string };
 
 const fetchData = async (workspaceId: string) => {
-  const [{ data: numbers, error: nErr }, { data: tpl, error: tErr }, { data: workspaces, error: wErr }] = await Promise.all([
+  const [{ data: numbers, error: nErr }, { data: tpl, error: tErr }, { data: workspaces, error: wErr }, { data: bms }] = await Promise.all([
     supabase.from("whatsapp_numbers")
-      .select("id, workspace_id, phone_number, display_name, label, partner_source, bm_name, notes, provider_app_id, provider_api_key, is_active, connected_in_gupshup, connected_in_iskra, status, usage_type, country_code, webhook_connected")
+      .select("id, workspace_id, phone_number, display_name, label, partner_source, bm_name, business_manager_id, notes, provider_app_id, provider_api_key, is_active, connected_in_gupshup, connected_in_iskra, status, usage_type, country_code, webhook_connected")
       .eq("workspace_id", workspaceId),
     supabase.from("message_templates")
       .select("whatsapp_number_id, status, synced_at")
       .eq("workspace_id", workspaceId),
     supabase.from("workspaces").select("id, name").eq("is_active", true),
+    supabase.from("business_managers").select("id, name, status").eq("workspace_id", workspaceId).order("name"),
   ]);
   if (nErr) throw nErr; if (tErr) throw tErr; if (wErr) throw wErr;
 
@@ -61,6 +65,7 @@ const fetchData = async (workspaceId: string) => {
     numbers: (numbers ?? []) as NumberRow[],
     syncByNumber,
     workspaces: (workspaces ?? []) as Workspace[],
+    bms: (bms ?? []) as BMOption[],
   };
 };
 
@@ -121,6 +126,7 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
   const numbers = data?.numbers ?? [];
   const syncByNumber = data?.syncByNumber ?? new Map();
   const workspaces = data?.workspaces ?? [];
+  const bms = data?.bms ?? [];
   const workspaceName = useMemo(
     () => workspaces.find((w) => w.id === workspaceId)?.name ?? "this client",
     [workspaces, workspaceId],
@@ -275,7 +281,29 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     <Field label="API key"><Input value={draft.provider_api_key ?? ""} onChange={(e) => update(n.id, { provider_api_key: e.target.value })} placeholder="leave blank to use global" /></Field>
                     <Field label="Gupshup app name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} placeholder="01Ashik02" /></Field>
                     <Field label="Partner / source"><Input value={draft.partner_source ?? ""} onChange={(e) => update(n.id, { partner_source: e.target.value })} /></Field>
-                    <Field label="BM name"><Input value={draft.bm_name ?? ""} onChange={(e) => update(n.id, { bm_name: e.target.value })} /></Field>
+                    <Field label="Business Manager">
+                      <div className="flex gap-1">
+                        <Select
+                          value={draft.business_manager_id ?? "__none"}
+                          onValueChange={(v) => update(n.id, { business_manager_id: v === "__none" ? null : v })}
+                        >
+                          <SelectTrigger className="flex-1"><SelectValue placeholder="None" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">None</SelectItem>
+                            {bms.map((b) => (
+                              <SelectItem key={b.id} value={b.id}>{b.name} {b.status !== "active" ? `· ${b.status}` : ""}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {draft.business_manager_id && (
+                          <Button asChild size="sm" variant="ghost" className="px-2">
+                            <Link to={`/admin/business-managers/${draft.business_manager_id}`} title="Open BM">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </Field>
                   </div>
                 </details>
 

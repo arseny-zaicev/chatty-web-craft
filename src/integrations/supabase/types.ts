@@ -238,6 +238,107 @@ export type Database = {
           },
         ]
       }
+      business_manager_warmup_events: {
+        Row: {
+          business_manager_id: string
+          created_at: string
+          created_by: string | null
+          event_type: string
+          id: string
+          payload: Json
+          workspace_id: string
+        }
+        Insert: {
+          business_manager_id: string
+          created_at?: string
+          created_by?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          workspace_id: string
+        }
+        Update: {
+          business_manager_id?: string
+          created_at?: string
+          created_by?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_manager_warmup_events_business_manager_id_fkey"
+            columns: ["business_manager_id"]
+            isOneToOne: false
+            referencedRelation: "business_managers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_managers: {
+        Row: {
+          created_at: string
+          created_by: string
+          current_day_sent: number
+          daily_warmup_cap: number | null
+          external_id: string | null
+          health_score: number
+          id: string
+          last_warmup_action_at: string | null
+          name: string
+          notes: string | null
+          owner_email: string | null
+          provider: string
+          status: string
+          updated_at: string
+          warmup_stage: string | null
+          warmup_started_at: string | null
+          warmup_target_date: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          current_day_sent?: number
+          daily_warmup_cap?: number | null
+          external_id?: string | null
+          health_score?: number
+          id?: string
+          last_warmup_action_at?: string | null
+          name: string
+          notes?: string | null
+          owner_email?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+          warmup_stage?: string | null
+          warmup_started_at?: string | null
+          warmup_target_date?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          current_day_sent?: number
+          daily_warmup_cap?: number | null
+          external_id?: string | null
+          health_score?: number
+          id?: string
+          last_warmup_action_at?: string | null
+          name?: string
+          notes?: string | null
+          owner_email?: string | null
+          provider?: string
+          status?: string
+          updated_at?: string
+          warmup_stage?: string | null
+          warmup_started_at?: string | null
+          warmup_target_date?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       campaign_number_allocations: {
         Row: {
           allocated_count: number
@@ -1657,6 +1758,7 @@ export type Database = {
         Row: {
           assigned_ref: string | null
           bm_name: string | null
+          business_manager_id: string | null
           connected_in_gupshup: boolean
           connected_in_iskra: boolean
           country_code: string | null
@@ -1693,6 +1795,7 @@ export type Database = {
         Insert: {
           assigned_ref?: string | null
           bm_name?: string | null
+          business_manager_id?: string | null
           connected_in_gupshup?: boolean
           connected_in_iskra?: boolean
           country_code?: string | null
@@ -1729,6 +1832,7 @@ export type Database = {
         Update: {
           assigned_ref?: string | null
           bm_name?: string | null
+          business_manager_id?: string | null
           connected_in_gupshup?: boolean
           connected_in_iskra?: boolean
           country_code?: string | null
@@ -1762,7 +1866,15 @@ export type Database = {
           webhook_connected?: boolean
           workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_numbers_business_manager_id_fkey"
+            columns: ["business_manager_id"]
+            isOneToOne: false
+            referencedRelation: "business_managers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_webhook_failures: {
         Row: {
