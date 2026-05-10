@@ -31,6 +31,7 @@ type Section =
   | "companies.portfolio"
   | "companies.fleet"
   | "companies.analytics"
+  | "companies.webhook_health"
   | "forms.submissions"
   | "forms.analytics"
   | "site.analytics"
