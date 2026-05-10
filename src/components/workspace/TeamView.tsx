@@ -161,7 +161,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
           role: linkRole,
           max_uses: linkSeats,
           days: 30,
-          pipeline_ids: linkRole === "client" ? linkPipelineIds : [],
+          pipeline_ids: linkPipelineIds,
         },
       });
       if (error) throw error;
