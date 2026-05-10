@@ -1555,6 +1555,7 @@ export type Database = {
       }
       workspace_members: {
         Row: {
+          can_view_stats: boolean
           created_at: string
           id: string
           role: string
@@ -1562,6 +1563,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          can_view_stats?: boolean
           created_at?: string
           id?: string
           role?: string
@@ -1569,6 +1571,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          can_view_stats?: boolean
           created_at?: string
           id?: string
           role?: string

@@ -7,12 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity, BarChart3 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 type Member = {
   id: string;
   user_id: string;
   role: string;
+  can_view_stats: boolean;
   joined_at: string;
   email: string | null;
   full_name: string | null;
@@ -106,6 +108,17 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to remove"),
   });
 
+  const toggleStats = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("workspace_members").update({ can_view_stats: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: membersKey(workspaceId) });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to update"),
+  });
+
   const { data: links, isLoading: linksLoading } = useQuery({
     queryKey: linksKey(workspaceId),
     queryFn: async (): Promise<InviteLink[]> => {
@@ -169,7 +182,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1"><Users className="w-4 h-4 text-primary" /><h3 className="font-display text-lg font-semibold">Team & client access</h3></div>
-          <p className="text-xs text-muted-foreground">Invite teammates as <strong>Manager</strong> (full access) or the client as <strong>Client</strong> (read-only Overview, Inbox, Pipeline, Campaigns - no provider details).</p>
+          <p className="text-xs text-muted-foreground"><strong>Manager</strong> - full access (Inbox, Pipeline, Overview, Campaigns view, Quick replies, Settings). <strong>Client</strong> - Inbox + Pipeline only by default; toggle below to grant Overview + Campaigns view.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setLinkOpen(true)}><Link2 className="w-4 h-4 mr-2" />Invite link</Button>
@@ -256,6 +269,17 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     {activeLabel} active · {m.sessions_30d ?? 0} {m.sessions_30d === 1 ? "session" : "sessions"} (30d)
                   </span>
                 </div>
+                {m.role === "client" && (
+                  <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mt-1">
+                    <BarChart3 className="w-3 h-3" />
+                    <span>Can view Overview & Campaigns</span>
+                    <Switch
+                      checked={m.can_view_stats}
+                      onCheckedChange={(v) => toggleStats.mutate({ id: m.id, value: v })}
+                      disabled={toggleStats.isPending}
+                    />
+                  </label>
+                )}
               </div>
               <Button size="icon" variant="ghost" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
                 <Trash2 className="w-4 h-4 text-muted-foreground" />
@@ -281,7 +305,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
               <Select value={role} onValueChange={(v) => setRole(v as "manager" | "client")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="client">Client - read-only, no provider details</SelectItem>
+                  <SelectItem value="client">Client - Inbox + Pipeline only</SelectItem>
                   <SelectItem value="manager">Manager - full access</SelectItem>
                 </SelectContent>
               </Select>
@@ -309,7 +333,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manager">Manager - full access</SelectItem>
-                  <SelectItem value="client">Client - read-only</SelectItem>
+                  <SelectItem value="client">Client - Inbox + Pipeline only</SelectItem>
                 </SelectContent>
               </Select>
             </div>

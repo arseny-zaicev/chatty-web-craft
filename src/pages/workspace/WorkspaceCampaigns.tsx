@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchCampaignSummaries } from "@/lib/launchData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 
 // Sibling campaigns launched across multiple WhatsApp numbers share a base name
 // in the form "<base> :: <numberLabel>". Clients should see them merged.
@@ -125,6 +125,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   });
   const { data: role } = useWorkspaceRole(workspaceId);
   const canManage = isManagerLike(role);
+  const canLaunch = isAdmin(role);
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   const numberIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.whatsapp_number_id).filter(Boolean))) as string[], [campaigns]);
@@ -152,20 +153,20 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />Refresh
           </Button>
-          {canManage && (
+          {canLaunch && (
             <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />New launch</Link></Button>
           )}
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
         Campaign history and live monitoring.
-        {canManage && <> Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</>}
+        {canLaunch && <> Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</>}
       </p>
 
       {groups.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
           No campaigns yet.
-          {canManage && <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>}
+          {canLaunch && <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>}
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">

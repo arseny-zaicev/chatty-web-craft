@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
       // total sign-ins (auth metadata), and 30-day active minutes / sessions.
       const { data: rows, error: memErr } = await admin
         .from("workspace_members")
-        .select("id, user_id, role, created_at")
+        .select("id, user_id, role, can_view_stats, created_at")
         .eq("workspace_id", workspace_id)
         .order("created_at", { ascending: true });
       if (memErr) return json({ error: memErr.message }, 500);
@@ -281,6 +281,7 @@ Deno.serve(async (req) => {
           id: r.id,
           user_id: r.user_id,
           role: r.role,
+          can_view_stats: Boolean((r as { can_view_stats?: boolean }).can_view_stats),
           joined_at: r.created_at,
           email: auth.email,
           full_name: prof.full_name,

@@ -13,13 +13,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceAccess, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 
-const clientTabs = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
+const overviewTab = { key: "overview", label: "Overview", icon: LayoutDashboard };
+const campaignsTab = { key: "campaigns", label: "Campaigns", icon: Megaphone };
+const baseClientTabs = [
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
-  { key: "campaigns", label: "Campaigns", icon: Megaphone },
 ];
 const managerExtras = [
   { key: "data", label: "Data", icon: Database },
@@ -36,9 +36,17 @@ export function WorkspaceSidebar() {
   const { slug } = useParams<{ slug?: string }>();
   const { data: workspaces, isLoading } = useQuery({ queryKey: workspaceKeys.list, queryFn: fetchWorkspaces });
   const currentWs = (workspaces ?? []).find((w: Workspace) => w.slug === slug);
-  const { data: role } = useWorkspaceRole(currentWs?.id);
+  const { data: access } = useWorkspaceAccess(currentWs?.id);
+  const role = access?.role;
   const canManage = isManagerLike(role);
+  const canLaunch = isAdmin(role);
+  const canSeeStats = canManage || (role === "client" && Boolean(access?.canViewStats));
 
+  const clientTabs = [
+    ...(canSeeStats ? [overviewTab] : []),
+    ...baseClientTabs,
+    ...(canSeeStats ? [campaignsTab] : []),
+  ];
   const opsTabs = canManage ? [...clientTabs, ...managerExtras] : clientTabs;
 
   return (
@@ -83,7 +91,7 @@ export function WorkspaceSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
-                  {canManage && (
+                  {canLaunch && (
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild tooltip="Launch campaign">
                         <NavLink
