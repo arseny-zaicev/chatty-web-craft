@@ -486,6 +486,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   My chats
                 </button>
                 <button
+                  onClick={() => setRepliedOnly((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
+                    repliedOnly
+                      ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/40"
+                      : "border-border text-muted-foreground hover:border-emerald-500/40"
+                  }`}
+                  title="Show only conversations where the contact replied"
+                >
+                  Replied{repliedCount > 0 && ` · ${repliedCount}`}
+                </button>
+                <button
                   onClick={() => setShowNegative((v) => !v)}
                   className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
                     showNegative
@@ -503,6 +514,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   title="Sort conversations"
                 >
                   <option value="recent">Recent</option>
+                  <option value="replied">Replied first</option>
                   <option value="unread">Unread first</option>
                   <option value="oldest">Oldest</option>
                 </select>
