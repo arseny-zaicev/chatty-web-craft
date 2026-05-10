@@ -175,7 +175,7 @@ async function seedDefaultStagesForWorkspace(workspaceId: string): Promise<Stage
   return (data ?? []) as Stage[];
 }
 
-export async function fetchPipelineBase(workspaceId?: string) {
+export async function fetchPipelineBase(workspaceId?: string, pipelineId?: string | null) {
   let stagesQuery = supabase.from("pipeline_stages").select("id, name, color, position, stage_type, workspace_id, pipeline_id").order("position");
   let dealsQuery = supabase
     .from("deals")
@@ -190,6 +190,12 @@ export async function fetchPipelineBase(workspaceId?: string) {
     dealsQuery = dealsQuery.eq("workspace_id", workspaceId);
     conversationsQuery = conversationsQuery.eq("workspace_id", workspaceId);
   }
+  if (pipelineId) {
+    stagesQuery = stagesQuery.eq("pipeline_id", pipelineId);
+    dealsQuery = dealsQuery.eq("pipeline_id", pipelineId);
+    // Conversations are not filtered by pipeline here — Pipeline.tsx only uses
+    // conversations for assignee/responder lookup, which is independent of pipeline.
+  }
 
   const [stagesRes, dealsRes, convRes] = await Promise.all([stagesQuery, dealsQuery, conversationsQuery]);
 
@@ -199,7 +205,7 @@ export async function fetchPipelineBase(workspaceId?: string) {
 
   let stages = (stagesRes.data ?? []) as Stage[];
   // Auto-seed default stages the first time a workspace pipeline is opened.
-  if (workspaceId && stages.length === 0) {
+  if (workspaceId && !pipelineId && stages.length === 0) {
     stages = await seedDefaultStagesForWorkspace(workspaceId);
   }
 
