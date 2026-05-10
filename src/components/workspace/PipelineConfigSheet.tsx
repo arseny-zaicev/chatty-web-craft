@@ -63,7 +63,16 @@ type Source = {
 };
 
 type Template = { id: string; name: string };
-type WaNumber = { id: string; phone_number: string; display_name: string | null; status: string };
+type WaNumber = {
+  id: string;
+  phone_number: string;
+  display_name: string | null;
+  status: string;
+  is_active: boolean;
+  provider_api_key: string | null;
+  webhook_connected: boolean;
+  approved_templates: number;
+};
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
@@ -100,6 +109,8 @@ export default function PipelineConfigSheet({
   const [dailyCap, setDailyCap] = useState<string>("");
   const [winStart, setWinStart] = useState("09:00");
   const [winEnd, setWinEnd] = useState("18:00");
+  const [timezone, setTimezone] = useState<string>("Asia/Kolkata");
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
 
   const [showNewSource, setShowNewSource] = useState(false);
   const [newSourceKind, setNewSourceKind] = useState<SourceKind>("google_sheet");
@@ -116,6 +127,7 @@ export default function PipelineConfigSheet({
     setDailyCap(p.daily_cap ? String(p.daily_cap) : "");
     setWinStart(p.sending_window?.start ?? "09:00");
     setWinEnd(p.sending_window?.end ?? "18:00");
+    setTimezone(p.sending_window?.timezone ?? "Asia/Kolkata");
   };
 
   const { data: templates } = useQuery({
@@ -132,16 +144,35 @@ export default function PipelineConfigSheet({
     },
   });
 
-  const { data: numbers } = useQuery({
+  const { data: numbers, refetch: refetchNumbers } = useQuery({
     queryKey: ["pipeline-numbers", wsId],
     enabled: Boolean(wsId && open),
     queryFn: async (): Promise<WaNumber[]> => {
-      const { data } = await supabase
+      const { data: nums } = await supabase
         .from("whatsapp_numbers")
-        .select("id, phone_number, display_name, status")
+        .select("id, phone_number, display_name, status, is_active, provider_api_key, webhook_connected")
         .eq("workspace_id", wsId)
         .order("display_name");
-      return (data ?? []) as WaNumber[];
+      const ids = (nums ?? []).map((n) => n.id);
+      const counts = new Map<string, number>();
+      if (ids.length) {
+        const { data: tpl } = await supabase
+          .from("message_templates")
+          .select("whatsapp_number_id, status")
+          .in("whatsapp_number_id", ids)
+          .eq("status", "approved");
+        for (const t of tpl ?? []) counts.set(t.whatsapp_number_id, (counts.get(t.whatsapp_number_id) ?? 0) + 1);
+      }
+      return (nums ?? []).map((n) => ({
+        id: n.id,
+        phone_number: n.phone_number,
+        display_name: n.display_name,
+        status: n.status,
+        is_active: Boolean(n.is_active),
+        provider_api_key: n.provider_api_key,
+        webhook_connected: Boolean(n.webhook_connected),
+        approved_templates: counts.get(n.id) ?? 0,
+      }));
     },
   });
 
@@ -186,31 +217,58 @@ export default function PipelineConfigSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pipeline?.id]);
 
-  // Readiness checklist for auto-outreach
-  const activeNumbers = useMemo(
-    () => (numbers ?? []).filter((n) => n.status === "active" && senderIds.includes(n.id)),
+  // Sender-readiness: assigned & active, status active or ready,
+  // has API key, webhook connected, at least one approved template.
+  const blockersFor = (n: WaNumber): string[] => {
+    const r: string[] = [];
+    if (!n.is_active) r.push("disabled");
+    if (n.status !== "active" && n.status !== "ready") r.push(n.status);
+    if (!n.provider_api_key) r.push("no API key");
+    if (!n.webhook_connected) r.push("no webhook");
+    if (n.approved_templates === 0) r.push("no approved templates");
+    return r;
+  };
+  const readySenders = useMemo(
+    () => (numbers ?? []).filter((n) => senderIds.includes(n.id) && blockersFor(n).length === 0),
     [numbers, senderIds],
   );
   const readiness = useMemo(() => {
     const items = [
       { key: "template", label: "First-touch template selected", ok: Boolean(templateId) },
-      { key: "sender", label: "At least one active sender number", ok: activeNumbers.length > 0 },
-      { key: "window", label: "Sending window set", ok: Boolean(winStart && winEnd) },
+      { key: "sender", label: "At least one ready sender number", ok: readySenders.length > 0 },
+      { key: "window", label: "Sending window + timezone set", ok: Boolean(winStart && winEnd && timezone) },
       { key: "cap", label: "Daily cap set", ok: Boolean(dailyCap && parseInt(dailyCap, 10) > 0) },
       { key: "slack", label: "Slack channel for notifications", ok: Boolean(slackChannel.trim()) },
     ];
     const allOk = items.every((i) => i.ok);
     return { items, allOk };
-  }, [templateId, activeNumbers, winStart, winEnd, dailyCap, slackChannel]);
+  }, [templateId, readySenders, winStart, winEnd, timezone, dailyCap, slackChannel]);
+
+  const firstBlockerToast = () => {
+    const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
+    if (selected.length === 0) {
+      toast.error("Select at least one sender number");
+      return;
+    }
+    const blocked = selected
+      .map((n) => ({ n, reasons: blockersFor(n) }))
+      .filter((x) => x.reasons.length > 0);
+    if (blocked.length > 0 && blocked.length === selected.length) {
+      const ex = blocked[0];
+      toast.error(`${ex.n.display_name || ex.n.phone_number}: ${ex.reasons.join(", ")}`);
+      return;
+    }
+    toast.error("Complete the checklist below first");
+  };
 
   const saveOutreach = async () => {
     if (!pipeId) return;
     if (autoOutreach && !readiness.allOk) {
-      toast.error("Complete the checklist before enabling auto-outreach");
+      firstBlockerToast();
       return;
     }
     const sending_window =
-      winStart && winEnd ? { start: winStart, end: winEnd } : null;
+      winStart && winEnd ? { start: winStart, end: winEnd, timezone } : null;
     const { error } = await supabase
       .from("pipelines")
       .update({
@@ -225,6 +283,26 @@ export default function PipelineConfigSheet({
     if (error) return toast.error(error.message);
     toast.success("Pipeline saved");
     qc.invalidateQueries({ queryKey: ["pipelines", wsId] });
+    qc.invalidateQueries({ queryKey: ["pipeline-numbers", wsId] });
+  };
+
+  const refreshTemplates = async () => {
+    if (!wsId) return;
+    setSyncingTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("campaigns", {
+        body: { action: "sync_templates_all", workspace_id: wsId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Templates refreshed");
+      await qc.invalidateQueries({ queryKey: ["pipeline-templates", wsId] });
+      await refetchNumbers();
+    } catch (e: any) {
+      toast.error(e?.message || "Sync failed");
+    } finally {
+      setSyncingTemplates(false);
+    }
   };
 
   const createSource = async () => {
@@ -479,7 +557,7 @@ export default function PipelineConfigSheet({
                 checked={autoOutreach}
                 onCheckedChange={(v) => {
                   if (v && !readiness.allOk) {
-                    toast.error("Complete the checklist below first");
+                    firstBlockerToast();
                     return;
                   }
                   setAutoOutreach(v);
@@ -502,7 +580,20 @@ export default function PipelineConfigSheet({
             </div>
 
             <div>
-              <Label className="text-xs">First-touch template</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs">First-touch template</Label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={refreshTemplates}
+                  disabled={syncingTemplates}
+                >
+                  {syncingTemplates
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <><RefreshCw className="w-3 h-3 mr-1" />Refresh from Gupshup</>}
+                </Button>
+              </div>
               <Select value={templateId || "none"} onValueChange={(v) => setTemplateId(v === "none" ? "" : v)}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
                 <SelectContent>
@@ -522,23 +613,28 @@ export default function PipelineConfigSheet({
                 )}
                 {(numbers ?? []).map((n) => {
                   const selected = senderIds.includes(n.id);
-                  const inactive = n.status !== "active";
+                  const reasons = blockersFor(n);
+                  const blocked = reasons.length > 0;
                   return (
                     <button
                       key={n.id}
                       type="button"
                       onClick={() => setSenderIds((cur) => selected ? cur.filter((id) => id !== n.id) : [...cur, n.id])}
-                      className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"} ${inactive ? "opacity-60" : ""}`}
-                      title={inactive ? `Status: ${n.status}` : undefined}
+                      className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? (blocked ? "bg-amber-500/20 text-amber-900 border-amber-500/50" : "bg-primary text-primary-foreground border-primary") : "bg-card border-border hover:border-primary/50"} ${blocked && !selected ? "opacity-60" : ""}`}
+                      title={blocked ? `Blocked: ${reasons.join(", ")}` : "Ready to send"}
                     >
-                      {n.display_name || n.phone_number}{inactive ? ` · ${n.status}` : ""}
+                      {n.display_name || n.phone_number}
+                      {blocked ? ` · ${reasons[0]}` : ""}
                     </button>
                   );
                 })}
               </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Tap to toggle. Numbers must be Active or Ready, with API key, webhook, and approved templates.
+              </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div>
                 <Label className="text-xs">Window start</Label>
                 <Input type="time" value={winStart} onChange={(e) => setWinStart(e.target.value)} className="h-9" />
@@ -548,10 +644,28 @@ export default function PipelineConfigSheet({
                 <Input type="time" value={winEnd} onChange={(e) => setWinEnd(e.target.value)} className="h-9" />
               </div>
               <div>
+                <Label className="text-xs">Timezone</Label>
+                <Select value={timezone} onValueChange={setTimezone}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Asia/Kolkata">Asia/Kolkata (IST)</SelectItem>
+                    <SelectItem value="Asia/Dubai">Asia/Dubai (GST)</SelectItem>
+                    <SelectItem value="Europe/London">Europe/London</SelectItem>
+                    <SelectItem value="Europe/Berlin">Europe/Berlin</SelectItem>
+                    <SelectItem value="America/New_York">America/New_York</SelectItem>
+                    <SelectItem value="America/Los_Angeles">America/Los_Angeles</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label className="text-xs">Daily cap</Label>
                 <Input type="number" min={1} value={dailyCap} onChange={(e) => setDailyCap(e.target.value)} placeholder="e.g. 80" className="h-9" />
               </div>
             </div>
+            <p className="text-[10px] text-muted-foreground">
+              Sends between {winStart}-{winEnd} {timezone}.
+            </p>
           </div>
         </section>
 

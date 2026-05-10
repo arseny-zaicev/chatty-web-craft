@@ -1,105 +1,69 @@
-## Цель
+## Что я нашёл
 
-Добавить в Operations отдельный реестр **Business Managers** с трекингом прогрева, чтобы видеть статус прогрева на уровне BM (а не только отдельных номеров) и какие номера к каждому BM привязаны.
+- **Auto first-touch не включается**, потому что чеклист считает валидными только номера со статусом `active`.
+- У тебя в ISKRA сейчас есть номер **Kartik Chauhan** со статусом `stock`, хотя он уже assigned к ISKRA, с API key, webhook и 1 approved template. Из-за этого UI показывает его выбранным, но чеклист пишет `At least one active sender number`.
+- **Sadya** в ISKRA со статусом `ready`, но текущий чеклист тоже не считает `ready` валидным.
+- В Fleet Registry логика показывает `stock` как “свободный/складской”, но Pipeline Config использует `status === active` как единственный разрешённый sender - отсюда конфликт.
+- **Timezone сейчас по факту UTC**, потому что UI сохраняет только `start/end`, без `timezone`. Значит `07:00 - 00:00` не “Индия” и не “твое локальное время” явно - это сейчас неочевидная/опасная настройка.
+- **Slack для positive replies уже частично есть**, но он срабатывает только когда conversation вручную starred (`is_starred = true`). Автоматизация “Positive reply -> stage” сейчас не создаёт Slack event сама по себе.
+- Синк шаблонов уже есть через `campaigns` function (`sync_templates_all`), но в Pipeline Config нет кнопки “Refresh templates”, поэтому непонятно, актуальный список или нет.
 
-## Где это живёт
+## План правок
 
-Новая страница `/admin/fleet/business-managers` рядом с `FleetRegistry` и `FleetAnalytics`. Точка входа - таб "Business Managers" в навигации Operations / Fleet.
+### 1. Починить выбор sender numbers для Auto first-touch
 
-## Модель данных
+- Считать отправочными номерами не только `active`, но и **`ready`**.
+- Для номера, который assigned к workspace, имеет API key, webhook и approved templates, показывать понятный статус “ready to send” даже если raw status ещё `stock`.
+- В чеклисте заменить формулировку на более честную: **“At least one ready sender number”**.
+- В `lead-dispatch` тоже разрешить `ready`, иначе UI даст включить, а backend потом всё равно заблокирует.
 
-Новая таблица `business_managers`:
-- `name` (уникальное в рамках workspace, например "BM-Iskra-01")
-- `provider` (gupshup / meta / other)
-- `external_id` (Meta BM ID)
-- `owner_email`, `notes`
-- `status`: `warming` / `active` / `paused` / `restricted` / `blocked` / `retired`
-- `warmup_started_at`, `warmup_target_date`, `warmup_stage` (day 1-30 / week 1-4 / "ready")
-- `last_warmup_action_at` (последнее действие, движущее прогрев - sent campaign, manual ping)
-- `daily_warmup_cap`, `current_day_sent` (для оркестратора)
-- `health_score` 0-100 (агрегат от номеров)
-- `workspace_id`, `created_by`, timestamps
+### 2. Убрать путаницу `stock` vs assigned client
 
-Связь с номерами: добавить `business_manager_id uuid` в `whatsapp_numbers` (мягкая ссылка). Старое текстовое поле `bm_name` оставляем как fallback и для миграции - скрипт смэтчит по имени.
+- В Pipeline Config рядом с каждым sender number показывать причину, почему он не проходит: `stock`, `no API key`, `no webhook`, `no approved templates`, `disabled`.
+- Для Fleet/Workspace сделать правило: если номер assigned клиенту и готов технически, он должен проходить как sender даже если старый статус остался `stock`.
+- Отдельно можно миграцией привести текущий Kartik Chauhan из `stock` в `ready`, чтобы у тебя сразу включилось без ручной правки.
 
-Лог событий прогрева `business_manager_warmup_events`:
-- `business_manager_id`, `event_type` (`campaign_sent`, `number_added`, `number_restricted`, `manual_note`, `stage_advanced`), `payload jsonb`, `created_by`, `created_at`.
-Используется для таймлайна "когда был последний прогрев" и аудита.
+### 3. Сделать timezone явной
 
-RLS: `is_workspace_manager` для записи, `is_workspace_member` для чтения. Admin видит всё.
+- Добавить в Pipeline Config поле **Timezone** рядом с Window start/end.
+- Default для новой настройки поставить **Asia/Kolkata** для India pipeline.
+- Сохранять `sending_window: { start, end, timezone }`.
+- Показать под полями короткую строку типа: `Sends between 07:00-00:00 Asia/Kolkata`.
+- Backend `lead-dispatch` уже умеет читать `sending_window.timezone`, нужно только начать сохранять это из UI.
 
-## UI
+### 4. Добавить refresh templates прямо в Pipeline Config
 
-### Список BM (`/admin/fleet/business-managers`)
-Таблица:
-- Имя BM, провайдер, статус (бейдж), стадия прогрева (Day 7/30), health, число номеров (active / restricted / blocked), последнее действие прогрева, владелец.
-- Фильтры: статус, провайдер, workspace.
-- Поиск по имени / external_id.
-- Кнопка "Add BM".
+- В блоке First-touch template добавить кнопку **Refresh templates**.
+- Она вызовет существующий sync по всем номерам workspace.
+- После успеха обновит список templates и numbers readiness.
+- В sender chips показать `templates: X approved` и `last synced` где доступно.
 
-### Детальная страница BM (`/admin/fleet/business-managers/:id`)
-Секции:
-1. **Header** - имя, статус, стадия, health, кнопки `Advance stage`, `Pause`, `Mark active`, `Retire`.
-2. **Warmup plan** - прогресс-бар по дням, цель, daily cap, сколько отправлено сегодня (сумма по номерам).
-3. **Allocated numbers** - список `whatsapp_numbers`, привязанных к BM: телефон, статус, messaging_limit, sent today, последнее сообщение. Кнопки `Attach number` / `Detach`.
-4. **Timeline** - события из `business_manager_warmup_events` + автоматические события из `slack_event_queue` (number_restricted, number_blocked) отфильтрованные по принадлежности к BM.
-5. **Notes**.
+### 5. Slack notification на заинтересованный ответ
 
-### Интеграция с FleetRegistry
-В `NumbersInventory` / `FleetRegistry` поле `bm_name` заменить на селект `business_manager_id` (с возможностью создать BM на лету). Колонка "BM" становится ссылкой на детальную BM.
+- Добавить автоматический Slack event, когда automation переводит deal/conversation в positive stage.
+- Логика: если inbound reply совпал с rule и target stage называется вроде `Positive reply` / positive-type stage, создать событие `positive_lead` в Slack queue.
+- Сообщение должно идти в pipeline/workspace Slack channel, который ты указал в Pipeline Config.
+- Чтобы не спамить, добавить dedupe: не отправлять повторный positive alert по одной conversation чаще одного раза.
 
-### Интеграция с FleetAnalytics
-Добавить агрегаты по BM: средний health, % restricted, send volume per BM за период.
+### 6. Улучшить UX включения Auto first-touch
 
-## Логика прогрева (минимальная, без авто-оркестрации)
+- Сейчас switch просто говорит “Complete checklist below first”. Сделать toast конкретным: например `Kartik Chauhan is selected but status is stock. Mark as Ready or refresh Fleet status.`
+- Кнопку Save оставить рабочей даже если Auto выключен, но при включении показывать точные blockers.
+- После Save инвалидировать pipeline + numbers queries, чтобы статус не казался старым.
 
-На этом этапе не строим автопрогрев. Только трекинг:
-- `current_day_sent` обновляется триггером/edge-функцией при инсерте `messages` outbound с номеров этого BM.
-- `health_score` пересчитывается раз в час cron-функцией: формула из доли active vs restricted/blocked номеров и тренда messaging_limit.
-- При переходе номера в `restricted`/`blocked` автоматически пишется событие в timeline BM и статус BM поднимается до `restricted`, если >= N% номеров деградировали (порог настраиваемый, по умолчанию 30%).
+## Технические файлы
 
-Это даёт основу под будущий warmup-orchestrator (P2).
+- `src/components/workspace/PipelineConfigSheet.tsx` - readiness, sender chips, timezone, refresh templates, понятные ошибки.
+- `supabase/functions/lead-dispatch/index.ts` - разрешить sender statuses `active` + `ready`, использовать timezone.
+- `supabase/functions/whatsapp-webhook/index.ts` - при matched positive automation ставить positive Slack event.
+- Migration - если нужно: dedupe поле/trigger для positive alerts и/или привести текущий Kartik Chauhan `stock -> ready`.
 
-## Slack
+## Ожидаемый результат
 
-Новые события:
-- `bm.warmup_started`, `bm.stage_advanced`, `bm.degraded` (при пороге restricted), `bm.ready` (когда прогрев завершён).
-Канал - `SLACK_OPS_NUMBERS_CHANNEL_ID` (уже есть).
+После этого ты сможешь:
 
-## Миграция существующих данных
-
-Скрипт (через `supabase--insert`):
-1. Сгруппировать `whatsapp_numbers.bm_name` -> создать запись в `business_managers` для каждого уникального непустого имени.
-2. Проставить `whatsapp_numbers.business_manager_id`.
-3. Статус каждого BM выставить на основании статусов номеров (active если все active, restricted если есть restricted, и т.д.).
-
-## Объём по этапам
-
-**P0 (сейчас)**
-- Таблицы `business_managers`, `business_manager_warmup_events`, FK на `whatsapp_numbers`.
-- Миграция данных из `bm_name`.
-- Страница списка + детальная + ручное управление статусом и стадией.
-- Замена `bm_name` инпута на селект BM в Numbers Inventory.
-
-**P1**
-- Авто health_score + cron.
-- Slack-события прогрева.
-- Виджет "BM warmup" на Ops Live.
-
-**P2**
-- Warmup-orchestrator: автоматическая отправка warmup-кампаний по плану дней.
-- Шаблоны warmup-сообщений на уровне BM.
-- Привязка кампаний к BM (а не только к отдельным номерам).
-
-## Технические детали
-
-- Триггер `propagate_number_status_to_bm` пересчитывает агрегаты при апдейте `whatsapp_numbers`.
-- Edge function `bm-health-recalc` (cron каждый час) - пересчёт health и `last_warmup_action_at`.
-- В `FleetRegistry` добавить колонку BM с навигацией.
-- Типы Supabase обновятся автоматически после миграции.
-
-## Открытые вопросы
-
-1. Прогрев привязан к workspace или глобальный для всего Iskra? (по структуре `whatsapp_numbers` они уже workspace-scoped, предлагаю BM тоже workspace-scoped).
-2. Нужен ли warmup-плейбук (шаги по дням с целевым кол-вом сообщений), или пока хватит ручного advance stage?
-3. Health-score формула - оставить мою дефолтную или есть конкретные веса от тебя?
+1. выбрать Kartik/Sadya как sender numbers,
+2. включить **Auto first-touch**,
+3. явно видеть, по какому timezone шлётся pipeline,
+4. обновлять templates прямо из pipeline settings,
+5. получать Slack alert, когда человек реально дал заинтересованный ответ, а не только когда ты вручную starred conversation.
