@@ -27,11 +27,19 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function normalizePhone(raw: unknown): string | null {
+function normalizePhone(raw: unknown, defaultCountryCode?: string | null): string | null {
   if (raw == null) return null;
-  const s = String(raw).replace(/[^\d+]/g, "");
+  let s = String(raw).trim();
   if (!s) return null;
-  const digits = s.startsWith("+") ? s.slice(1) : s;
+  if (/<\s*test\s+lead/i.test(s)) return null;
+  s = s.replace(/^\s*(p|P|П|tel|phone|whatsapp|wa)\s*[:：]\s*/i, "");
+  s = s.replace(/[^\d+]/g, "");
+  if (!s) return null;
+  let digits = s.startsWith("+") ? s.slice(1) : s;
+  const cc = (defaultCountryCode || "").replace(/\D/g, "");
+  if (cc && !digits.startsWith(cc) && digits.length >= 7 && digits.length <= 10) {
+    digits = cc + digits;
+  }
   if (digits.length < 7 || digits.length > 16) return null;
   return digits;
 }
@@ -61,11 +69,13 @@ Deno.serve(async (req) => {
 
     const { data: source } = await admin
       .from("source_connections")
-      .select("id, workspace_id, pipeline_id, kind, status, name")
+      .select("id, workspace_id, pipeline_id, kind, status, name, config")
       .eq("secret_token", token)
       .maybeSingle();
     if (!source) return json({ error: "Invalid source token" }, 403);
     if (source.status !== "active") return json({ error: `Source is ${source.status}` }, 423);
+    const defaultCC = (source as any).config?.default_country_code
+      ? String((source as any).config.default_country_code) : null;
 
     // Resolve pipeline + workspace defaults for first-touch
     const { data: pipeline } = await admin
@@ -107,7 +117,7 @@ Deno.serve(async (req) => {
 
     // 2. Validate + dedupe + import each row
     for (const raw of rawLeads) {
-      const phone = normalizePhone(raw?.phone);
+      const phone = normalizePhone(raw?.phone, defaultCC);
       const name = raw?.name ? String(raw.name).slice(0, 200) : null;
       const externalId = raw?.external_id ? String(raw.external_id).slice(0, 200) : null;
       const payload = (raw?.payload && typeof raw.payload === "object") ? raw.payload : {};

@@ -32,13 +32,37 @@ const corsHeaders = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-function normalizePhone(raw: unknown): string | null {
+// Strips common prefixes (p:, P:, П:, tel:, phone:, whatsapp:) and noise.
+// If a default country code is configured and the cleaned number is the right
+// local length, the code is prepended. Returns null for empty / test-lead values.
+function normalizePhone(raw: unknown, defaultCountryCode?: string | null): string | null {
   if (raw == null) return null;
-  const s = String(raw).replace(/[^\d+]/g, "");
+  let s = String(raw).trim();
   if (!s) return null;
-  const digits = s.startsWith("+") ? s.slice(1) : s;
+  // Reject Meta test-lead placeholders like "<test lead: dummy data for phone>"
+  if (/<\s*test\s+lead/i.test(s)) return null;
+  // Strip leading prefixes
+  s = s.replace(/^\s*(p|P|П|tel|phone|whatsapp|wa)\s*[:：]\s*/i, "");
+  // Now keep only digits and +
+  s = s.replace(/[^\d+]/g, "");
+  if (!s) return null;
+  let digits = s.startsWith("+") ? s.slice(1) : s;
+  // Apply default country code for local-length numbers
+  const cc = (defaultCountryCode || "").replace(/\D/g, "");
+  if (cc && !digits.startsWith(cc)) {
+    // Indian local mobiles are 10 digits; generic: if length looks local (<= 10), prepend.
+    if (digits.length >= 7 && digits.length <= 10) {
+      digits = cc + digits;
+    }
+  }
   if (digits.length < 7 || digits.length > 16) return null;
   return digits;
+}
+
+// Returns true if the raw value is a Meta-style test-lead placeholder.
+function isTestLeadValue(raw: unknown): boolean {
+  if (raw == null) return false;
+  return /<\s*test\s+lead/i.test(String(raw));
 }
 
 // Convert column letter (A, B, AA) to 0-based index
@@ -223,14 +247,17 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     let rejected = 0;
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
+    const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
 
     // 3. Validate + dedupe + import
     for (let i = 0; i < newRows.length; i++) {
       const sheetRowNumber = startIdx + i + 1; // 1-based
       const row = newRows[i] ?? [];
       const phoneRaw = row[phoneIdx];
-      const phone = normalizePhone(phoneRaw);
-      const name = nameIdx >= 0 ? (row[nameIdx] ? String(row[nameIdx]).slice(0, 200) : null) : null;
+      const phone = normalizePhone(phoneRaw, defaultCC);
+      const nameRawCell = nameIdx >= 0 ? row[nameIdx] : null;
+      const name = nameRawCell && !isTestLeadValue(nameRawCell)
+        ? String(nameRawCell).slice(0, 200) : null;
       const externalId = `row-${sheetRowNumber}`;
       const payload: Record<string, unknown> = { _sheet_row: sheetRowNumber };
       headers.forEach((h, idx) => {
@@ -238,6 +265,24 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       });
 
       lastProcessedRow = sheetRowNumber;
+
+      // Skip Meta test-lead rows entirely (do not pollute lead_imports as invalid)
+      if (isTestLeadValue(phoneRaw) || isTestLeadValue(nameRawCell)) {
+        rejected++;
+        await admin.from("lead_imports").insert({
+          workspace_id: source.workspace_id,
+          pipeline_id: source.pipeline_id,
+          batch_id: batch.id,
+          source_connection_id: source.id,
+          external_id: externalId,
+          phone: String(phoneRaw ?? ""),
+          name,
+          payload,
+          status: "invalid",
+          error: "Test lead (skipped)",
+        });
+        continue;
+      }
 
       if (!phone) {
         rejected++;

@@ -1,188 +1,96 @@
-## Что уже проверено
+## Что я уже увидел по фактам
 
-- Backend сейчас отвечает нормально.
-- В ISKRA есть один рабочий pipeline: `Nitish / Ads / India / Delivery`.
-- К нему подключены 2 активные Google Sheets source:
-  - `Warm Leads | BM | India` - `phone`, `full_name`, cursor на row 3.
-  - `Warm Leads | BM | India | Nitish | Bala` - `phone_number`, `namefull_name`, cursor на row 2.
-- Оба source реально подключены к одному pipeline, значит должны наследовать одни и те же настройки:
-  - Auto first-touch: on
-  - Template: `bm_request_confirmation`, approved
-  - Sender: `Kartik Chauhan`, ready
-  - Daily cap: 200
-  - Timezone: `Asia/Kolkata`
-  - Pipeline Slack channel: set
+1. Это не только проблема `+91`.
+   - Ankur импортирован как `918269603031`, то есть номер уже нормальный для India.
+   - Сообщения по нему реально пытались отправляться, но падали.
 
-## Причины проблемы
+2. Главная причина текущих failed:
+   - Gupshup возвращает `OAuthException, (#131008) Required parameter is missing`.
+   - У шаблона `bm_request_confirmation` есть переменная `{{1}}`, а в `campaign_recipients.variables` сейчас пусто: `{}`.
+   - Поэтому отправка уходит без обязательного параметра шаблона. Это объясняет, почему даже нормальный номер Ankur падает.
 
-1. **Реальный лид уже импортирован, но застрял в `awaiting_manual`.**
-   - Лид `Ankur Shrivastava` был импортирован из первой таблицы.
-   - Его статус сейчас `awaiting_manual`, поэтому `lead-dispatch` его не подхватывает.
-   - Текущий `lead-dispatch` берёт только `pending` лиды.
-   - То есть даже если Auto first-touch сейчас включён, старый лид сам не перейдёт в отправку.
+3. Есть отдельный баг с повторной постановкой одного и того же лида в очередь.
+   - По Ankur уже создано много `campaign_recipients`, но `lead_imports` всё ещё `awaiting_manual` и не привязан к recipient.
+   - Значит `lead-dispatch` вставляет recipient, но не всегда успешно обновляет сам `lead_imports`.
+   - Cron снова видит этот лид как `awaiting_manual` и повторно создаёт отправки.
 
-2. **Для Google Sheets нет автоматического polling cron.**
-   - Cron уже есть для campaign sending, Slack dispatch и lead-dispatch.
-   - Но нет cron, который каждые N минут синкает active Google Sheets sources.
-   - Поэтому новые строки в Google Sheets не импортируются сами, если не нажать manual sync.
+4. Проблема `+91` всё равно нужна.
+   - Сейчас `p:+918269...` чистится нормально.
+   - Но `p:7909022806` станет `7909022806`, без country code.
+   - Для India надо превращать 10-значные локальные номера в `91xxxxxxxxxx`.
 
-3. **Slack events по импорту сейчас создаются, но Slack dispatcher их пропускает.**
-   - В `slack_event_queue` есть события `lead.imported` и `lead.import_failed`.
-   - Они обработаны как `skipped`, потому что `slack-dispatch` не умеет эти event types.
-   - Поэтому уведомление “лид импортирован / не импортирован / dispatched” не приходит.
-
-4. **Positive reply Slack routing неполный.**
-   - `whatsapp-webhook` создаёт `positive_lead` только если automation переводит conversation в positive stage.
-   - `slack-dispatch` для `positive_lead` сейчас смотрит workspace Slack channel, а не pipeline Slack channel.
-   - Также positive alerts завязаны на `inbox_alerts_enabled`, хотя это отдельная настройка и не должна блокировать interested-lead alerts.
-
-5. **Automations сейчас не scoped к pipeline.**
-   - Existing automations target stages из старого/Main pipeline.
-   - Новый pipeline имеет свои stages, но automations могут пытаться двигать deal в stage другого pipeline.
-   - Это может ломать “interested reply” логику или отправлять alert не туда.
-
-6. **Вторая таблица имеет подозрительный `name_column`.**
-   - Сейчас config: `namefull_name`.
-   - Если реальный header называется `full_name`, имена из второй таблицы будут приходить пустыми.
-   - Phone import это не блокирует, но source выглядит настроенным не идеально.
-
-7. **Window end `00:00` рискованный.**
-   - Сейчас pipeline window: `07:00-00:00 Asia/Kolkata`.
-   - В scheduling code `00:00` может трактоваться как начало дня, а не конец дня.
-   - Это надо нормализовать как “end of day” или явно поддержать overnight window.
+5. Ответы на вопросы уже попадают в `lead_imports.payload`.
+   - Например у Ankur есть `company_name`, `email`, `do_you_currently_own_or_manage_a_meta_business_manager?`, `has_this_business_manager_previously_run_ads?`, `is_the_business_manager_verified?`.
+   - Сейчас они не передаются в `campaign_recipients.variables` и не показываются нормально в контексте отправки.
 
 ## План исправления
 
-### 1. Починить stuck лидов после включения Auto first-touch
+### 1. Остановить повторные отправки одного и того же лида
 
-- Обновить `lead-dispatch`, чтобы он подхватывал не только `pending`, но и `awaiting_manual` лиды для pipeline, где Auto first-touch включён и checklist валиден.
-- При успешной постановке в campaign переводить такие лиды сразу в `queued`, как сейчас разрешено статусными правилами.
-- Сделать one-time repair для текущего ISKRA pipeline:
-  - найти `awaiting_manual` лидов в `Nitish / Ads / India / Delivery`;
-  - перевести их в `pending` или дать `lead-dispatch` забрать их после кодового фикса;
-  - проверить, что для Ankur создаётся `campaign_recipient`.
+В `lead-dispatch`:
+- перед вставкой recipient проверять, что у лида ещё нет `campaign_recipient_id` или активного recipient по этому lead/import;
+- сделать обновление `lead_imports` более надёжным: если recipient создан, статус лида должен стать `queued`, а не оставаться `awaiting_manual`;
+- если обновление лида не удалось, не оставлять новый recipient как scheduled - пометить его failed/cancelled-подобным безопасным статусом через существующий `failed` с понятной ошибкой, чтобы cron не размножал дубли;
+- добавить защиту от дублей по связке `pipeline_id + phone + first_touch campaign date`, чтобы один imported lead не создавал 10 одинаковых попыток.
 
-### 2. Добавить auto-sync для всех активных Google Sheets sources
+### 2. Заполнить обязательные переменные шаблона
 
-- Добавить backend function `google-sheets-sync-all` или расширить existing `google-sheets-sync` режимом “sync all active sources”.
-- Логика:
-  - найти все `source_connections` с `kind = google_sheet` и `status = active`;
-  - для каждого source вызвать ту же логику, что manual `Sync now`;
-  - не ломать cursor `last_synced_row`;
-  - возвращать результат по каждому source: `accepted`, `rejected`, `last_synced_row`, `error`.
-- Добавить cron каждые 1-2 минуты.
-- Ограничить batch size, чтобы несколько таблиц не упирались в timeout.
+В `lead-dispatch`:
+- при создании `campaign_recipients` формировать `variables` из данных лида;
+- для текущего шаблона с `variables: ["1"]` передавать:
+  - `1 = lead.name`, если имя есть;
+  - иначе `1 = "there"` как безопасный fallback.
 
-### 3. Убедиться, что обе таблицы одинаково реагируют на pipeline settings
+Это должно убрать `(#131008) Required parameter is missing` для Ankur и похожих лидов.
 
-- Оставить source-level config только для spreadsheet/table mapping:
-  - spreadsheet id
-  - tab name
-  - phone column
-  - name column
-  - header row
-  - cursor
-- Все delivery settings брать только из pipeline:
-  - auto first-touch
-  - template
-  - sender numbers
-  - sending window/timezone
-  - daily cap
-  - Slack channel
-- Добавить в source UI явный текст/status: “inherits pipeline outreach settings”.
-- Добавить проверку в sync response/debug UI, какой pipeline config был применён при импорте.
+### 3. Нормализовать телефоны правильно для Meta/Sheets
 
-### 4. Починить Slack lead events
+В `google-sheets-sync` и `lead-intake`:
+- чистить префиксы до номера: `p:`, `P:`, `П:`, `tel:`, `phone:`, `whatsapp:`;
+- пропускать Meta test leads как `skipped_test`, а не считать их обычными invalid;
+- добавить поддержку `default_country_code` в `source_connections.config`;
+- для India sources поставить `default_country_code: "91"`;
+- если номер после очистки 10-значный и задан default country code, сохранять как `91xxxxxxxxxx`;
+- если номер уже начинается с `91` и нормальной длины, не добавлять код второй раз.
 
-- В `slack-dispatch` добавить обработку:
-  - `lead.imported`
-  - `lead.import_failed`
-  - `lead.dispatched`
-  - `lead.dispatch_blocked`
-- Routing:
-  - сначала `payload.slack_channel_id` из pipeline;
-  - fallback на workspace Slack channel;
-  - ops channel только если событие реально важно для ops.
-- Чтобы события больше не уходили в `skipped`, а становились `sent` или `failed` с понятной ошибкой.
+### 4. Починить текущие данные после исправления кода
 
-### 5. Починить Slack alert для interested/positive replies
+Один раз после деплоя:
+- у India source выставить `default_country_code: "91"`;
+- поправить второй source: `name_column` сейчас `namefull_name`, надо `full_name`;
+- для существующих invalid/awaiting_manual лидов попробовать повторно нормализовать телефон;
+- валидные лиды перевести в `pending`, только если они ещё не были успешно поставлены/отправлены;
+- для дублей Ankur оставить только одну актуальную scheduled/queued попытку, остальные failed с понятной причиной вроде `duplicate first-touch attempt cleanup`.
 
-- В `whatsapp-webhook` при inbound reply определять pipeline conversation/deal.
-- В `positive_lead` payload добавлять:
-  - `pipeline_id`
-  - `pipeline_name`
-  - `slack_channel_id` pipeline
-  - `stage_name`
-  - `conversation_id`
-  - phone/name/message
-- В `slack-dispatch` для `positive_lead` отправлять именно в pipeline Slack channel.
-- Не блокировать positive alerts настройкой `inbox_alerts_enabled`; эта настройка должна относиться к unread spike, не к interested leads.
-- Оставить 24h dedupe на conversation, чтобы не спамить на каждый follow-up reply.
+### 5. Передавать ответы на вопросы в контекст лида
 
-### 6. Сделать automations pipeline-safe
+В `lead-dispatch`:
+- сохранять в `campaign_recipients.variables` не только `1`, но и readable поля из `payload`:
+  - company name;
+  - email;
+  - owns/manages BM;
+  - BM ran ads before;
+  - BM verified;
+  - form name;
+  - campaign/adset/ad name, если есть.
 
-- В webhook, перед движением deal, если automation target stage принадлежит другому pipeline:
-  - взять имя/stage_type target stage;
-  - найти stage с таким же именем в текущем conversation pipeline;
-  - двигать deal туда.
-- Если matching stage не найден:
-  - не двигать в чужой pipeline;
-  - записать диагностическое событие/log;
-  - Slack alert не слать как positive, если stage не подтверждён.
-- Позже можно добавить `pipeline_id` в `stage_automations`, но для быстрого фикса достаточно runtime remap.
+Это не обязательно попадёт в WhatsApp-шаблон, если шаблон использует только `{{1}}`, но эти данные будут доступны в recipient/message metadata и дальше их можно показать в Inbox/lead details.
 
-### 7. Нормализовать sending window `00:00`
+### 6. Проверить отправку после фикса
 
-- В scheduling helper считать `00:00` как `24:00`, если start раньше end-of-day.
-- Если end <= start, явно поддержать overnight window или показать warning в UI.
-- В UI подписать: “Timezone used for sending: Asia/Kolkata”, чтобы было понятно, что это не browser/local time.
+После изменений:
+- задеплоить `google-sheets-sync`, `lead-intake`, `lead-dispatch`, `campaigns`;
+- вручную вызвать `lead-dispatch`;
+- проверить, что:
+  - новые recipients создаются один раз на лид;
+  - `variables` содержит `1`;
+  - ошибка `#131008` ушла;
+  - `lead_imports` меняется с `pending/awaiting_manual` на `queued`;
+  - `campaigns` после due-времени даёт либо `sent`, либо уже новую конкретную ошибку провайдера, если проблема будет не в переменных.
 
-### 8. Улучшить диагностику в Settings
+## Почему именно так
 
-- В counters добавить:
-  - `Awaiting manual`
-  - `Invalid`
-  - `Duplicate`
-- В source card добавить last sync summary:
-  - imported
-  - skipped invalid
-  - skipped duplicate
-  - last row synced
-  - last error
-- Для Google Sheets добавить “Sync all sources now”, чтобы сразу проверить обе таблицы одним кликом.
-
-### 9. Починить текущие данные
-
-- Для текущего stuck real lead:
-  - после code fix запустить `lead-dispatch` вручную;
-  - убедиться, что статус стал `queued` и появился `campaign_recipient`.
-- Для второй таблицы:
-  - проверить actual headers;
-  - если header реально `full_name`, заменить `name_column` с `namefull_name` на `full_name`.
-- Не трогать invalid Meta test leads - они должны оставаться `invalid`.
-
-## Проверка после фикса
-
-1. Database checks:
-   - 2 active Google Sheet sources подключены к одному pipeline.
-   - новые строки из обеих таблиц импортируются в один pipeline.
-   - auto-on импорт создаёт `pending`, затем `queued`.
-   - old `awaiting_manual` больше не stuck.
-
-2. Function checks:
-   - `google-sheets-sync-all` возвращает результат по двум source.
-   - `lead-dispatch` создаёт first-touch campaign/recipients.
-   - `campaigns` отправляет scheduled recipients.
-   - `slack-dispatch` переводит lead events в `sent`, не `skipped`.
-
-3. Slack checks:
-   - import success/failure приходит в правильный pipeline Slack channel.
-   - dispatch blocked приходит с причиной, если checklist сломан.
-   - interested/positive reply приходит в Slack один раз на conversation в 24h.
-
-## Риски
-
-- Если автоматически подхватить все old `awaiting_manual`, можно случайно отправить старым лидам. Поэтому one-time repair надо ограничить текущим ISKRA pipeline и текущими свежими лидами.
-- Если Google Sheet содержит тестовые Meta rows, они продолжат попадать в `invalid` - это правильно.
-- Если Slack channel ID неверный или bot не добавлен в channel, event станет `failed`, но уже с видимой ошибкой, а не silent `skipped`.
-- Если second sheet header действительно не `full_name`, `name_column` нужно подтвердить вручную.
+- `+91` решает только часть входных номеров.
+- Текущий failed у Ankur происходит не из-за телефона, а из-за пустых template params.
+- Пока не починить привязку `lead_imports -> campaign_recipients`, система будет повторно пытаться отправлять одному и тому же человеку.
+- Ответы на вопросы уже есть в базе, нужно просто протащить их дальше в очередь/контекст.

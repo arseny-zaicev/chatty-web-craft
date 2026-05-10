@@ -67,7 +67,40 @@ type Pipeline = {
 };
 type Lead = {
   id: string; pipeline_id: string; workspace_id: string; phone: string; name: string | null;
+  payload?: Record<string, any> | null;
 };
+
+// Build template variables for first-touch send. Falls back gracefully so
+// Gupshup never gets an empty params array (which causes #131008).
+function buildVariables(tpl: { variables: any } | null, lead: Lead): Record<string, string> {
+  const vars = Array.isArray(tpl?.variables) ? tpl!.variables : [];
+  const payload = (lead.payload && typeof lead.payload === "object") ? lead.payload : {};
+  const firstName = (lead.name || (payload as any).full_name || (payload as any).name || "")
+    .toString().trim().split(/\s+/)[0] || "there";
+  const out: Record<string, string> = {};
+  for (const key of vars) {
+    const k = String(key);
+    if (k === "1" || k.toLowerCase() === "name" || k.toLowerCase() === "first_name") {
+      out[k] = firstName;
+    } else if ((payload as any)[k] != null) {
+      out[k] = String((payload as any)[k]);
+    } else {
+      out[k] = firstName; // safe non-empty fallback
+    }
+  }
+  // Mirror useful payload fields for downstream UI/metadata (kept in variables JSONB).
+  const passthrough = [
+    "company_name", "email", "form_name", "campaign_name", "adset_name", "ad_name",
+    "do_you_currently_own_or_manage_a_meta_business_manager?",
+    "has_this_business_manager_previously_run_ads?",
+    "is_the_business_manager_verified?",
+  ];
+  for (const k of passthrough) {
+    const v = (payload as any)[k];
+    if (v != null && v !== "") out[`_${k}`] = String(v).slice(0, 500);
+  }
+  return out;
+}
 
 async function processPipeline(admin: any, pipeline: Pipeline) {
   const ws = pipeline.workspace_id;
@@ -81,7 +114,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   }
   const { data: tpl } = await admin
     .from("message_templates")
-    .select("id, status, whatsapp_number_id, user_id")
+    .select("id, status, whatsapp_number_id, user_id, variables, body")
     .eq("id", pipeline.first_touch_template_id)
     .maybeSingle();
   if (!tpl || tpl.status !== "approved") {
@@ -119,17 +152,19 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return blocked(admin, pipeline, "daily_cap_reached", null);
   }
 
-  // Claim pending OR awaiting_manual leads. When auto-outreach is enabled,
-  // older `awaiting_manual` rows (imported while auto was off) should also be
-  // picked up - status guard allows awaiting_manual -> queued.
+  // Claim pending OR awaiting_manual leads that DO NOT yet have a recipient.
+  // The campaign_recipient_id guard prevents the cron from re-queuing the same
+  // lead every minute when an earlier update missed.
   const claimLimit = Math.min(200, availableCapacity);
   const { data: leads } = await admin
     .from("lead_imports")
-    .select("id, pipeline_id, workspace_id, phone, name, status")
+    .select("id, pipeline_id, workspace_id, phone, name, status, payload, campaign_recipient_id")
     .eq("pipeline_id", pipeline.id)
     .in("status", ["pending", "awaiting_manual"])
+    .is("campaign_recipient_id", null)
     .order("imported_at", { ascending: true })
     .limit(claimLimit);
+  console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads?.length ?? 0}`);
   if (!leads || leads.length === 0) return { processed: 0 };
 
   // Get-or-create today's first-touch rolling campaigns (one per sender number)
@@ -224,7 +259,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
       whatsapp_number_id: sib.whatsapp_number_id,
       contact_phone: lead.phone,
       contact_name: lead.name,
-      variables: {},
+      variables: buildVariables(tpl as any, lead),
       status: "scheduled",
       scheduled_at: new Date(cur).toISOString(),
     });
@@ -241,19 +276,12 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return { processed: 0, error: recErr?.message };
   }
 
-  // Map back: leadUpdates was built in same order as recipientRows; rely on returned order
-  // but be defensive: match by (campaign_id, contact_phone, scheduled_at)
-  const recMap = new Map<string, { id: string; scheduled_at: string }>();
-  for (const r of inserted) {
-    recMap.set(`${r.campaign_id}|${r.contact_phone}|${r.scheduled_at}`, { id: r.id, scheduled_at: r.scheduled_at });
-  }
-
+  // PostgREST insert returns rows in the same order they were inserted.
+  // Linking by index avoids timestamp string mismatches (microsecond rounding).
   let queued = 0;
   for (let k = 0; k < leadUpdates.length; k++) {
     const lu = leadUpdates[k];
-    const rr = recipientRows[lu.recipient_idx];
-    const key = `${rr.campaign_id}|${rr.contact_phone}|${rr.scheduled_at}`;
-    const rec = recMap.get(key);
+    const rec = inserted[lu.recipient_idx];
     if (!rec) continue;
     const { error: uErr } = await admin
       .from("lead_imports")
@@ -265,7 +293,15 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
       })
       .eq("id", lu.id)
       .in("status", ["pending", "awaiting_manual"]);
-    if (!uErr) queued++;
+    if (uErr) {
+      // Couldn't claim the lead -> cancel the orphan recipient so cron does not double-send
+      await admin
+        .from("campaign_recipients")
+        .update({ status: "failed", error_message: `lead update failed: ${uErr.message}` })
+        .eq("id", rec.id);
+      continue;
+    }
+    queued++;
   }
 
   // Bump campaigns.total_recipients
