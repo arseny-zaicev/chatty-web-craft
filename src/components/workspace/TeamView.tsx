@@ -156,7 +156,13 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
   const createLink = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("workspace-invite-link?action=create", {
-        body: { workspace_id: workspaceId, role: linkRole, max_uses: linkSeats, days: 30 },
+        body: {
+          workspace_id: workspaceId,
+          role: linkRole,
+          max_uses: linkSeats,
+          days: 30,
+          pipeline_ids: linkRole === "client" ? linkPipelineIds : [],
+        },
       });
       if (error) throw error;
       const payload = data as { error?: string; token?: string };
@@ -165,9 +171,26 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
     },
     onSuccess: () => {
       toast.success("Invite link created");
+      setLinkPipelineIds([]);
       qc.invalidateQueries({ queryKey: linksKey(workspaceId) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not create link"),
+  });
+
+  const updateAccess = useMutation({
+    mutationFn: async ({ id, ids }: { id: string; ids: string[] }) => {
+      const { data, error } = await supabase.functions.invoke("workspace-invite-link?action=update_access", {
+        body: { workspace_id: workspaceId, id, allowed_pipeline_ids: ids },
+      });
+      if (error) throw error;
+      const payload = data as { error?: string };
+      if (payload?.error) throw new Error(payload.error);
+    },
+    onSuccess: () => {
+      toast.success("Access updated");
+      qc.invalidateQueries({ queryKey: membersKey(workspaceId) });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update access"),
   });
 
   const revokeLink = useMutation({
