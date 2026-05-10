@@ -135,11 +135,11 @@ export const CampaignTypes = () => {
             <p className="text-base text-muted-foreground mb-8">{campaign.caseStudy.industry}</p>
 
             {/* Big metric */}
-            <div className="flex items-baseline gap-4 mb-10">
-              <span className="text-6xl md:text-7xl font-display font-extrabold text-primary leading-none">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-10">
+              <span className="text-5xl md:text-6xl font-display font-extrabold text-primary leading-none tracking-tight">
                 {campaign.caseStudy.metric}
               </span>
-              <span className="text-xl text-foreground/70 font-medium">
+              <span className="text-base md:text-lg text-foreground/70 font-medium">
                 {campaign.caseStudy.metricLabel}
               </span>
             </div>
