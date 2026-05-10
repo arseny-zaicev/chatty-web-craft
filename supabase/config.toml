@@ -35,4 +35,8 @@ project_id = "xglfamaaotmwulglwcui"
     verify_jwt = false
   [functions.google-sheets-sync]
     verify_jwt = false
+  [functions.cron-heartbeat]
+    verify_jwt = false
+  [functions.health-watchdog]
+    verify_jwt = false
 
