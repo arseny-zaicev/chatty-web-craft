@@ -153,20 +153,20 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-4 h-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />Refresh
           </Button>
-          {canManage && (
+          {canLaunch && (
             <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />New launch</Link></Button>
           )}
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
         Campaign history and live monitoring.
-        {canManage && <> Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</>}
+        {canLaunch && <> Create new campaigns from <Link to={`/ws/${slug}/launch`} className="text-primary underline">Launch</Link>.</>}
       </p>
 
       {groups.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
           No campaigns yet.
-          {canManage && <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>}
+          {canLaunch && <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>}
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
