@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       const linkPipes = (link as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null;
-      const memberPipes = link.role === "client" && linkPipes && linkPipes.length > 0 ? linkPipes : null;
+      const memberPipes = linkPipes && linkPipes.length > 0 ? linkPipes : null;
 
       if (!existingMem) {
         const { error: insErr } = await admin
@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
       let allowed_pipeline_ids: string[] | null = null;
       const rawPipes = Array.isArray(body?.pipeline_ids) ? (body.pipeline_ids as unknown[]) : [];
       const wantedPipes = rawPipes.map((p) => String(p)).filter((p) => /^[0-9a-f-]{36}$/i.test(p));
-      if (role === "client" && wantedPipes.length > 0) {
+      if (wantedPipes.length > 0) {
         const { data: validPipes } = await admin
           .from("pipelines")
           .select("id")

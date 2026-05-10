@@ -10,7 +10,8 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Loader2, Plus, Star, Trash2, Pencil, Check, X, KanbanSquare } from "lucide-react";
+import { Loader2, Plus, Star, Trash2, Pencil, Check, X, KanbanSquare, Settings2, Webhook } from "lucide-react";
+import PipelineConfigSheet from "./PipelineConfigSheet";
 import { toast } from "sonner";
 import {
   Pipeline,
@@ -68,6 +69,22 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const [deleting, setDeleting] = useState<Pipeline | null>(null);
+  const [configuring, setConfiguring] = useState<Pipeline | null>(null);
+
+  const { data: sourceCounts = {} } = useQuery({
+    queryKey: ["pipelines", workspaceId, "source-counts"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("source_connections")
+        .select("pipeline_id")
+        .eq("workspace_id", workspaceId);
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((r: { pipeline_id: string }) => {
+        if (r.pipeline_id) map[r.pipeline_id] = (map[r.pipeline_id] ?? 0) + 1;
+      });
+      return map;
+    },
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: pipelinesKey(workspaceId) });
@@ -162,6 +179,8 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
         {pipelines.map((p) => {
           const isEditing = editingId === p.id;
           const dealCount = dealCounts[p.id] ?? 0;
+          const sourceCount = sourceCounts[p.id] ?? 0;
+          const isExternal = sourceCount > 0;
           return (
             <div key={p.id} className="p-3 flex items-center gap-3">
               <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: isEditing ? editColor : p.color }} />
@@ -196,9 +215,21 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                           <Star className="w-2.5 h-2.5 fill-primary" /> Default
                         </span>
                       )}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 ${isExternal ? "bg-amber-500/10 text-amber-500 border-amber-500/20" : "bg-muted/40 text-muted-foreground border-border"}`}>
+                        {isExternal ? <><Webhook className="w-2.5 h-2.5" /> Externally fed</> : "Manual"}
+                      </span>
                     </div>
-                    <div className="text-xs text-muted-foreground">{dealCount} deal{dealCount === 1 ? "" : "s"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {dealCount} deal{dealCount === 1 ? "" : "s"}
+                      {sourceCount > 0 && <> · {sourceCount} source{sourceCount === 1 ? "" : "s"}</>}
+                      {p.auto_outreach_enabled && <> · auto first-touch</>}
+                    </div>
                   </div>
+                  {canManage && (
+                    <Button size="sm" variant="ghost" onClick={() => setConfiguring(p)} title="Configure">
+                      <Settings2 className="w-3.5 h-3.5 mr-1" /> Configure
+                    </Button>
+                  )}
                   {canManage && !p.is_default && (
                     <Button size="sm" variant="ghost" onClick={() => handleSetDefault(p)} title="Set as default">
                       <Star className="w-3.5 h-3.5 mr-1" /> Make default
@@ -301,6 +332,12 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PipelineConfigSheet
+        pipeline={configuring}
+        open={!!configuring}
+        onClose={() => { setConfiguring(null); invalidate(); }}
+      />
     </div>
   );
 }

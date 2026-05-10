@@ -10,6 +10,12 @@ export type Pipeline = {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+  auto_outreach_enabled: boolean;
+  first_touch_template_id: string | null;
+  default_sender_number_ids: string[];
+  sending_window: { start?: string; end?: string; timezone?: string } | null;
+  daily_cap: number | null;
+  slack_channel_id: string | null;
 };
 
 export const pipelinesKey = (workspaceId?: string) =>

@@ -924,6 +924,142 @@ export type Database = {
         }
         Relationships: []
       }
+      import_batches: {
+        Row: {
+          accepted: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          pipeline_id: string
+          rejected: number
+          source_connection_id: string | null
+          source_kind: string
+          started_at: string
+          status: string
+          total: number
+          workspace_id: string
+        }
+        Insert: {
+          accepted?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          pipeline_id: string
+          rejected?: number
+          source_connection_id?: string | null
+          source_kind: string
+          started_at?: string
+          status?: string
+          total?: number
+          workspace_id: string
+        }
+        Update: {
+          accepted?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          pipeline_id?: string
+          rejected?: number
+          source_connection_id?: string | null
+          source_kind?: string
+          started_at?: string
+          status?: string
+          total?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_batches_source_connection_id_fkey"
+            columns: ["source_connection_id"]
+            isOneToOne: false
+            referencedRelation: "source_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_imports: {
+        Row: {
+          batch_id: string | null
+          conversation_id: string | null
+          deal_id: string | null
+          error: string | null
+          external_id: string | null
+          id: string
+          imported_at: string
+          name: string | null
+          payload: Json
+          phone: string
+          pipeline_id: string
+          source_connection_id: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          conversation_id?: string | null
+          deal_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          id?: string
+          imported_at?: string
+          name?: string | null
+          payload?: Json
+          phone: string
+          pipeline_id: string
+          source_connection_id?: string | null
+          status?: string
+          workspace_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          conversation_id?: string | null
+          deal_id?: string | null
+          error?: string | null
+          external_id?: string | null
+          id?: string
+          imported_at?: string
+          name?: string | null
+          payload?: Json
+          phone?: string
+          pipeline_id?: string
+          source_connection_id?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_imports_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_imports_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_imports_source_connection_id_fkey"
+            columns: ["source_connection_id"]
+            isOneToOne: false
+            referencedRelation: "source_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_templates: {
         Row: {
           body: string | null
@@ -1092,34 +1228,52 @@ export type Database = {
       }
       pipelines: {
         Row: {
+          auto_outreach_enabled: boolean
           color: string
           created_at: string
+          daily_cap: number | null
+          default_sender_number_ids: string[]
+          first_touch_template_id: string | null
           id: string
           is_default: boolean
           name: string
           position: number
+          sending_window: Json | null
+          slack_channel_id: string | null
           updated_at: string
           user_id: string
           workspace_id: string
         }
         Insert: {
+          auto_outreach_enabled?: boolean
           color?: string
           created_at?: string
+          daily_cap?: number | null
+          default_sender_number_ids?: string[]
+          first_touch_template_id?: string | null
           id?: string
           is_default?: boolean
           name: string
           position?: number
+          sending_window?: Json | null
+          slack_channel_id?: string | null
           updated_at?: string
           user_id: string
           workspace_id: string
         }
         Update: {
+          auto_outreach_enabled?: boolean
           color?: string
           created_at?: string
+          daily_cap?: number | null
+          default_sender_number_ids?: string[]
+          first_touch_template_id?: string | null
           id?: string
           is_default?: boolean
           name?: string
           position?: number
+          sending_window?: Json | null
+          slack_channel_id?: string | null
           updated_at?: string
           user_id?: string
           workspace_id?: string
@@ -1233,6 +1387,62 @@ export type Database = {
           workspace_id?: string | null
         }
         Relationships: []
+      }
+      source_connections: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string
+          id: string
+          kind: string
+          last_error: string | null
+          last_ingest_at: string | null
+          name: string
+          pipeline_id: string
+          secret_token: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          last_ingest_at?: string | null
+          name: string
+          pipeline_id: string
+          secret_token: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          last_ingest_at?: string | null
+          name?: string
+          pipeline_id?: string
+          secret_token?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_connections_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stage_automations: {
         Row: {
