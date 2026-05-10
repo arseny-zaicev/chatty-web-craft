@@ -98,8 +98,6 @@ export function WorkspaceSidebar() {
                           to={`/ws/${slug}/launch`}
                           className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
                         >
-                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
-                        >
                           <Rocket className="w-4 h-4" />
                           {!collapsed && <span>Launch</span>}
                         </NavLink>
