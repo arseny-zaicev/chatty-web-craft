@@ -574,7 +574,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => deleteDeal(activeDeal.id)}
+                    onClick={() => handleDeleteDeal(activeDeal.id)}
                     className="text-destructive hover:text-destructive"
                   >
                     <Trash2 className="w-4 h-4 mr-1" /> Delete
@@ -635,7 +635,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
             <Button variant="ghost" onClick={() => setShowNew(false)}>
               Cancel
             </Button>
-            <Button onClick={createDeal} disabled={!newTitle.trim()}>
+            <Button onClick={handleCreateDeal} disabled={!newTitle.trim()}>
               Create
             </Button>
           </DialogFooter>
