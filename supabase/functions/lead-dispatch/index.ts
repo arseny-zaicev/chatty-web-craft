@@ -81,7 +81,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   }
   const { data: tpl } = await admin
     .from("message_templates")
-    .select("id, status, whatsapp_number_id, user_id")
+    .select("id, status, whatsapp_number_id, user_id, variables, body")
     .eq("id", pipeline.first_touch_template_id)
     .maybeSingle();
   if (!tpl || tpl.status !== "approved") {
