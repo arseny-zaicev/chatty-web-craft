@@ -6,6 +6,7 @@ import {
   buildNumberAlertBlocks,
   buildPositiveLeadBlocks,
   buildInboxSpikeBlocks,
+  buildGupshupMailAlertBlocks,
   postSlack,
   splitCampaignName,
 } from "../_shared/slackBlocks.ts";
