@@ -361,6 +361,35 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
                 <input type="checkbox" checked={!!editing.is_favorite} onChange={(e) => setEditing({ ...editing, is_favorite: e.target.checked })} />
                 Favorite
               </label>
+              <Field label="Visibility" hint={canManageWorkspace
+                ? "Shared snippets are available to everyone in this workspace. Personal ones are only visible to you."
+                : "You can only create personal snippets. Shared snippets are managed by the workspace owner."}>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={!canManageWorkspace}
+                    onClick={() => setEditing({ ...editing, scope: "workspace" })}
+                    className={`flex-1 text-xs px-3 py-2 rounded border transition ${
+                      (editing.scope ?? defaultScope) === "workspace"
+                        ? "bg-primary/10 text-primary border-primary/40"
+                        : "border-border text-muted-foreground hover:border-primary/30"
+                    } ${!canManageWorkspace ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    Shared (workspace)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing({ ...editing, scope: "personal" })}
+                    className={`flex-1 text-xs px-3 py-2 rounded border transition ${
+                      (editing.scope ?? defaultScope) === "personal"
+                        ? "bg-primary/10 text-primary border-primary/40"
+                        : "border-border text-muted-foreground hover:border-primary/30"
+                    }`}
+                  >
+                    Personal (only me)
+                  </button>
+                </div>
+              </Field>
             </div>
             <div className="px-4 py-3 border-t border-border flex items-center justify-end gap-2">
               <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
