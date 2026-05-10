@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
     if ((out as any).error) return json(out, 502);
     return json(out);
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return { error: e instanceof Error ? e.message : String(e) };
   }
 });
 
@@ -159,15 +159,15 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     const headerRow = Number.isFinite(cfg.header_row) ? Math.max(1, Math.floor(cfg.header_row)) : 1;
     let lastSyncedRow = Number.isFinite(cfg.last_synced_row) ? Math.max(headerRow, Math.floor(cfg.last_synced_row)) : headerRow;
 
-    if (!spreadsheetId) return json({ error: "config.spreadsheet_id missing" }, 400);
-    if (!phoneSpec) return json({ error: "config.phone_column missing" }, 400);
+    if (!spreadsheetId) return { error: "config.spreadsheet_id missing" };
+    if (!phoneSpec) return { error: "config.phone_column missing" };
 
     const { data: pipeline } = await admin
       .from("pipelines")
       .select("id, auto_outreach_enabled, slack_channel_id")
       .eq("id", source.pipeline_id)
       .maybeSingle();
-    if (!pipeline) return json({ error: "Pipeline missing" }, 410);
+    if (!pipeline) return { error: "Pipeline missing" };
 
     // 1. Read whole sheet (A:Z is enough for MVP, ~26 cols).
     const range = `${sheetName}!A:Z`;
@@ -184,24 +184,24 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         .from("source_connections")
         .update({ last_error: `sheets_api_${sheetResp.status}: ${errText.slice(0, 300)}` })
         .eq("id", source.id);
-      return json({ error: `Sheets API ${sheetResp.status}: ${errText.slice(0, 300)}` }, 502);
+      return { error: `Sheets API ${sheetResp.status}: ${errText.slice(0, 300)}` };
     }
     const sheetData = await sheetResp.json();
     const rows: string[][] = (sheetData?.values ?? []) as string[][];
     if (rows.length === 0) {
-      return json({ ok: true, total: 0, accepted: 0, rejected: 0, message: "Sheet empty" });
+      return { ok: true, total: 0, accepted: 0, rejected: 0, message: "Sheet empty" };
     }
 
     const headers = rows[headerRow - 1] ?? [];
     const phoneIdx = resolveColumnIndex(phoneSpec, headers);
     const nameIdx = resolveColumnIndex(nameSpec, headers);
-    if (phoneIdx < 0) return json({ error: `phone_column "${phoneSpec}" not found` }, 400);
+    if (phoneIdx < 0) return { error: `phone_column "${phoneSpec}" not found` };
 
     // Slice new rows: 1-based row number > lastSyncedRow
     const startIdx = Math.max(headerRow, lastSyncedRow); // 1-based last processed row
     const newRows = rows.slice(startIdx); // these are rows with 1-based index startIdx+1..rows.length
     if (newRows.length === 0) {
-      return json({ ok: true, total: 0, accepted: 0, rejected: 0, message: "No new rows" });
+      return { ok: true, total: 0, accepted: 0, rejected: 0, message: "No new rows" };
     }
 
     // 2. Open import batch
@@ -217,7 +217,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       })
       .select("id")
       .single();
-    if (batchErr || !batch) return json({ error: batchErr?.message ?? "Could not open batch" }, 500);
+    if (batchErr || !batch) return { error: batchErr?.message ?? "Could not open batch" };
 
     let accepted = 0;
     let rejected = 0;
@@ -368,6 +368,6 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       last_synced_row: lastProcessedRow,
     });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return { error: e instanceof Error ? e.message : String(e) };
   }
 });
