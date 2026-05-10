@@ -43,9 +43,14 @@ const STARTER_PACK: { title: string; body: string; folder: string; is_favorite?:
 export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [activeFolder, setActiveFolder] = useState<string>(ALL);
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(SCOPE_ALL);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Draft | null>(null);
   const [showVars, setShowVars] = useState(false);
+
+  const { data: role } = useWorkspaceRole(workspaceId);
+  const canManageWorkspace = isManagerLike(role);
+  const defaultScope: SavedReplyScope = canManageWorkspace ? "workspace" : "personal";
 
   const { data: replies = [], isLoading } = useQuery({
     queryKey: libraryKeys.replies(workspaceId),
