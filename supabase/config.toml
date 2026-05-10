@@ -33,4 +33,6 @@ project_id = "xglfamaaotmwulglwcui"
     verify_jwt = false
   [functions.lead-dispatch]
     verify_jwt = false
+  [functions.google-sheets-sync]
+    verify_jwt = false
 

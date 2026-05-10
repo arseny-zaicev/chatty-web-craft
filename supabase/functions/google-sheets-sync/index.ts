@@ -1,9 +1,9 @@
 // google-sheets-sync: pulls new rows from a Google Sheet (via Lovable
 // connector gateway) into lead_imports for a single source_connection.
 //
-// Body: { source_connection_id: string }
+// Body: { source_connection_id: string, secret_token?: string }
 // Auth: caller must be a workspace_manager of the source's workspace, OR
-//       request must come with the service role key (cron).
+//       request must come with the source secret token / service role key (cron).
 //
 // Source config (source_connections.config jsonb):
 //   {
@@ -108,24 +108,16 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const sourceId = body?.source_connection_id;
+    const sourceToken = typeof body?.secret_token === "string" ? body.secret_token : "";
     const syncAll = body?.all === true;
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Authorize: workspace manager OR service-role bearer.
+    // Authorize: workspace manager OR source secret token / service-role bearer.
     const authHeader = req.headers.get("Authorization") || "";
     const isService = authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
-    let userId: string | null = null;
-    if (!isService) {
-      const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: u } = await userClient.auth.getUser();
-      if (!u?.user) return json({ error: "Unauthorized" }, 401);
-      userId = u.user.id;
-    }
 
     // Cron / service-role bulk sync of all active Google Sheet sources.
     if (syncAll) {
@@ -150,17 +142,24 @@ Deno.serve(async (req) => {
 
     const { data: source } = await admin
       .from("source_connections")
-      .select("id, workspace_id, pipeline_id, kind, name, config, status")
+      .select("id, workspace_id, pipeline_id, kind, name, config, status, secret_token")
       .eq("id", sourceId)
       .maybeSingle();
     if (!source) return json({ error: "Source not found" }, 404);
     if (source.kind !== "google_sheet") return json({ error: "Not a Google Sheet source" }, 400);
     if (source.status !== "active") return json({ error: `Source is ${source.status}` }, 423);
 
-    if (!isService) {
+    const isSourceToken = Boolean(sourceToken && source.secret_token && sourceToken === source.secret_token);
+    if (!isService && !isSourceToken) {
+      if (!authHeader) return json({ error: "Unauthorized" }, 401);
+      const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: u } = await userClient.auth.getUser();
+      if (!u?.user) return json({ error: "Unauthorized" }, 401);
       const { data: isManager } = await admin.rpc("is_workspace_manager", {
         _workspace_id: source.workspace_id,
-        _user_id: userId,
+        _user_id: u.user.id,
       });
       if (!isManager) return json({ error: "Forbidden" }, 403);
     }
@@ -169,7 +168,7 @@ Deno.serve(async (req) => {
     if ((out as any).error) return json(out, 502);
     return json(out);
   } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
+    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
 
