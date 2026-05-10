@@ -65,6 +65,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [activeId, setActiveId] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [myOnly, setMyOnly] = useState(false);
+  const [pipelineFilter, setPipelineFilter] = useState<string>("all"); // "all" | "unassigned" | <pipelineId>
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
