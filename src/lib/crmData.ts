@@ -145,9 +145,13 @@ const DEFAULT_WORKSPACE_STAGES: Array<{ name: string; color: string; stage_type:
 async function seedDefaultStagesForWorkspace(workspaceId: string): Promise<Stage[]> {
   const { data: u } = await supabase.auth.getUser();
   if (!u.user) return [];
+  // Ensure a default board exists; new stages must belong to it.
+  const { ensureDefaultPipeline } = await import("./pipelines");
+  const pipelineId = await ensureDefaultPipeline(workspaceId);
   const rows = DEFAULT_WORKSPACE_STAGES.map((s, i) => ({
     workspace_id: workspaceId,
     user_id: u.user!.id,
+    pipeline_id: pipelineId,
     name: s.name,
     color: s.color,
     stage_type: s.stage_type,
@@ -158,7 +162,6 @@ async function seedDefaultStagesForWorkspace(workspaceId: string): Promise<Stage
     .insert(rows)
     .select("id, name, color, position, stage_type, workspace_id, pipeline_id");
   if (error) {
-    // Race with another tab seeding at the same time -> just refetch
     const { data: again } = await supabase
       .from("pipeline_stages")
       .select("id, name, color, position, stage_type, workspace_id, pipeline_id")
