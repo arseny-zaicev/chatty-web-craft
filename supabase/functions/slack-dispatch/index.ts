@@ -6,6 +6,7 @@ import {
   buildNumberAlertBlocks,
   buildPositiveLeadBlocks,
   buildInboxSpikeBlocks,
+  buildGupshupMailAlertBlocks,
   postSlack,
   splitCampaignName,
 } from "../_shared/slackBlocks.ts";
@@ -166,6 +167,16 @@ Deno.serve(async (req) => {
         const p = ev.payload as any;
         const msg = buildInboxSpikeBlocks({ ws, unreadCount: p.unread_total || 0, conversations: p.conversations || [] });
         await postSlack(workspaceChannel, msg);
+      } else if (ev.event_type === "gupshup_mail_alert") {
+        const p = ev.payload as any;
+        const msg = buildGupshupMailAlertBlocks({
+          category: String(p.category || "other"),
+          severity: (p.severity || "info") as "info" | "warning" | "critical",
+          ws,
+          payload: p,
+        });
+        if (OPS_NUMBERS) await postSlack(OPS_NUMBERS, msg);
+        if (workspaceChannel) await postSlack(workspaceChannel, msg);
       } else {
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
