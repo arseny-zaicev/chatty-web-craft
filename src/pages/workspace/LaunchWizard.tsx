@@ -549,6 +549,7 @@ export default function LaunchWizard() {
               respect_recipient_tz: respectTz,
               bucket_index: bucketIndex,
               bucket_count: targets.length,
+              pipeline_id: pipelineId || null,
             },
           });
           if (error) results.push({ ok: false, numberId: t.numberId, error: error.message, rowIds: bucketRowIds });
