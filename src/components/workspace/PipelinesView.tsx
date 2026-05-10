@@ -90,9 +90,15 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
     setEditingId(p.id); setEditName(p.name); setEditColor(p.color);
   };
   const saveEdit = async () => {
-    if (!editingId || !editName.trim()) return;
+    if (!editingId) return;
+    const name = normalize(editName);
+    if (!name) return;
+    if (nameExists(name, editingId)) {
+      toast.error("A pipeline with this name already exists");
+      return;
+    }
     try {
-      await updatePipeline(editingId, { name: editName.trim(), color: editColor });
+      await updatePipeline(editingId, { name, color: editColor });
       toast.success("Saved");
       setEditingId(null);
       invalidate();
