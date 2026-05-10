@@ -203,6 +203,11 @@ Deno.serve(async (req) => {
         }
         const msg = buildPositiveLeadBlocks({ ws, payload: p });
         await postSlack(pipelineChannel, msg);
+        // Mirror to Iskra internal delivery-leads channel
+        const ISKRA_INTERNAL = "delivery-leads";
+        if (pipelineChannel !== ISKRA_INTERNAL) {
+          try { await postSlack(ISKRA_INTERNAL, msg); } catch (e) { console.warn("mirror positive_lead failed", e); }
+        }
       } else if (ev.event_type === "inbox_unread_spike") {
         if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
