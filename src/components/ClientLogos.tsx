@@ -1,4 +1,4 @@
-import salesforgeLogo from "@/assets/logos/salesforge.png";
+import salesforgeLogo from "@/assets/logos/salesforge.svg";
 import pathosLogo from "@/assets/logos/pathos.png";
 import fbMarketingLogo from "@/assets/logos/fb_marketing.png";
 import keyDigitalLogo from "@/assets/logos/key_digital.svg";
@@ -10,7 +10,7 @@ import koldleadsLogo from "@/assets/logos/koldleads.png";
 import cleon1Logo from "@/assets/logos/cleon1.png";
 import pluralsalesLogo from "@/assets/logos/pluralsales.svg";
 import recruitcloudLogo from "@/assets/logos/recruitcloud.avif";
-import undergroundEcomLogo from "@/assets/logos/underground_ecom.png";
+import undergroundEcomLogo from "@/assets/logos/underground_ecom.svg";
 import pnDigitalLogo from "@/assets/logos/pn_digital.svg";
 import goflowLogo from "@/assets/logos/goflow.svg";
 
@@ -35,7 +35,7 @@ const clients: Client[] = [
   { name: "RecruitCloud", logo: recruitcloudLogo, url: "https://www.recruitcloud.io", scale: 1.0 },
   { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com", scale: 1.05 },
   { name: "Cleon1", logo: cleon1Logo, url: "https://cleon1.com", scale: 1.0 },
-  { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com", scale: 1.0 },
+  { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com", scale: 1.4 },
   { name: "Sophias", logo: sophiasLogo, url: "https://sophias.io", scale: 1.0 },
   { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://www.hffinteriors.ae", scale: 0.95 },
   { name: "KoldLeads", logo: koldleadsLogo, url: "https://www.youtube.com/@karstonfox", scale: 1.0 },
@@ -99,8 +99,9 @@ export const ClientLogos = () => (
               <img
                 src={client.logo}
                 alt={`${client.name} logo`}
-                loading="lazy"
+                loading="eager"
                 decoding="async"
+                fetchPriority={i < 8 ? "high" : "auto"}
                 draggable={false}
                 width={160}
                 height={h}
@@ -110,8 +111,6 @@ export const ClientLogos = () => (
                   width: "auto",
                   maxWidth: "160px",
                   objectFit: "contain",
-                  opacity: 0.92,
-                  transition: "opacity 0.3s ease",
                   imageRendering: "auto",
                   backfaceVisibility: "hidden",
                   WebkitBackfaceVisibility: "hidden",
