@@ -378,9 +378,20 @@ export default function PipelineConfigSheet({
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(
-        `Sync done · ${data?.accepted ?? 0} new · ${data?.rejected ?? 0} skipped`,
-      );
+      const total = data?.total ?? 0;
+      const accepted = data?.accepted ?? 0;
+      const rejected = data?.rejected ?? 0;
+      if (total === 0) {
+        toast.success("Up to date - no new rows in the sheet", {
+          description: "All rows are already imported. New rows added below will be picked up on next sync.",
+        });
+      } else if (accepted === 0 && rejected > 0) {
+        toast.warning(`Sync done - 0 new, ${rejected} skipped`, {
+          description: "Skipped rows are duplicates (already imported) or have invalid phone numbers.",
+        });
+      } else {
+        toast.success(`Sync done - ${accepted} new${rejected ? `, ${rejected} skipped` : ""}`);
+      }
       refetchSources();
       qc.invalidateQueries({ queryKey: ["pipeline-lead-counters", pipeId] });
     } catch (e: any) {
