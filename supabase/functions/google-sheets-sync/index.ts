@@ -67,6 +67,13 @@ function resolveColumnIndex(spec: string | undefined, headers: string[]): number
   return -1;
 }
 
+// Sync logic for one source. Returns a result object.
+async function syncOne(admin: any, source: any): Promise<Record<string, unknown>> {
+  if (source.kind !== "google_sheet") return { source_id: source.id, error: "Not a Google Sheet source" };
+  if (source.status !== "active") return { source_id: source.id, error: `Source is ${source.status}` };
+  return await runSync(admin, source);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -77,13 +84,13 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const sourceId = body?.source_connection_id;
-    if (!sourceId || typeof sourceId !== "string") return json({ error: "source_connection_id required" }, 400);
+    const syncAll = body?.all === true;
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Authorize: workspace manager OR service-role bearer
+    // Authorize: workspace manager OR service-role bearer.
     const authHeader = req.headers.get("Authorization") || "";
     const isService = authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
     let userId: string | null = null;
@@ -95,6 +102,27 @@ Deno.serve(async (req) => {
       if (!u?.user) return json({ error: "Unauthorized" }, 401);
       userId = u.user.id;
     }
+
+    // Cron / service-role bulk sync of all active Google Sheet sources.
+    if (syncAll) {
+      if (!isService) return json({ error: "all=true requires service role" }, 403);
+      const { data: sources } = await admin
+        .from("source_connections")
+        .select("id, workspace_id, pipeline_id, kind, name, config, status")
+        .eq("kind", "google_sheet")
+        .eq("status", "active");
+      const results: any[] = [];
+      for (const s of sources ?? []) {
+        try {
+          results.push(await syncOne(admin, s));
+        } catch (e) {
+          results.push({ source_id: s.id, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+      return json({ ok: true, count: results.length, results });
+    }
+
+    if (!sourceId || typeof sourceId !== "string") return json({ error: "source_connection_id required" }, 400);
 
     const { data: source } = await admin
       .from("source_connections")
@@ -113,6 +141,16 @@ Deno.serve(async (req) => {
       if (!isManager) return json({ error: "Forbidden" }, 403);
     }
 
+    const out = await runSync(admin, source);
+    if ((out as any).error) return json(out, 502);
+    return json(out);
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+});
+
+async function runSync(admin: any, source: any): Promise<Record<string, unknown>> {
+  try {
     const cfg = (source.config ?? {}) as Record<string, any>;
     const spreadsheetId = String(cfg.spreadsheet_id || "").trim();
     const sheetName = String(cfg.sheet_name || "Sheet1").trim();
