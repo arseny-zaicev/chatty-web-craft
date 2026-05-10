@@ -47,22 +47,40 @@ Deno.serve(async (req) => {
   for (const ws of workspaces || []) {
     if (ws.last_inbox_spike_alert_at && (now - new Date(ws.last_inbox_spike_alert_at).getTime()) < cooldownMs) continue;
 
-    const { data: convs, error: cErr } = await supabase
+    const { data: convsRaw, error: cErr } = await supabase
       .from("conversations")
-      .select("contact_name, contact_phone, unread_count, last_message_text")
+      .select("id, contact_name, contact_phone, unread_count, last_message_text")
       .eq("workspace_id", ws.id)
       .gt("unread_count", 0)
       .order("unread_count", { ascending: false })
-      .limit(20);
+      .limit(40);
     if (cErr) { console.error("conv fetch", cErr.message); continue; }
 
-    const total = (convs || []).reduce((acc, c) => acc + (c.unread_count || 0), 0);
+    // Drop conversations whose linked deal sits in a "lost" stage
+    // (Block / Not interested / Lost). No point pinging the team about
+    // contacts who already said no.
+    let convs = convsRaw || [];
+    if (convs.length > 0) {
+      const ids = convs.map((c) => c.id);
+      const { data: deals } = await supabase
+        .from("deals")
+        .select("conversation_id, stage:pipeline_stages!stage_id(stage_type)")
+        .in("conversation_id", ids);
+      const lostSet = new Set(
+        (deals || [])
+          .filter((d: any) => d?.stage?.stage_type === "lost")
+          .map((d: any) => d.conversation_id),
+      );
+      convs = convs.filter((c) => !lostSet.has(c.id)).slice(0, 20);
+    }
+
+    const total = convs.reduce((acc, c) => acc + (c.unread_count || 0), 0);
     if (total < UNREAD_THRESHOLD) continue;
 
     await supabase.from("slack_event_queue").insert({
       event_type: "inbox_unread_spike",
       workspace_id: ws.id,
-      payload: { unread_total: total, conversations: convs || [] },
+      payload: { unread_total: total, conversations: convs },
     });
     await supabase.from("workspaces").update({ last_inbox_spike_alert_at: new Date().toISOString() }).eq("id", ws.id);
     queued++;
