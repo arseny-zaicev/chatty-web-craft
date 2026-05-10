@@ -36,9 +36,17 @@ export function WorkspaceSidebar() {
   const { slug } = useParams<{ slug?: string }>();
   const { data: workspaces, isLoading } = useQuery({ queryKey: workspaceKeys.list, queryFn: fetchWorkspaces });
   const currentWs = (workspaces ?? []).find((w: Workspace) => w.slug === slug);
-  const { data: role } = useWorkspaceRole(currentWs?.id);
+  const { data: access } = useWorkspaceAccess(currentWs?.id);
+  const role = access?.role;
   const canManage = isManagerLike(role);
+  const canLaunch = isAdmin(role);
+  const canSeeStats = canManage || (role === "client" && Boolean(access?.canViewStats));
 
+  const clientTabs = [
+    ...(canSeeStats ? [overviewTab] : []),
+    ...baseClientTabs,
+    ...(canSeeStats ? [campaignsTab] : []),
+  ];
   const opsTabs = canManage ? [...clientTabs, ...managerExtras] : clientTabs;
 
   return (
