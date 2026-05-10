@@ -102,6 +102,26 @@ export default function LaunchWizard() {
       setPipelineId(pipelines.find((p) => p.is_default)?.id ?? pipelines[0].id);
     }
   }, [pipelines, pipelineId]);
+  const [showCreatePipeline, setShowCreatePipeline] = useState(false);
+  const [newPipelineName, setNewPipelineName] = useState("");
+  const [newPipelineColor, setNewPipelineColor] = useState("#6366f1");
+  const [creatingPipeline, setCreatingPipeline] = useState(false);
+  const handleCreatePipeline = async () => {
+    if (!workspace || !newPipelineName.trim()) return;
+    setCreatingPipeline(true);
+    try {
+      const p = await createPipeline(workspace.id, { name: newPipelineName.trim(), color: newPipelineColor });
+      await qc.invalidateQueries({ queryKey: pipelinesKey(workspace.id) });
+      setPipelineId(p.id);
+      setShowCreatePipeline(false);
+      setNewPipelineName("");
+      toast.success("Pipeline created");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create pipeline");
+    } finally {
+      setCreatingPipeline(false);
+    }
+  };
 
   const [logicalKey, setLogicalKey] = useState<string>("");
   const [poolCountry, setPoolCountry] = useState<string>("");
