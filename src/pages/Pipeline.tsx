@@ -412,7 +412,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 {members.map((m) => (
                   <SelectItem key={m.user_id} value={m.user_id}>
-                    {m.full_name?.trim() || `User ${m.user_id.slice(0, 6)}`}
+                    {memberDisplayName(m)}
                   </SelectItem>
                 ))}
               </SelectContent>
