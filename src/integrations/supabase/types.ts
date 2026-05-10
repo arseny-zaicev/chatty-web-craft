@@ -362,6 +362,7 @@ export type Database = {
           name: string
           parent_campaign_id: string | null
           per_number_quota: number
+          pipeline_id: string | null
           recurrence: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at: string | null
           respect_recipient_tz: boolean
@@ -388,6 +389,7 @@ export type Database = {
           name: string
           parent_campaign_id?: string | null
           per_number_quota?: number
+          pipeline_id?: string | null
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
           respect_recipient_tz?: boolean
@@ -414,6 +416,7 @@ export type Database = {
           name?: string
           parent_campaign_id?: string | null
           per_number_quota?: number
+          pipeline_id?: string | null
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
           respect_recipient_tz?: boolean
@@ -538,6 +541,7 @@ export type Database = {
           last_message_at: string | null
           last_message_text: string | null
           pinned_at: string | null
+          pipeline_id: string | null
           unread_count: number
           updated_at: string
           user_id: string
@@ -556,6 +560,7 @@ export type Database = {
           last_message_at?: string | null
           last_message_text?: string | null
           pinned_at?: string | null
+          pipeline_id?: string | null
           unread_count?: number
           updated_at?: string
           user_id: string
@@ -574,6 +579,7 @@ export type Database = {
           last_message_at?: string | null
           last_message_text?: string | null
           pinned_at?: string | null
+          pipeline_id?: string | null
           unread_count?: number
           updated_at?: string
           user_id?: string
@@ -600,6 +606,7 @@ export type Database = {
           currency: string | null
           id: string
           notes: string | null
+          pipeline_id: string | null
           position: number
           stage_id: string
           title: string
@@ -616,6 +623,7 @@ export type Database = {
           currency?: string | null
           id?: string
           notes?: string | null
+          pipeline_id?: string | null
           position?: number
           stage_id: string
           title: string
@@ -632,6 +640,7 @@ export type Database = {
           currency?: string | null
           id?: string
           notes?: string | null
+          pipeline_id?: string | null
           position?: number
           stage_id?: string
           title?: string
@@ -954,6 +963,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          pipeline_id: string | null
           position: number
           stage_type: Database["public"]["Enums"]["stage_type"]
           updated_at: string
@@ -965,6 +975,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          pipeline_id?: string | null
           position?: number
           stage_type?: Database["public"]["Enums"]["stage_type"]
           updated_at?: string
@@ -976,11 +987,48 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          pipeline_id?: string | null
           position?: number
           stage_type?: Database["public"]["Enums"]["stage_type"]
           updated_at?: string
           user_id?: string
           workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      pipelines: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          position: number
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          position?: number
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          position?: number
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
         }
         Relationships: []
       }
@@ -1555,6 +1603,7 @@ export type Database = {
       }
       workspace_members: {
         Row: {
+          allowed_pipeline_ids: string[] | null
           can_view_stats: boolean
           created_at: string
           id: string
@@ -1563,6 +1612,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          allowed_pipeline_ids?: string[] | null
           can_view_stats?: boolean
           created_at?: string
           id?: string
@@ -1571,6 +1621,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          allowed_pipeline_ids?: string[] | null
           can_view_stats?: boolean
           created_at?: string
           id?: string
