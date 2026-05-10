@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
-import * as XLSX from "xlsx";
 import { applyDerivedVariables, applyColumnMapping, validateRowAgainstProfile, type PrepProfile } from "./prepProfiles";
+
+// xlsx is ~600 KB minified; load it on demand only when the user actually uploads a spreadsheet.
+const loadXLSX = () => import("xlsx");
 
 export type AudienceBatch = {
   id: string;

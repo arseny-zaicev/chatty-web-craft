@@ -391,6 +391,11 @@ const ReportView = ({
     if (!pdfRef.current) return;
     setIsExporting(true);
     try {
+      // Lazy-load the heavy PDF stack only when the user clicks Download.
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
       const node = pdfRef.current;
       const canvas = await html2canvas(node, {
         scale: 2,
