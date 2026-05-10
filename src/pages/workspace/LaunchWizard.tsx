@@ -1259,6 +1259,26 @@ export default function LaunchWizard() {
           </p>
         </aside>
       </div>
+
+      <Dialog open={showCreatePipeline} onOpenChange={setShowCreatePipeline}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>New pipeline</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Field label="Name">
+              <Input value={newPipelineName} onChange={(e) => setNewPipelineName(e.target.value)} placeholder="e.g. Ads / Germany" autoFocus />
+            </Field>
+            <Field label="Color">
+              <Input type="color" value={newPipelineColor} onChange={(e) => setNewPipelineColor(e.target.value)} className="h-10 w-20 p-1" />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCreatePipeline(false)}>Cancel</Button>
+            <Button onClick={handleCreatePipeline} disabled={!newPipelineName.trim() || creatingPipeline}>
+              {creatingPipeline ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
