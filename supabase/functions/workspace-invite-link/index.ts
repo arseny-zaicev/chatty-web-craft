@@ -120,10 +120,23 @@ Deno.serve(async (req) => {
             user_metadata: { ...(existing.user_metadata ?? {}), full_name: fullName, first_name: firstName, last_name: lastName },
           });
           if (updErr) return json({ error: updErr.message }, 500);
-          await admin
-            .from("profiles")
-            .upsert({ user_id: existing.id, full_name: fullName }, { onConflict: "user_id" });
+        } else {
+          const verifier = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false },
+          });
+          const { error: verifyErr } = await verifier.auth.signInWithPassword({ email, password });
+          if (verifyErr) {
+            return json({
+              error: "This email already has an account. Use the existing password, or reset it first.",
+              code: "existing_account_password_invalid",
+              already_existed: true,
+            });
+          }
+          await verifier.auth.signOut();
         }
+        await admin
+          .from("profiles")
+          .upsert({ user_id: existing.id, full_name: fullName }, { onConflict: "user_id" });
       } else {
         const { data: created, error: createErr } = await admin.auth.admin.createUser({
           email,
