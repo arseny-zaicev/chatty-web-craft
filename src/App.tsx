@@ -85,6 +85,8 @@ const FleetAnalytics = lazyWithRetry(() => import("./pages/admin/FleetAnalytics"
 const AdminMfaSetup = lazyWithRetry(() => import("./pages/admin/AdminMfaSetup"));
 const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"));
 const OpsLive = lazyWithRetry(() => import("./pages/admin/OpsLive"));
+const BusinessManagers = lazyWithRetry(() => import("./pages/admin/BusinessManagers"));
+const BusinessManagerDetail = lazyWithRetry(() => import("./pages/admin/BusinessManagerDetail"));
 const Apply = lazyWithRetry(() => import("./pages/Apply"));
 const SellerLeadsApply = lazyWithRetry(() => import("./pages/SellerLeadsApply"));
 const WhatsAppApply = lazyWithRetry(() => import("./pages/WhatsAppApply"));
