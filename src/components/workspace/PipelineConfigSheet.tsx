@@ -63,7 +63,16 @@ type Source = {
 };
 
 type Template = { id: string; name: string };
-type WaNumber = { id: string; phone_number: string; display_name: string | null; status: string };
+type WaNumber = {
+  id: string;
+  phone_number: string;
+  display_name: string | null;
+  status: string;
+  is_active: boolean;
+  provider_api_key: string | null;
+  webhook_connected: boolean;
+  approved_templates: number;
+};
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
@@ -100,6 +109,8 @@ export default function PipelineConfigSheet({
   const [dailyCap, setDailyCap] = useState<string>("");
   const [winStart, setWinStart] = useState("09:00");
   const [winEnd, setWinEnd] = useState("18:00");
+  const [timezone, setTimezone] = useState<string>("Asia/Kolkata");
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
 
   const [showNewSource, setShowNewSource] = useState(false);
   const [newSourceKind, setNewSourceKind] = useState<SourceKind>("google_sheet");
@@ -116,6 +127,7 @@ export default function PipelineConfigSheet({
     setDailyCap(p.daily_cap ? String(p.daily_cap) : "");
     setWinStart(p.sending_window?.start ?? "09:00");
     setWinEnd(p.sending_window?.end ?? "18:00");
+    setTimezone(p.sending_window?.timezone ?? "Asia/Kolkata");
   };
 
   const { data: templates } = useQuery({
@@ -132,16 +144,35 @@ export default function PipelineConfigSheet({
     },
   });
 
-  const { data: numbers } = useQuery({
+  const { data: numbers, refetch: refetchNumbers } = useQuery({
     queryKey: ["pipeline-numbers", wsId],
     enabled: Boolean(wsId && open),
     queryFn: async (): Promise<WaNumber[]> => {
-      const { data } = await supabase
+      const { data: nums } = await supabase
         .from("whatsapp_numbers")
-        .select("id, phone_number, display_name, status")
+        .select("id, phone_number, display_name, status, is_active, provider_api_key, webhook_connected")
         .eq("workspace_id", wsId)
         .order("display_name");
-      return (data ?? []) as WaNumber[];
+      const ids = (nums ?? []).map((n) => n.id);
+      const counts = new Map<string, number>();
+      if (ids.length) {
+        const { data: tpl } = await supabase
+          .from("message_templates")
+          .select("whatsapp_number_id, status")
+          .in("whatsapp_number_id", ids)
+          .eq("status", "approved");
+        for (const t of tpl ?? []) counts.set(t.whatsapp_number_id, (counts.get(t.whatsapp_number_id) ?? 0) + 1);
+      }
+      return (nums ?? []).map((n) => ({
+        id: n.id,
+        phone_number: n.phone_number,
+        display_name: n.display_name,
+        status: n.status,
+        is_active: Boolean(n.is_active),
+        provider_api_key: n.provider_api_key,
+        webhook_connected: Boolean(n.webhook_connected),
+        approved_templates: counts.get(n.id) ?? 0,
+      }));
     },
   });
 
