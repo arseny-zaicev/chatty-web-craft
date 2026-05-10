@@ -1,97 +1,92 @@
 ## Goal
 
-Stop the noise (verification / onboarding / generic emails) and only ping Slack for **real status changes**. Route billing/recharge to a separate finance channel. Make every Slack message look premium-minimal: one line headline + 2-3 fields, no excerpt wall.
+Allow a workspace owner / manager to invite someone as **Client** and scope their access to one or more specific pipelines. A scoped client should only see:
+- those pipelines (and their stages) in the Pipeline page,
+- conversations belonging to those pipelines in the Inbox,
+- stats / Overview / Campaigns filtered to those pipelines,
+- nothing else from the workspace.
 
-## What gets through (allowlist, not keyword soup)
+The column `workspace_members.allowed_pipeline_ids uuid[]` already exists but is unused. We build on top of it. Convention:
+- `NULL` or empty array → full access (current behaviour, used by managers and "open" clients).
+- Non-empty array → restricted to exactly those pipeline ids.
 
-Every incoming Gupshup email is matched against an explicit subject pattern set. **Anything that doesn't match → logged as `info` and dropped (no Slack).**
+---
 
-| Pattern (case-insensitive on subject) | Category | Severity | Channel |
-|---|---|---|---|
-| `Phone number and Display name approved` | `number_approved` | info → **send** | OPS_NUMBERS |
-| `Display name approved` (without "Rejected") | `display_name_approved` | info → **send** | OPS_NUMBERS |
-| `Display name Rejected` | `display_name_rejected` | warning | OPS_NUMBERS |
-| `Update in your WABA status` + body contains `restrict` / `flagged` / `messaging limit` | `waba_restricted` | critical | OPS_NUMBERS |
-| `Update in your WABA status` + body contains `ban` / `disable` / `terminat` | `waba_blocked` | critical | OPS_NUMBERS |
-| `Update in your WABA status` + body contains `quality` (low/medium/high) | `quality_changed` | warning | OPS_NUMBERS |
-| `Update in your WABA status` (other) | `waba_status_other` | warning | OPS_NUMBERS |
-| `Tier upgrade` / `messaging limit` upgrade | `tier_upgraded` | info → **send** | OPS_NUMBERS |
-| `Template … Approved` | `template_approved` | info → **send** | OPS_NUMBERS |
-| `Template … Rejected` / `Paused` / `Disabled` | `template_rejected` | warning | OPS_NUMBERS |
-| `Recharge successful` / `Payment received` / `Invoice` / `Low balance` | `billing` | info / warning | **OPS_FINANCE** |
-| `Email … verification`, `Email Verified`, `Welcome`, `Getting started`, `Onboarding`, `OTP`, `password`, `Webinar`, `Newsletter` | — | **dropped** | — |
+## 1. Database
 
-Anything not matched and not in the dropped list → stored in `gupshup_mail_log` with `category='other'`, `severity='info'`, no Slack post. We can review later.
+**Migration**
 
-After 30 days post-approval the spec mentions "warmup" — out of scope for this batch (no automation triggered), but we'll store `received_at` so a future job can compute the 30-day mark.
+- Add `allowed_pipeline_ids uuid[]` to `workspace_invite_links` so the scope is captured at link creation and applied automatically on accept.
+- Helper `public.member_pipeline_scope(_workspace_id uuid, _user_id uuid) returns uuid[]` (security definer): returns `NULL` for managers/owners/admins or for clients with no restriction; returns the array otherwise.
+- Helper `public.can_access_pipeline(_workspace_id uuid, _user_id uuid, _pipeline_id uuid) returns boolean`: `true` if scope is `NULL`, otherwise `_pipeline_id = ANY(scope)`.
+- Update RLS SELECT policies (additive, ANDed with existing membership check) on:
+  - `pipelines` — `can_access_pipeline(workspace_id, auth.uid(), id)`
+  - `pipeline_stages` — same via `pipeline_id`
+  - `conversations` — `pipeline_id IS NULL OR can_access_pipeline(...)` (NULL conversations only visible to non-scoped members)
+  - `deals` — same via `pipeline_id`
+  - `messages` — via the conversation's pipeline
+  - `campaigns` — same via `pipeline_id`
+  - `campaign_recipients` — via the campaign's pipeline
+  Existing `Users view own ...` policies are left intact (the user can still see rows they own); the new policies only further constrain *workspace member* visibility.
+- The `Workspace members ...` policies are tightened to additionally require `can_access_pipeline(...)`.
 
-## Routing
+**Behaviour for `pipeline_id IS NULL`**: only unrestricted members see those rows. Scoped clients should never see "uncategorised" data.
 
-- New secret/env: `SLACK_OPS_FINANCE_CHANNEL_ID` (need from you).
-- `billing` category → finance channel only.
-- All other status events → `SLACK_OPS_NUMBERS_CHANNEL_ID` + workspace channel (if matched).
+---
 
-## Slack message redesign — premium minimal
+## 2. Edge function `workspace-invite-link`
 
-One header line. Two-field row. No giant excerpt unless severity = critical.
+- `action=create` accepts an optional `pipeline_ids: string[]` body field. Validate every id belongs to `workspace_id`. Persist on the new column.
+- `action=info` returns `pipeline_ids` (with names) so the join page can show "You will get access to: Ads / India".
+- `action=accept` copies `pipeline_ids` from the link to the new `workspace_members.allowed_pipeline_ids`.
+- `action=members` returns `allowed_pipeline_ids` (already in `workspace_members`).
+- New `action=update_access`: body `{ id, allowed_pipeline_ids }` for owners/admins to change a member's scope after the fact.
 
-```text
-🟢  ISKRA · NitishUS01     Number approved
-+14155551234 · WABA 1234567890
+---
 
-🔴  ISKRA · NitishUS01     WABA restricted
-+14155551234 · Quality: medium → low
+## 3. UI - `TeamView` (Settings -> Team & client access)
 
-🟠  Unmatched              Display name rejected
-"NitishShowtime2Num1" · open in Gmail
-```
+**Invite link dialog**
+- Role select (existing).
+- When role = **Client**, show a "Pipeline access" multi-select below seat limit:
+  - Default: "All pipelines" (chip).
+  - Add chips for each pipeline; toggling makes the link scoped.
+  - Helper text: *"Choose which boards this client can see. Leave empty for full access."*
+- When role = **Manager**, the picker is hidden (managers always have full access).
 
-Block layout:
-- `header` (plain text, ~50 chars max).
-- One `section` with mrkdwn: `*+phone* · *<contextual second field>*` (template name, quality, WABA id, or display name).
-- `context` row: `tag · time · Open in Gmail · Open number` (linked text, no big buttons).
-- For `critical` only: small `section` with 1-line excerpt.
+**Member rows**
+- For client members, show pipeline access summary line: *"Access: Ads / India, Outbound / UK"* or *"Access: All pipelines"*.
+- Add an "Edit access" pencil icon → small popover with the same multi-select, calling `action=update_access`.
 
-Contextual second field per category:
-- `number_approved` / `display_name_approved`: `Approved`
-- `display_name_rejected`: `Display name: <name>`
-- `waba_restricted` / `waba_blocked`: `Reason: <short extracted phrase>`
-- `quality_changed`: `Quality: <new>`
-- `template_*`: `Template: <name>`
-- `tier_upgraded`: `Tier: <new>`
-- `billing`: `Amount: <if parsed> · <type>`
+**Active links list**
+- Each link's metadata line gets a third segment listing pipeline scope (or "all").
 
-## Code changes
+---
 
-1. **`supabase/functions/gupshup-mail-poll/index.ts`**
-   - Replace `classify()` with a strict allowlist returning `{ category, severity, action: "send"|"drop"|"log_only" }` plus extracted secondary field (quality, template, reason snippet).
-   - Add a `DROP_PATTERNS` regex (verification, onboarding, OTP, newsletter…) checked first.
-   - Extend `parsed` jsonb with `secondary_field` and `channel` ('numbers' | 'finance').
-   - When enqueuing `slack_event_queue`, include `routing: 'finance'|'numbers'` in payload.
+## 4. Frontend filters / readouts
 
-2. **DB migration**
-   - Extend `gupshup_mail_category` enum with: `number_approved`, `display_name_approved`, `display_name_rejected`, `waba_restricted`, `waba_blocked`, `quality_changed`, `tier_upgraded`, `waba_status_other`. Keep old values for back-compat.
+Most filtering happens automatically because RLS hides rows. Two cosmetic touches:
 
-3. **`supabase/functions/_shared/slackBlocks.ts`**
-   - Rewrite `buildGupshupMailAlertBlocks` for the minimal layout above.
-   - New `catLabels` covering the new categories.
-   - Move "Open in Gmail" / "Open numbers" into a single `context` line as links, drop the actions block.
+- `Pipeline.tsx`: the pipeline tab list already comes from the `pipelines` query, which will now return only allowed boards; default-pipeline fallback must pick the first *visible* pipeline if the workspace default is hidden from the user.
+- `CRM.tsx`: pipeline filter dropdown options come from the same query. Hide the "Unassigned" option for scoped clients (they can't see unassigned conversations anyway).
+- `WorkspaceOverview` / `WorkspaceCampaigns`: stats are already keyed off conversations / campaigns rows that RLS now filters, so numbers will reflect only allowed pipelines automatically. No code change required beyond verifying empty-state copy.
 
-4. **`supabase/functions/slack-dispatch/index.ts`**
-   - Read `SLACK_OPS_FINANCE_CHANNEL_ID`.
-   - For `gupshup_mail_alert`: route by `payload.routing` (`finance` → finance channel; else numbers channel + workspace channel).
+---
 
-5. **Backfill**
-   - Optional one-shot: re-classify last 7 days of `gupshup_mail_log` to update categories. **Skipped** unless you want it (would re-fire Slack noise).
+## 5. Out of scope (explicitly)
 
-## Out of scope (call out, do later)
+- No per-stage permissions.
+- No "read-only on pipeline X" - access is binary per pipeline.
+- Pipeline scope does **not** override `can_view_stats`; both are independent toggles for clients.
+- We do not retroactively restrict existing client members; their `allowed_pipeline_ids` stays `NULL` (full access) until an owner edits it.
 
-- 30-day post-approval warmup automation (separate task; needs warmup engine).
-- Auto-pausing campaigns when a number gets `waba_restricted` (separate workflow).
-- Pulling structured fields from Gupshup HTML (we extract by regex from text — good enough; HTML parser later if needed).
+---
 
-## Question before I build
+## Files touched
 
-I need the **Slack channel ID for `SLACK_OPS_FINANCE_CHANNEL_ID`** (Recharge / billing alerts). Two options:
-- **(a)** Use the existing `SLACK_OPS_NUMBERS_CHANNEL_ID` for billing too (no new secret).
-- **(b)** Give me a channel ID (e.g. `C0XXXXXXX`) and I'll add the secret.
+- New migration: invite link column + 2 SQL helpers + RLS policy updates on 7 tables.
+- `supabase/functions/workspace-invite-link/index.ts` - 3 actions touched, 1 added.
+- `src/components/workspace/TeamView.tsx` - link dialog + member row scope UI.
+- `src/pages/Pipeline.tsx` - default-pipeline fallback when default is hidden.
+- `src/pages/CRM.tsx` - hide "Unassigned" option for scoped clients (small).
+- `src/integrations/supabase/types.ts` - regenerated automatically after migration.
