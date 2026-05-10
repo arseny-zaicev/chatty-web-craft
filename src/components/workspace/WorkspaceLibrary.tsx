@@ -175,9 +175,18 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           <FolderRow icon={FolderOpen} label="All snippets" count={replies.length}
-            active={activeFolder === ALL} onClick={() => setActiveFolder(ALL)} />
+            active={activeFolder === ALL && scopeFilter === SCOPE_ALL}
+            onClick={() => { setActiveFolder(ALL); setScopeFilter(SCOPE_ALL); }} />
           <FolderRow icon={Star} label="Favorites" count={replies.filter((r) => r.is_favorite).length}
             active={activeFolder === FAV} onClick={() => setActiveFolder(FAV)} starred />
+          <div className="h-px bg-border my-2" />
+          <div className="px-2 pt-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">Scope</div>
+          <FolderRow icon={Sparkles} label="Workspace" count={workspaceCount}
+            active={scopeFilter === "workspace"}
+            onClick={() => setScopeFilter(scopeFilter === "workspace" ? SCOPE_ALL : "workspace")} />
+          <FolderRow icon={MessageSquare} label="My personal" count={personalCount}
+            active={scopeFilter === "personal"}
+            onClick={() => setScopeFilter(scopeFilter === "personal" ? SCOPE_ALL : "personal")} />
           <div className="h-px bg-border my-2" />
           {folders.length === 0 && (
             <div className="text-xs text-muted-foreground px-2 py-3">No folders yet.</div>
