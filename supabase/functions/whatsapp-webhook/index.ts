@@ -185,7 +185,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   // Try to link this reply back to a campaign recipient (most recent sent/delivered to this contact on this number)
   const { data: recipient } = await supabase
     .from("campaign_recipients")
-    .select("id, campaign_id, status")
+    .select("id, campaign_id, status, campaigns!inner(pipeline_id, kind)")
     .eq("whatsapp_number_id", number.id)
     .eq("contact_phone", source)
     .in("status", ["sent", "scheduled", "sending", "pending"])
@@ -193,11 +193,22 @@ async function handleInbound(payload: Record<string, unknown>) {
     .limit(1)
     .maybeSingle();
 
+  const recipientPipelineId = (recipient as any)?.campaigns?.pipeline_id ?? null;
   if (recipient) {
     await supabase
       .from("campaign_recipients")
       .update({ status: "replied", conversation_id: conversationId })
       .eq("id", recipient.id);
+    if (recipientPipelineId) {
+      await supabase
+        .from("conversations")
+        .update({ pipeline_id: recipientPipelineId })
+        .eq("id", conversationId);
+      await supabase
+        .from("deals")
+        .update({ pipeline_id: recipientPipelineId })
+        .eq("conversation_id", conversationId);
+    }
     console.log("Linked inbound reply to campaign_recipient", recipient.id);
   }
 
@@ -239,7 +250,7 @@ async function handleInbound(payload: Record<string, unknown>) {
     .select("pipeline_id")
     .eq("id", conversationId)
     .maybeSingle();
-  const conversationPipelineId = convPipeline?.pipeline_id ?? null;
+  const conversationPipelineId = recipientPipelineId ?? convPipeline?.pipeline_id ?? null;
 
   const { data: automations } = await supabase
     .from("stage_automations")
@@ -323,7 +334,7 @@ async function handleInbound(payload: Record<string, unknown>) {
         }
         await supabase
           .from("deals")
-          .update({ stage_id: resolvedStageId })
+          .update({ stage_id: resolvedStageId, pipeline_id: conversationPipelineId })
           .eq("conversation_id", conversationId);
         movedToStageId = resolvedStageId;
       }
