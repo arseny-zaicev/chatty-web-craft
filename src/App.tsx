@@ -144,6 +144,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <AuthCacheReset />
           <ScrollToTop />
             <SiteChrome />
           <ChunkErrorBoundary>
