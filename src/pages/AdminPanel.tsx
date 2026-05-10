@@ -51,6 +51,7 @@ const NAV: NavGroup[] = [
       { id: "companies.portfolio", label: "Portfolio", icon: LayoutDashboard },
       { id: "companies.fleet", label: "Fleet · Numbers", icon: Phone, external: "/admin/fleet" },
       { id: "companies.analytics", label: "Fleet analytics", icon: BarChart3, external: "/admin/analytics" },
+      { id: "companies.webhook_health", label: "Webhook health", icon: AlertTriangle },
     ],
   },
   {
