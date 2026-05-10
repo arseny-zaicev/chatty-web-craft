@@ -36,7 +36,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   // We never match by display_name: it is human-editable, often duplicated across numbers,
   // and was the source of silent misrouting at >1 number.
   let number: { id: string; user_id: string; workspace_id: string; phone_number: string; display_name: string | null; provider_app_id: string | null } | null = null;
-  let matchStrategy: "provider_app_id" | "phone_number" | null = null;
+  let matchStrategy: "provider_app_id" | "label" | "phone_number" | null = null;
 
   if (appName) {
     const { data, error } = await supabase
@@ -52,6 +52,24 @@ async function handleInbound(payload: Record<string, unknown>) {
     } else if (data && data.length > 1) {
       console.error("Ambiguous provider_app_id - multiple numbers share the same Gupshup app id", { appName, count: data.length });
       return; // refuse to guess
+    }
+  }
+  // Fallback: provider_app_id stores the Gupshup app UUID, but the webhook payload
+  // sends the Gupshup app *name*, which we mirror in the `label` column on creation.
+  if (!number && appName) {
+    const { data, error } = await supabase
+      .from("whatsapp_numbers")
+      .select("id, user_id, workspace_id, phone_number, display_name, provider_app_id")
+      .eq("label", appName)
+      .limit(2);
+    if (error) {
+      console.error("label lookup failed", error);
+    } else if (data && data.length === 1) {
+      number = data[0];
+      matchStrategy = "label";
+    } else if (data && data.length > 1) {
+      console.error("Ambiguous label - multiple numbers share the same Gupshup app name", { appName, count: data.length });
+      return;
     }
   }
   if (!number && destination) {
