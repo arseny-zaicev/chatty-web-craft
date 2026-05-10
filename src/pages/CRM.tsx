@@ -323,6 +323,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [messages.length, activeId]);
 
   const stageTypeByConv = baseData?.conversationStageType ?? new Map<string, string>();
+  const repliedSet = baseData?.repliedConversationIds ?? new Set<string>();
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {
@@ -337,15 +338,24 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
           return a.unread_count > 0 ? -1 : 1;
         }
       }
+      if (sortMode === "replied") {
+        const ra = repliedSet.has(a.id);
+        const rb = repliedSet.has(b.id);
+        if (ra !== rb) return ra ? -1 : 1;
+      }
       const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
       const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
       return sortMode === "oldest" ? ta - tb : tb - ta;
     });
-  }, [conversations, sortMode]);
+  }, [conversations, sortMode, repliedSet]);
 
   const negativeCount = useMemo(
     () => conversations.filter((c) => stageTypeByConv.get(c.id) === "lost").length,
     [conversations, stageTypeByConv],
+  );
+  const repliedCount = useMemo(
+    () => conversations.filter((c) => repliedSet.has(c.id)).length,
+    [conversations, repliedSet],
   );
 
   const filtered = sorted.filter((c) => {
