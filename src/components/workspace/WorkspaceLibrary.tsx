@@ -274,6 +274,9 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {items.map((r) => {
                 const isLink = looksLikeUrl(r.body);
+                const canEdit = r.scope === "personal"
+                  ? true /* RLS will block if not owner */
+                  : canManageWorkspace;
                 return (
                   <div key={r.id} className="group rounded-lg border border-border bg-card/40 hover:border-primary/40 hover:bg-card/70 transition p-3 flex flex-col gap-2">
                     <div className="flex items-start gap-2 min-w-0">
@@ -283,7 +286,16 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
                         {isLink ? <Link2 className="w-3.5 h-3.5" /> : <MessageSquare className="w-3.5 h-3.5" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">{r.title || "Untitled"}</div>
+                        <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                          <span className="truncate">{r.title || "Untitled"}</span>
+                          <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
+                            r.scope === "workspace"
+                              ? "bg-primary/10 text-primary border border-primary/20"
+                              : "bg-muted text-muted-foreground border border-border"
+                          }`}>
+                            {r.scope === "workspace" ? "Shared" : "Personal"}
+                          </span>
+                        </div>
                         <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5 break-words">{r.body}</div>
                       </div>
                       <button onClick={() => toggleFav(r)} title="Favorite" className="shrink-0">
@@ -294,13 +306,17 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => copy(r.body)}>
                         <Copy className="w-3 h-3 mr-1" />Copy
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditing(r)}>
-                        <Pencil className="w-3 h-3 mr-1" />Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-auto text-destructive"
-                        onClick={() => { if (confirm(`Delete "${r.title}"?`)) del.mutate(r.id); }}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {canEdit && (
+                        <>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditing(r)}>
+                            <Pencil className="w-3 h-3 mr-1" />Edit
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-auto text-destructive"
+                            onClick={() => { if (confirm(`Delete "${r.title}"?`)) del.mutate(r.id); }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
