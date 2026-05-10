@@ -41,6 +41,85 @@ export interface BlockMessage {
   blocks: unknown[];
 }
 
+export function splitCampaignName(full: string): { base: string; numberLabel: string | null } {
+  const idx = full.lastIndexOf(" :: ");
+  if (idx === -1) return { base: full, numberLabel: null };
+  return { base: full.slice(0, idx), numberLabel: full.slice(idx + 4) };
+}
+
+export function buildCampaignGroupBlocks(args: {
+  event: string;
+  ws: WorkspaceInfo;
+  audience: "ops" | "client";
+  baseName: string;
+  campaignId: string;
+  totals: { total: number; sent: number; failed: number };
+  parts: Array<{ phone: string | null; label: string | null; total: number; sent: number; failed: number }>;
+  payload: Record<string, unknown>;
+}): BlockMessage {
+  const { event, ws, audience, baseName, campaignId, totals, parts, payload } = args;
+  const tag = brandTag(ws.name, ws.internal_code);
+  const meta: Record<string, { emoji: string; verb: string }> = {
+    campaign_launched: { emoji: "🚀", verb: "launched" },
+    campaign_resumed:  { emoji: "▶️", verb: "resumed" },
+    campaign_paused:   { emoji: "⏸️", verb: "paused" },
+    campaign_completed:{ emoji: "✅", verb: "finished" },
+    campaign_cancelled:{ emoji: "🛑", verb: "cancelled" },
+    campaign_scheduled:{ emoji: "📅", verb: "scheduled" },
+    campaign_failed:   { emoji: "❌", verb: "failed" },
+  };
+  const m = meta[event] || { emoji: "📣", verb: event };
+  const numbersWord = parts.length > 1 ? `${parts.length} numbers` : "1 number";
+  const headline = audience === "client"
+    ? `${m.emoji}  Campaign ${m.verb}`
+    : `${m.emoji}  ${tag}  ·  Campaign ${m.verb} · ${numbersWord}`;
+
+  const fields: { type: string; text: string }[] = [
+    { type: "mrkdwn", text: `*Campaign*\n${baseName}` },
+    { type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` },
+  ];
+  if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
+    const delivered = totals.sent - totals.failed;
+    fields.push({ type: "mrkdwn", text: `*Sent*\n${fmtNumber(totals.sent)} (${fmtPct(totals.sent, totals.total)})` });
+    fields.push({ type: "mrkdwn", text: `*Delivered*\n${fmtNumber(delivered)} · ${fmtNumber(totals.failed)} failed` });
+  } else if (event === "campaign_scheduled" || event === "campaign_launched" || event === "campaign_resumed") {
+    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} UAE` });
+    fields.push({ type: "mrkdwn", text: `*First send*\n${fmtDate(payload.scheduled_start_at as string)}` });
+  } else if (event === "campaign_paused") {
+    fields.push({ type: "mrkdwn", text: `*Progress*\n${fmtNumber(totals.sent)} / ${fmtNumber(totals.total)} sent` });
+    fields.push({ type: "mrkdwn", text: `*Failed*\n${fmtNumber(totals.failed)}` });
+  }
+
+  const blocks: unknown[] = [
+    { type: "header", text: { type: "plain_text", text: headline, emoji: true } },
+    { type: "section", fields: fields.slice(0, 10) },
+  ];
+
+  // Per-number breakdown for OPS only
+  if (audience === "ops" && parts.length > 0) {
+    const lines = parts.map((p) => {
+      const who = p.phone ? `+${p.phone}` : (p.label || "—");
+      if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
+        return `• ${who} — ${fmtNumber(p.sent)}/${fmtNumber(p.total)} sent${p.failed ? ` · ${p.failed} failed` : ""}`;
+      }
+      return `• ${who} — ${fmtNumber(p.total)} msgs`;
+    });
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: `*Numbers*\n${lines.join("\n")}` } });
+  }
+
+  blocks.push({
+    type: "actions",
+    elements: [
+      { type: "button", text: { type: "plain_text", text: "Open in Iskra" }, url: campaignUrl(ws.slug, campaignId) },
+    ],
+  });
+  blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: audience === "client"
+    ? `_${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dubai" })}_`
+    : `_${tag} workspace · ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Dubai" })}_` }] });
+
+  return { text: `${headline}: ${baseName}`, blocks };
+}
+
 export function buildCampaignLifecycleBlocks(args: {
   event: string;
   ws: WorkspaceInfo;
