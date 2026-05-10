@@ -281,7 +281,29 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                     <Field label="API key"><Input value={draft.provider_api_key ?? ""} onChange={(e) => update(n.id, { provider_api_key: e.target.value })} placeholder="leave blank to use global" /></Field>
                     <Field label="Gupshup app name"><Input value={draft.display_name ?? ""} onChange={(e) => update(n.id, { display_name: e.target.value })} placeholder="01Ashik02" /></Field>
                     <Field label="Partner / source"><Input value={draft.partner_source ?? ""} onChange={(e) => update(n.id, { partner_source: e.target.value })} /></Field>
-                    <Field label="BM name"><Input value={draft.bm_name ?? ""} onChange={(e) => update(n.id, { bm_name: e.target.value })} /></Field>
+                    <Field label="Business Manager">
+                      <div className="flex gap-1">
+                        <Select
+                          value={draft.business_manager_id ?? "__none"}
+                          onValueChange={(v) => update(n.id, { business_manager_id: v === "__none" ? null : v })}
+                        >
+                          <SelectTrigger className="flex-1"><SelectValue placeholder="None" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">None</SelectItem>
+                            {bms.map((b) => (
+                              <SelectItem key={b.id} value={b.id}>{b.name} {b.status !== "active" ? `· ${b.status}` : ""}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {draft.business_manager_id && (
+                          <Button asChild size="sm" variant="ghost" className="px-2">
+                            <Link to={`/admin/business-managers/${draft.business_manager_id}`} title="Open BM">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </Field>
                   </div>
                 </details>
 
