@@ -37,7 +37,10 @@ export default function WorkspaceOverview() {
     return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const H = HEALTH[data.health];
+  const isClient = role === "client";
+  // Hide the "blocked / no active numbers" badge from the client view —
+  // it's an internal infra signal and was confusing clients.
+  const H = isClient && data.health === "blocked" ? HEALTH.idle : HEALTH[data.health];
   const slug = workspace.slug;
 
   return (
