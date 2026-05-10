@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       }
       const { data: link } = await admin
         .from("workspace_invite_links")
-        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at")
+        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at, allowed_pipeline_ids")
         .eq("token", token)
         .maybeSingle();
       if (!link) return json({ valid: false, error: "Link not found" }, 404);
@@ -64,6 +64,16 @@ Deno.serve(async (req) => {
         .eq("id", link.workspace_id)
         .maybeSingle();
 
+      let pipelineNames: { id: string; name: string }[] = [];
+      const pipeIds = (link as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null;
+      if (pipeIds && pipeIds.length > 0) {
+        const { data: pipes } = await admin
+          .from("pipelines")
+          .select("id, name")
+          .in("id", pipeIds);
+        pipelineNames = (pipes ?? []) as { id: string; name: string }[];
+      }
+
       return json({
         valid: true,
         workspace_name: ws?.name ?? "your team",
@@ -73,6 +83,8 @@ Deno.serve(async (req) => {
         workspace_logo: ws?.logo_url ?? null,
         role: link.role,
         seats_left: link.max_uses - link.used_count,
+        allowed_pipeline_ids: pipeIds ?? [],
+        allowed_pipelines: pipelineNames,
       });
     }
 
