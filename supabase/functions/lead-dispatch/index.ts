@@ -119,13 +119,15 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return blocked(admin, pipeline, "daily_cap_reached", null);
   }
 
-  // Claim pending leads
+  // Claim pending OR awaiting_manual leads. When auto-outreach is enabled,
+  // older `awaiting_manual` rows (imported while auto was off) should also be
+  // picked up - status guard allows awaiting_manual -> queued.
   const claimLimit = Math.min(200, availableCapacity);
   const { data: leads } = await admin
     .from("lead_imports")
-    .select("id, pipeline_id, workspace_id, phone, name")
+    .select("id, pipeline_id, workspace_id, phone, name, status")
     .eq("pipeline_id", pipeline.id)
-    .eq("status", "pending")
+    .in("status", ["pending", "awaiting_manual"])
     .order("imported_at", { ascending: true })
     .limit(claimLimit);
   if (!leads || leads.length === 0) return { processed: 0 };
