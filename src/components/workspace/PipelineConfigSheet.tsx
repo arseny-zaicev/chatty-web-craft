@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -135,11 +135,10 @@ export default function PipelineConfigSheet({
     },
   });
 
-  // hydrate when sheet opens
-  if (open && pipeline && autoOutreach !== pipeline.auto_outreach_enabled && templateId === "" && (pipeline.first_touch_template_id || pipeline.default_sender_number_ids?.length)) {
-    // Initial load - hydrate once
-    hydrate(pipeline);
-  }
+  useEffect(() => {
+    if (open && pipeline) hydrate(pipeline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pipeline?.id]);
 
   const saveOutreach = async () => {
     if (!pipeId) return;
