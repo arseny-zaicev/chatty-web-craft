@@ -63,10 +63,21 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
     qc.invalidateQueries({ queryKey: ["pipelines", workspaceId, "deal-counts"] });
   };
 
+  const normalize = (s: string) => s.trim().replace(/\s+/g, " ");
+  const nameExists = (name: string, ignoreId?: string) => {
+    const n = normalize(name).toLowerCase();
+    return pipelines.some((p) => p.id !== ignoreId && p.name.trim().toLowerCase() === n);
+  };
+
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    const name = normalize(newName);
+    if (!name) return;
+    if (nameExists(name)) {
+      toast.error("A pipeline with this name already exists");
+      return;
+    }
     try {
-      await createPipeline(workspaceId, { name: newName.trim(), color: newColor });
+      await createPipeline(workspaceId, { name, color: newColor });
       toast.success("Pipeline created");
       setShowNew(false);
       setNewName("");
