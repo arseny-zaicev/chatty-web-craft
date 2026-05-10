@@ -271,12 +271,23 @@ function CampaignDetail({
         <div className="mb-3 rounded-md border border-border bg-card/30 p-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Per number</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {group.campaigns.map((c) => (
-              <div key={c.id} className="flex items-center justify-between text-xs">
-                <span className="truncate">{numberLabelFor(c.id)}</span>
-                <span className="text-muted-foreground shrink-0">{c.sent_count ?? 0}/{c.total_recipients ?? 0}{(c.failed_count ?? 0) > 0 ? ` · ${c.failed_count} failed` : ""}</span>
-              </div>
-            ))}
+            {group.campaigns.map((c) => {
+              const total = c.total_recipients ?? 0;
+              const sent = c.sent_count ?? 0;
+              const failed = c.failed_count ?? 0;
+              const pending = Math.max(0, total - sent - failed);
+              const parts = [`${sent} sent`];
+              if (failed > 0) parts.push(`${failed} failed`);
+              if (pending > 0) parts.push(`${pending} pending`);
+              return (
+                <div key={c.id} className="flex items-center justify-between text-xs gap-3">
+                  <span className="truncate">{numberLabelFor(c.id)}</span>
+                  <span className="text-muted-foreground shrink-0 tabular-nums">
+                    {parts.join(" · ")} <span className="opacity-60">/ {total}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
