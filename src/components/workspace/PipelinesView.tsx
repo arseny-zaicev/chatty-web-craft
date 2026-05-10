@@ -332,6 +332,12 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PipelineConfigSheet
+        pipeline={configuring}
+        open={!!configuring}
+        onClose={() => { setConfiguring(null); invalidate(); }}
+      />
     </div>
   );
 }
