@@ -120,8 +120,9 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   }, [conversations]);
 
   const { data: pipelineData, isLoading } = useQuery({
-    queryKey: crmKeys.pipeline(workspaceId),
-    queryFn: () => fetchPipelineBase(workspaceId),
+    queryKey: crmKeys.pipeline(workspaceId, selectedPipelineId),
+    queryFn: () => fetchPipelineBase(workspaceId, selectedPipelineId),
+    enabled: !!workspaceId ? !!selectedPipelineId : true,
   });
 
   // Auth gate + me id
@@ -136,7 +137,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (pipelineData.stages[0] && !newStageId) setNewStageId(pipelineData.stages[0].id);
   }, [pipelineData, newStageId]);
 
-  // Realtime deals — workspace-scoped
+  // Realtime deals — workspace-scoped channel; client filters to selected pipeline.
   useRealtimeTable<Deal>(
     {
       channel: `pipeline-deals-${workspaceId ?? "all"}`,
@@ -148,13 +149,17 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
       setDeals((prev) => {
         if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
         const incoming = payload.new as Deal;
+        // Drop events for other pipelines; remove if previously belonged here.
+        if (selectedPipelineId && incoming.pipeline_id && incoming.pipeline_id !== selectedPipelineId) {
+          return prev.filter((d) => d.id !== incoming.id);
+        }
         const idx = prev.findIndex((d) => d.id === incoming.id);
         return idx >= 0
           ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
           : [...prev, incoming];
       });
     },
-    [workspaceId],
+    [workspaceId, selectedPipelineId],
   );
 
   // Realtime conversations (assignee / responder updates) — workspace-scoped
