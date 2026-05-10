@@ -253,6 +253,11 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                   <div className="text-[10px] text-muted-foreground mt-0.5">
                     {l.role} · {l.used_count}/{l.max_uses} used ·{" "}
                     {l.revoked_at ? "revoked" : expired ? "expired" : exhausted ? "all seats used" : `expires ${new Date(l.expires_at).toLocaleDateString()}`}
+                    {l.role === "client" && (
+                      <> · {(l.allowed_pipeline_ids?.length ?? 0) === 0
+                        ? "all pipelines"
+                        : `${l.allowed_pipeline_ids!.length} pipeline${l.allowed_pipeline_ids!.length === 1 ? "" : "s"}`}</>
+                    )}
                   </div>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => copyLink(l.token)} disabled={dead}>
