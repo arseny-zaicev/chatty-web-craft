@@ -247,6 +247,22 @@ export default function PipelineConfigSheet({
           </SheetDescription>
         </SheetHeader>
 
+        {/* Live counters */}
+        <section className="mt-4 grid grid-cols-5 gap-2">
+          {[
+            { label: "Pending", value: counters?.pending ?? 0, tone: "text-amber-600" },
+            { label: "Queued", value: counters?.queued ?? 0, tone: "text-blue-600" },
+            { label: "Sent today", value: counters?.sent ?? 0, tone: "text-emerald-600" },
+            { label: "Replied", value: counters?.replied ?? 0, tone: "text-violet-600" },
+            { label: "Failed", value: counters?.failed ?? 0, tone: "text-destructive" },
+          ].map((c) => (
+            <div key={c.label} className="rounded-lg border border-border bg-card/40 px-2 py-1.5 text-center">
+              <div className={`text-base font-semibold tabular-nums ${c.tone}`}>{c.value}</div>
+              <div className="text-[10px] text-muted-foreground">{c.label}</div>
+            </div>
+          ))}
+        </section>
+
         {/* Sources */}
         <section className="mt-6 space-y-3">
           <div className="flex items-center justify-between">
