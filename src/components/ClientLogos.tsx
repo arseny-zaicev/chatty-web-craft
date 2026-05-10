@@ -35,7 +35,7 @@ const clients: Client[] = [
   { name: "RecruitCloud", logo: recruitcloudLogo, url: "https://www.recruitcloud.io", scale: 1.0 },
   { name: "Pathos", logo: pathosLogo, url: "https://payonresultspr.com", scale: 1.05 },
   { name: "Cleon1", logo: cleon1Logo, url: "https://cleon1.com", scale: 1.0 },
-  { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com", scale: 1.0 },
+  { name: "Plural Sales", logo: pluralsalesLogo, url: "https://pluralsales.com", scale: 1.4 },
   { name: "Sophias", logo: sophiasLogo, url: "https://sophias.io", scale: 1.0 },
   { name: "HFF Interiors", logo: hffInteriorsLogo, url: "https://www.hffinteriors.ae", scale: 0.95 },
   { name: "KoldLeads", logo: koldleadsLogo, url: "https://www.youtube.com/@karstonfox", scale: 1.0 },
