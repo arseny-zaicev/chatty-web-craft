@@ -359,15 +359,17 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       },
     });
 
-    return json({
+    return {
       ok: true,
+      source_id: source.id,
+      source_name: source.name,
       batch_id: batch.id,
       total: newRows.length,
       accepted,
       rejected,
       last_synced_row: lastProcessedRow,
-    });
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
-});
+}
