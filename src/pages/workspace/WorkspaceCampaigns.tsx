@@ -7,6 +7,79 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchCampaignSummaries } from "@/lib/launchData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+
+// Sibling campaigns launched across multiple WhatsApp numbers share a base name
+// in the form "<base> :: <numberLabel>". Clients should see them merged.
+const splitBase = (full: string): { base: string; numberLabel: string | null } => {
+  const idx = full.indexOf(" :: ");
+  if (idx === -1) return { base: full, numberLabel: null };
+  return { base: full.slice(0, idx).trim(), numberLabel: full.slice(idx + 4).trim() || null };
+};
+
+type CampaignRow = {
+  id: string;
+  name: string;
+  status: string;
+  total_recipients: number | null;
+  sent_count: number | null;
+  failed_count: number | null;
+  created_at: string;
+  whatsapp_number_id: string | null;
+  template_id: string | null;
+};
+
+type CampaignGroup = {
+  key: string;
+  displayName: string;
+  status: string;
+  total: number;
+  sent: number;
+  failed: number;
+  created_at: string;
+  template_id: string | null;
+  whatsapp_number_ids: string[];
+  campaigns: CampaignRow[];
+};
+
+// Pick the "most active" status across siblings: running > scheduled > paused > failed > completed > draft
+const statusRank: Record<string, number> = {
+  running: 6, scheduled: 5, paused: 4, failed: 3, completed: 2, draft: 1,
+};
+
+const groupCampaigns = (rows: CampaignRow[]): CampaignGroup[] => {
+  const map = new Map<string, CampaignGroup>();
+  for (const c of rows) {
+    const { base } = splitBase(c.name);
+    const key = base;
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        displayName: base,
+        status: c.status,
+        total: 0,
+        sent: 0,
+        failed: 0,
+        created_at: c.created_at,
+        template_id: c.template_id,
+        whatsapp_number_ids: [],
+        campaigns: [],
+      };
+      map.set(key, g);
+    }
+    g.total += c.total_recipients ?? 0;
+    g.sent += c.sent_count ?? 0;
+    g.failed += c.failed_count ?? 0;
+    if ((statusRank[c.status] ?? 0) > (statusRank[g.status] ?? 0)) g.status = c.status;
+    if (c.created_at < g.created_at) g.created_at = c.created_at;
+    if (c.whatsapp_number_id && !g.whatsapp_number_ids.includes(c.whatsapp_number_id)) {
+      g.whatsapp_number_ids.push(c.whatsapp_number_id);
+    }
+    g.campaigns.push(c);
+  }
+  return Array.from(map.values()).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+};
 
 const statusTone: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
