@@ -1,101 +1,97 @@
-## Цель
+## Goal
 
-Каждые 5 минут читать новые письма от Gupshup на `iskra.gupshup.alerts@gmail.com`, классифицировать их (quality drop / restriction / template rejected / billing / прочее), привязывать к нашему `whatsapp_numbers` по номеру или WABA ID, и слать структурированный алерт в Slack-канал `SLACK_OPS_NUMBERS_CHANNEL_ID` (тот же, что используют существующие алерты `enqueue_number_slack_event`).
+Stop the noise (verification / onboarding / generic emails) and only ping Slack for **real status changes**. Route billing/recharge to a separate finance channel. Make every Slack message look premium-minimal: one line headline + 2-3 fields, no excerpt wall.
 
-## Архитектура
+## What gets through (allowlist, not keyword soup)
+
+Every incoming Gupshup email is matched against an explicit subject pattern set. **Anything that doesn't match → logged as `info` and dropped (no Slack).**
+
+| Pattern (case-insensitive on subject) | Category | Severity | Channel |
+|---|---|---|---|
+| `Phone number and Display name approved` | `number_approved` | info → **send** | OPS_NUMBERS |
+| `Display name approved` (without "Rejected") | `display_name_approved` | info → **send** | OPS_NUMBERS |
+| `Display name Rejected` | `display_name_rejected` | warning | OPS_NUMBERS |
+| `Update in your WABA status` + body contains `restrict` / `flagged` / `messaging limit` | `waba_restricted` | critical | OPS_NUMBERS |
+| `Update in your WABA status` + body contains `ban` / `disable` / `terminat` | `waba_blocked` | critical | OPS_NUMBERS |
+| `Update in your WABA status` + body contains `quality` (low/medium/high) | `quality_changed` | warning | OPS_NUMBERS |
+| `Update in your WABA status` (other) | `waba_status_other` | warning | OPS_NUMBERS |
+| `Tier upgrade` / `messaging limit` upgrade | `tier_upgraded` | info → **send** | OPS_NUMBERS |
+| `Template … Approved` | `template_approved` | info → **send** | OPS_NUMBERS |
+| `Template … Rejected` / `Paused` / `Disabled` | `template_rejected` | warning | OPS_NUMBERS |
+| `Recharge successful` / `Payment received` / `Invoice` / `Low balance` | `billing` | info / warning | **OPS_FINANCE** |
+| `Email … verification`, `Email Verified`, `Welcome`, `Getting started`, `Onboarding`, `OTP`, `password`, `Webinar`, `Newsletter` | — | **dropped** | — |
+
+Anything not matched and not in the dropped list → stored in `gupshup_mail_log` with `category='other'`, `severity='info'`, no Slack post. We can review later.
+
+After 30 days post-approval the spec mentions "warmup" — out of scope for this batch (no automation triggered), but we'll store `received_at` so a future job can compute the 30-day mark.
+
+## Routing
+
+- New secret/env: `SLACK_OPS_FINANCE_CHANNEL_ID` (need from you).
+- `billing` category → finance channel only.
+- All other status events → `SLACK_OPS_NUMBERS_CHANNEL_ID` + workspace channel (if matched).
+
+## Slack message redesign — premium minimal
+
+One header line. Two-field row. No giant excerpt unless severity = critical.
 
 ```text
-Gupshup -> Gmail (iskra.gupshup.alerts@gmail.com)
-                |
-                v
-   gupshup-mail-poll (Edge Function, cron */5 мин)
-                |
-                v
-   public.gupshup_mail_log  (idempotency, status, raw)
-                |
-                v
-   public.slack_event_queue  (event_type='gupshup_mail_alert')
-                |
-                v
-   slack-dispatch -> SLACK_OPS_NUMBERS_CHANNEL_ID
+🟢  ISKRA · NitishUS01     Number approved
++14155551234 · WABA 1234567890
+
+🔴  ISKRA · NitishUS01     WABA restricted
++14155551234 · Quality: medium → low
+
+🟠  Unmatched              Display name rejected
+"NitishShowtime2Num1" · open in Gmail
 ```
 
-## Что сделаем
+Block layout:
+- `header` (plain text, ~50 chars max).
+- One `section` with mrkdwn: `*+phone* · *<contextual second field>*` (template name, quality, WABA id, or display name).
+- `context` row: `tag · time · Open in Gmail · Open number` (linked text, no big buttons).
+- For `critical` only: small `section` with 1-line excerpt.
 
-### 1. Шаг настройки в Gupshup (вручную пользователем)
-Прежде чем разворачивать функцию, ты заходишь в Gupshup → Account / Notification settings и ставишь `iskra.gupshup.alerts@gmail.com` как notification email на всех аккаунтах/WABA. Я укажу точные шаги в чате.
+Contextual second field per category:
+- `number_approved` / `display_name_approved`: `Approved`
+- `display_name_rejected`: `Display name: <name>`
+- `waba_restricted` / `waba_blocked`: `Reason: <short extracted phrase>`
+- `quality_changed`: `Quality: <new>`
+- `template_*`: `Template: <name>`
+- `tier_upgraded`: `Tier: <new>`
+- `billing`: `Amount: <if parsed> · <type>`
 
-### 2. БД (одна миграция)
-- `public.gupshup_mail_log` — таблица:
-  - `gmail_id` (text, unique) — `id` сообщения Gmail для идемпотентности
-  - `received_at` (timestamptz)
-  - `from_address`, `subject`, `snippet`
-  - `category` enum: `quality_drop` | `restriction` | `block` | `template_rejected` | `template_approved` | `billing` | `account_review` | `other`
-  - `severity` enum: `info` | `warning` | `critical`
-  - `whatsapp_number_id` (uuid, nullable, FK)
-  - `workspace_id` (uuid, nullable)
-  - `parsed` jsonb (вытащенные phone, waba_id, template_name и т.д.)
-  - `slack_event_id` (uuid, nullable, FK → slack_event_queue)
-- RLS: только `is_admin(auth.uid())` читает; запись только service_role.
-- `public.gupshup_mail_state` (single row) — хранит `last_history_id` или `last_internal_date_ms` курсора Gmail.
+## Code changes
 
-### 3. Edge Function `gupshup-mail-poll`
-- Идём через connector gateway: `https://connector-gateway.lovable.dev/google_mail/gmail/v1/users/me/messages?q=from:gupshup.io OR from:gupshup.com newer_than:1d&maxResults=50`.
-- Для каждого `id` сверяемся с `gupshup_mail_log.gmail_id`; новые — берём `messages/{id}?format=full`, парсим headers + body.
-- Парсер по subject/keywords:
-  - `quality.*low|medium|high|drop` → `quality_drop`
-  - `restrict|throttle|messaging limit` → `restriction`
-  - `block|disabled|banned` → `block`
-  - `template.*rejected|approved|paused` → `template_rejected/approved`
-  - `payment|invoice|low balance|funds` → `billing`
-  - `policy review|account review` → `account_review`
-- Извлекаем `phone_number` (regex `\+?\d{10,15}`) и `waba_id`. По `phone_number` ищем `whatsapp_numbers` → получаем `whatsapp_number_id`, `workspace_id`.
-- Severity: `block`, `restriction`, `billing` → `critical`; `quality_drop`, `template_rejected`, `account_review` → `warning`; остальное → `info`.
-- Вставляем строку в `gupshup_mail_log` (ON CONFLICT DO NOTHING по `gmail_id`).
-- Для `severity != 'info'` (или всё, если попросишь) — вставляем событие в `slack_event_queue` с `event_type = 'gupshup_mail_alert'` и payload `{ category, severity, phone_number, whatsapp_number_id, subject, snippet, gmail_link }`.
-- Возвращаем `{ scanned, new, alerts }` для логов.
+1. **`supabase/functions/gupshup-mail-poll/index.ts`**
+   - Replace `classify()` with a strict allowlist returning `{ category, severity, action: "send"|"drop"|"log_only" }` plus extracted secondary field (quality, template, reason snippet).
+   - Add a `DROP_PATTERNS` regex (verification, onboarding, OTP, newsletter…) checked first.
+   - Extend `parsed` jsonb with `secondary_field` and `channel` ('numbers' | 'finance').
+   - When enqueuing `slack_event_queue`, include `routing: 'finance'|'numbers'` in payload.
 
-### 4. Slack handler
-В `supabase/functions/slack-dispatch/index.ts` добавить обработчик `gupshup_mail_alert`:
-- Канал: `SLACK_OPS_NUMBERS_CHANNEL_ID`.
-- Блок: emoji по severity (🔴/🟠/🔵), категория, номер (если найден — со ссылкой на CRM), subject, выдержка из письма, кнопка "Открыть в Gmail" (`https://mail.google.com/mail/u/0/#inbox/{gmail_id}`).
-- Использовать существующий хелпер `slackBlocks.ts`.
+2. **DB migration**
+   - Extend `gupshup_mail_category` enum with: `number_approved`, `display_name_approved`, `display_name_rejected`, `waba_restricted`, `waba_blocked`, `quality_changed`, `tier_upgraded`, `waba_status_other`. Keep old values for back-compat.
 
-### 5. Cron
-Через `pg_cron` поднять расписание `*/5 * * * *` → `select net.http_post(...gupshup-mail-poll...)` с service-role auth (тот же паттерн, что у `numbers-health-sync`, посмотрю как он запланирован и повторю).
+3. **`supabase/functions/_shared/slackBlocks.ts`**
+   - Rewrite `buildGupshupMailAlertBlocks` for the minimal layout above.
+   - New `catLabels` covering the new categories.
+   - Move "Open in Gmail" / "Open numbers" into a single `context` line as links, drop the actions block.
 
-### 6. UI (минимум, опционально)
-В `AdminPanel` (или Workspace Settings → Provider/Debug) добавить маленькую таблицу "Последние Gupshup-уведомления" с фильтром по severity, чтобы быстро глазами проверять. Можно отложить.
+4. **`supabase/functions/slack-dispatch/index.ts`**
+   - Read `SLACK_OPS_FINANCE_CHANNEL_ID`.
+   - For `gupshup_mail_alert`: route by `payload.routing` (`finance` → finance channel; else numbers channel + workspace channel).
 
-## Технические детали
+5. **Backfill**
+   - Optional one-shot: re-classify last 7 days of `gupshup_mail_log` to update categories. **Skipped** unless you want it (would re-fire Slack noise).
 
-- Gmail-коннектор использует `gmail.readonly` — этого достаточно. Никаких write-операций.
-- Для идемпотентности используем Gmail `messages.id` (стабильный per-mailbox).
-- Курсор `last_internal_date_ms` нужен только для оптимизации; первичная защита — unique index на `gmail_id`.
-- Лимит первого запуска: `newer_than:7d` чтобы не разлить старые письма.
-- Все запросы к Gmail — через gateway: заголовки `Authorization: Bearer ${LOVABLE_API_KEY}`, `X-Connection-Api-Key: ${GOOGLE_MAIL_API_KEY}`.
-- Никаких новых секретов. Всё уже есть.
+## Out of scope (call out, do later)
 
-## Что вне scope
+- 30-day post-approval warmup automation (separate task; needs warmup engine).
+- Auto-pausing campaigns when a number gets `waba_restricted` (separate workflow).
+- Pulling structured fields from Gupshup HTML (we extract by regex from text — good enough; HTML parser later if needed).
 
-- Парсинг вложений (PDF-репорты Gupshup) — пока просто игнорим.
-- Авто-действия (пауза кампаний при block) — только алерт.
-- Ответ на письма из Gmail — нет, read-only.
+## Question before I build
 
-## Acceptance criteria
-
-1. Письмо от `noreply@gupshup.io` с темой "Phone number quality update" приходит → в течение ≤5 мин в Slack-канале появляется сообщение с категорией `quality_drop`, найденным номером и выдержкой.
-2. Повторный запуск polling не дублирует алерт (unique по `gmail_id`).
-3. В `gupshup_mail_log` видно все обработанные письма с категорией.
-4. Письма не от Gupshup игнорируются.
-5. Если номер из письма не найден в `whatsapp_numbers` — алерт всё равно уходит, поле "Number" = "Unmatched".
-
-## Ручной чеклист после деплоя
-
-- [ ] В Gupshup notification email = `iskra.gupshup.alerts@gmail.com` (на всех аккаунтах).
-- [ ] Отправить тестовое письмо себе с темой "Phone number quality update" с номером из БД → ждать 5 мин → проверить Slack.
-- [ ] `select * from gupshup_mail_log order by received_at desc limit 10;` — есть строки.
-- [ ] `select * from slack_event_queue where event_type='gupshup_mail_alert' order by created_at desc limit 10;` — есть события и `processed_at` проставлен.
-- [ ] Удалить тестовое письмо в Gmail → повторный poll не должен заново его слать.
-
-Жми "Approve plan" — и я разверну: миграция → edge function → расписание cron → доработка `slack-dispatch`.
+I need the **Slack channel ID for `SLACK_OPS_FINANCE_CHANNEL_ID`** (Recharge / billing alerts). Two options:
+- **(a)** Use the existing `SLACK_OPS_NUMBERS_CHANNEL_ID` for billing too (no new secret).
+- **(b)** Give me a channel ID (e.g. `C0XXXXXXX`) and I'll add the secret.

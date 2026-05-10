@@ -18,6 +18,7 @@ const corsHeaders = {
 
 const OPS_CAMPAIGNS = Deno.env.get("SLACK_OPS_CAMPAIGNS_CHANNEL_ID") || "";
 const OPS_NUMBERS   = Deno.env.get("SLACK_OPS_NUMBERS_CHANNEL_ID") || "";
+const OPS_FINANCE   = Deno.env.get("SLACK_OPS_FINANCE_CHANNEL_ID") || "";
 
 const CAMPAIGN_EVENTS = new Set([
   "campaign_launched", "campaign_resumed", "campaign_paused",
@@ -175,8 +176,14 @@ Deno.serve(async (req) => {
           ws,
           payload: p,
         });
-        if (OPS_NUMBERS) await postSlack(OPS_NUMBERS, msg);
-        if (workspaceChannel) await postSlack(workspaceChannel, msg);
+        const routing = String(p.routing || "numbers");
+        if (routing === "finance") {
+          const financeChan = OPS_FINANCE || OPS_NUMBERS;
+          if (financeChan) await postSlack(financeChan, msg);
+        } else {
+          if (OPS_NUMBERS) await postSlack(OPS_NUMBERS, msg);
+          if (workspaceChannel) await postSlack(workspaceChannel, msg);
+        }
       } else {
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
