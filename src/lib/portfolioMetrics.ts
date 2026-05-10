@@ -166,14 +166,22 @@ export type WorkspaceOverview = WorkspaceMetrics & {
   recent_launches: Array<{ id: string; name: string; status: string; created_at: string; sent_count: number; total: number }>;
 };
 
+// Sibling campaigns launched across multiple WhatsApp numbers share a base
+// name in the form "<base> :: <numberLabel>". Clients should see them merged
+// into a single launch.
+const splitBase = (full: string): string => {
+  const idx = full.indexOf(" :: ");
+  return idx === -1 ? full : full.slice(0, idx).trim();
+};
+
 export async function fetchWorkspaceOverview(workspaceId: string): Promise<WorkspaceOverview> {
   const today = startOfDayIso();
   const [{ data: convs }, { data: numbers }, { data: campaigns }, { data: templates }, { data: recent }] = await Promise.all([
     supabase.from("conversations").select("id, unread_count, last_message_at").eq("workspace_id", workspaceId),
     supabase.from("whatsapp_numbers").select("is_active, connected_in_gupshup, connected_in_iskra").eq("workspace_id", workspaceId),
-    supabase.from("campaigns").select("status, scheduled_start_at").eq("workspace_id", workspaceId),
+    supabase.from("campaigns").select("name, status, scheduled_start_at").eq("workspace_id", workspaceId),
     supabase.from("message_templates").select("status").eq("workspace_id", workspaceId).eq("status", "approved"),
-    supabase.from("campaigns").select("id, name, status, created_at, sent_count, total_recipients").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(5),
+    supabase.from("campaigns").select("id, name, status, created_at, sent_count, total_recipients").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(20),
   ]);
 
   const convIds = (convs ?? []).map((c) => c.id);
@@ -195,7 +203,14 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
   const numbers_active = (numbers ?? []).filter((n) => n.is_active).length;
   const numbers_ready = (numbers ?? []).filter((n) => n.is_active && n.connected_in_gupshup && n.connected_in_iskra).length;
   const unread_replies = (convs ?? []).reduce((s, c) => s + (c.unread_count ?? 0), 0);
-  const active_campaigns = (campaigns ?? []).filter((c) => c.status === "scheduled" || c.status === "running").length;
+
+  // Group sibling campaigns (same launch across multiple numbers) by base name
+  const activeBases = new Set<string>();
+  (campaigns ?? []).forEach((c: any) => {
+    if (c.status === "scheduled" || c.status === "running") activeBases.add(splitBase(c.name ?? ""));
+  });
+  const active_campaigns = activeBases.size;
+
   const next_launch = (campaigns ?? [])
     .filter((c) => (c.status === "scheduled" || c.status === "draft") && c.scheduled_start_at && c.scheduled_start_at > new Date().toISOString())
     .sort((a, b) => (a.scheduled_start_at! > b.scheduled_start_at! ? 1 : -1))[0]?.scheduled_start_at ?? null;
@@ -206,6 +221,32 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
   else if ((campaigns ?? []).some((c) => c.status === "running")) health = "running";
   else if (next_launch) health = "scheduled";
   else if (unread_replies >= 20) health = "attention";
+
+  // Group recent launches by base name -> single row per launch (sums across numbers)
+  type Launch = { id: string; name: string; status: string; created_at: string; sent_count: number; total: number };
+  const launchMap = new Map<string, Launch>();
+  for (const r of (recent ?? [])) {
+    const base = splitBase(r.name ?? "");
+    const existing = launchMap.get(base);
+    if (!existing) {
+      launchMap.set(base, {
+        id: r.id,
+        name: base,
+        status: r.status,
+        created_at: r.created_at,
+        sent_count: r.sent_count ?? 0,
+        total: r.total_recipients ?? 0,
+      });
+    } else {
+      existing.sent_count += r.sent_count ?? 0;
+      existing.total += r.total_recipients ?? 0;
+      if ((statusRank[r.status] ?? 0) > (statusRank[existing.status] ?? 0)) existing.status = r.status;
+      if (r.created_at < existing.created_at) existing.created_at = r.created_at;
+    }
+  }
+  const recent_launches = Array.from(launchMap.values())
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    .slice(0, 5);
 
   return {
     workspace_id: workspaceId,
@@ -223,6 +264,10 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     scheduled_campaign_name: null,
     health,
     templates_approved: (templates ?? []).length,
-    recent_launches: (recent ?? []).map((r) => ({ id: r.id, name: r.name, status: r.status, created_at: r.created_at, sent_count: r.sent_count ?? 0, total: r.total_recipients ?? 0 })),
+    recent_launches,
   };
 }
+
+const statusRank: Record<string, number> = {
+  running: 6, scheduled: 5, paused: 4, failed: 3, completed: 2, draft: 1,
+};
