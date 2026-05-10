@@ -32,13 +32,37 @@ const corsHeaders = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-function normalizePhone(raw: unknown): string | null {
+// Strips common prefixes (p:, P:, П:, tel:, phone:, whatsapp:) and noise.
+// If a default country code is configured and the cleaned number is the right
+// local length, the code is prepended. Returns null for empty / test-lead values.
+function normalizePhone(raw: unknown, defaultCountryCode?: string | null): string | null {
   if (raw == null) return null;
-  const s = String(raw).replace(/[^\d+]/g, "");
+  let s = String(raw).trim();
   if (!s) return null;
-  const digits = s.startsWith("+") ? s.slice(1) : s;
+  // Reject Meta test-lead placeholders like "<test lead: dummy data for phone>"
+  if (/<\s*test\s+lead/i.test(s)) return null;
+  // Strip leading prefixes
+  s = s.replace(/^\s*(p|P|П|tel|phone|whatsapp|wa)\s*[:：]\s*/i, "");
+  // Now keep only digits and +
+  s = s.replace(/[^\d+]/g, "");
+  if (!s) return null;
+  let digits = s.startsWith("+") ? s.slice(1) : s;
+  // Apply default country code for local-length numbers
+  const cc = (defaultCountryCode || "").replace(/\D/g, "");
+  if (cc && !digits.startsWith(cc)) {
+    // Indian local mobiles are 10 digits; generic: if length looks local (<= 10), prepend.
+    if (digits.length >= 7 && digits.length <= 10) {
+      digits = cc + digits;
+    }
+  }
   if (digits.length < 7 || digits.length > 16) return null;
   return digits;
+}
+
+// Returns true if the raw value is a Meta-style test-lead placeholder.
+function isTestLeadValue(raw: unknown): boolean {
+  if (raw == null) return false;
+  return /<\s*test\s+lead/i.test(String(raw));
 }
 
 // Convert column letter (A, B, AA) to 0-based index
