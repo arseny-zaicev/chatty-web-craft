@@ -108,6 +108,17 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to remove"),
   });
 
+  const toggleStats = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("workspace_members").update({ can_view_stats: value }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: membersKey(workspaceId) });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to update"),
+  });
+
   const { data: links, isLoading: linksLoading } = useQuery({
     queryKey: linksKey(workspaceId),
     queryFn: async (): Promise<InviteLink[]> => {
