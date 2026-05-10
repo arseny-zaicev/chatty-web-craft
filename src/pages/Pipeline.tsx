@@ -378,7 +378,29 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         </header>}
 
         {!embedded ? null : (
-          <div className="px-4 py-2 border-b border-border flex items-center justify-end gap-2 bg-card/30">
+          <div className="px-4 py-2 border-b border-border flex items-center gap-2 bg-card/30 flex-wrap">
+            {pipelines.length > 0 && (
+              <div className="flex items-center gap-1 mr-auto flex-wrap">
+                {pipelines.map((p) => {
+                  const active = p.id === selectedPipelineId;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setSearchParams((prev) => { prev.set("pipeline", p.id); return prev; }, { replace: true })}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition flex items-center gap-1.5 ${
+                        active
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground hover:border-primary/40"
+                      }`}
+                      title={p.name}
+                    >
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <span className="text-xs text-muted-foreground">Filter:</span>
             <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
               <SelectTrigger className="h-8 w-44 text-xs">
