@@ -35,6 +35,7 @@ type Message = {
   media_url: string | null;
   status: string;
   created_at: string;
+  sent_by_user_id: string | null;
 };
 
 const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
