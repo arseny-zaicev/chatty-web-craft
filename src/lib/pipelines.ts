@@ -114,6 +114,84 @@ export async function deletePipeline(id: string, workspaceId: string) {
   if (error) throw error;
 }
 
+/** Set a single pipeline as the workspace default. Clears the flag from any sibling. */
+export async function setDefaultPipeline(workspaceId: string, pipelineId: string) {
+  // Clear current default(s) first to avoid the partial-unique-index violation.
+  const { error: clearErr } = await supabase
+    .from("pipelines")
+    .update({ is_default: false })
+    .eq("workspace_id", workspaceId)
+    .neq("id", pipelineId);
+  if (clearErr) throw clearErr;
+  const { error } = await supabase
+    .from("pipelines")
+    .update({ is_default: true })
+    .eq("id", pipelineId);
+  if (error) throw error;
+}
+
+/** Returns the first stage (by position, then created_at) of a pipeline, or null. */
+export async function firstStageOfPipeline(pipelineId: string): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("pipeline_stages")
+    .select("id")
+    .eq("pipeline_id", pipelineId)
+    .order("position")
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+/** Move a conversation to another pipeline. Also moves the linked deal (if any) to
+ * the first stage of the new pipeline so deal and conversation never disagree. */
+export async function moveConversationToPipeline(conversationId: string, pipelineId: string) {
+  const stage = await firstStageOfPipeline(pipelineId);
+  // Update conversation first (cheap, idempotent).
+  const { error: cErr } = await supabase
+    .from("conversations")
+    .update({ pipeline_id: pipelineId })
+    .eq("id", conversationId);
+  if (cErr) throw cErr;
+  if (!stage) return;
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .maybeSingle();
+  if (deal?.id) {
+    const { error: dErr } = await supabase
+      .from("deals")
+      .update({ pipeline_id: pipelineId, stage_id: stage.id })
+      .eq("id", deal.id);
+    if (dErr) throw dErr;
+  }
+}
+
+/** Move a deal to another pipeline. Also moves the linked conversation (if any). */
+export async function moveDealToPipeline(dealId: string, pipelineId: string) {
+  const stage = await firstStageOfPipeline(pipelineId);
+  if (!stage) throw new Error("Target pipeline has no stages");
+  const { data: deal, error: getErr } = await supabase
+    .from("deals")
+    .select("id, conversation_id")
+    .eq("id", dealId)
+    .single();
+  if (getErr) throw getErr;
+  const { error } = await supabase
+    .from("deals")
+    .update({ pipeline_id: pipelineId, stage_id: stage.id })
+    .eq("id", dealId);
+  if (error) throw error;
+  if (deal.conversation_id) {
+    await supabase
+      .from("conversations")
+      .update({ pipeline_id: pipelineId })
+      .eq("id", deal.conversation_id);
+  }
+}
+
 /** Make sure there is at least one (default) board for the workspace.
  * Returns the default board id. Idempotent. */
 export async function ensureDefaultPipeline(workspaceId: string): Promise<string> {
