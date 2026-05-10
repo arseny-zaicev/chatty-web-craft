@@ -34,7 +34,8 @@ export default function ResetPassword() {
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success("Password updated");
-    navigate("/portal-auth", { replace: true });
+    const next = new URLSearchParams(window.location.search).get("next");
+    navigate(next && next.startsWith("/") ? next : "/portal-auth", { replace: true });
   };
 
   return (
