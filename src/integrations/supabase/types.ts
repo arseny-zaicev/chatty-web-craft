@@ -2006,6 +2006,15 @@ export type Database = {
         | "billing"
         | "account_review"
         | "other"
+        | "number_approved"
+        | "display_name_approved"
+        | "display_name_rejected"
+        | "waba_restricted"
+        | "waba_blocked"
+        | "quality_changed"
+        | "tier_upgraded"
+        | "waba_status_other"
+        | "dropped"
       gupshup_mail_severity: "info" | "warning" | "critical"
       message_direction: "inbound" | "outbound"
       message_status:
@@ -2196,6 +2205,15 @@ export const Constants = {
         "billing",
         "account_review",
         "other",
+        "number_approved",
+        "display_name_approved",
+        "display_name_rejected",
+        "waba_restricted",
+        "waba_blocked",
+        "quality_changed",
+        "tier_upgraded",
+        "waba_status_other",
+        "dropped",
       ],
       gupshup_mail_severity: ["info", "warning", "critical"],
       message_direction: ["inbound", "outbound"],

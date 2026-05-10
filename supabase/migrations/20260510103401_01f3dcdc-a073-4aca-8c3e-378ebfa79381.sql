@@ -1,0 +1,9 @@
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'number_approved';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'display_name_approved';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'display_name_rejected';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'waba_restricted';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'waba_blocked';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'quality_changed';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'tier_upgraded';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'waba_status_other';
+ALTER TYPE public.gupshup_mail_category ADD VALUE IF NOT EXISTS 'dropped';
