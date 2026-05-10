@@ -236,7 +236,7 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New pipeline</DialogTitle>
-            <DialogDescription>Creates an independent board pre-seeded with default stages.</DialogDescription>
+          <DialogDescription>Creates an independent board pre-seeded with default stages.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -247,6 +247,21 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                 placeholder="e.g. Ads / India"
                 autoFocus
               />
+              <p className="text-[11px] text-muted-foreground">
+                Use a short operational name like Ads / India or Outbound / UK. Pick something your whole team will recognise.
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {NAME_EXAMPLES.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    onClick={() => setNewName(ex)}
+                    className="text-[11px] px-2 py-0.5 rounded-full border border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary/40 transition"
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Color</label>
