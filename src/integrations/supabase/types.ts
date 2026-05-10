@@ -1579,6 +1579,7 @@ export type Database = {
           is_favorite: boolean
           last_used_at: string | null
           position: number
+          scope: string
           tags: string[]
           title: string
           updated_at: string
@@ -1593,6 +1594,7 @@ export type Database = {
           is_favorite?: boolean
           last_used_at?: string | null
           position?: number
+          scope?: string
           tags?: string[]
           title: string
           updated_at?: string
@@ -1607,6 +1609,7 @@ export type Database = {
           is_favorite?: boolean
           last_used_at?: string | null
           position?: number
+          scope?: string
           tags?: string[]
           title?: string
           updated_at?: string
