@@ -142,6 +142,7 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
         folder: s.folder,
         tags: [] as string[],
         is_favorite: !!s.is_favorite,
+        scope: defaultScope,
       }));
       const { error } = await supabase.from("workspace_saved_replies").insert(rows);
       if (error) throw error;
