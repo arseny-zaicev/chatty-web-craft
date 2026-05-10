@@ -281,6 +281,7 @@ Deno.serve(async (req) => {
           id: r.id,
           user_id: r.user_id,
           role: r.role,
+          can_view_stats: Boolean((r as { can_view_stats?: boolean }).can_view_stats),
           joined_at: r.created_at,
           email: auth.email,
           full_name: prof.full_name,
