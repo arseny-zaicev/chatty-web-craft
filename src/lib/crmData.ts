@@ -74,15 +74,44 @@ export async function fetchCrmBase(workspaceId?: string) {
     conversationsQuery = conversationsQuery.eq("workspace_id", workspaceId);
   }
 
-  const [{ data: numbers, error: numbersError }, { data: conversations, error: conversationsError }] =
-    await Promise.all([
-      numbersQuery,
-      conversationsQuery,
-    ]);
+  let dealsQuery = supabase
+    .from("deals")
+    .select("conversation_id, stage_id, workspace_id");
+  let stagesQuery = supabase
+    .from("pipeline_stages")
+    .select("id, stage_type, workspace_id");
+  if (workspaceId) {
+    dealsQuery = dealsQuery.eq("workspace_id", workspaceId);
+    stagesQuery = stagesQuery.eq("workspace_id", workspaceId);
+  }
+
+  const [
+    { data: numbers, error: numbersError },
+    { data: conversations, error: conversationsError },
+    { data: deals, error: dealsError },
+    { data: stages, error: stagesError },
+  ] = await Promise.all([numbersQuery, conversationsQuery, dealsQuery, stagesQuery]);
 
   if (numbersError) throw numbersError;
   if (conversationsError) throw conversationsError;
-  return { numbers: (numbers ?? []) as WhatsAppNumber[], conversations: (conversations ?? []) as Conversation[] };
+  if (dealsError) throw dealsError;
+  if (stagesError) throw stagesError;
+
+  // Map conversation_id -> stage_type ("open" | "won" | "lost")
+  const stageTypeById = new Map<string, string>();
+  (stages ?? []).forEach((s: any) => stageTypeById.set(s.id, s.stage_type));
+  const conversationStageType = new Map<string, string>();
+  (deals ?? []).forEach((d: any) => {
+    if (!d.conversation_id || !d.stage_id) return;
+    const t = stageTypeById.get(d.stage_id);
+    if (t) conversationStageType.set(d.conversation_id, t);
+  });
+
+  return {
+    numbers: (numbers ?? []) as WhatsAppNumber[],
+    conversations: (conversations ?? []) as Conversation[],
+    conversationStageType,
+  };
 }
 
 const DEFAULT_WORKSPACE_STAGES: Array<{ name: string; color: string; stage_type: "open" | "won" | "lost" }> = [
