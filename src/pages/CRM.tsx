@@ -45,6 +45,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [numberFilter, setNumberFilter] = useState<string>("all");
   const [starredOnly, setStarredOnly] = useState(false);
   const [showNegative, setShowNegative] = useState(false);
+  const [repliedOnly, setRepliedOnly] = useState(false);
   const [sortMode, setSortMode] = useState<"recent" | "unread" | "oldest">("recent");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
