@@ -164,6 +164,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     .is("campaign_recipient_id", null)
     .order("imported_at", { ascending: true })
     .limit(claimLimit);
+  console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads?.length ?? 0}`);
   if (!leads || leads.length === 0) return { processed: 0 };
 
   // Get-or-create today's first-touch rolling campaigns (one per sender number)
