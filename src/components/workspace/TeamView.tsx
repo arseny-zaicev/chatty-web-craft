@@ -41,6 +41,7 @@ type InviteLink = {
   expires_at: string;
   revoked_at: string | null;
   created_at: string;
+  allowed_pipeline_ids: string[] | null;
 };
 
 function fmtRelative(iso: string | null | undefined): string {
