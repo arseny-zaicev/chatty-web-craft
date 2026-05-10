@@ -642,6 +642,7 @@ export type Database = {
           created_at: string
           id: string
           is_starred: boolean
+          last_auto_positive_alert_at: string | null
           last_message_at: string | null
           last_message_text: string | null
           pinned_at: string | null
@@ -661,6 +662,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_starred?: boolean
+          last_auto_positive_alert_at?: string | null
           last_message_at?: string | null
           last_message_text?: string | null
           pinned_at?: string | null
@@ -680,6 +682,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_starred?: boolean
+          last_auto_positive_alert_at?: string | null
           last_message_at?: string | null
           last_message_text?: string | null
           pinned_at?: string | null
