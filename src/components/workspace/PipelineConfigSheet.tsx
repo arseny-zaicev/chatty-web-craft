@@ -557,7 +557,7 @@ export default function PipelineConfigSheet({
                 checked={autoOutreach}
                 onCheckedChange={(v) => {
                   if (v && !readiness.allOk) {
-                    toast.error("Complete the checklist below first");
+                    firstBlockerToast();
                     return;
                   }
                   setAutoOutreach(v);
@@ -580,7 +580,20 @@ export default function PipelineConfigSheet({
             </div>
 
             <div>
-              <Label className="text-xs">First-touch template</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-xs">First-touch template</Label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={refreshTemplates}
+                  disabled={syncingTemplates}
+                >
+                  {syncingTemplates
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <><RefreshCw className="w-3 h-3 mr-1" />Refresh from Gupshup</>}
+                </Button>
+              </div>
               <Select value={templateId || "none"} onValueChange={(v) => setTemplateId(v === "none" ? "" : v)}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
                 <SelectContent>
@@ -600,23 +613,28 @@ export default function PipelineConfigSheet({
                 )}
                 {(numbers ?? []).map((n) => {
                   const selected = senderIds.includes(n.id);
-                  const inactive = n.status !== "active";
+                  const reasons = blockersFor(n);
+                  const blocked = reasons.length > 0;
                   return (
                     <button
                       key={n.id}
                       type="button"
                       onClick={() => setSenderIds((cur) => selected ? cur.filter((id) => id !== n.id) : [...cur, n.id])}
-                      className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"} ${inactive ? "opacity-60" : ""}`}
-                      title={inactive ? `Status: ${n.status}` : undefined}
+                      className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? (blocked ? "bg-amber-500/20 text-amber-900 border-amber-500/50" : "bg-primary text-primary-foreground border-primary") : "bg-card border-border hover:border-primary/50"} ${blocked && !selected ? "opacity-60" : ""}`}
+                      title={blocked ? `Blocked: ${reasons.join(", ")}` : "Ready to send"}
                     >
-                      {n.display_name || n.phone_number}{inactive ? ` · ${n.status}` : ""}
+                      {n.display_name || n.phone_number}
+                      {blocked ? ` · ${reasons[0]}` : ""}
                     </button>
                   );
                 })}
               </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Tap to toggle. Numbers must be Active or Ready, with API key, webhook, and approved templates.
+              </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div>
                 <Label className="text-xs">Window start</Label>
                 <Input type="time" value={winStart} onChange={(e) => setWinStart(e.target.value)} className="h-9" />
@@ -626,10 +644,28 @@ export default function PipelineConfigSheet({
                 <Input type="time" value={winEnd} onChange={(e) => setWinEnd(e.target.value)} className="h-9" />
               </div>
               <div>
+                <Label className="text-xs">Timezone</Label>
+                <Select value={timezone} onValueChange={setTimezone}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Asia/Kolkata">Asia/Kolkata (IST)</SelectItem>
+                    <SelectItem value="Asia/Dubai">Asia/Dubai (GST)</SelectItem>
+                    <SelectItem value="Europe/London">Europe/London</SelectItem>
+                    <SelectItem value="Europe/Berlin">Europe/Berlin</SelectItem>
+                    <SelectItem value="America/New_York">America/New_York</SelectItem>
+                    <SelectItem value="America/Los_Angeles">America/Los_Angeles</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label className="text-xs">Daily cap</Label>
                 <Input type="number" min={1} value={dailyCap} onChange={(e) => setDailyCap(e.target.value)} placeholder="e.g. 80" className="h-9" />
               </div>
             </div>
+            <p className="text-[10px] text-muted-foreground">
+              Sends between {winStart}-{winEnd} {timezone}.
+            </p>
           </div>
         </section>
 
