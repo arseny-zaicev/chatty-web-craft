@@ -13,10 +13,13 @@ export type LibraryField = {
   position: number;
 };
 
+export type SavedReplyScope = "workspace" | "personal";
+
 export type SavedReply = {
   id: string;
   workspace_id: string;
   user_id: string;
+  scope: SavedReplyScope;
   title: string;
   body: string;
   folder: string | null;
@@ -55,7 +58,7 @@ export async function fetchLibraryFields(workspaceId: string): Promise<LibraryFi
 export async function fetchSavedReplies(workspaceId: string): Promise<SavedReply[]> {
   const { data, error } = await supabase
     .from("workspace_saved_replies")
-    .select("id, workspace_id, user_id, title, body, folder, tags, is_favorite, last_used_at, position")
+    .select("id, workspace_id, user_id, scope, title, body, folder, tags, is_favorite, last_used_at, position")
     .eq("workspace_id", workspaceId)
     .order("is_favorite", { ascending: false })
     .order("title", { ascending: true });

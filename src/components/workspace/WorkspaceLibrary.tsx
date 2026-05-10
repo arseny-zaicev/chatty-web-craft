@@ -10,12 +10,15 @@ import {
   Loader2, Copy, ChevronDown, ChevronRight, Settings2, Pencil, Sparkles,
 } from "lucide-react";
 import {
-  BUILTIN_FIELDS, LibraryField, SavedReply,
+  BUILTIN_FIELDS, LibraryField, SavedReply, SavedReplyScope,
   fetchLibraryFields, fetchSavedReplies, libraryKeys,
 } from "@/lib/workspaceLibrary";
+import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
 
 const ALL = "__all__";
 const FAV = "__fav__";
+const SCOPE_ALL = "all" as const;
+type ScopeFilter = typeof SCOPE_ALL | SavedReplyScope;
 
 type Draft = Partial<SavedReply> & { url?: string };
 
@@ -40,9 +43,14 @@ const STARTER_PACK: { title: string; body: string; folder: string; is_favorite?:
 export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [activeFolder, setActiveFolder] = useState<string>(ALL);
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(SCOPE_ALL);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Draft | null>(null);
   const [showVars, setShowVars] = useState(false);
+
+  const { data: role } = useWorkspaceRole(workspaceId);
+  const canManageWorkspace = isManagerLike(role);
+  const defaultScope: SavedReplyScope = canManageWorkspace ? "workspace" : "personal";
 
   const { data: replies = [], isLoading } = useQuery({
     queryKey: libraryKeys.replies(workspaceId),
@@ -64,6 +72,7 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
 
   const items = useMemo(() => {
     return replies.filter((r) => {
+      if (scopeFilter !== SCOPE_ALL && r.scope !== scopeFilter) return false;
       if (activeFolder === FAV && !r.is_favorite) return false;
       if (activeFolder !== ALL && activeFolder !== FAV) {
         const f = r.folder?.trim() || "Uncategorized";
@@ -75,7 +84,10 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
       }
       return true;
     });
-  }, [replies, activeFolder, q]);
+  }, [replies, activeFolder, scopeFilter, q]);
+
+  const workspaceCount = useMemo(() => replies.filter((r) => r.scope === "workspace").length, [replies]);
+  const personalCount = useMemo(() => replies.filter((r) => r.scope === "personal").length, [replies]);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: libraryKeys.replies(workspaceId) });
@@ -85,12 +97,16 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sign in required");
       const folder = r.folder?.trim() || null;
+      const requestedScope: SavedReplyScope = (r.scope as SavedReplyScope) || defaultScope;
+      // Non-managers can only create/own personal replies.
+      const scope: SavedReplyScope = !canManageWorkspace ? "personal" : requestedScope;
       const payload = {
         title: r.title?.trim() ?? "",
         body: r.body ?? "",
         folder,
         tags: r.tags ?? [],
         is_favorite: !!r.is_favorite,
+        scope,
       };
       if (r.id) {
         const { error } = await supabase.from("workspace_saved_replies").update(payload).eq("id", r.id);
@@ -126,6 +142,7 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
         folder: s.folder,
         tags: [] as string[],
         is_favorite: !!s.is_favorite,
+        scope: defaultScope,
       }));
       const { error } = await supabase.from("workspace_saved_replies").insert(rows);
       if (error) throw error;
@@ -158,9 +175,18 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           <FolderRow icon={FolderOpen} label="All snippets" count={replies.length}
-            active={activeFolder === ALL} onClick={() => setActiveFolder(ALL)} />
+            active={activeFolder === ALL && scopeFilter === SCOPE_ALL}
+            onClick={() => { setActiveFolder(ALL); setScopeFilter(SCOPE_ALL); }} />
           <FolderRow icon={Star} label="Favorites" count={replies.filter((r) => r.is_favorite).length}
             active={activeFolder === FAV} onClick={() => setActiveFolder(FAV)} starred />
+          <div className="h-px bg-border my-2" />
+          <div className="px-2 pt-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">Scope</div>
+          <FolderRow icon={Sparkles} label="Workspace" count={workspaceCount}
+            active={scopeFilter === "workspace"}
+            onClick={() => setScopeFilter(scopeFilter === "workspace" ? SCOPE_ALL : "workspace")} />
+          <FolderRow icon={MessageSquare} label="My personal" count={personalCount}
+            active={scopeFilter === "personal"}
+            onClick={() => setScopeFilter(scopeFilter === "personal" ? SCOPE_ALL : "personal")} />
           <div className="h-px bg-border my-2" />
           {folders.length === 0 && (
             <div className="text-xs text-muted-foreground px-2 py-3">No folders yet.</div>
@@ -206,6 +232,7 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
           <Button size="sm" className="h-8" onClick={() => setEditing({
             title: "", body: "", folder: activeFolder !== ALL && activeFolder !== FAV ? activeFolder : "",
             tags: [], is_favorite: false,
+            scope: scopeFilter !== SCOPE_ALL ? scopeFilter : defaultScope,
           })}>
             <Plus className="w-3.5 h-3.5 mr-1" />New
           </Button>
@@ -232,6 +259,7 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
                 <Button size="sm" variant="outline" onClick={() => setEditing({
                   title: "", body: "", folder: activeFolder !== ALL && activeFolder !== FAV ? activeFolder : "",
                   tags: [], is_favorite: false,
+                  scope: scopeFilter !== SCOPE_ALL ? scopeFilter : defaultScope,
                 })}>
                   <Plus className="w-3.5 h-3.5 mr-1" />Add snippet
                 </Button>
@@ -246,6 +274,9 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {items.map((r) => {
                 const isLink = looksLikeUrl(r.body);
+                const canEdit = r.scope === "personal"
+                  ? true /* RLS will block if not owner */
+                  : canManageWorkspace;
                 return (
                   <div key={r.id} className="group rounded-lg border border-border bg-card/40 hover:border-primary/40 hover:bg-card/70 transition p-3 flex flex-col gap-2">
                     <div className="flex items-start gap-2 min-w-0">
@@ -255,7 +286,16 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
                         {isLink ? <Link2 className="w-3.5 h-3.5" /> : <MessageSquare className="w-3.5 h-3.5" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">{r.title || "Untitled"}</div>
+                        <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                          <span className="truncate">{r.title || "Untitled"}</span>
+                          <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
+                            r.scope === "workspace"
+                              ? "bg-primary/10 text-primary border border-primary/20"
+                              : "bg-muted text-muted-foreground border border-border"
+                          }`}>
+                            {r.scope === "workspace" ? "Shared" : "Personal"}
+                          </span>
+                        </div>
                         <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5 break-words">{r.body}</div>
                       </div>
                       <button onClick={() => toggleFav(r)} title="Favorite" className="shrink-0">
@@ -266,13 +306,17 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => copy(r.body)}>
                         <Copy className="w-3 h-3 mr-1" />Copy
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditing(r)}>
-                        <Pencil className="w-3 h-3 mr-1" />Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-auto text-destructive"
-                        onClick={() => { if (confirm(`Delete "${r.title}"?`)) del.mutate(r.id); }}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {canEdit && (
+                        <>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditing(r)}>
+                            <Pencil className="w-3 h-3 mr-1" />Edit
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-auto text-destructive"
+                            onClick={() => { if (confirm(`Delete "${r.title}"?`)) del.mutate(r.id); }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -317,6 +361,35 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
                 <input type="checkbox" checked={!!editing.is_favorite} onChange={(e) => setEditing({ ...editing, is_favorite: e.target.checked })} />
                 Favorite
               </label>
+              <Field label="Visibility" hint={canManageWorkspace
+                ? "Shared snippets are available to everyone in this workspace. Personal ones are only visible to you."
+                : "You can only create personal snippets. Shared snippets are managed by the workspace owner."}>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={!canManageWorkspace}
+                    onClick={() => setEditing({ ...editing, scope: "workspace" })}
+                    className={`flex-1 text-xs px-3 py-2 rounded border transition ${
+                      (editing.scope ?? defaultScope) === "workspace"
+                        ? "bg-primary/10 text-primary border-primary/40"
+                        : "border-border text-muted-foreground hover:border-primary/30"
+                    } ${!canManageWorkspace ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    Shared (workspace)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing({ ...editing, scope: "personal" })}
+                    className={`flex-1 text-xs px-3 py-2 rounded border transition ${
+                      (editing.scope ?? defaultScope) === "personal"
+                        ? "bg-primary/10 text-primary border-primary/40"
+                        : "border-border text-muted-foreground hover:border-primary/30"
+                    }`}
+                  >
+                    Personal (only me)
+                  </button>
+                </div>
+              </Field>
             </div>
             <div className="px-4 py-3 border-t border-border flex items-center justify-end gap-2">
               <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
