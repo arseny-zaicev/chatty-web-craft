@@ -232,6 +232,7 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
           <Button size="sm" className="h-8" onClick={() => setEditing({
             title: "", body: "", folder: activeFolder !== ALL && activeFolder !== FAV ? activeFolder : "",
             tags: [], is_favorite: false,
+            scope: scopeFilter !== SCOPE_ALL ? scopeFilter : defaultScope,
           })}>
             <Plus className="w-3.5 h-3.5 mr-1" />New
           </Button>
