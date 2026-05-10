@@ -13,10 +13,13 @@ export type LibraryField = {
   position: number;
 };
 
+export type SavedReplyScope = "workspace" | "personal";
+
 export type SavedReply = {
   id: string;
   workspace_id: string;
   user_id: string;
+  scope: SavedReplyScope;
   title: string;
   body: string;
   folder: string | null;
