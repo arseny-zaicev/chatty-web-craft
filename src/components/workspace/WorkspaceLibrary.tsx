@@ -72,6 +72,7 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
 
   const items = useMemo(() => {
     return replies.filter((r) => {
+      if (scopeFilter !== SCOPE_ALL && r.scope !== scopeFilter) return false;
       if (activeFolder === FAV && !r.is_favorite) return false;
       if (activeFolder !== ALL && activeFolder !== FAV) {
         const f = r.folder?.trim() || "Uncategorized";
@@ -83,7 +84,10 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
       }
       return true;
     });
-  }, [replies, activeFolder, q]);
+  }, [replies, activeFolder, scopeFilter, q]);
+
+  const workspaceCount = useMemo(() => replies.filter((r) => r.scope === "workspace").length, [replies]);
+  const personalCount = useMemo(() => replies.filter((r) => r.scope === "personal").length, [replies]);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: libraryKeys.replies(workspaceId) });
