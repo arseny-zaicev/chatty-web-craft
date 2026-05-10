@@ -116,7 +116,7 @@ serve(async (req) => {
 
     const { data: conv, error: convErr } = await admin
       .from("conversations")
-      .select("id, user_id, contact_phone, whatsapp_number_id")
+      .select("id, user_id, contact_phone, whatsapp_number_id, workspace_id")
       .eq("id", conversation_id)
       .maybeSingle();
     if (convErr || !conv) {
@@ -126,9 +126,20 @@ serve(async (req) => {
       });
     }
     if (conv.user_id !== userId) {
-      // Allow admin
+      // Allow admin OR any member of the conversation's workspace
+      let allowed = false;
       const { data: isAdminData } = await admin.rpc("is_admin", { _user_id: userId });
-      if (!isAdminData) {
+      if (isAdminData) allowed = true;
+      if (!allowed && conv.workspace_id) {
+        const { data: member } = await admin
+          .from("workspace_members")
+          .select("id")
+          .eq("workspace_id", conv.workspace_id)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (member) allowed = true;
+      }
+      if (!allowed) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
