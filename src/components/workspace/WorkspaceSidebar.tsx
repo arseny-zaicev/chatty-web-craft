@@ -13,13 +13,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceAccess, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 
-const clientTabs = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
+const overviewTab = { key: "overview", label: "Overview", icon: LayoutDashboard };
+const campaignsTab = { key: "campaigns", label: "Campaigns", icon: Megaphone };
+const baseClientTabs = [
   { key: "inbox", label: "Inbox", icon: Inbox },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
-  { key: "campaigns", label: "Campaigns", icon: Megaphone },
 ];
 const managerExtras = [
   { key: "data", label: "Data", icon: Database },
