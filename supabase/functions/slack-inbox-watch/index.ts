@@ -10,6 +10,14 @@ const corsHeaders = {
 const UNREAD_THRESHOLD = 5;
 const COOLDOWN_HOURS = 2;
 
+function isTerminalReply(text: string | null | undefined): boolean {
+  const normalized = String(text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?\s]+$/g, "");
+  return normalized === "block" || normalized === "not for me";
+}
+
 function isQuietHourUAE(now = new Date()): boolean {
   const uaeHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dubai", hour: "2-digit", hour12: false }).format(now));
   return uaeHour >= 22 || uaeHour < 9;
@@ -56,10 +64,10 @@ Deno.serve(async (req) => {
       .limit(40);
     if (cErr) { console.error("conv fetch", cErr.message); continue; }
 
-    // Drop conversations whose linked deal sits in a "lost" stage
-    // (Block / Not interested / Lost). No point pinging the team about
-    // contacts who already said no.
-    let convs = convsRaw || [];
+    // Drop conversations that are already terminal-no replies. Some imports
+    // still sit in an open CRM stage until an operator moves them, so stage
+    // filtering alone is not enough for Slack inbox alerts.
+    let convs = (convsRaw || []).filter((c) => !isTerminalReply(c.last_message_text));
     if (convs.length > 0) {
       const ids = convs.map((c) => c.id);
       const { data: deals } = await supabase
