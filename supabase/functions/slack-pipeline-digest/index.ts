@@ -48,8 +48,14 @@ Deno.serve(async (req) => {
   // Pipelines that have a Slack channel
   const { data: pipelines, error: pErr } = await supabase
     .from("pipelines")
-    .select("id, name, slack_channel_id, workspace_id, workspaces(name, internal_code)")
+    .select("id, name, slack_channel_id, workspace_id")
     .not("slack_channel_id", "is", null);
+
+  const wsIds = Array.from(new Set((pipelines || []).map(p => p.workspace_id).filter(Boolean)));
+  const { data: wsRows } = wsIds.length
+    ? await supabase.from("workspaces").select("id, name, internal_code").in("id", wsIds)
+    : { data: [] as any[] };
+  const wsMap = new Map((wsRows || []).map(w => [w.id, w]));
 
   if (pErr) {
     return new Response(JSON.stringify({ error: pErr.message }), { status: 500, headers: corsHeaders });
