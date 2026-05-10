@@ -167,6 +167,37 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads?.length ?? 0}`);
   if (!leads || leads.length === 0) return { processed: 0 };
 
+  // Hard duplicate guard: if this phone already has an ACTIVE first-touch
+  // recipient in this pipeline (pending/scheduled/sent/replied), skip the lead.
+  // Failed recipients do NOT block (allows manual retry).
+  const phones = Array.from(new Set((leads as any[]).map((l) => l.phone).filter(Boolean)));
+  const blockedPhones = new Set<string>();
+  if (phones.length) {
+    const { data: existingRecs } = await admin
+      .from("campaign_recipients")
+      .select("contact_phone, status, campaigns!inner(pipeline_id, kind)")
+      .in("contact_phone", phones)
+      .in("status", ["pending", "scheduled", "sent", "replied"])
+      .eq("campaigns.pipeline_id", pipeline.id)
+      .eq("campaigns.kind", "first_touch");
+    for (const r of existingRecs || []) blockedPhones.add(String((r as any).contact_phone));
+  }
+  if (blockedPhones.size) {
+    const dupLeadIds = (leads as any[]).filter((l) => blockedPhones.has(l.phone)).map((l) => l.id);
+    if (dupLeadIds.length) {
+      await admin
+        .from("lead_imports")
+        .update({ status: "skipped", error: "duplicate first-touch (already messaged in this pipeline)" })
+        .in("id", dupLeadIds)
+        .in("status", ["pending", "awaiting_manual"]);
+      console.log(`[lead-dispatch] pipeline=${pipeline.id} skipped_duplicates=${dupLeadIds.length}`);
+    }
+  }
+  const filteredLeads = (leads as any[]).filter((l) => !blockedPhones.has(l.phone));
+  if (filteredLeads.length === 0) return { processed: 0, skipped_duplicates: blockedPhones.size };
+  (leads as any).length = 0;
+  for (const l of filteredLeads) (leads as any).push(l);
+
   // Get-or-create today's first-touch rolling campaigns (one per sender number)
   const today = dayKey(Date.now(), tz);
   const baseName = `First touch · ${pipeline.name} · ${today}`;

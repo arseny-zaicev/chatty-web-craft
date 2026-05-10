@@ -1,96 +1,53 @@
-## Что я уже увидел по фактам
+# План: чистый Slack + защита от дублей
 
-1. Это не только проблема `+91`.
-   - Ankur импортирован как `918269603031`, то есть номер уже нормальный для India.
-   - Сообщения по нему реально пытались отправляться, но падали.
+## Что не так сейчас
 
-2. Главная причина текущих failed:
-   - Gupshup возвращает `OAuthException, (#131008) Required parameter is missing`.
-   - У шаблона `bm_request_confirmation` есть переменная `{{1}}`, а в `campaign_recipients.variables` сейчас пусто: `{}`.
-   - Поэтому отправка уходит без обязательного параметра шаблона. Это объясняет, почему даже нормальный номер Ankur падает.
+**1. Slack-шум.** В канал пайплайна летят системные события: `lead.imported`, `lead.dispatched`, `lead.dispatch_blocked`, `lead.import_failed`. Клиенту это не нужно - импорт идёт постоянно автоматически. Нужны только реальные ответы лидов.
 
-3. Есть отдельный баг с повторной постановкой одного и того же лида в очередь.
-   - По Ankur уже создано много `campaign_recipients`, но `lead_imports` всё ещё `awaiting_manual` и не привязан к recipient.
-   - Значит `lead-dispatch` вставляет recipient, но не всегда успешно обновляет сам `lead_imports`.
-   - Cron снова видит этот лид как `awaiting_manual` и повторно создаёт отправки.
+**2. Дубли отправки (Ankur 6×).** Сегодня одному номеру `918269603031` ушло **7 успешных** сообщений подряд из first-touch кампании. Причина: до фикса CHECK-constraint каждый запуск cron видел `lead_imports.status='awaiting_manual'` и создавал НОВЫЙ `campaign_recipient`, потому что апдейт статуса лида молча падал. Constraint мы починили, но защиты на уровне «1 first-touch на номер» в коде нет - если завтра снова что-то отвалится, опять начнётся спам.
 
-4. Проблема `+91` всё равно нужна.
-   - Сейчас `p:+918269...` чистится нормально.
-   - Но `p:7909022806` станет `7909022806`, без country code.
-   - Для India надо превращать 10-значные локальные номера в `91xxxxxxxxxx`.
+---
 
-5. Ответы на вопросы уже попадают в `lead_imports.payload`.
-   - Например у Ankur есть `company_name`, `email`, `do_you_currently_own_or_manage_a_meta_business_manager?`, `has_this_business_manager_previously_run_ads?`, `is_the_business_manager_verified?`.
-   - Сейчас они не передаются в `campaign_recipients.variables` и не показываются нормально в контексте отправки.
+## Что делаем
 
-## План исправления
+### A. Slack — оставить только реальные ответы лидов
 
-### 1. Остановить повторные отправки одного и того же лида
+В `slack-dispatch/index.ts`:
+- **Удаляем** обработку и отправку для: `lead.imported`, `lead.import_failed`, `lead.dispatched`, `lead.dispatch_blocked` → помечаем как `skipped`, в Slack ничего не идёт.
+- **Оставляем** `positive_lead` (когда менеджер пометил чат звёздочкой).
+- **Добавляем новое событие `lead.first_reply`** - срабатывает, когда лид впервые ответил на наш first-touch. В Slack уходит карточка: имя, телефон, текст ответа, кнопка «Открыть в Inbox». Дубли по одному лиду не шлём (используем `last_auto_positive_alert_at` или новое поле).
 
-В `lead-dispatch`:
-- перед вставкой recipient проверять, что у лида ещё нет `campaign_recipient_id` или активного recipient по этому lead/import;
-- сделать обновление `lead_imports` более надёжным: если recipient создан, статус лида должен стать `queued`, а не оставаться `awaiting_manual`;
-- если обновление лида не удалось, не оставлять новый recipient как scheduled - пометить его failed/cancelled-подобным безопасным статусом через существующий `failed` с понятной ошибкой, чтобы cron не размножал дубли;
-- добавить защиту от дублей по связке `pipeline_id + phone + first_touch campaign date`, чтобы один imported lead не создавал 10 одинаковых попыток.
+Триггер для `lead.first_reply`: расширяем существующий `mark_lead_replied_on_inbound` - когда `lead_imports.status` переходит `sent → replied`, кладём событие в `slack_event_queue` с типом `lead.first_reply` и payload (conversation_id, contact_name, contact_phone, last_message_text, pipeline_id для маршрутизации в нужный канал).
 
-### 2. Заполнить обязательные переменные шаблона
+### B. Жёсткая защита от повторной отправки
 
-В `lead-dispatch`:
-- при создании `campaign_recipients` формировать `variables` из данных лида;
-- для текущего шаблона с `variables: ["1"]` передавать:
-  - `1 = lead.name`, если имя есть;
-  - иначе `1 = "there"` как безопасный fallback.
+В `lead-dispatch/index.ts` перед каждым `INSERT` в `campaign_recipients` для first-touch:
 
-Это должно убрать `(#131008) Required parameter is missing` для Ankur и похожих лидов.
+1. **Проверка по `(pipeline_id, contact_phone)`**: если в `campaign_recipients` уже есть запись для этого телефона по любой first-touch кампании этого pipeline со статусом `pending/scheduled/sent/replied` - **пропускаем** (логируем `skipped: duplicate first-touch`). Лид помечается `status='skipped'` с понятной ошибкой.
+2. **Только при `failed`** - разрешаем создать новую попытку (это ответ на пожелание «если ошибка - можем потом руками»).
+3. Добавляем БД-индекс `idx_recipients_pipeline_phone_active` для быстрого lookup.
+4. Те же 6 «лишних» recipients Ankur-у уже либо `failed`, либо доставлены - чистка не нужна, но добавим разовый SQL-сброс зависших `pending/scheduled` дублей по телефонам, у которых уже есть `sent`.
 
-### 3. Нормализовать телефоны правильно для Meta/Sheets
+### C. Inbox - показывать ответы лидов на вопросы
 
-В `google-sheets-sync` и `lead-intake`:
-- чистить префиксы до номера: `p:`, `P:`, `П:`, `tel:`, `phone:`, `whatsapp:`;
-- пропускать Meta test leads как `skipped_test`, а не считать их обычными invalid;
-- добавить поддержку `default_country_code` в `source_connections.config`;
-- для India sources поставить `default_country_code: "91"`;
-- если номер после очистки 10-значный и задан default country code, сохранять как `91xxxxxxxxxx`;
-- если номер уже начинается с `91` и нормальной длины, не добавлять код второй раз.
+Бонусом (вы просили раньше): ответы на квиз-вопросы из `lead_imports.payload` (company_name, email, BM ownership и т.д.) показываем в правой панели чата в Inbox под контактом - блок «Ответы из формы».
 
-### 4. Починить текущие данные после исправления кода
+---
 
-Один раз после деплоя:
-- у India source выставить `default_country_code: "91"`;
-- поправить второй source: `name_column` сейчас `namefull_name`, надо `full_name`;
-- для существующих invalid/awaiting_manual лидов попробовать повторно нормализовать телефон;
-- валидные лиды перевести в `pending`, только если они ещё не были успешно поставлены/отправлены;
-- для дублей Ankur оставить только одну актуальную scheduled/queued попытку, остальные failed с понятной причиной вроде `duplicate first-touch attempt cleanup`.
+## Технические детали
 
-### 5. Передавать ответы на вопросы в контекст лида
+**Файлы:**
+- `supabase/functions/slack-dispatch/index.ts` - убрать ветку `lead.*`, добавить ветку `lead.first_reply` с карточкой.
+- `supabase/functions/lead-dispatch/index.ts` - дедуп-проверка перед `INSERT campaign_recipients`.
+- Migration: триггер `enqueue_first_reply_event` на `lead_imports` (AFTER UPDATE WHEN OLD.status='sent' AND NEW.status='replied'), плюс индекс для дедупа.
+- `src/pages/.../Inbox*.tsx` (компонент правой панели) - подтянуть `lead_imports.payload` по `conversation_id` и отрендерить.
 
-В `lead-dispatch`:
-- сохранять в `campaign_recipients.variables` не только `1`, но и readable поля из `payload`:
-  - company name;
-  - email;
-  - owns/manages BM;
-  - BM ran ads before;
-  - BM verified;
-  - form name;
-  - campaign/adset/ad name, если есть.
+**Не трогаем:** campaign-events, number-events, gupshup_mail, inbox_unread_spike - они идут в ops-каналы, не в клиентский.
 
-Это не обязательно попадёт в WhatsApp-шаблон, если шаблон использует только `{{1}}`, но эти данные будут доступны в recipient/message metadata и дальше их можно показать в Inbox/lead details.
+---
 
-### 6. Проверить отправку после фикса
+## Чего НЕ будет
 
-После изменений:
-- задеплоить `google-sheets-sync`, `lead-intake`, `lead-dispatch`, `campaigns`;
-- вручную вызвать `lead-dispatch`;
-- проверить, что:
-  - новые recipients создаются один раз на лид;
-  - `variables` содержит `1`;
-  - ошибка `#131008` ушла;
-  - `lead_imports` меняется с `pending/awaiting_manual` на `queued`;
-  - `campaigns` после due-времени даёт либо `sent`, либо уже новую конкретную ошибку провайдера, если проблема будет не в переменных.
-
-## Почему именно так
-
-- `+91` решает только часть входных номеров.
-- Текущий failed у Ankur происходит не из-за телефона, а из-за пустых template params.
-- Пока не починить привязку `lead_imports -> campaign_recipients`, система будет повторно пытаться отправлять одному и тому же человеку.
-- Ответы на вопросы уже есть в базе, нужно просто протащить их дальше в очередь/контекст.
+- Авто-определения «yes/да/интересно» по тексту - вы выбрали «любой первый ответ», поэтому слать будем на любое первое входящее (без классификации).
+- Уведомлений об импортах - полностью молчим.
+- 30-дневной блокировки - только жёсткая по pipeline+phone, ручной retry возможен.
