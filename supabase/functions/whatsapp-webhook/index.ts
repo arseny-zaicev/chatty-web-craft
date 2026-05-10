@@ -365,7 +365,6 @@ async function handleInbound(payload: Record<string, unknown>) {
     }
   }
 }
-}
 
 async function handleStatus(payload: Record<string, unknown>) {
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
