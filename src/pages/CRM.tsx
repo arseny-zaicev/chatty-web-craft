@@ -45,7 +45,8 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [numberFilter, setNumberFilter] = useState<string>("all");
   const [starredOnly, setStarredOnly] = useState(false);
   const [showNegative, setShowNegative] = useState(false);
-  const [sortMode, setSortMode] = useState<"recent" | "unread" | "oldest">("recent");
+  const [repliedOnly, setRepliedOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<"recent" | "unread" | "oldest" | "replied">("recent");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -322,6 +323,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [messages.length, activeId]);
 
   const stageTypeByConv = baseData?.conversationStageType ?? new Map<string, string>();
+  const repliedSet = baseData?.repliedConversationIds ?? new Set<string>();
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {
@@ -336,15 +338,24 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
           return a.unread_count > 0 ? -1 : 1;
         }
       }
+      if (sortMode === "replied") {
+        const ra = repliedSet.has(a.id);
+        const rb = repliedSet.has(b.id);
+        if (ra !== rb) return ra ? -1 : 1;
+      }
       const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
       const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
       return sortMode === "oldest" ? ta - tb : tb - ta;
     });
-  }, [conversations, sortMode]);
+  }, [conversations, sortMode, repliedSet]);
 
   const negativeCount = useMemo(
     () => conversations.filter((c) => stageTypeByConv.get(c.id) === "lost").length,
     [conversations, stageTypeByConv],
+  );
+  const repliedCount = useMemo(
+    () => conversations.filter((c) => repliedSet.has(c.id)).length,
+    [conversations, repliedSet],
   );
 
   const filtered = sorted.filter((c) => {
@@ -357,6 +368,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (numberFilter !== "all" && c.whatsapp_number_id !== numberFilter) return false;
     if (starredOnly && !c.is_starred) return false;
     if (myOnly && meId && c.assigned_user_id !== meId) return false;
+    if (repliedOnly && !repliedSet.has(c.id)) return false;
     if (search) {
       const q = search.toLowerCase();
       const hay = `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`.toLowerCase();
@@ -474,6 +486,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   My chats
                 </button>
                 <button
+                  onClick={() => setRepliedOnly((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
+                    repliedOnly
+                      ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/40"
+                      : "border-border text-muted-foreground hover:border-emerald-500/40"
+                  }`}
+                  title="Show only conversations where the contact replied"
+                >
+                  Replied{repliedCount > 0 && ` · ${repliedCount}`}
+                </button>
+                <button
                   onClick={() => setShowNegative((v) => !v)}
                   className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
                     showNegative
@@ -491,6 +514,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   title="Sort conversations"
                 >
                   <option value="recent">Recent</option>
+                  <option value="replied">Replied first</option>
                   <option value="unread">Unread first</option>
                   <option value="oldest">Oldest</option>
                 </select>

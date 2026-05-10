@@ -107,10 +107,23 @@ export async function fetchCrmBase(workspaceId?: string) {
     if (t) conversationStageType.set(d.conversation_id, t);
   });
 
+  // Set of conversation ids that have at least one inbound message (i.e. contact replied).
+  const repliedConversationIds = new Set<string>();
+  const convIds = (conversations ?? []).map((c: any) => c.id);
+  if (convIds.length > 0) {
+    const { data: inbound } = await supabase
+      .from("messages")
+      .select("conversation_id")
+      .eq("direction", "inbound")
+      .in("conversation_id", convIds);
+    (inbound ?? []).forEach((m: any) => repliedConversationIds.add(m.conversation_id));
+  }
+
   return {
     numbers: (numbers ?? []) as WhatsAppNumber[],
     conversations: (conversations ?? []) as Conversation[],
     conversationStageType,
+    repliedConversationIds,
   };
 }
 
