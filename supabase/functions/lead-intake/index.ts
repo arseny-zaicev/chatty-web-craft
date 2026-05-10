@@ -69,11 +69,13 @@ Deno.serve(async (req) => {
 
     const { data: source } = await admin
       .from("source_connections")
-      .select("id, workspace_id, pipeline_id, kind, status, name")
+      .select("id, workspace_id, pipeline_id, kind, status, name, config")
       .eq("secret_token", token)
       .maybeSingle();
     if (!source) return json({ error: "Invalid source token" }, 403);
     if (source.status !== "active") return json({ error: `Source is ${source.status}` }, 423);
+    const defaultCC = (source as any).config?.default_country_code
+      ? String((source as any).config.default_country_code) : null;
 
     // Resolve pipeline + workspace defaults for first-touch
     const { data: pipeline } = await admin
