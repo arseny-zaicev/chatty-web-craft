@@ -234,17 +234,8 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   };
 
   // Auth gate + me id
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) navigate("/admin-auth");
-      else setMeId(data.session.user.id);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) navigate("/admin-auth");
-      else setMeId(session.user.id);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  const authedUserId = useRequireAuth("/admin-auth");
+  useEffect(() => { setMeId(authedUserId); }, [authedUserId]);
 
   useEffect(() => {
     if (!baseData) return;
@@ -269,29 +260,25 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [activeId, conversations]);
 
   // Realtime conversations
-  useEffect(() => {
-    const channel = supabase
-      .channel("crm-conversations")
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
-        setConversations((prev) => {
-          if (payload.eventType === "DELETE") {
-            return prev.filter((c) => c.id !== (payload.old as Conversation).id);
-          }
-          const incoming = payload.new as Conversation;
-          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
-          const idx = prev.findIndex((c) => c.id === incoming.id);
-          const next = idx >= 0
-            ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
-            : [incoming, ...prev];
-          queryClient.setQueryData(crmKeys.base(workspaceId), { numbers, conversations: next });
-          return next;
-        });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [numbers, queryClient, workspaceId]);
+  useRealtimeTable<Conversation>(
+    { channel: "crm-conversations", table: "conversations" },
+    (payload) => {
+      setConversations((prev) => {
+        if (payload.eventType === "DELETE") {
+          return prev.filter((c) => c.id !== (payload.old as Conversation).id);
+        }
+        const incoming = payload.new as Conversation;
+        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
+        const idx = prev.findIndex((c) => c.id === incoming.id);
+        const next = idx >= 0
+          ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
+          : [incoming, ...prev];
+        queryClient.setQueryData(crmKeys.base(workspaceId), { numbers, conversations: next });
+        return next;
+      });
+    },
+    [numbers, queryClient, workspaceId],
+  );
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -301,17 +288,12 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     }
     let cancelled = false;
     setLoadingMessages(true);
-    supabase
-      .from("messages")
-      .select("id, direction, body, media_url, status, created_at, sent_by_user_id")
-      .eq("conversation_id", activeId)
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (cancelled) return;
-        setMessages((data ?? []) as Message[]);
-        setLoadingMessages(false);
-      });
-    supabase.from("conversations").update({ unread_count: 0 }).eq("id", activeId).then(() => {});
+    fetchConversationMessages(activeId).then((data) => {
+      if (cancelled) return;
+      setMessages(data as Message[]);
+      setLoadingMessages(false);
+    });
+    void markConversationRead(activeId).catch(() => {});
     void touchResponder(activeId);
     return () => {
       cancelled = true;
@@ -319,23 +301,21 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [activeId]);
 
   // Realtime messages for active conversation
-  useEffect(() => {
-    if (!activeId) return;
-    const channel = supabase
-      .channel(`crm-messages-${activeId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${activeId}` },
-        (payload) => {
-          const newMsg = payload.new as Message;
-          setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeId]);
+  useRealtimeTable<Message>(
+    {
+      channel: `crm-messages-${activeId ?? "none"}`,
+      table: "messages",
+      event: "INSERT",
+      filter: activeId ? `conversation_id=eq.${activeId}` : undefined,
+      enabled: !!activeId,
+    },
+    (payload) => {
+      const newMsg = payload.new as Message;
+      setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+    },
+    [activeId],
+  );
+
 
   useEffect(() => {
     // On conversation switch: snap to bottom instantly, reset stickiness.
