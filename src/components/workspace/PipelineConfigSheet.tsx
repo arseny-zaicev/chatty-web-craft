@@ -135,6 +135,30 @@ export default function PipelineConfigSheet({
     },
   });
 
+  const { data: counters } = useQuery({
+    queryKey: ["pipeline-lead-counters", pipeId],
+    enabled: Boolean(pipeId && open),
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
+      const base = supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!);
+      const [pending, queued, sentToday, failedToday, repliedToday] = await Promise.all([
+        base.eq("status", "pending"),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "queued"),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "sent").gte("sent_at", todayStart.toISOString()),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "failed").gte("scheduled_at", todayStart.toISOString()),
+        supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!).eq("status", "replied").gte("sent_at", todayStart.toISOString()),
+      ]);
+      return {
+        pending: pending.count ?? 0,
+        queued: queued.count ?? 0,
+        sent: sentToday.count ?? 0,
+        failed: failedToday.count ?? 0,
+        replied: repliedToday.count ?? 0,
+      };
+    },
+  });
+
   useEffect(() => {
     if (open && pipeline) hydrate(pipeline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -222,6 +246,22 @@ export default function PipelineConfigSheet({
             Configure how leads enter this pipeline and how the team is notified.
           </SheetDescription>
         </SheetHeader>
+
+        {/* Live counters */}
+        <section className="mt-4 grid grid-cols-5 gap-2">
+          {[
+            { label: "Pending", value: counters?.pending ?? 0, tone: "text-amber-600" },
+            { label: "Queued", value: counters?.queued ?? 0, tone: "text-blue-600" },
+            { label: "Sent today", value: counters?.sent ?? 0, tone: "text-emerald-600" },
+            { label: "Replied", value: counters?.replied ?? 0, tone: "text-violet-600" },
+            { label: "Failed", value: counters?.failed ?? 0, tone: "text-destructive" },
+          ].map((c) => (
+            <div key={c.label} className="rounded-lg border border-border bg-card/40 px-2 py-1.5 text-center">
+              <div className={`text-base font-semibold tabular-nums ${c.tone}`}>{c.value}</div>
+              <div className="text-[10px] text-muted-foreground">{c.label}</div>
+            </div>
+          ))}
+        </section>
 
         {/* Sources */}
         <section className="mt-6 space-y-3">
