@@ -2,11 +2,12 @@
 // Triggered by pg_cron every minute and ad-hoc.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  buildCampaignLifecycleBlocks,
+  buildCampaignGroupBlocks,
   buildNumberAlertBlocks,
   buildPositiveLeadBlocks,
   buildInboxSpikeBlocks,
   postSlack,
+  splitCampaignName,
 } from "../_shared/slackBlocks.ts";
 
 const corsHeaders = {
