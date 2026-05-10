@@ -35,12 +35,18 @@ export async function touchResponder(conversationId: string, userId: string) {
   if (error) throw error;
 }
 
-export async function fetchConversationMessages(conversationId: string) {
+/**
+ * Loads the most recent ~50 messages for a conversation.
+ * We fetch in descending order with a hard limit, then reverse for chronological display,
+ * so opening a long-running thread no longer pulls thousands of rows.
+ */
+export async function fetchConversationMessages(conversationId: string, limit = 50) {
   const { data, error } = await supabase
     .from("messages")
     .select("id, direction, body, media_url, status, created_at, sent_by_user_id")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).slice().reverse();
 }

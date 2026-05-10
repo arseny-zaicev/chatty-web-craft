@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
-import * as XLSX from "xlsx";
 import { applyDerivedVariables, applyColumnMapping, validateRowAgainstProfile, type PrepProfile } from "./prepProfiles";
+
+// xlsx is ~600 KB minified; load it on demand only when the user actually uploads a spreadsheet.
+const loadXLSX = () => import("xlsx");
 
 export type AudienceBatch = {
   id: string;
@@ -84,6 +86,7 @@ export async function parseAudienceFile(file: File): Promise<ParsedAudience> {
     return parseDelimited(text);
   }
   const buf = await file.arrayBuffer();
+  const XLSX = await loadXLSX();
   const wb = XLSX.read(buf, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "", raw: false });

@@ -22,8 +22,7 @@ import {
   Download,
 } from "lucide-react";
 import { User } from "@supabase/supabase-js";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+// jspdf (~300 KB) and html2canvas (~200 KB) are loaded on demand from the export handler below.
 
 const ALLOWED_EMAILS = new Set<string>(["paras@pndigital.co.uk"]);
 const PN_BRAND = {
@@ -392,6 +391,11 @@ const ReportView = ({
     if (!pdfRef.current) return;
     setIsExporting(true);
     try {
+      // Lazy-load the heavy PDF stack only when the user clicks Download.
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
       const node = pdfRef.current;
       const canvas = await html2canvas(node, {
         scale: 2,

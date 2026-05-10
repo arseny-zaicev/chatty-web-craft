@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase, friendlySenderLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ type Message = {
 const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const queryClient = useQueryClient();
+  // queryClient no longer needed: realtime updates flow through local state, react-query stays the cache.
   const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
   const [numberFilter, setNumberFilter] = useState<string>("all");
   const [starredOnly, setStarredOnly] = useState(false);
@@ -259,25 +259,27 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (el) (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeId, conversations]);
 
-  // Realtime conversations
+  // Realtime conversations — scoped to this workspace; channel is stable for the page lifetime.
   useRealtimeTable<Conversation>(
-    { channel: "crm-conversations", table: "conversations" },
+    {
+      channel: `crm-conversations-${workspaceId ?? "all"}`,
+      table: "conversations",
+      filter: workspaceId ? `workspace_id=eq.${workspaceId}` : undefined,
+      enabled: !!workspaceId,
+    },
     (payload) => {
       setConversations((prev) => {
         if (payload.eventType === "DELETE") {
           return prev.filter((c) => c.id !== (payload.old as Conversation).id);
         }
         const incoming = payload.new as Conversation;
-        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
         const idx = prev.findIndex((c) => c.id === incoming.id);
-        const next = idx >= 0
+        return idx >= 0
           ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
           : [incoming, ...prev];
-        queryClient.setQueryData(crmKeys.base(workspaceId), { numbers, conversations: next });
-        return next;
       });
     },
-    [numbers, queryClient, workspaceId],
+    [workspaceId],
   );
 
   // Load messages when active conversation changes
