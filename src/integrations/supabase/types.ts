@@ -1631,6 +1631,21 @@ export type Database = {
         }
         Relationships: []
       }
+      system_alerts: {
+        Row: {
+          kind: string
+          last_sent_at: string
+        }
+        Insert: {
+          kind: string
+          last_sent_at?: string
+        }
+        Update: {
+          kind?: string
+          last_sent_at?: string
+        }
+        Relationships: []
+      }
       tv_tokens: {
         Row: {
           created_at: string
