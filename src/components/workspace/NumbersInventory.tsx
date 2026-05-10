@@ -40,14 +40,15 @@ type BMOption = { id: string; name: string; status: string };
 type Workspace = { id: string; name: string };
 
 const fetchData = async (workspaceId: string) => {
-  const [{ data: numbers, error: nErr }, { data: tpl, error: tErr }, { data: workspaces, error: wErr }] = await Promise.all([
+  const [{ data: numbers, error: nErr }, { data: tpl, error: tErr }, { data: workspaces, error: wErr }, { data: bms }] = await Promise.all([
     supabase.from("whatsapp_numbers")
-      .select("id, workspace_id, phone_number, display_name, label, partner_source, bm_name, notes, provider_app_id, provider_api_key, is_active, connected_in_gupshup, connected_in_iskra, status, usage_type, country_code, webhook_connected")
+      .select("id, workspace_id, phone_number, display_name, label, partner_source, bm_name, business_manager_id, notes, provider_app_id, provider_api_key, is_active, connected_in_gupshup, connected_in_iskra, status, usage_type, country_code, webhook_connected")
       .eq("workspace_id", workspaceId),
     supabase.from("message_templates")
       .select("whatsapp_number_id, status, synced_at")
       .eq("workspace_id", workspaceId),
     supabase.from("workspaces").select("id, name").eq("is_active", true),
+    supabase.from("business_managers").select("id, name, status").eq("workspace_id", workspaceId).order("name"),
   ]);
   if (nErr) throw nErr; if (tErr) throw tErr; if (wErr) throw wErr;
 
@@ -64,6 +65,7 @@ const fetchData = async (workspaceId: string) => {
     numbers: (numbers ?? []) as NumberRow[],
     syncByNumber,
     workspaces: (workspaces ?? []) as Workspace[],
+    bms: (bms ?? []) as BMOption[],
   };
 };
 
