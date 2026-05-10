@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { baseName as splitBase } from "./campaigns";
 
 const startOfDayIso = () => {
   const d = new Date();
@@ -166,13 +167,6 @@ export type WorkspaceOverview = WorkspaceMetrics & {
   recent_launches: Array<{ id: string; name: string; status: string; created_at: string; sent_count: number; total: number }>;
 };
 
-// Sibling campaigns launched across multiple WhatsApp numbers share a base
-// name in the form "<base> :: <numberLabel>". Clients should see them merged
-// into a single launch.
-const splitBase = (full: string): string => {
-  const idx = full.indexOf(" :: ");
-  return idx === -1 ? full : full.slice(0, idx).trim();
-};
 
 export async function fetchWorkspaceOverview(workspaceId: string): Promise<WorkspaceOverview> {
   const today = startOfDayIso();

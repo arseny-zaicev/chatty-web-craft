@@ -27,6 +27,16 @@ import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
 
 import { fetchWorkspaceMembers, memberDisplayName, workspaceMembersKey } from "@/lib/workspaceMembers";
+import {
+  fetchConversationMessages,
+  markConversationRead,
+  markConversationUnread,
+  setConversationPinned,
+  setConversationStarred,
+  touchResponder as touchResponderApi,
+} from "@/lib/inbox";
+import { useRequireAuth } from "@/hooks/useAuthSession";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 type Message = {
   id: string;
@@ -143,10 +153,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   /** Mark current user as the active responder on a conversation. */
   const touchResponder = async (conversationId: string) => {
     if (!meId) return;
-    await supabase
-      .from("conversations")
-      .update({ active_responder_id: meId, active_responder_at: new Date().toISOString() })
-      .eq("id", conversationId);
+    try { await touchResponderApi(conversationId, meId); } catch { /* non-blocking */ }
   };
 
   const handleSend = async () => {
@@ -191,11 +198,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     setConversations((prev) =>
       prev.map((c) => (c.id === conv.id ? { ...c, is_starred: next } : c)),
     );
-    const { error } = await supabase
-      .from("conversations")
-      .update({ is_starred: next })
-      .eq("id", conv.id);
-    if (error) {
+    try {
+      await setConversationStarred(conv.id, next);
+    } catch {
       toast.error("Failed to update star");
       setConversations((prev) =>
         prev.map((c) => (c.id === conv.id ? { ...c, is_starred: !next } : c)),
@@ -208,11 +213,9 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     setConversations((prev) =>
       prev.map((c) => (c.id === conv.id ? { ...c, pinned_at: next } : c)),
     );
-    const { error } = await supabase
-      .from("conversations")
-      .update({ pinned_at: next })
-      .eq("id", conv.id);
-    if (error) {
+    try {
+      await setConversationPinned(conv.id, next);
+    } catch {
       toast.error("Failed to update pin");
       setConversations((prev) =>
         prev.map((c) => (c.id === conv.id ? { ...c, pinned_at: conv.pinned_at } : c)),
@@ -221,30 +224,18 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   };
 
   const markUnread = async (conv: Conversation) => {
-    const { error } = await supabase
-      .from("conversations")
-      .update({ unread_count: Math.max(1, conv.unread_count) })
-      .eq("id", conv.id);
-    if (error) toast.error("Failed");
+    try { await markConversationUnread(conv.id, conv.unread_count); }
+    catch { toast.error("Failed"); }
   };
 
   const markRead = async (conv: Conversation) => {
     if (conv.unread_count === 0) return;
-    await supabase.from("conversations").update({ unread_count: 0 }).eq("id", conv.id);
+    try { await markConversationRead(conv.id); } catch { /* non-blocking */ }
   };
 
   // Auth gate + me id
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) navigate("/admin-auth");
-      else setMeId(data.session.user.id);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) navigate("/admin-auth");
-      else setMeId(session.user.id);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  const authedUserId = useRequireAuth("/admin-auth");
+  useEffect(() => { setMeId(authedUserId); }, [authedUserId]);
 
   useEffect(() => {
     if (!baseData) return;
@@ -269,29 +260,25 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [activeId, conversations]);
 
   // Realtime conversations
-  useEffect(() => {
-    const channel = supabase
-      .channel("crm-conversations")
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
-        setConversations((prev) => {
-          if (payload.eventType === "DELETE") {
-            return prev.filter((c) => c.id !== (payload.old as Conversation).id);
-          }
-          const incoming = payload.new as Conversation;
-          if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
-          const idx = prev.findIndex((c) => c.id === incoming.id);
-          const next = idx >= 0
-            ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
-            : [incoming, ...prev];
-          queryClient.setQueryData(crmKeys.base(workspaceId), { numbers, conversations: next });
-          return next;
-        });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [numbers, queryClient, workspaceId]);
+  useRealtimeTable<Conversation>(
+    { channel: "crm-conversations", table: "conversations" },
+    (payload) => {
+      setConversations((prev) => {
+        if (payload.eventType === "DELETE") {
+          return prev.filter((c) => c.id !== (payload.old as Conversation).id);
+        }
+        const incoming = payload.new as Conversation;
+        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
+        const idx = prev.findIndex((c) => c.id === incoming.id);
+        const next = idx >= 0
+          ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
+          : [incoming, ...prev];
+        queryClient.setQueryData(crmKeys.base(workspaceId), { numbers, conversations: next });
+        return next;
+      });
+    },
+    [numbers, queryClient, workspaceId],
+  );
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -301,17 +288,12 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     }
     let cancelled = false;
     setLoadingMessages(true);
-    supabase
-      .from("messages")
-      .select("id, direction, body, media_url, status, created_at, sent_by_user_id")
-      .eq("conversation_id", activeId)
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (cancelled) return;
-        setMessages((data ?? []) as Message[]);
-        setLoadingMessages(false);
-      });
-    supabase.from("conversations").update({ unread_count: 0 }).eq("id", activeId).then(() => {});
+    fetchConversationMessages(activeId).then((data) => {
+      if (cancelled) return;
+      setMessages(data as Message[]);
+      setLoadingMessages(false);
+    });
+    void markConversationRead(activeId).catch(() => {});
     void touchResponder(activeId);
     return () => {
       cancelled = true;
@@ -319,23 +301,21 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   }, [activeId]);
 
   // Realtime messages for active conversation
-  useEffect(() => {
-    if (!activeId) return;
-    const channel = supabase
-      .channel(`crm-messages-${activeId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${activeId}` },
-        (payload) => {
-          const newMsg = payload.new as Message;
-          setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeId]);
+  useRealtimeTable<Message>(
+    {
+      channel: `crm-messages-${activeId ?? "none"}`,
+      table: "messages",
+      event: "INSERT",
+      filter: activeId ? `conversation_id=eq.${activeId}` : undefined,
+      enabled: !!activeId,
+    },
+    (payload) => {
+      const newMsg = payload.new as Message;
+      setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+    },
+    [activeId],
+  );
+
 
   useEffect(() => {
     // On conversation switch: snap to bottom instantly, reset stickiness.
