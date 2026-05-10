@@ -71,9 +71,9 @@ const BusinessManagerDetail = () => {
       business_manager_id: id,
       workspace_id: data.bm.workspace_id,
       event_type,
-      payload,
+      payload: payload as any,
       created_by: u.user?.id ?? null,
-    });
+    } as any);
   };
 
   const updateBm = useMutation({
