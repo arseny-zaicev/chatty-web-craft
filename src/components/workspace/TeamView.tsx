@@ -305,7 +305,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
               <Select value={role} onValueChange={(v) => setRole(v as "manager" | "client")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="client">Client - read-only, no provider details</SelectItem>
+                  <SelectItem value="client">Client - Inbox + Pipeline only</SelectItem>
                   <SelectItem value="manager">Manager - full access</SelectItem>
                 </SelectContent>
               </Select>
