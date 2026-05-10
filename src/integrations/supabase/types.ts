@@ -1619,6 +1619,7 @@ export type Database = {
       }
       workspace_invite_links: {
         Row: {
+          allowed_pipeline_ids: string[] | null
           created_at: string
           created_by: string | null
           expires_at: string
@@ -1631,6 +1632,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          allowed_pipeline_ids?: string[] | null
           created_at?: string
           created_by?: string | null
           expires_at: string
@@ -1643,6 +1645,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          allowed_pipeline_ids?: string[] | null
           created_at?: string
           created_by?: string | null
           expires_at?: string
@@ -1887,6 +1890,10 @@ export type Database = {
       }
     }
     Functions: {
+      can_access_pipeline: {
+        Args: { _pipeline_id: string; _user_id: string; _workspace_id: string }
+        Returns: boolean
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -1932,6 +1939,10 @@ export type Database = {
       mark_audience_rows_used: {
         Args: { _campaign_id: string; _row_ids: string[] }
         Returns: number
+      }
+      member_pipeline_scope: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: string[]
       }
       move_to_dlq: {
         Args: {

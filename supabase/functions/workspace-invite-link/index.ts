@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       }
       const { data: link } = await admin
         .from("workspace_invite_links")
-        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at")
+        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at, allowed_pipeline_ids")
         .eq("token", token)
         .maybeSingle();
       if (!link) return json({ valid: false, error: "Link not found" }, 404);
@@ -64,6 +64,16 @@ Deno.serve(async (req) => {
         .eq("id", link.workspace_id)
         .maybeSingle();
 
+      let pipelineNames: { id: string; name: string }[] = [];
+      const pipeIds = (link as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null;
+      if (pipeIds && pipeIds.length > 0) {
+        const { data: pipes } = await admin
+          .from("pipelines")
+          .select("id, name")
+          .in("id", pipeIds);
+        pipelineNames = (pipes ?? []) as { id: string; name: string }[];
+      }
+
       return json({
         valid: true,
         workspace_name: ws?.name ?? "your team",
@@ -73,6 +83,8 @@ Deno.serve(async (req) => {
         workspace_logo: ws?.logo_url ?? null,
         role: link.role,
         seats_left: link.max_uses - link.used_count,
+        allowed_pipeline_ids: pipeIds ?? [],
+        allowed_pipelines: pipelineNames,
       });
     }
 
@@ -93,7 +105,7 @@ Deno.serve(async (req) => {
       // Lock-and-check the link
       const { data: link } = await admin
         .from("workspace_invite_links")
-        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at")
+        .select("id, workspace_id, role, max_uses, used_count, expires_at, revoked_at, allowed_pipeline_ids")
         .eq("token", token)
         .maybeSingle();
       if (!link) return json({ error: "Link not found" }, 404);
@@ -165,11 +177,20 @@ Deno.serve(async (req) => {
         .eq("user_id", userId)
         .maybeSingle();
 
+      const linkPipes = (link as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null;
+      const memberPipes = link.role === "client" && linkPipes && linkPipes.length > 0 ? linkPipes : null;
+
       if (!existingMem) {
         const { error: insErr } = await admin
           .from("workspace_members")
-          .insert({ workspace_id: link.workspace_id, user_id: userId, role: link.role });
+          .insert({
+            workspace_id: link.workspace_id,
+            user_id: userId,
+            role: link.role,
+            allowed_pipeline_ids: memberPipes,
+          });
         if (insErr) return json({ error: insErr.message }, 500);
+
 
         // Increment used_count only when a NEW membership was added
         await admin
@@ -226,7 +247,7 @@ Deno.serve(async (req) => {
       // total sign-ins (auth metadata), and 30-day active minutes / sessions.
       const { data: rows, error: memErr } = await admin
         .from("workspace_members")
-        .select("id, user_id, role, can_view_stats, created_at")
+        .select("id, user_id, role, can_view_stats, allowed_pipeline_ids, created_at")
         .eq("workspace_id", workspace_id)
         .order("created_at", { ascending: true });
       if (memErr) return json({ error: memErr.message }, 500);
@@ -282,6 +303,7 @@ Deno.serve(async (req) => {
           user_id: r.user_id,
           role: r.role,
           can_view_stats: Boolean((r as { can_view_stats?: boolean }).can_view_stats),
+          allowed_pipeline_ids: ((r as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null) as string[] | null,
           joined_at: r.created_at,
           email: auth.email,
           full_name: prof.full_name,
@@ -302,6 +324,21 @@ Deno.serve(async (req) => {
       const days = Math.min(Math.max(Number(body?.days ?? 30), 1), 365);
       const expires_at = new Date(Date.now() + days * 86400000).toISOString();
 
+      // Pipeline scope - only meaningful for clients
+      let allowed_pipeline_ids: string[] | null = null;
+      const rawPipes = Array.isArray(body?.pipeline_ids) ? (body.pipeline_ids as unknown[]) : [];
+      const wantedPipes = rawPipes.map((p) => String(p)).filter((p) => /^[0-9a-f-]{36}$/i.test(p));
+      if (role === "client" && wantedPipes.length > 0) {
+        const { data: validPipes } = await admin
+          .from("pipelines")
+          .select("id")
+          .eq("workspace_id", workspace_id)
+          .in("id", wantedPipes);
+        const validIds = (validPipes ?? []).map((p) => p.id);
+        if (validIds.length === 0) return json({ error: "No valid pipelines selected" }, 400);
+        allowed_pipeline_ids = validIds;
+      }
+
       // Generate unique token
       let token = generateToken(12);
       for (let i = 0; i < 5; i++) {
@@ -316,8 +353,8 @@ Deno.serve(async (req) => {
 
       const { data: created, error: insErr } = await admin
         .from("workspace_invite_links")
-        .insert({ workspace_id, token, role, max_uses, expires_at, created_by: caller.id })
-        .select("id, token, role, max_uses, used_count, expires_at, created_at")
+        .insert({ workspace_id, token, role, max_uses, expires_at, created_by: caller.id, allowed_pipeline_ids })
+        .select("id, token, role, max_uses, used_count, expires_at, created_at, allowed_pipeline_ids")
         .single();
       if (insErr) return json({ error: insErr.message }, 500);
       return json({ ok: true, ...created });
@@ -326,12 +363,37 @@ Deno.serve(async (req) => {
     if (action === "list") {
       const { data, error } = await admin
         .from("workspace_invite_links")
-        .select("id, token, role, max_uses, used_count, expires_at, revoked_at, created_at")
+        .select("id, token, role, max_uses, used_count, expires_at, revoked_at, created_at, allowed_pipeline_ids")
         .eq("workspace_id", workspace_id)
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) return json({ error: error.message }, 500);
       return json({ links: data });
+    }
+
+    if (action === "update_access") {
+      const id = String(body?.id ?? "");
+      if (!id) return json({ error: "id required" }, 400);
+      const rawPipes = Array.isArray(body?.allowed_pipeline_ids) ? (body.allowed_pipeline_ids as unknown[]) : [];
+      const wantedPipes = rawPipes.map((p) => String(p)).filter((p) => /^[0-9a-f-]{36}$/i.test(p));
+      let toSet: string[] | null = null;
+      if (wantedPipes.length > 0) {
+        const { data: validPipes } = await admin
+          .from("pipelines")
+          .select("id")
+          .eq("workspace_id", workspace_id)
+          .in("id", wantedPipes);
+        const validIds = (validPipes ?? []).map((p) => p.id);
+        if (validIds.length === 0) return json({ error: "No valid pipelines selected" }, 400);
+        toSet = validIds;
+      }
+      const { error } = await admin
+        .from("workspace_members")
+        .update({ allowed_pipeline_ids: toSet })
+        .eq("id", id)
+        .eq("workspace_id", workspace_id);
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, allowed_pipeline_ids: toSet });
     }
 
     if (action === "revoke") {

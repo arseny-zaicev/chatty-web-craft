@@ -19,6 +19,7 @@ interface LinkInfo {
   workspace_logo?: string | null;
   role?: string;
   seats_left?: number;
+  allowed_pipelines?: { id: string; name: string }[];
   error?: string;
 }
 
@@ -203,6 +204,11 @@ export default function JoinTeam() {
                   <Users className="w-3.5 h-3.5" />
                   {info.seats_left} {info.seats_left === 1 ? "seat" : "seats"} left
                 </span>
+                {info.role === "client" && (info.allowed_pipelines?.length ?? 0) > 0 && (
+                  <span className="block text-xs text-muted-foreground">
+                    You'll get access to: <strong className="text-foreground">{info.allowed_pipelines!.map((p) => p.name).join(", ")}</strong>
+                  </span>
+                )}
               </CardDescription>
             </div>
           ) : (

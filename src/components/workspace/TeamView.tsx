@@ -7,14 +7,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity, BarChart3 } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity, BarChart3, Pencil, Layers } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type Member = {
   id: string;
   user_id: string;
   role: string;
   can_view_stats: boolean;
+  allowed_pipeline_ids: string[] | null;
   joined_at: string;
   email: string | null;
   full_name: string | null;
@@ -24,6 +26,8 @@ type Member = {
   minutes_30d: number;
   sessions_30d: number;
 };
+
+type WsPipeline = { id: string; name: string; color: string | null };
 
 const membersKey = (wsId: string) => ["workspace", wsId, "members"] as const;
 const linksKey = (wsId: string) => ["workspace", wsId, "invite-links"] as const;
@@ -37,6 +41,7 @@ type InviteLink = {
   expires_at: string;
   revoked_at: string | null;
   created_at: string;
+  allowed_pipeline_ids: string[] | null;
 };
 
 function fmtRelative(iso: string | null | undefined): string {
@@ -60,9 +65,25 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkRole, setLinkRole] = useState<"manager" | "client">("manager");
   const [linkSeats, setLinkSeats] = useState(4);
+  const [linkPipelineIds, setLinkPipelineIds] = useState<string[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"manager" | "client">("client");
+
+  const { data: pipelines } = useQuery({
+    queryKey: ["workspace", workspaceId, "pipelines-list"] as const,
+    queryFn: async (): Promise<WsPipeline[]> => {
+      const { data, error } = await supabase
+        .from("pipelines")
+        .select("id, name, color")
+        .eq("workspace_id", workspaceId)
+        .order("position", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as WsPipeline[];
+    },
+  });
+  const pipelineById = new Map((pipelines ?? []).map((p) => [p.id, p] as const));
+
 
   const { data: members, isLoading } = useQuery({
     queryKey: membersKey(workspaceId),
@@ -135,7 +156,13 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
   const createLink = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("workspace-invite-link?action=create", {
-        body: { workspace_id: workspaceId, role: linkRole, max_uses: linkSeats, days: 30 },
+        body: {
+          workspace_id: workspaceId,
+          role: linkRole,
+          max_uses: linkSeats,
+          days: 30,
+          pipeline_ids: linkRole === "client" ? linkPipelineIds : [],
+        },
       });
       if (error) throw error;
       const payload = data as { error?: string; token?: string };
@@ -144,9 +171,26 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
     },
     onSuccess: () => {
       toast.success("Invite link created");
+      setLinkPipelineIds([]);
       qc.invalidateQueries({ queryKey: linksKey(workspaceId) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not create link"),
+  });
+
+  const updateAccess = useMutation({
+    mutationFn: async ({ id, ids }: { id: string; ids: string[] }) => {
+      const { data, error } = await supabase.functions.invoke("workspace-invite-link?action=update_access", {
+        body: { workspace_id: workspaceId, id, allowed_pipeline_ids: ids },
+      });
+      if (error) throw error;
+      const payload = data as { error?: string };
+      if (payload?.error) throw new Error(payload.error);
+    },
+    onSuccess: () => {
+      toast.success("Access updated");
+      qc.invalidateQueries({ queryKey: membersKey(workspaceId) });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update access"),
   });
 
   const revokeLink = useMutation({
@@ -209,6 +253,11 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                   <div className="text-[10px] text-muted-foreground mt-0.5">
                     {l.role} · {l.used_count}/{l.max_uses} used ·{" "}
                     {l.revoked_at ? "revoked" : expired ? "expired" : exhausted ? "all seats used" : `expires ${new Date(l.expires_at).toLocaleDateString()}`}
+                    {l.role === "client" && (
+                      <> · {(l.allowed_pipeline_ids?.length ?? 0) === 0
+                        ? "all pipelines"
+                        : `${l.allowed_pipeline_ids!.length} pipeline${l.allowed_pipeline_ids!.length === 1 ? "" : "s"}`}</>
+                    )}
                   </div>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => copyLink(l.token)} disabled={dead}>
@@ -280,6 +329,58 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     />
                   </label>
                 )}
+                {m.role === "client" && (
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1 flex-wrap">
+                    <Layers className="w-3 h-3" />
+                    <span>
+                      Access:{" "}
+                      {(m.allowed_pipeline_ids?.length ?? 0) === 0
+                        ? "All pipelines"
+                        : m.allowed_pipeline_ids!
+                            .map((id) => pipelineById.get(id)?.name ?? "?")
+                            .join(", ")}
+                    </span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="inline-flex items-center gap-1 hover:text-foreground transition" type="button">
+                          <Pencil className="w-3 h-3" />
+                          Edit
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-3 space-y-2" align="start">
+                        <div className="text-xs font-medium">Pipeline access</div>
+                        <p className="text-[10px] text-muted-foreground">Leave empty for full access.</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(pipelines ?? []).map((p) => {
+                            const selected = (m.allowed_pipeline_ids ?? []).includes(p.id);
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  const cur = m.allowed_pipeline_ids ?? [];
+                                  const next = selected ? cur.filter((id) => id !== p.id) : [...cur, p.id];
+                                  updateAccess.mutate({ id: m.id, ids: next });
+                                }}
+                                className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
+                              >
+                                {p.name}
+                              </button>
+                            );
+                          })}
+                          {(pipelines ?? []).length === 0 && (
+                            <div className="text-[10px] text-muted-foreground">No pipelines yet.</div>
+                          )}
+                        </div>
+                        {(m.allowed_pipeline_ids?.length ?? 0) > 0 && (
+                          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => updateAccess.mutate({ id: m.id, ids: [] })}>
+                            Clear (all pipelines)
+                          </Button>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
               </div>
               <Button size="icon" variant="ghost" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
                 <Trash2 className="w-4 h-4 text-muted-foreground" />
@@ -341,6 +442,43 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
               <label className="text-xs font-medium text-muted-foreground">Seat limit (max teammates)</label>
               <Input type="number" min={1} max={50} value={linkSeats} onChange={(e) => setLinkSeats(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
             </div>
+            {linkRole === "client" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Pipeline access</label>
+                <p className="text-[10px] text-muted-foreground">
+                  Choose which boards this client can see in the Inbox and Pipeline. Leave empty for full access.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setLinkPipelineIds([])}
+                    className={`text-[11px] px-2 py-1 rounded-full border transition ${linkPipelineIds.length === 0 ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
+                  >
+                    All pipelines
+                  </button>
+                  {(pipelines ?? []).map((p) => {
+                    const selected = linkPipelineIds.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setLinkPipelineIds((cur) =>
+                            cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id]
+                          );
+                        }}
+                        className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(pipelines ?? []).length === 0 && (
+                  <p className="text-[10px] text-muted-foreground">No pipelines yet - create one in Settings - Pipelines first.</p>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkOpen(false)}>Cancel</Button>
