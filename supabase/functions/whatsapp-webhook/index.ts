@@ -69,8 +69,8 @@ async function handleInbound(payload: Record<string, unknown>) {
       number = data[0];
       matchStrategy = "label";
     } else if (data && data.length > 1) {
+      ambiguousReason = `ambiguous_label:${data.length}`;
       console.error("Ambiguous label - multiple numbers share the same Gupshup app name", { appName, count: data.length });
-      return;
     }
   }
   if (!number && destination) {
