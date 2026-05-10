@@ -14,12 +14,13 @@ const STALE_DISPATCH_MIN = 10;      // alert if pending leads older than N min n
 const ALERT_DEBOUNCE_MIN = 30;      // don't repeat the same alert for N min
 
 // Heartbeat freshness expectations (minutes). 2x the cron interval.
+// Only include functions that run on a fixed schedule (not on-demand ones like `campaigns`).
 const HEARTBEAT_MAX_AGE_MIN: Record<string, number> = {
   "lead-dispatch": 5,
   "google-sheets-sync": 6,
-  "campaigns": 5,
   "health-watchdog": 12,
 };
+const INBOUND_SILENCE_MIN = 90; // widened to avoid off-peak false positives
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
