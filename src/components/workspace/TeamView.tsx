@@ -16,6 +16,7 @@ type Member = {
   user_id: string;
   role: string;
   can_view_stats: boolean;
+  allowed_pipeline_ids: string[] | null;
   joined_at: string;
   email: string | null;
   full_name: string | null;
@@ -25,6 +26,8 @@ type Member = {
   minutes_30d: number;
   sessions_30d: number;
 };
+
+type WsPipeline = { id: string; name: string; color: string | null };
 
 const membersKey = (wsId: string) => ["workspace", wsId, "members"] as const;
 const linksKey = (wsId: string) => ["workspace", wsId, "invite-links"] as const;
