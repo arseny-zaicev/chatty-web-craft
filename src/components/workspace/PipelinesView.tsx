@@ -148,12 +148,14 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
             <KanbanSquare className="w-4 h-4 text-primary" /> Pipelines
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Each pipeline is an independent board with its own stages. Use names like "Ads / India" to group visually.
+            Each pipeline is an independent board with its own stages. Use a short operational name like "Ads / India" or "Outbound / UK".
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowNew(true)}>
-          <Plus className="w-4 h-4 mr-1" /> New pipeline
-        </Button>
+        {canManage && (
+          <Button size="sm" onClick={() => setShowNew(true)}>
+            <Plus className="w-4 h-4 mr-1" /> New pipeline
+          </Button>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
