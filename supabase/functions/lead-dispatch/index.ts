@@ -67,7 +67,40 @@ type Pipeline = {
 };
 type Lead = {
   id: string; pipeline_id: string; workspace_id: string; phone: string; name: string | null;
+  payload?: Record<string, any> | null;
 };
+
+// Build template variables for first-touch send. Falls back gracefully so
+// Gupshup never gets an empty params array (which causes #131008).
+function buildVariables(tpl: { variables: any } | null, lead: Lead): Record<string, string> {
+  const vars = Array.isArray(tpl?.variables) ? tpl!.variables : [];
+  const payload = (lead.payload && typeof lead.payload === "object") ? lead.payload : {};
+  const firstName = (lead.name || (payload as any).full_name || (payload as any).name || "")
+    .toString().trim().split(/\s+/)[0] || "there";
+  const out: Record<string, string> = {};
+  for (const key of vars) {
+    const k = String(key);
+    if (k === "1" || k.toLowerCase() === "name" || k.toLowerCase() === "first_name") {
+      out[k] = firstName;
+    } else if ((payload as any)[k] != null) {
+      out[k] = String((payload as any)[k]);
+    } else {
+      out[k] = firstName; // safe non-empty fallback
+    }
+  }
+  // Mirror useful payload fields for downstream UI/metadata (kept in variables JSONB).
+  const passthrough = [
+    "company_name", "email", "form_name", "campaign_name", "adset_name", "ad_name",
+    "do_you_currently_own_or_manage_a_meta_business_manager?",
+    "has_this_business_manager_previously_run_ads?",
+    "is_the_business_manager_verified?",
+  ];
+  for (const k of passthrough) {
+    const v = (payload as any)[k];
+    if (v != null && v !== "") out[`_${k}`] = String(v).slice(0, 500);
+  }
+  return out;
+}
 
 async function processPipeline(admin: any, pipeline: Pipeline) {
   const ws = pipeline.workspace_id;
