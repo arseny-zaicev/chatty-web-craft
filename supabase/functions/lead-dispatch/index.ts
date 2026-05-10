@@ -319,11 +319,12 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Find pipelines with auto_outreach_enabled AND at least one pending lead
+    // Find pipelines with auto_outreach_enabled AND at least one pending or
+    // awaiting_manual lead (the latter covers leads imported while auto was off).
     const { data: pipelinesNeedingWork } = await admin
       .from("lead_imports")
       .select("pipeline_id")
-      .eq("status", "pending")
+      .in("status", ["pending", "awaiting_manual"])
       .limit(1000);
     const pipelineIds = Array.from(new Set((pipelinesNeedingWork ?? []).map((r: any) => r.pipeline_id).filter(Boolean)));
     if (pipelineIds.length === 0) return json({ ok: true, processed: 0, pipelines: 0 });
