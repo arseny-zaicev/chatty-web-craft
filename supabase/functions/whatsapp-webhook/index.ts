@@ -85,12 +85,22 @@ async function handleInbound(payload: Record<string, unknown>) {
       number = data[0];
       matchStrategy = "phone_number";
     } else if (data && data.length > 1) {
+      ambiguousReason = `ambiguous_phone_number:${data.length}`;
       console.error("Ambiguous phone_number - duplicate rows for same number", { destination, count: data.length });
-      return;
     }
   }
   if (!number) {
-    console.warn("No matching whatsapp_number for inbound webhook", { appName, destination, source });
+    const reason = ambiguousReason ?? "no_match";
+    console.warn("No matching whatsapp_number for inbound webhook", { reason, appName, destination, source });
+    await supabase.from("whatsapp_webhook_failures").insert({
+      reason,
+      app_name: appName || null,
+      destination: destination || null,
+      source: source || null,
+      event_type: "message",
+      payload,
+      replay_status: "pending",
+    });
     return;
   }
   console.log("Matched inbound whatsapp_number", {
