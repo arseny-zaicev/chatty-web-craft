@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchCampaignSummaries } from "@/lib/launchData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 
 // Sibling campaigns launched across multiple WhatsApp numbers share a base name
 // in the form "<base> :: <numberLabel>". Clients should see them merged.
