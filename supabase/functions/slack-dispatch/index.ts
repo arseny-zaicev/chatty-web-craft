@@ -28,36 +28,44 @@ const NUMBER_EVENTS = new Set([
   "number_restricted", "number_blocked", "number_recovered", "number_quality_changed",
 ]);
 
-function buildLeadEventBlocks(eventType: string, ws: any, p: any) {
+function buildFirstReplyBlocks(ws: any, p: any) {
   const wsTag = ws?.name ? `${ws.name}${ws.internal_code ? `-${ws.internal_code}` : ""}` : "Workspace";
-  const meta: Record<string, { emoji: string; title: string }> = {
-    "lead.imported": { emoji: "📥", title: "Leads imported" },
-    "lead.import_failed": { emoji: "⚠️", title: "Lead import failed" },
-    "lead.dispatched": { emoji: "📤", title: "Leads dispatched" },
-    "lead.dispatch_blocked": { emoji: "🛑", title: "Auto first-touch blocked" },
-  };
-  const m = meta[eventType] || { emoji: "ℹ️", title: eventType };
-  const lines: string[] = [];
-  if (eventType === "lead.imported" || eventType === "lead.import_failed") {
-    lines.push(`*Source:* ${p?.source_name ?? "-"}`);
-    lines.push(`*New:* ${p?.accepted ?? 0}  ·  *Skipped:* ${p?.rejected ?? 0}  ·  *Total:* ${p?.total ?? 0}`);
-  } else if (eventType === "lead.dispatched") {
-    lines.push(`*Pipeline:* ${p?.pipeline_name ?? "-"}`);
-    lines.push(`*Queued for first-touch:* ${p?.queued ?? 0} on ${p?.sender_count ?? 0} number(s)`);
-  } else if (eventType === "lead.dispatch_blocked") {
-    lines.push(`*Pipeline:* ${p?.pipeline_name ?? "-"}`);
-    lines.push(`*Reason:* \`${p?.reason ?? "-"}\``);
-    if (p?.error) lines.push(`*Error:* ${String(p.error).slice(0, 240)}`);
+  const name = p?.contact_name || "Unknown";
+  const phone = p?.contact_phone ? `+${String(p.contact_phone).replace(/^\+/, "")}` : "-";
+  const reply = p?.last_message_text ? String(p.last_message_text).slice(0, 500) : "(no text)";
+  const appBase = Deno.env.get("APP_BASE_URL") || "";
+  const wsSlug = ws?.slug || ws?.id || "";
+  const inboxUrl = appBase && wsSlug ? `${appBase}/ws/${wsSlug}/inbox?c=${p?.conversation_id || ""}` : null;
+
+  // Surface form answers if present
+  const payload = (p?.payload || {}) as Record<string, any>;
+  const answerLines: string[] = [];
+  const skipKeys = new Set(["phone", "name", "full_name", "first_name", "last_name", "country", "country_code"]);
+  for (const [k, v] of Object.entries(payload)) {
+    if (skipKeys.has(k.toLowerCase())) continue;
+    if (v == null || v === "") continue;
+    if (typeof v === "object") continue;
+    if (answerLines.length >= 6) break;
+    const label = k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    answerLines.push(`*${label}:* ${String(v).slice(0, 160)}`);
   }
-  const text = `${m.emoji} ${m.title} · ${wsTag}`;
-  return {
-    text,
-    blocks: [
-      { type: "header", text: { type: "plain_text", text: `${m.emoji} ${m.title}`, emoji: true } },
-      { type: "context", elements: [{ type: "mrkdwn", text: `*${wsTag}*` }] },
-      { type: "section", text: { type: "mrkdwn", text: lines.join("\n") || "-" } },
-    ],
-  };
+
+  const blocks: any[] = [
+    { type: "header", text: { type: "plain_text", text: "💬 New lead reply", emoji: true } },
+    { type: "context", elements: [{ type: "mrkdwn", text: `*${wsTag}*` }] },
+    { type: "section", text: { type: "mrkdwn", text: `*${name}* · ${phone}` } },
+    { type: "section", text: { type: "mrkdwn", text: `> ${reply.replace(/\n/g, "\n> ")}` } },
+  ];
+  if (answerLines.length) {
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: answerLines.join("\n") } });
+  }
+  if (inboxUrl) {
+    blocks.push({
+      type: "actions",
+      elements: [{ type: "button", text: { type: "plain_text", text: "Open in Inbox" }, url: inboxUrl, style: "primary" }],
+    });
+  }
+  return { text: `💬 New reply from ${name} · ${wsTag}`, blocks };
 }
 
 
