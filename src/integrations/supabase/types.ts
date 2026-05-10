@@ -359,6 +359,7 @@ export type Database = {
           delay_min_seconds: number
           failed_count: number
           id: string
+          kind: string
           name: string
           parent_campaign_id: string | null
           per_number_quota: number
@@ -386,6 +387,7 @@ export type Database = {
           delay_min_seconds?: number
           failed_count?: number
           id?: string
+          kind?: string
           name: string
           parent_campaign_id?: string | null
           per_number_quota?: number
@@ -413,6 +415,7 @@ export type Database = {
           delay_min_seconds?: number
           failed_count?: number
           id?: string
+          kind?: string
           name?: string
           parent_campaign_id?: string | null
           per_number_quota?: number
@@ -990,6 +993,8 @@ export type Database = {
       lead_imports: {
         Row: {
           batch_id: string | null
+          campaign_id: string | null
+          campaign_recipient_id: string | null
           conversation_id: string | null
           deal_id: string | null
           error: string | null
@@ -1000,12 +1005,16 @@ export type Database = {
           payload: Json
           phone: string
           pipeline_id: string
+          scheduled_at: string | null
+          sent_at: string | null
           source_connection_id: string | null
           status: string
           workspace_id: string
         }
         Insert: {
           batch_id?: string | null
+          campaign_id?: string | null
+          campaign_recipient_id?: string | null
           conversation_id?: string | null
           deal_id?: string | null
           error?: string | null
@@ -1016,12 +1025,16 @@ export type Database = {
           payload?: Json
           phone: string
           pipeline_id: string
+          scheduled_at?: string | null
+          sent_at?: string | null
           source_connection_id?: string | null
           status?: string
           workspace_id: string
         }
         Update: {
           batch_id?: string | null
+          campaign_id?: string | null
+          campaign_recipient_id?: string | null
           conversation_id?: string | null
           deal_id?: string | null
           error?: string | null
@@ -1032,6 +1045,8 @@ export type Database = {
           payload?: Json
           phone?: string
           pipeline_id?: string
+          scheduled_at?: string | null
+          sent_at?: string | null
           source_connection_id?: string | null
           status?: string
           workspace_id?: string
