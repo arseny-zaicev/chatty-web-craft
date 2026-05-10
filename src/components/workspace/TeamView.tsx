@@ -442,43 +442,43 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
               <label className="text-xs font-medium text-muted-foreground">Seat limit (max teammates)</label>
               <Input type="number" min={1} max={50} value={linkSeats} onChange={(e) => setLinkSeats(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
             </div>
-            {linkRole === "client" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Pipeline access</label>
-                <p className="text-[10px] text-muted-foreground">
-                  Choose which boards this client can see in the Inbox and Pipeline. Leave empty for full access.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setLinkPipelineIds([])}
-                    className={`text-[11px] px-2 py-1 rounded-full border transition ${linkPipelineIds.length === 0 ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
-                  >
-                    All pipelines
-                  </button>
-                  {(pipelines ?? []).map((p) => {
-                    const selected = linkPipelineIds.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setLinkPipelineIds((cur) =>
-                            cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id]
-                          );
-                        }}
-                        className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
-                      >
-                        {p.name}
-                      </button>
-                    );
-                  })}
-                </div>
-                {(pipelines ?? []).length === 0 && (
-                  <p className="text-[10px] text-muted-foreground">No pipelines yet - create one in Settings - Pipelines first.</p>
-                )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Pipeline access</label>
+              <p className="text-[10px] text-muted-foreground">
+                {linkRole === "client"
+                  ? "Choose which boards this client can see in the Inbox and Pipeline. Leave empty for full access."
+                  : "Optionally restrict this manager to specific pipelines. Leave empty for full workspace access."}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setLinkPipelineIds([])}
+                  className={`text-[11px] px-2 py-1 rounded-full border transition ${linkPipelineIds.length === 0 ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
+                >
+                  All pipelines
+                </button>
+                {(pipelines ?? []).map((p) => {
+                  const selected = linkPipelineIds.includes(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setLinkPipelineIds((cur) =>
+                          cur.includes(p.id) ? cur.filter((id) => id !== p.id) : [...cur, p.id]
+                        );
+                      }}
+                      className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:border-primary/50"}`}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
               </div>
-            )}
+              {(pipelines ?? []).length === 0 && (
+                <p className="text-[10px] text-muted-foreground">No pipelines yet - create one in Settings - Pipelines first.</p>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkOpen(false)}>Cancel</Button>
