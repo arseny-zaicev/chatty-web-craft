@@ -259,25 +259,27 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (el) (el as HTMLElement).scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeId, conversations]);
 
-  // Realtime conversations
+  // Realtime conversations — scoped to this workspace; channel is stable for the page lifetime.
   useRealtimeTable<Conversation>(
-    { channel: "crm-conversations", table: "conversations" },
+    {
+      channel: `crm-conversations-${workspaceId ?? "all"}`,
+      table: "conversations",
+      filter: workspaceId ? `workspace_id=eq.${workspaceId}` : undefined,
+      enabled: !!workspaceId,
+    },
     (payload) => {
       setConversations((prev) => {
         if (payload.eventType === "DELETE") {
           return prev.filter((c) => c.id !== (payload.old as Conversation).id);
         }
         const incoming = payload.new as Conversation;
-        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
         const idx = prev.findIndex((c) => c.id === incoming.id);
-        const next = idx >= 0
+        return idx >= 0
           ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
           : [incoming, ...prev];
-        queryClient.setQueryData(crmKeys.base(workspaceId), { numbers, conversations: next });
-        return next;
       });
     },
-    [numbers, queryClient, workspaceId],
+    [workspaceId],
   );
 
   // Load messages when active conversation changes

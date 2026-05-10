@@ -67,7 +67,9 @@ export async function fetchCrmBase(workspaceId?: string) {
     .select(
       "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id",
     )
-    .order("last_message_at", { ascending: false, nullsFirst: false });
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    // Cap to most recent 200 conversations to keep payload bounded; older ones are paginated in.
+    .limit(200);
 
   if (workspaceId) {
     numbersQuery = numbersQuery.eq("workspace_id", workspaceId);

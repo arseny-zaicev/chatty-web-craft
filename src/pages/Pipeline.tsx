@@ -117,14 +117,18 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (pipelineData.stages[0] && !newStageId) setNewStageId(pipelineData.stages[0].id);
   }, [pipelineData, newStageId]);
 
-  // Realtime deals
+  // Realtime deals — workspace-scoped
   useRealtimeTable<Deal>(
-    { channel: "pipeline-deals", table: "deals" },
+    {
+      channel: `pipeline-deals-${workspaceId ?? "all"}`,
+      table: "deals",
+      filter: workspaceId ? `workspace_id=eq.${workspaceId}` : undefined,
+      enabled: !!workspaceId,
+    },
     (payload) => {
       setDeals((prev) => {
         if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
         const incoming = payload.new as Deal;
-        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
         const idx = prev.findIndex((d) => d.id === incoming.id);
         return idx >= 0
           ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
@@ -134,14 +138,18 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     [workspaceId],
   );
 
-  // Realtime conversations (assignee / responder updates)
+  // Realtime conversations (assignee / responder updates) — workspace-scoped
   useRealtimeTable<Conversation>(
-    { channel: "pipeline-conversations", table: "conversations" },
+    {
+      channel: `pipeline-conversations-${workspaceId ?? "all"}`,
+      table: "conversations",
+      filter: workspaceId ? `workspace_id=eq.${workspaceId}` : undefined,
+      enabled: !!workspaceId,
+    },
     (payload) => {
       setConversations((prev) => {
         if (payload.eventType === "DELETE") return prev.filter((c) => c.id !== (payload.old as Conversation).id);
         const incoming = payload.new as Conversation;
-        if (workspaceId && incoming.workspace_id !== workspaceId) return prev;
         const idx = prev.findIndex((c) => c.id === incoming.id);
         return idx >= 0
           ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
