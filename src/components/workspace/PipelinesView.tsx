@@ -10,7 +10,8 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Loader2, Plus, Star, Trash2, Pencil, Check, X, KanbanSquare } from "lucide-react";
+import { Loader2, Plus, Star, Trash2, Pencil, Check, X, KanbanSquare, Settings2, Webhook } from "lucide-react";
+import PipelineConfigSheet from "./PipelineConfigSheet";
 import { toast } from "sonner";
 import {
   Pipeline,
@@ -68,6 +69,22 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const [deleting, setDeleting] = useState<Pipeline | null>(null);
+  const [configuring, setConfiguring] = useState<Pipeline | null>(null);
+
+  const { data: sourceCounts = {} } = useQuery({
+    queryKey: ["pipelines", workspaceId, "source-counts"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("source_connections")
+        .select("pipeline_id")
+        .eq("workspace_id", workspaceId);
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((r: { pipeline_id: string }) => {
+        if (r.pipeline_id) map[r.pipeline_id] = (map[r.pipeline_id] ?? 0) + 1;
+      });
+      return map;
+    },
+  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: pipelinesKey(workspaceId) });
