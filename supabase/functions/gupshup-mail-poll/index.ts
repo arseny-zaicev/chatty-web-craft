@@ -1,9 +1,8 @@
 // Polls the connected Gmail mailbox (iskra.gupshup.alerts@gmail.com) for new
-// notifications from Gupshup, classifies them, links them to a whatsapp_number
-// when possible, and enqueues a Slack alert in slack_event_queue.
+// notifications from Gupshup, classifies them with a strict allowlist, links
+// them to a whatsapp_number when possible, and enqueues a Slack alert.
 //
-// Triggered by pg_cron every 5 minutes. Idempotent: each Gmail message id is
-// stored in public.gupshup_mail_log with a UNIQUE constraint.
+// Triggered by pg_cron every 5 minutes. Idempotent on Gmail message id.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -17,11 +16,20 @@ const GMAIL_KEY = Deno.env.get("GOOGLE_MAIL_API_KEY") || "";
 
 type Severity = "info" | "warning" | "critical";
 type Category =
-  | "quality_drop" | "restriction" | "block" | "template_rejected"
-  | "template_approved" | "billing" | "account_review" | "other";
+  | "number_approved" | "display_name_approved" | "display_name_rejected"
+  | "waba_restricted" | "waba_blocked" | "quality_changed" | "tier_upgraded"
+  | "waba_status_other" | "template_approved" | "template_rejected"
+  | "billing" | "other" | "dropped";
 
-const CRITICAL: Set<Category> = new Set(["block", "restriction", "billing"]);
-const WARNING: Set<Category> = new Set(["quality_drop", "template_rejected", "account_review"]);
+type Routing = "numbers" | "finance";
+
+interface Classification {
+  category: Category;
+  severity: Severity;
+  routing: Routing;
+  send: boolean;
+  secondary?: string;
+}
 
 function authHeaders() {
   return {
@@ -30,19 +38,110 @@ function authHeaders() {
   };
 }
 
-function classify(subject: string, body: string): { category: Category; severity: Severity } {
-  const t = `${subject}\n${body}`.toLowerCase();
-  let category: Category = "other";
-  if (/template.*(rejected|paused|disabled)/.test(t))           category = "template_rejected";
-  else if (/template.*(approved|live)/.test(t))                 category = "template_approved";
-  else if (/(blocked|disabled|banned|terminated|suspend)/.test(t)) category = "block";
-  else if (/(restrict|throttl|messaging.?limit|tier.?demot)/.test(t)) category = "restriction";
-  else if (/(quality).*(low|medium|high|drop|update|degrad)/.test(t) || /quality.?rating/.test(t)) category = "quality_drop";
-  else if (/(payment|invoice|low.?balance|funds|recharge|wallet)/.test(t)) category = "billing";
-  else if (/(policy review|account review|under review|verification)/.test(t)) category = "account_review";
+// Subjects we never want to be paged about.
+const DROP_SUBJECT = /(verification|verified|welcome|getting started|onboarding|otp|one[- ]?time|password|webinar|newsletter|how to|invite|sign[- ]?in|signup link|confirm your email|please confirm|email confirmation)/i;
 
-  const severity: Severity = CRITICAL.has(category) ? "critical" : WARNING.has(category) ? "warning" : "info";
-  return { category, severity };
+function pickQuality(text: string): string | null {
+  // "Quality rating: Low/Medium/High" or "quality has changed to <X>"
+  const m = text.match(/quality\s+(?:rating|status|is|has\s+(?:changed|moved)\s+to)[^a-z]{0,8}(low|medium|high|red|yellow|green|flagged)/i)
+       || text.match(/(?:to|is|now)\s+(low|medium|high)\s+quality/i);
+  return m ? m[1].toLowerCase() : null;
+}
+function pickTier(text: string): string | null {
+  const m = text.match(/(?:tier|messaging\s+limit)[^a-z0-9]{0,8}(tier_?\d|\d{2,3}\s*k|unlimited|1k|10k|100k|1000)/i);
+  return m ? m[1] : null;
+}
+function pickReason(text: string): string | null {
+  const m = text.match(/(restricted[^.\n]{0,120}|flagged[^.\n]{0,120}|policy[^.\n]{0,120}|messaging limit[^.\n]{0,120})/i);
+  return m ? m[1].trim().slice(0, 120) : null;
+}
+function pickDisplayName(subject: string, text: string): string | null {
+  const m = text.match(/display\s+name[^a-z0-9"']{0,8}["']([^"'\n]{2,80})["']/i)
+       || subject.match(/\|\s*([A-Za-z0-9_]{3,40})\s*$/);
+  return m ? m[1].trim() : null;
+}
+function pickTemplate(text: string): string | null {
+  const m = text.match(/template[^a-z0-9]{0,8}["']?([a-z0-9_\-]{3,80})["']?/i);
+  return m ? m[1] : null;
+}
+function pickAmount(text: string): string | null {
+  const m = text.match(/(?:USD|INR|EUR|AED|\$|₹|€)\s?([\d,]+(?:\.\d{1,2})?)/i)
+       || text.match(/amount[^a-z0-9]{0,4}([\d,]+(?:\.\d{1,2})?)/i);
+  return m ? m[1] : null;
+}
+
+function classify(subject: string, body: string): Classification {
+  const sub = subject || "";
+  const txt = `${subject}\n${body}`;
+  const t = txt.toLowerCase();
+
+  // 1. Hard drop verification / onboarding noise.
+  if (DROP_SUBJECT.test(sub)) {
+    return { category: "dropped", severity: "info", routing: "numbers", send: false };
+  }
+
+  // 2. Billing / payments → finance.
+  if (/(recharge\s+successful|payment\s+(received|successful)|invoice|low\s+balance|wallet|funds\s+added|recharge\s+failed)/i.test(sub)) {
+    const failed = /(failed|declined|insufficient)/i.test(sub + " " + body);
+    return {
+      category: "billing",
+      severity: failed ? "warning" : "info",
+      routing: "finance",
+      send: true,
+      secondary: pickAmount(txt) || (failed ? "Failed" : "Recharge"),
+    };
+  }
+
+  // 3. Number / Display name approvals.
+  if (/phone\s+number\s+and\s+display\s+name\s+approved/i.test(sub)) {
+    return { category: "number_approved", severity: "info", routing: "numbers", send: true, secondary: "Approved" };
+  }
+  if (/display\s+name\s+approved/i.test(sub)) {
+    const name = pickDisplayName(sub, body);
+    return { category: "display_name_approved", severity: "info", routing: "numbers", send: true, secondary: name ? `Name: ${name}` : "Approved" };
+  }
+  if (/display\s+name\s+rejected/i.test(sub)) {
+    const name = pickDisplayName(sub, body);
+    return { category: "display_name_rejected", severity: "warning", routing: "numbers", send: true, secondary: name ? `Name: ${name}` : "Rejected" };
+  }
+
+  // 4. Templates.
+  if (/template[^|]*\b(approved|live)\b/i.test(sub)) {
+    const name = pickTemplate(txt);
+    return { category: "template_approved", severity: "info", routing: "numbers", send: true, secondary: name ? `Template: ${name}` : "Approved" };
+  }
+  if (/template[^|]*\b(rejected|paused|disabled|flagged)\b/i.test(sub)) {
+    const name = pickTemplate(txt);
+    return { category: "template_rejected", severity: "warning", routing: "numbers", send: true, secondary: name ? `Template: ${name}` : "Rejected" };
+  }
+
+  // 5. WABA status updates - the catch-all umbrella from Gupshup.
+  if (/update\s+in\s+your\s+waba\s+status/i.test(sub) || /waba\s+status/i.test(sub)) {
+    if (/(banned|disabled|terminated|suspended|blocked)/i.test(t)) {
+      return { category: "waba_blocked", severity: "critical", routing: "numbers", send: true, secondary: pickReason(txt) || "Blocked" };
+    }
+    if (/(restrict|flagged|messaging\s+limit\s+(reduced|downgraded))/i.test(t)) {
+      return { category: "waba_restricted", severity: "critical", routing: "numbers", send: true, secondary: pickReason(txt) || "Restricted" };
+    }
+    const q = pickQuality(t);
+    if (q) {
+      return { category: "quality_changed", severity: "warning", routing: "numbers", send: true, secondary: `Quality: ${q}` };
+    }
+    if (/(tier\s+upgrade|messaging\s+limit\s+(increased|upgraded))/i.test(t)) {
+      const tier = pickTier(t);
+      return { category: "tier_upgraded", severity: "info", routing: "numbers", send: true, secondary: tier ? `Tier: ${tier}` : "Upgraded" };
+    }
+    return { category: "waba_status_other", severity: "warning", routing: "numbers", send: true, secondary: "Status update" };
+  }
+
+  // 6. Standalone tier upgrade emails.
+  if (/(tier\s+upgrade|messaging\s+limit\s+(increased|upgraded))/i.test(sub)) {
+    const tier = pickTier(txt);
+    return { category: "tier_upgraded", severity: "info", routing: "numbers", send: true, secondary: tier ? `Tier: ${tier}` : "Upgraded" };
+  }
+
+  // 7. Everything else: log only, don't page.
+  return { category: "other", severity: "info", routing: "numbers", send: false };
 }
 
 function decodeBase64Url(s: string): string {
@@ -59,7 +158,6 @@ function extractText(payload: GmailPart): string {
   if (!payload) return "";
   if (payload.mimeType === "text/plain" && payload.body?.data) return decodeBase64Url(payload.body.data);
   if (payload.parts) {
-    // Prefer text/plain
     for (const p of payload.parts) {
       if (p.mimeType === "text/plain" && p.body?.data) return decodeBase64Url(p.body.data);
     }
@@ -75,7 +173,6 @@ function extractText(payload: GmailPart): string {
 }
 
 function parsePhone(text: string): string | null {
-  // Find sequences of 10–15 digits, optionally prefixed with +. Strip non-digits.
   const matches = text.match(/\+?\d[\d \-()]{9,18}\d/g);
   if (!matches) return null;
   for (const raw of matches) {
@@ -83,12 +180,6 @@ function parsePhone(text: string): string | null {
     if (digits.length >= 10 && digits.length <= 15) return digits;
   }
   return null;
-}
-
-function parseTemplateName(text: string): string | null {
-  const m = text.match(/template[^\n]*?["“']([a-z0-9_\-]{3,80})["”']/i)
-        || text.match(/template[^\n]*?(?:name|id)[:\s-]+([a-z0-9_\-]{3,80})/i);
-  return m ? m[1] : null;
 }
 
 function parseWabaId(text: string): string | null {
@@ -110,10 +201,8 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // Cursor: only look at messages newer than the last seen internalDate.
   const { data: state } = await supabase.from("gupshup_mail_state").select("*").eq("id", 1).maybeSingle();
   const lastMs = Number(state?.last_internal_date_ms || 0);
-  // First run: limit to last 7 days.
   const sinceSec = Math.floor((lastMs > 0 ? lastMs : Date.now() - 7 * 24 * 3600 * 1000) / 1000);
   const q = encodeURIComponent(`(from:gupshup.io OR from:gupshup.com) after:${sinceSec}`);
   const listUrl = `${GATEWAY}/users/me/messages?maxResults=50&q=${q}`;
@@ -132,13 +221,11 @@ Deno.serve(async (req) => {
   const listJson = await listRes.json();
   const ids: string[] = (listJson.messages || []).map((m: { id: string }) => m.id);
 
-  let scanned = 0; let inserted = 0; let alerts = 0;
+  let scanned = 0; let inserted = 0; let alerts = 0; let dropped = 0;
   let maxInternal = lastMs;
 
   for (const id of ids) {
     scanned++;
-
-    // Skip if already processed (cheap check).
     const { data: existing } = await supabase
       .from("gupshup_mail_log").select("id").eq("gmail_id", id).maybeSingle();
     if (existing) continue;
@@ -155,14 +242,12 @@ Deno.serve(async (req) => {
     const from = headerVal("From");
     const subject = headerVal("Subject");
 
-    // Defence: ignore mail not actually from gupshup
     if (!/gupshup\.(io|com)/i.test(from)) continue;
 
     const bodyText = extractText(msg.payload || {});
     const snippet = String(msg.snippet || "").slice(0, 500);
-    const { category, severity } = classify(subject, bodyText || snippet);
+    const cls = classify(subject, bodyText || snippet);
     const phone = parsePhone(`${subject}\n${bodyText}`);
-    const templateName = parseTemplateName(`${subject}\n${bodyText}`);
     const wabaId = parseWabaId(`${subject}\n${bodyText}`);
 
     let whatsappNumberId: string | null = null;
@@ -174,7 +259,9 @@ Deno.serve(async (req) => {
     }
 
     const parsed = {
-      phone_number: phone, template_name: templateName, waba_id: wabaId, from,
+      phone_number: phone, waba_id: wabaId, from,
+      secondary_field: cls.secondary || null,
+      routing: cls.routing,
     };
 
     const { data: ins, error: insErr } = await supabase
@@ -186,8 +273,8 @@ Deno.serve(async (req) => {
         from_address: from,
         subject,
         snippet,
-        category,
-        severity,
+        category: cls.category,
+        severity: cls.severity,
         whatsapp_number_id: whatsappNumberId,
         workspace_id: workspaceId,
         parsed,
@@ -195,14 +282,12 @@ Deno.serve(async (req) => {
       .select("id")
       .maybeSingle();
     if (insErr) {
-      // Probably a unique-violation race; ignore.
       if (!String(insErr.message).includes("duplicate")) console.warn("log insert failed", insErr.message);
       continue;
     }
     inserted++;
 
-    // Enqueue Slack alert for non-info severity (info = noise).
-    if (severity === "info") continue;
+    if (!cls.send) { dropped++; continue; }
 
     const { data: ev, error: evErr } = await supabase
       .from("slack_event_queue")
@@ -210,9 +295,11 @@ Deno.serve(async (req) => {
         event_type: "gupshup_mail_alert",
         workspace_id: workspaceId,
         payload: {
-          category, severity,
+          category: cls.category,
+          severity: cls.severity,
+          routing: cls.routing,
+          secondary: cls.secondary || null,
           phone_number: phone,
-          template_name: templateName,
           waba_id: wabaId,
           subject, snippet, gmail_id: id,
           whatsapp_number_id: whatsappNumberId,
@@ -233,7 +320,7 @@ Deno.serve(async (req) => {
     last_error: null,
   }).eq("id", 1);
 
-  return new Response(JSON.stringify({ scanned, inserted, alerts }), {
+  return new Response(JSON.stringify({ scanned, inserted, alerts, dropped }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
