@@ -210,18 +210,10 @@ Deno.serve(async (req) => {
       },
     });
 
-    // 5. (P0 stub) auto first-touch handoff. The campaigns engine remains the
-    // single source of truth for outbound sending. Until the per-lead campaign
-    // wrapper is wired, we mark accepted rows `awaiting_manual` so they show
-    // in the operator backlog. The pipeline.auto_outreach_enabled flag is
-    // already persisted and exposed for the next iteration.
-    if (pipeline.auto_outreach_enabled && acceptedLeads.length > 0) {
-      await admin
-        .from("lead_imports")
-        .update({ status: "awaiting_manual" })
-        .in("id", acceptedLeads.map((l) => l.id))
-        .eq("status", "pending");
-    }
+    // 5. Accepted leads are inserted with status `pending` (auto-outreach on)
+    // or `awaiting_manual` (auto-outreach off). The lead-dispatch cron picks
+    // up `pending` rows every minute and routes them through the campaigns
+    // engine. No further action needed here.
 
     return json({
       ok: true,

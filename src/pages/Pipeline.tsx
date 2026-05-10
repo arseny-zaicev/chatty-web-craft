@@ -52,7 +52,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
 import StageAutomationsDialog from "@/components/workspace/StageAutomationsDialog";
-import { fetchWorkspaceMembers, workspaceMembersKey } from "@/lib/workspaceMembers";
+import { fetchWorkspaceMembers, workspaceMembersKey, memberDisplayName } from "@/lib/workspaceMembers";
 import { createDeal, updateDeal, deleteDeal as deleteDealApi, moveDeal } from "@/lib/deals";
 import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipelines";
 import { useRequireAuth } from "@/hooks/useAuthSession";
@@ -412,7 +412,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 {members.map((m) => (
                   <SelectItem key={m.user_id} value={m.user_id}>
-                    {m.full_name?.trim() || `User ${m.user_id.slice(0, 6)}`}
+                    {memberDisplayName(m)}
                   </SelectItem>
                 ))}
               </SelectContent>
