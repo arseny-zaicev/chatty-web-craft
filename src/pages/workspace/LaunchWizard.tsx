@@ -1250,7 +1250,7 @@ export default function LaunchWizard() {
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
