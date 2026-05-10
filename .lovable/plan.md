@@ -1,53 +1,42 @@
-# План: чистый Slack + защита от дублей
+# План: Slack-уведомления в канал Nitish + проверка трекинга ответов
 
-## Что не так сейчас
+## Что нашёл
 
-**1. Slack-шум.** В канал пайплайна летят системные события: `lead.imported`, `lead.dispatched`, `lead.dispatch_blocked`, `lead.import_failed`. Клиенту это не нужно - импорт идёт постоянно автоматически. Нужны только реальные ответы лидов.
+### 1. Positive lead уходит в Iskra main, а не в Nitish-канал
+- Pipeline `Nitish / Ads / India / Delivery` имеет свой Slack-канал: `C0B2DBG8D0X` ✓
+- Но **DB-триггер `enqueue_positive_lead_event`** (срабатывает когда менеджер ставит звезду) кладёт в `slack_event_queue.payload` только `conversation_id`/`contact_phone`/`contact_name`/`last_message_text` — **БЕЗ** `pipeline_id` и `slack_channel_id`.
+- В `slack-dispatch` логика: `pipelineChannel = payload.slack_channel_id || workspaceChannel`. Раз нет первого → летит в `workspaces.slack_channel_id` (общий канал Iskra).
+- Аналогичный путь из `whatsapp-webhook` (авто-positive по стейджу) уже резолвит pipelineSlack правильно. Расхождение между двумя источниками.
 
-**2. Дубли отправки (Ankur 6×).** Сегодня одному номеру `918269603031` ушло **7 успешных** сообщений подряд из first-touch кампании. Причина: до фикса CHECK-constraint каждый запуск cron видел `lead_imports.status='awaiting_manual'` и создавал НОВЫЙ `campaign_recipient`, потому что апдейт статуса лида молча падал. Constraint мы починили, но защиты на уровне «1 first-touch на номер» в коде нет - если завтра снова что-то отвалится, опять начнётся спам.
-
----
+### 2. Трекинг ответов менеджера — уже работает
+- `messages.sent_by_user_id` пишется в `send-whatsapp` (строки 267, 284).
+- `conversations.active_responder_id/at` обновляется через `touchResponder` при открытии чата и отправке.
+- В UI Inbox под исходящим сообщением уже видно «· by [Имя]» (CRM.tsx:881-883).
+- Nitish есть в workspace `iskra` как `manager` (user_id 755912a7…). Значит, когда он отвечает в Inbox — сообщение пишется с его user_id и в БД, и видно в чате.
 
 ## Что делаем
 
-### A. Slack — оставить только реальные ответы лидов
+### A. Чиним маршрутизацию `positive_lead` (миграция)
+Перепишу функцию `public.enqueue_positive_lead_event()`:
+- Резолвлю `pipeline_id` и `slack_channel_id` через JOIN на `pipelines` по `NEW.pipeline_id`.
+- Кладу их в `payload` рядом с `pipeline_name`.
+- Триггер остаётся тот же (`AFTER UPDATE OF is_starred`).
 
-В `slack-dispatch/index.ts`:
-- **Удаляем** обработку и отправку для: `lead.imported`, `lead.import_failed`, `lead.dispatched`, `lead.dispatch_blocked` → помечаем как `skipped`, в Slack ничего не идёт.
-- **Оставляем** `positive_lead` (когда менеджер пометил чат звёздочкой).
-- **Добавляем новое событие `lead.first_reply`** - срабатывает, когда лид впервые ответил на наш first-touch. В Slack уходит карточка: имя, телефон, текст ответа, кнопка «Открыть в Inbox». Дубли по одному лиду не шлём (используем `last_auto_positive_alert_at` или новое поле).
+После фикса: звезда на чате внутри Nitish-пайплайна → событие летит в `C0B2DBG8D0X`, не в основной Iskra-канал.
 
-Триггер для `lead.first_reply`: расширяем существующий `mark_lead_replied_on_inbound` - когда `lead_imports.status` переходит `sent → replied`, кладём событие в `slack_event_queue` с типом `lead.first_reply` и payload (conversation_id, contact_name, contact_phone, last_message_text, pipeline_id для маршрутизации в нужный канал).
+### B. Проверка после деплоя
+1. Открыть чат Priyanshu (или любой в Nitish), нажать звезду → убедиться что в `slack_event_queue` появилось событие с `slack_channel_id=C0B2DBG8D0X` и `status=sent`.
+2. Снять звезду / поставить заново на другом чате — убедиться что `last_positive_lead_alert_at` дедупит в пределах 24ч (это уже работает в webhook-пути; для is_starred-триггера дедупа сейчас нет — добавлю простую дедуп-проверку «не чаще 1 раза в 24ч на conversation»).
+3. Ответить от имени Nitish в Inbox → подтвердить что в `messages.sent_by_user_id = 755912a7…` и в чате видно «by Nitish Sehrawat».
 
-### B. Жёсткая защита от повторной отправки
+### C. Что НЕ трогаю
+- Workspace-уровень канала Iskra оставляем как fallback для пайплайнов без `slack_channel_id`.
+- Логику `whatsapp-webhook` (auto-positive по стейджу) — она уже корректна.
+- Авторизация / права Nitish — он уже manager в workspace, ничего менять не нужно.
 
-В `lead-dispatch/index.ts` перед каждым `INSERT` в `campaign_recipients` для first-touch:
-
-1. **Проверка по `(pipeline_id, contact_phone)`**: если в `campaign_recipients` уже есть запись для этого телефона по любой first-touch кампании этого pipeline со статусом `pending/scheduled/sent/replied` - **пропускаем** (логируем `skipped: duplicate first-touch`). Лид помечается `status='skipped'` с понятной ошибкой.
-2. **Только при `failed`** - разрешаем создать новую попытку (это ответ на пожелание «если ошибка - можем потом руками»).
-3. Добавляем БД-индекс `idx_recipients_pipeline_phone_active` для быстрого lookup.
-4. Те же 6 «лишних» recipients Ankur-у уже либо `failed`, либо доставлены - чистка не нужна, но добавим разовый SQL-сброс зависших `pending/scheduled` дублей по телефонам, у которых уже есть `sent`.
-
-### C. Inbox - показывать ответы лидов на вопросы
-
-Бонусом (вы просили раньше): ответы на квиз-вопросы из `lead_imports.payload` (company_name, email, BM ownership и т.д.) показываем в правой панели чата в Inbox под контактом - блок «Ответы из формы».
-
----
-
-## Технические детали
-
-**Файлы:**
-- `supabase/functions/slack-dispatch/index.ts` - убрать ветку `lead.*`, добавить ветку `lead.first_reply` с карточкой.
-- `supabase/functions/lead-dispatch/index.ts` - дедуп-проверка перед `INSERT campaign_recipients`.
-- Migration: триггер `enqueue_first_reply_event` на `lead_imports` (AFTER UPDATE WHEN OLD.status='sent' AND NEW.status='replied'), плюс индекс для дедупа.
-- `src/pages/.../Inbox*.tsx` (компонент правой панели) - подтянуть `lead_imports.payload` по `conversation_id` и отрендерить.
-
-**Не трогаем:** campaign-events, number-events, gupshup_mail, inbox_unread_spike - они идут в ops-каналы, не в клиентский.
-
----
+## Файлы
+- Новая миграция: переопределение `public.enqueue_positive_lead_event()` с резолвом pipeline-канала и 24ч-дедупом.
 
 ## Чего НЕ будет
-
-- Авто-определения «yes/да/интересно» по тексту - вы выбрали «любой первый ответ», поэтому слать будем на любое первое входящее (без классификации).
-- Уведомлений об импортах - полностью молчим.
-- 30-дневной блокировки - только жёсткая по pipeline+phone, ручной retry возможен.
+- Никаких новых уведомлений-типов — только маршрутизация существующего `positive_lead`.
+- Изменений в UI Inbox — трекинг отправителя уже есть.
