@@ -1,86 +1,76 @@
-## Идея
+## Цель
 
-После завершения кампании (или по запросу в любой момент) клиент / ты получаете:
-1. **Сырой CSV** — построчно по каждому контакту: что ушло, дошло, ответили / нет, текст ответа, классификация ответа, какой шаблон / оффер / номер использовался.
-2. **AI-сводка (PDF / Markdown)** — кто реагирует лучше всего (по отрасли, гео, размеру, должности и т.д.), какая копия сработала, какие сегменты стоит масштабировать, кого исключить.
-
-Всё это уже реально, потому что в БД лежит почти всё нужное: `campaign_recipients` (статус, шаблон, номер, переменные с обогащением аудитории), `conversations`, `messages` (входящие ответы), `audience_rows.payload` (исходные поля лида — индустрия, должность, страна и т.п.), `message_templates` (текст оффера).
+Добавить полноценную аналитику доставки и выручки в Fleet Analytics (admin) — capacity vs sent vs delivered vs failed по номерам, по клиентам, и денежная выручка по ставке за доставленное сообщение (per workspace).
 
 ---
 
-## План (5 шагов)
+## 1. Schema changes
 
-### 1. Классификация ответов (replies tagging)
-Добавить в `conversations` (или отдельную таблицу `conversation_insights`) поля:
-- `reply_sentiment` — `positive | neutral | negative | objection | not_interested | ooo`
-- `reply_intent` — `meeting | pricing | info | wrong_person | unsubscribe | spam | other`
-- `first_reply_text`, `first_reply_at`, `time_to_first_reply_seconds`
-- `tagged_at`, `tagged_by` (`ai` / `user_id`)
+**`workspaces.delivered_rate_usd numeric DEFAULT 0`** — ставка $ за одно delivered сообщение для данного клиента. Редактируется в Admin → Clients (NewClientDialog / клиент-карточка).
 
-Заполнение:
-- **Авто (AI)** — edge function `classify-replies` берёт первые 1-3 входящих сообщения по conversation, прогоняет через Lovable AI (`google/gemini-2.5-flash`) с jsonschema-промптом, пишет результат. Запускается батчами после кампании + ночным cron.
-- **Ручное переопределение** в инбоксе (фишки в conversation header) — на будущее, не блокер.
-
-### 2. View / RPC для отчёта
-Создать SQL view `campaign_report_rows` со следующими колонками на каждого `campaign_recipient`:
-- contact_phone, contact_name, страна, и **все поля из `audience_rows.payload`** (industry, role, company, employees… — то, что было в импорте)
-- whatsapp_number_used, template_name, template_body (snapshot оффера)
-- delivery_status (sent / failed / read), sent_at, failed_reason
-- replied (bool), first_reply_text, time_to_first_reply, reply_sentiment, reply_intent
-- conversation_url (deep link в инбокс)
-
-И RPC `get_campaign_report(campaign_id)` с RLS-проверкой workspace member.
-
-### 3. Экспорт CSV / XLSX
-Кнопка **«Download report»** на странице кампании (admin + workspace):
-- Edge function `campaign-report-export` отдаёт CSV (стрим, чтоб не падать на 50k строк).
-- Опционально XLSX через `xlsx` npm в edge — оставим CSV в v1, XLSX в v2.
-- Файл имя: `{client}-{campaign_name}-{YYYYMMDD}.csv`.
-
-### 4. AI-сводка («Insights»)
-Edge function `campaign-insights` берёт агрегаты из view + сам прогоняет AI (Lovable AI, `google/gemini-2.5-pro`) с промптом вида:
-
-> «Вот распределение ответов по индустрии / должности / стране / размеру компании / шаблону. Скажи: 1) топ-3 сегмента с самым высоким positive reply rate, 2) что у них общего, 3) сегменты с высоким negative / not_interested — их исключить, 4) какая копия (template) сработала лучше и почему, 5) рекомендации по следующей итерации аудитории».
-
-Сохраняем в `campaign_insights` (campaign_id PK, summary_md, generated_at, model). UI: вкладка **«Insights»** на кампании — рендер markdown + chart-блоки (reply rate by industry / role / template).
-
-### 5. Доставка клиенту
-Три канала:
-- **В UI** (workspace → campaign → tabs `Overview / Recipients / Insights / Export`).
-- **Slack** — после `Campaign finished` уведомление автоматически прикладывает кнопки «Download CSV» и «Open insights».
-- **Email** (опционально, v2) — раз в неделю «Weekly intel digest» по всем кампаниям клиента.
+Глобальный baseline cap = 200/номер/день — константа `DAILY_CAP_PER_NUMBER = 200` в коде. Заблокированные номера (`status IN ('blocked','restricted')`) исключаются из capacity.
 
 ---
 
-## Технические детали
+## 2. Fleet Analytics — расширение метрик
 
-**Файлы / миграции:**
-- migration: `conversation_insights` (или колонки в `conversations`) + `campaign_insights` + view `campaign_report_rows` + RPC.
-- `supabase/functions/classify-replies/index.ts` — батч-классификатор.
-- `supabase/functions/campaign-report-export/index.ts` — стрим CSV.
-- `supabase/functions/campaign-insights/index.ts` — AI-сводка.
-- `src/pages/workspace/WorkspaceCampaigns.tsx` + новый `CampaignDetail.tsx` с табами Overview / Recipients / Insights / Export.
-- Slack `slackBlocks.ts` — добавить кнопки в финальный блок.
-- Cron: добавить `classify-replies` в `cron-heartbeat` (раз в 15 мин, лимит 200 conversations за тик).
+Файл: `src/pages/admin/FleetAnalytics.tsx`
 
-**Стоимость / лимиты:**
-- Классификация — `gemini-2.5-flash`, ~1 запрос на conversation, дёшево.
-- Insights — `gemini-2.5-pro`, 1 запрос на кампанию, разово.
-- CSV — без AI, мгновенно.
+### Top KPI bar (по выбранному периоду 7/30/90д + добавить "24h"):
 
-**Что НЕ делаем в v1:**
-- Ручной re-tagging в UI (только просмотр).
-- XLSX / PDF (CSV + markdown достаточно).
-- Cross-campaign benchmarking («вот тут сегмент X стабильно лучше во всех твоих кампаниях») — отдельный шаг v2 после того, как накопим данных.
+```text
+Capacity | Sent | Delivered | Failed | Delivered % | Revenue
+```
+
+- **Capacity** = `active_numbers_count × 200 × period_days`
+- **Sent / Delivered / Failed** — из `whatsapp_message_events`
+- **Delivered %** = delivered / sent
+- **Revenue** = Σ по workspace (delivered_in_ws × workspace.delivered_rate_usd)
+
+### Per-number table — добавить колонки:
+
+```text
+Number | Client | Cap | Sent | Used% | Delivered | Failed | Deliv% | Status
+```
+
+- **Cap** = 200 × period_days (или 0 если blocked)
+- **Used%** = sent / cap
+
+### Per-client table (новый блок):
+
+```text
+Client | Numbers | Cap | Sent | Delivered | Failed | Deliv% | Rate $ | Revenue
+```
+
+Группировка событий по `whatsapp_numbers.workspace_id`.
+
+### Revenue panel (новый):
+
+4 чипа: **24h / 7d / 30d / All-time** revenue. Считается из delivered events за окно × rate per workspace. Период-селектор уже есть, добавить "24h".
 
 ---
 
-## Порядок выкатки
+## 3. Admin → Clients — поле "Delivered rate"
 
-1. Миграция + view + RPC (1 шаг).
-2. `classify-replies` + cron — данные начинают копиться.
-3. CSV export — самое полезное прямо сейчас, можно отдавать клиентам уже на следующий день.
-4. AI insights — поверх данных, когда классификация набралась.
-5. Slack-кнопки + UI tabs.
+В `NewClientDialog` и где редактируется workspace добавить input "Rate per delivered message ($)". Default 0. Только admin может менять.
 
-После approve — иду по этому порядку, каждый шаг отдельным commit-ом, чтобы можно было ревьюить по частям.
+---
+
+## 4. Технические детали
+
+- Период-селектор: добавить кнопку `1` (24h) рядом с `7/30/90`.
+- `fetchAnalytics` грузит `workspaces.delivered_rate_usd`, кладёт в wsMap как объект `{name, rate}`.
+- Per-client агрегация: вторая `Map<workspace_id, {sent, delivered, failed, numbers}>` через `numbers[].workspace_id` лукап.
+- Capacity per number: `n.status === 'active' ? 200 * periodDays : 0`. Для 24h period_days = 1.
+- Revenue: `delivered × rate` округлять до 2 знаков, форматировать `$X,XXX.XX`.
+- Без новых edge functions — всё считается клиентски (как сейчас).
+
+---
+
+## Acceptance
+
+- В Fleet Analytics видно 6 KPI (Capacity, Sent, Delivered, Failed, Deliv%, Revenue) с переключателем 24h/7d/30d/90d.
+- Per-number таблица показывает Cap и Used% наряду с Delivered.
+- Новая Per-client таблица показывает выручку и доставку по каждому workspace.
+- Можно задать `delivered_rate_usd` для клиента в admin.
+- Заблокированные номера не учитываются в Capacity.

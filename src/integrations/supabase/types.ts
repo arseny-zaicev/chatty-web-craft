@@ -2330,6 +2330,7 @@ export type Database = {
         Row: {
           color: string
           created_at: string
+          delivered_rate_usd: number
           id: string
           inbox_alerts_enabled: boolean
           internal_code: string | null
@@ -2347,6 +2348,7 @@ export type Database = {
         Insert: {
           color?: string
           created_at?: string
+          delivered_rate_usd?: number
           id?: string
           inbox_alerts_enabled?: boolean
           internal_code?: string | null
@@ -2364,6 +2366,7 @@ export type Database = {
         Update: {
           color?: string
           created_at?: string
+          delivered_rate_usd?: number
           id?: string
           inbox_alerts_enabled?: boolean
           internal_code?: string | null
