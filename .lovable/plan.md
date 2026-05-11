@@ -1,48 +1,67 @@
-## Quick answer about +1 603 750 3256
+## Goal
 
-I checked the database directly. This number (`BigZ Hyprmrkt`) is genuinely unassigned and safe to leave in stock:
+Add a visible "health check" loop on top of the existing `numbers-health-sync` so you (and Slack) can see at a glance: how many numbers were checked, how many are healthy, which ones have problems — without opening each row.
 
-- `workspace_id`: **NULL** (not allocated to any client)
-- `status`: `stock`, `is_active`: true
-- Campaigns referencing it: **0**
-- Campaign recipients referencing it: **0**
-- Allocation rows in `campaign_number_allocations`: **0**
+## What already exists (don't rebuild)
 
-So no client is using it right now. It's truly idle.
+- `numbers-health-sync` edge function pulls Gupshup status / messaging limit / quality / display name and updates `whatsapp_numbers`. Cron runs it every 15 min.
+- DB trigger already posts to Slack when `status` or `messaging_limit` changes.
+- Email ingestion (`gupshup-mail-poll`) handles RESTRICTED notices for newer accounts.
 
-## The real issue you're raising
-
-Today there is **no automatic sync** between "this number is in a workspace" and "this number is being used in a campaign". Allocation is purely manual in Fleet → Numbers Registry. The Fleet UI also has no warning if you try to unassign or reassign a number that has active/recent campaign activity. That's the gap to close.
+So the engine is there — what's missing is **visibility, on-demand runs, and a digest**.
 
 ## Plan
 
-### 1. Show usage right in Fleet Registry
-For every row in `/admin/fleet`, fetch and display:
-- Last campaign that used the number (name + workspace + last sent date)
-- Count of running/scheduled campaigns currently bound to it
-- A "Currently in use" red badge when there is a running/scheduled/paused campaign on it
-- A "Recently used" amber badge when last_sent within the last 30 days but no active campaign
+### 1. "Check all numbers now" button in Fleet Registry
+Top-right of `/admin/fleet`, next to the search:
+- Button "Run health check" → calls `numbers-health-sync` with no body (= sweep all).
+- While running: spinner + disabled.
+- On done: toast with summary + a result strip pinned above the table:
+  ```
+  Checked 42 · 36 healthy · 4 restricted · 1 banned · 1 unreachable   [Re-run] [Dismiss]
+  ```
+- Rows that changed during this run get a subtle pulse highlight for ~5s.
 
-This makes "is this number really free?" answerable at a glance.
+### 2. Per-row "Re-check" action
+In the row's actions menu add "Re-check now" → calls the same function with `{ number_id }` (already supported). Updates that single row in place.
 
-### 2. Guard reassign / unassign / delete
-Before changing `workspace_id` or deleting a number, check `campaigns` for non-terminal statuses (`scheduled`, `running`, `paused`) bound to it. If any exist:
-- Block the action with a clear modal listing the blocking campaigns + their workspace
-- Offer two explicit choices: "Cancel" or "Force - I know what I'm doing" (force still allowed for admin, but logged)
+### 3. Health summary digest (Slack, every N hours)
+New tiny edge function `numbers-health-digest`:
+- Reads `whatsapp_numbers` (active only) + groups by `status`, `quality_rating`, `messaging_limit`.
+- Posts one Slack message to `delivery-leads` like:
+  ```
+  📋 Fleet health digest (last 6h)
+  • 38 active · 3 restricted · 1 banned · 0 unreachable
+  • Quality: 35 GREEN · 5 YELLOW · 2 RED
+  • Tier: 12 TIER_1K · 18 TIER_10K · 8 TIER_100K
+  • Changed since last digest: 2 (BigZ Hyprmrkt → restricted, Cleon → quality YELLOW)
+  ```
+- Only posts if there's something worth saying (changes OR a number in non-healthy state). Silent otherwise to avoid noise.
+- Cron every 6h (configurable). Uses a small `system_state` row to remember the last digest snapshot for the diff.
 
-Same guard runs when reassigning to a different workspace, since that would orphan the campaign.
+### 4. Surface last sync info in the row
+Each Fleet row already has a status badge — add a tiny muted line under it:
+- `synced 4m ago` (green dot) — from `last_health_sync_at`
+- `sync failed: <err>` (red dot) — from `last_health_sync_error`
+This makes "is the health data fresh?" answerable without clicking.
 
-### 3. Detail drawer "Usage history" tab
-Inside the Fleet edit drawer, add a small section listing the last ~10 campaigns that ever used this number, grouped by workspace, with status + sent_count. Pure read-only, helps audit "where has this number been".
+### 5. Health overview card on Fleet page
+Above the table, a thin 4-tile strip (always visible):
+```
+Active 38   Restricted 3   Banned 1   Unreachable 0
+```
+Click a tile = filters the table to that subset. Reuses data already loaded — no new query.
 
-### 4. Sanity SQL view (no UI)
-A simple SQL view `whatsapp_number_usage_summary` that joins numbers ↔ campaigns ↔ recipients and exposes: `number_id`, `active_campaign_count`, `last_used_at`, `last_workspace_id`, `last_campaign_id`. Both Fleet list and the drawer query this view so we don't repeat aggregation logic in the client.
+## Out of scope (on purpose)
 
-### Out of scope (on purpose)
-- Automatically moving `workspace_id` based on campaign activity. That would mask mistakes - if a campaign is running on a wrongly-assigned number, we want a warning, not silent reassignment.
-- Changing how the workspace UI picks numbers - that already only sees numbers with `workspace_id = current workspace`.
+- No auto-quarantine / auto-disable. We surface, you decide. (Status flips already happen via existing logic.)
+- No new metric storage / time-series. The digest diffs against the previous snapshot only — keeps it cheap.
 
-### Technical notes
-- New view in a migration; RLS via `is_admin(auth.uid())`.
-- `FleetRegistry.tsx`: extend the query in `fetchData` to join the view; add badges in the row renderer; wrap `reassign` and `remove` mutations with a pre-check that opens an `AlertDialog` if blocking campaigns exist.
-- No changes to campaign send logic, no changes to client-facing pages.
+## Technical notes
+
+- New file: `supabase/functions/numbers-health-digest/index.ts` + cron entry (every 6h) + `verify_jwt = false`.
+- New table `fleet_health_snapshots` (id, captured_at, summary jsonb) — single row updated on each digest run; used for diffing.
+- `FleetRegistry.tsx`: add header button, summary strip, per-row re-check action, last-sync sub-line, overview tiles. All client-side, calls `supabase.functions.invoke('numbers-health-sync', ...)`.
+- Reuse existing toasts/badges; no new design tokens.
+
+Want me to build all 5, or trim to a subset (e.g. just #1 + #2 + #4 first)?
