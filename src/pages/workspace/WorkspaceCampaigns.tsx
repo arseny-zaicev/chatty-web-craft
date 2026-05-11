@@ -117,7 +117,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate text-sm">{g.displayName}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {[template?.name, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
+                      {[canManage ? template?.name : null, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
