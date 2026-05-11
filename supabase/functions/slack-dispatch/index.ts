@@ -226,13 +226,14 @@ Deno.serve(async (req) => {
         const msg = buildPositiveLeadBlocks({ ws, payload: p });
         await postSlack(pipelineChannel, msg);
       } else if (ev.event_type === "inbox_unread_spike") {
-        if (!ws || !workspaceChannel || !inboxAlertsEnabled) {
+        const p = ev.payload as any;
+        const targetChannel = (p?.slack_channel_id as string) || workspaceChannel;
+        if (!ws || !targetChannel || !inboxAlertsEnabled) {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
-        const p = ev.payload as any;
-        const msg = buildInboxSpikeBlocks({ ws, unreadCount: p.unread_total || 0, conversations: p.conversations || [] });
-        await postSlack(workspaceChannel, msg);
+        const msg = buildInboxSpikeBlocks({ ws, unreadCount: p.unread_total || 0, conversations: p.conversations || [], pipelineName: p.pipeline_name || null });
+        await postSlack(targetChannel, msg);
       } else if (ev.event_type === "lead.first_reply") {
         const p = ev.payload as any;
         const pipelineChannel = (p?.slack_channel_id as string) || workspaceChannel;
