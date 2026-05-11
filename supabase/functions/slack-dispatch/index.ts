@@ -23,6 +23,7 @@ const OPS_FINANCE   = Deno.env.get("SLACK_OPS_FINANCE_CHANNEL_ID") || "";
 const CAMPAIGN_EVENTS = new Set([
   "campaign_launched", "campaign_resumed", "campaign_paused",
   "campaign_completed", "campaign_cancelled", "campaign_scheduled", "campaign_failed",
+  "campaign_day_completed",
 ]);
 const NUMBER_EVENTS = new Set([
   "number_restricted", "number_blocked", "number_recovered", "number_quality_changed",
