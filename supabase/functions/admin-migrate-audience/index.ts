@@ -26,16 +26,26 @@ Deno.serve(async (req) => {
     while (true) {
       const { data, error } = await src
         .from("audience_rows")
-        .select("batch_id, workspace_id, phone, payload, derived_payload, validation_status, usage_status, created_at")
+        .select("*")
         .eq("batch_id", batchId)
-        .order("created_at", { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
 
-      const { error: upErr } = await dst.from("audience_rows").upsert(data, { onConflict: "batch_id,phone", ignoreDuplicates: false });
+      // Normalize to Cloud schema
+      const rows = data.map((r: any) => ({
+        batch_id: r.batch_id ?? batchId,
+        workspace_id: r.workspace_id ?? "4d1d33c1-cd7c-4275-8abe-2cc67e6c11b0",
+        phone: String(r.phone ?? r.phone_number ?? "").replace(/^\+/, ""),
+        payload: r.payload ?? {},
+        derived_payload: r.derived_payload ?? {},
+        validation_status: r.validation_status ?? "valid",
+        usage_status: r.usage_status ?? "unused",
+      })).filter((r: any) => r.phone);
+
+      const { error: upErr } = await dst.from("audience_rows").upsert(rows, { onConflict: "batch_id,phone", ignoreDuplicates: false });
       if (upErr) throw upErr;
-      totalCopied += data.length;
+      totalCopied += rows.length;
       if (data.length < PAGE) break;
       from += PAGE;
     }
