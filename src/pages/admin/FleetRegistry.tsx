@@ -76,6 +76,25 @@ type DnStatus = "pending" | "approved" | "rejected";
 
 const BAN_DURATION_DAYS = 30;
 
+const isBlockedNumber = (r: Row) => r.status === "restricted" || r.status === "banned";
+const isReadyUnassignedNumber = (r: Row) => (
+  r.workspace_id === null
+  && !isBlockedNumber(r)
+  && r.is_active
+  && (r.status === "active" || r.status === "ready")
+  && Boolean(r.provider_app_id && r.provider_api_key && r.webhook_connected && r.templates_approved > 0)
+);
+
+const SECTION_FILTER_OPTIONS: Array<[string, string]> = [
+  ["all", "All sections"],
+  ["allocated", "Allocated"],
+  ["active", "Active campaign"],
+  ["warming", "Warming"],
+  ["stock", "Unassigned ready"],
+  ["restricted", "Restricted"],
+  ["banned", "Banned"],
+];
+
 type WS = { id: string; name: string; slug: string };
 
 const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
@@ -303,7 +322,8 @@ export default function FleetRegistry() {
     if (r.status === "banned") return "banned";
     if (r.status === "restricted") return "restricted";
     if (r.status === "warming") return "warming";
-    if (r.workspace_id === null) return "stock";
+    if (isReadyUnassignedNumber(r)) return "stock";
+    if (r.workspace_id === null) return "other";
     if (!r.is_active) return "other";
     if ((r.active_campaigns?.length ?? 0) > 0) return "active";
     if (r.status === "active" || r.status === "ready") return "allocated";
@@ -313,8 +333,8 @@ export default function FleetRegistry() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((r) => {
-      // "Unassigned" view = real Stock only (exclude banned/restricted - they're not usable)
-      if (view === "unassigned" && bucketOf(r) !== "stock") return false;
+      // "Unassigned" means launch-ready numbers with no client. Blocked/restricted and setup stock stay out.
+      if (view === "unassigned" && !isReadyUnassignedNumber(r)) return false;
       if (fStatus !== "all") {
         if (fStatus === "sync_failed") {
           if (!r.last_health_sync_error) return false;
@@ -436,7 +456,7 @@ export default function FleetRegistry() {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const unassignedCount = rows.filter((r) => r.workspace_id === null).length;
+  const unassignedCount = rows.filter(isReadyUnassignedNumber).length;
 
   return (
     <div className="min-h-screen bg-background">
