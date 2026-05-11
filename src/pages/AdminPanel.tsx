@@ -268,11 +268,11 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
 }
 
 const HEALTH_META = {
-  running:   { label: "Running",            cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: Rocket },
-  scheduled: { label: "Scheduled",          cls: "bg-sky-500/10 text-sky-600 border-sky-500/30",              icon: Calendar },
-  idle:      { label: "Ready to launch",    cls: "bg-muted text-muted-foreground border-border",              icon: CheckCircle2 },
-  attention: { label: "Attention",          cls: "bg-amber-500/10 text-amber-600 border-amber-500/30",        icon: AlertTriangle },
-  blocked:   { label: "No active numbers",  cls: "bg-red-500/10 text-red-600 border-red-500/30",              icon: AlertTriangle },
+  running:   { label: "Active",              cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: CheckCircle2 },
+  scheduled: { label: "Active",              cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: CheckCircle2 },
+  idle:      { label: "Active",              cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: CheckCircle2 },
+  attention: { label: "Attention",           cls: "bg-amber-500/10 text-amber-600 border-amber-500/30",        icon: AlertTriangle },
+  blocked:   { label: "No active numbers",   cls: "bg-red-500/10 text-red-600 border-red-500/30",              icon: AlertTriangle },
 } as const;
 
 function daysUntil(iso: string): number {
