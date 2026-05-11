@@ -232,13 +232,24 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   };
 
   const markUnread = async (conv: Conversation) => {
-    try { await markConversationUnread(conv.id, conv.unread_count); }
-    catch { toast.error("Failed"); }
+    const prev = conv.unread_count;
+    const next = Math.max(1, prev);
+    setConversations((cs) => cs.map((c) => (c.id === conv.id ? { ...c, unread_count: next } : c)));
+    try { await markConversationUnread(conv.id, prev); }
+    catch {
+      setConversations((cs) => cs.map((c) => (c.id === conv.id ? { ...c, unread_count: prev } : c)));
+      toast.error("Failed");
+    }
   };
 
   const markRead = async (conv: Conversation) => {
     if (conv.unread_count === 0) return;
-    try { await markConversationRead(conv.id); } catch { /* non-blocking */ }
+    const prev = conv.unread_count;
+    setConversations((cs) => cs.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c)));
+    try { await markConversationRead(conv.id); }
+    catch {
+      setConversations((cs) => cs.map((c) => (c.id === conv.id ? { ...c, unread_count: prev } : c)));
+    }
   };
 
   // Auth gate + me id
