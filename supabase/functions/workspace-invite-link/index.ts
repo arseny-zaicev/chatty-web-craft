@@ -188,6 +188,8 @@ Deno.serve(async (req) => {
             user_id: userId,
             role: link.role,
             allowed_pipeline_ids: memberPipes,
+            invited_at: new Date().toISOString(),
+            joined_at: new Date().toISOString(),
           });
         if (insErr) return json({ error: insErr.message }, 500);
 
