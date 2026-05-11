@@ -19,8 +19,9 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [color, setColor] = useState("#10b981");
   const [website, setWebsite] = useState("");
   const [logo, setLogo] = useState("");
+  const [rate, setRate] = useState("0");
 
-  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); setWebsite(""); setLogo(""); };
+  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); setWebsite(""); setLogo(""); setRate("0"); };
 
   const normalizeUrl = (s: string) => {
     const v = s.trim();
