@@ -1299,7 +1299,7 @@ export default function LaunchWizard() {
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
           <p className="text-[11px] text-muted-foreground">
-            {resolution.ok.length > 1 ? `Will create ${resolution.ok.length} sub-campaigns, one per number.` : "Single campaign."}
+            {resolution.ok.length > 1 ? `One campaign across ${resolution.ok.length} numbers (recipients distributed automatically).` : "Single campaign."}
           </p>
         </aside>
       </div>
