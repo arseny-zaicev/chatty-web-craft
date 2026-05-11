@@ -17,7 +17,9 @@ type Member = {
   role: string;
   can_view_stats: boolean;
   allowed_pipeline_ids: string[] | null;
-  joined_at: string;
+  joined_at: string | null;
+  invited_at: string | null;
+  membership_created_at: string | null;
   email: string | null;
   full_name: string | null;
   account_created_at: string | null;
