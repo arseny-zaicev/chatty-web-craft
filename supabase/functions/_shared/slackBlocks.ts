@@ -142,6 +142,7 @@ export function buildCampaignLifecycleBlocks(args: {
     campaign_cancelled:{ emoji: "🛑", verb: "cancelled" },
     campaign_scheduled:{ emoji: "📅", verb: "scheduled" },
     campaign_failed:   { emoji: "❌", verb: "failed" },
+    campaign_day_completed: { emoji: "✅", verb: "day finished" },
   };
   const m = meta[event] || { emoji: "📣", verb: event };
 
@@ -161,6 +162,16 @@ export function buildCampaignLifecycleBlocks(args: {
   } else if (event === "campaign_paused") {
     fields.push({ type: "mrkdwn", text: `*Progress*\n${fmtNumber(sent)} / ${fmtNumber(total)} sent` });
     fields.push({ type: "mrkdwn", text: `*Failed*\n${fmtNumber(failed)}` });
+  } else if (event === "campaign_day_completed") {
+    const sentToday = Number(payload.sent_today || 0);
+    const failedToday = Number(payload.failed_today || 0);
+    const nextDay = String(payload.next_day || "");
+    const nextStart = String(payload.next_day_start_local || payload.window_start || "09:00");
+    const nextRecipients = Number(payload.next_day_recipients || 0);
+    const tz = payload.recipient_tz ? ` ${payload.recipient_tz}` : "";
+    fields[1] = { type: "mrkdwn", text: `*Today*\n${fmtNumber(sentToday)} sent · ${fmtNumber(failedToday)} failed` };
+    fields.push({ type: "mrkdwn", text: `*Next batch*\n${fmtNumber(nextRecipients)} msgs` });
+    fields.push({ type: "mrkdwn", text: `*Starts*\n${nextDay} at ${nextStart}${tz}` });
   }
 
   if (numberPhone) {
