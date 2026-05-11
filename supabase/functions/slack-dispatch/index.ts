@@ -261,6 +261,7 @@ Deno.serve(async (req) => {
         // Disabled: do not notify Slack on new member joining CRM.
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
+      } else if (ev.event_type === "gupshup_mail_alert") {
         const p = ev.payload as any;
         const msg = buildGupshupMailAlertBlocks({
           category: String(p.category || "other"),
