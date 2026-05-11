@@ -454,6 +454,31 @@ export default function FleetRegistry() {
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <OverviewTile label="Active" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
+          <OverviewTile label="Restricted" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
+          <OverviewTile label="Banned" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
+          <OverviewTile label="Sync failed" value={overview.unreachable} tone="red" active={false} onClick={() => {}} />
+        </div>
+
+        {healthSummary && (
+          <div className="rounded-md border border-border bg-card/50 px-3 py-2 flex items-center gap-3 text-sm">
+            <Activity className="w-4 h-4 text-emerald-600" />
+            <span>
+              Checked <b>{healthSummary.total}</b> ·
+              {" "}<span className="text-emerald-700">{Math.max(0, healthSummary.synced - healthSummary.changed)} unchanged</span> ·
+              {" "}<span className="text-amber-700">{healthSummary.changed} changed</span>
+              {healthSummary.failed > 0 && <> · <span className="text-red-700">{healthSummary.failed} failed</span></>}
+            </span>
+            <span className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={() => healthCheck.mutate(undefined)} disabled={healthCheck.isPending}>
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${healthCheck.isPending ? "animate-spin" : ""}`} />Re-run
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setHealthSummary(null)}>Dismiss</Button>
+            </span>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 items-center">
           <ViewTab active={view === "all"} onClick={() => setView("all")} icon={<Layers className="w-3.5 h-3.5" />}>All numbers</ViewTab>
           <ViewTab active={view === "by-client"} onClick={() => setView("by-client")} icon={<Building2 className="w-3.5 h-3.5" />}>Group by client</ViewTab>
