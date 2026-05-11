@@ -755,8 +755,8 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQui
             ) : (
               <>
                 <InboxIcon className="w-3.5 h-3.5 text-amber-600" />
-                <span className="font-medium text-amber-700">Unassigned</span>
-                <span className="text-xs text-muted-foreground">- not yet allocated to any client</span>
+                <span className="font-medium text-amber-700">Unassigned setup stock</span>
+                <span className="text-xs text-muted-foreground">- not client-allocated, not counted as launch-ready</span>
               </>
             )}
             <span className="ml-auto text-xs text-muted-foreground">{g.rows.length} number{g.rows.length === 1 ? "" : "s"}</span>
