@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2, Copy, Check,
+  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2, Copy, Check, AlertTriangle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -470,6 +470,7 @@ export default function FleetRegistry() {
 
       <AddNumberDrawer open={adderOpen || !!editing} onOpenChange={(v) => { if (!v) { setAdderOpen(false); setEditing(null); } else setAdderOpen(true); }} workspaces={workspaces}
         editing={editing}
+        existingRows={rows}
         onCreated={async () => { await qc.invalidateQueries({ queryKey: ["fleet-registry"] }); }} />
     </div>
   );
@@ -839,8 +840,8 @@ function InlineDnSelect({ value, checkedAt, onChange }: { value: DnStatus; check
 
 // Add Number drawer ---------------------------------------------------------
 function AddNumberDrawer({
-  open, onOpenChange, workspaces, editing, onCreated,
-}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; editing?: Row | null; onCreated: () => Promise<void> | void }) {
+  open, onOpenChange, workspaces, editing, existingRows, onCreated,
+}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; editing?: Row | null; existingRows: Row[]; onCreated: () => Promise<void> | void }) {
   const [phone, setPhone] = useState("");
   const [appName, setAppName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -856,7 +857,22 @@ function AddNumberDrawer({
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
-  
+
+  const dupPhone = useMemo(() => {
+    const clean = phone.replace(/[^\d]/g, "");
+    if (!clean) return null;
+    return existingRows.find((r) => r.phone_number === clean && r.id !== editing?.id) ?? null;
+  }, [phone, existingRows, editing]);
+  const dupAppName = useMemo(() => {
+    const v = appName.trim().toLowerCase();
+    if (!v) return null;
+    return existingRows.find((r) => (r.label ?? "").trim().toLowerCase() === v && r.id !== editing?.id) ?? null;
+  }, [appName, existingRows, editing]);
+  const dupAppId = useMemo(() => {
+    const v = appId.trim().toLowerCase();
+    if (!v) return null;
+    return existingRows.find((r) => (r.provider_app_id ?? "").trim().toLowerCase() === v && r.id !== editing?.id) ?? null;
+  }, [appId, existingRows, editing]);
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
@@ -979,6 +995,12 @@ function AddNumberDrawer({
         <div className="space-y-4 py-2">
           <Field label="Phone (digits only)" required>
             <Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))} placeholder="971500000000" />
+            {dupPhone && (
+              <div className="text-[11px] text-red-600 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                +{dupPhone.phone_number} already in Fleet ({dupPhone.workspace_name || "unassigned"} · {dupPhone.label || "no label"})
+              </div>
+            )}
           </Field>
 
           <Field label="Messaging limit">
@@ -1000,6 +1022,12 @@ function AddNumberDrawer({
 
           <Field label="App name">
             <Input value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="01Ashik02" />
+            {dupAppName && (
+              <div className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                App name "{dupAppName.label}" already used by +{dupAppName.phone_number} ({dupAppName.workspace_name || "unassigned"})
+              </div>
+            )}
           </Field>
 
           <Field label="Display name">
@@ -1027,6 +1055,12 @@ function AddNumberDrawer({
           <div className="grid grid-cols-2 gap-3">
             <Field label="App ID">
               <Input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="uuid" />
+              {dupAppId && (
+                <div className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Already used by +{dupAppId.phone_number}
+                </div>
+              )}
             </Field>
             <Field label="API key">
               <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk_..." />
@@ -1106,7 +1140,7 @@ function AddNumberDrawer({
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
             Save
           </Button>
