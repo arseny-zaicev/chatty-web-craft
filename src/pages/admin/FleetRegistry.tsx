@@ -1022,6 +1022,12 @@ function AddNumberDrawer({
 
           <Field label="App name">
             <Input value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="01Ashik02" />
+            {dupAppName && (
+              <div className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                App name "{dupAppName.label}" already used by +{dupAppName.phone_number} ({dupAppName.workspace_name || "unassigned"})
+              </div>
+            )}
           </Field>
 
           <Field label="Display name">
