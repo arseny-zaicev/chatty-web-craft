@@ -382,9 +382,10 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
               const sent = m.active_campaign_sent ?? 0;
               const total = m.active_campaign_total ?? 0;
               const pct = total > 0 ? Math.min(100, Math.round((sent / total) * 100)) : 0;
+              const sendingNow = !!m.is_sending_now;
               const isRunning = m.active_campaign_status === "running";
-              const label = isRunning ? "Campaign in progress" : "Next campaign";
-              const Icon = isRunning ? Rocket : Calendar;
+              const label = sendingNow ? "Sending now" : isRunning ? "Campaign running" : "Next campaign";
+              const Icon = sendingNow ? Rocket : isRunning ? CheckCircle2 : Calendar;
               return (
                 <>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon className="w-3.5 h-3.5" />{label}</div>
