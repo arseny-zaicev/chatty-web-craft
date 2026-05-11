@@ -450,6 +450,7 @@ function PresetsSection({
 function PrepPromptsSection({
   workspaceName, workspaceId, workspaceSlug,
 }: { workspaceName: string; workspaceId: string; workspaceSlug: string }) {
+  const qc = useQueryClient();
   const profilesQ = useQuery({
     queryKey: prepProfileKeys.list(workspaceId),
     queryFn: () => listPrepProfiles(workspaceId),
