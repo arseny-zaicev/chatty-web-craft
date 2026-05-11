@@ -302,6 +302,11 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                   <Badge variant="outline" className={m.role === "client" ? "bg-blue-500/10 text-blue-500 border-blue-500/30" : "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"}>
                     {m.role}
                   </Badge>
+                  {!m.joined_at && (
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30">
+                      Invite sent
+                    </Badge>
+                  )}
                 </div>
                 {m.email && (
                   <div className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
@@ -310,7 +315,11 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                   </div>
                 )}
                 <div className="flex items-center gap-3 flex-wrap text-[10px] text-muted-foreground">
-                  <span>Joined {new Date(m.joined_at).toLocaleDateString()}</span>
+                  {m.joined_at ? (
+                    <span>Joined {new Date(m.joined_at).toLocaleDateString()}</span>
+                  ) : (
+                    <span>Invited {new Date(m.invited_at ?? m.membership_created_at ?? Date.now()).toLocaleDateString()} · waiting for first sign-in</span>
+                  )}
                   <span className="inline-flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     Last seen {fmtRelative(m.last_seen_at ?? m.last_sign_in_at)}
