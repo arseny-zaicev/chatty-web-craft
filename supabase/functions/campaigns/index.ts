@@ -731,77 +731,93 @@ async function processQueue(admin: any) {
     .limit(perTickLimit);
   if (error) return json({ error: error.message }, 500);
 
+  // Shard by sender number so each WhatsApp number processes its queue
+  // independently and in parallel. Within a shard we still sleep up to the
+  // recipient's scheduled_at to preserve jitter, but across shards N numbers
+  // send concurrently - this is what unblocks the system at full rollout.
+  const shards = new Map<string, any[]>();
+  for (const r of due ?? []) {
+    const key = String(r.campaigns?.whatsapp_number_id || r.id);
+    const arr = shards.get(key) ?? [];
+    arr.push(r);
+    shards.set(key, arr);
+  }
+
   let sent = 0;
   let failed = 0;
-  for (const recipient of due ?? []) {
-    // Honor the per-recipient scheduled_at: sleep up to the tick budget so
-    // sent_at lands at the actual randomized timestamp (preserves jitter
-    // configured via delay_min/max_seconds), not the cron minute boundary.
-    const targetMs = new Date(recipient.scheduled_at).getTime();
-    const nowMs = Date.now();
-    const waitMs = targetMs - nowMs;
-    const remainingBudget = TICK_BUDGET_MS - (nowMs - tickStartedAt);
-    if (waitMs > 0 && remainingBudget > 0) {
-      await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
-    }
-    if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
+  const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
 
-    const { data: locked } = await admin
-      .from("campaign_recipients")
-      .update({ status: "sending" })
-      .eq("id", recipient.id)
-      .eq("status", "scheduled")
-      .select("id")
-      .maybeSingle();
-    if (!locked) continue;
-
-    try {
-      const gsBody = await sendTemplate(admin, recipient);
-      const providerId = gsBody.messageId || null;
-      const tpl = recipient.campaigns?.message_templates;
-      const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
-      const renderedBody = renderTemplateBody(tpl?.body, variableNames, recipient.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
-      const sentAt = new Date().toISOString();
-
-      // Ensure a conversation exists so Inbox shows the thread starting from this opener
-      const conversationId = await ensureCampaignConversation(admin, recipient);
-
-      await admin.from("campaign_recipients").update({
-        status: "sent",
-        sent_at: sentAt,
-        provider_message_id: providerId,
-        conversation_id: conversationId,
-      }).eq("id", recipient.id);
-
-      if (conversationId) {
-        await admin.from("messages").insert({
-          user_id: recipient.user_id,
-          conversation_id: conversationId,
-          direction: "outbound",
-          body: renderedBody,
-          status: "sent",
-          provider_message_id: providerId,
-          metadata: {
-            campaign_id: recipient.campaign_id,
-            campaign_recipient_id: recipient.id,
-            template_id: tpl?.id ?? null,
-            template_name: tpl?.name ?? null,
-            source: "campaign_opener",
-            gupshup_response: gsBody,
-          },
-        });
-        await admin.from("conversations").update({
-          last_message_text: renderedBody.slice(0, 500),
-          last_message_at: sentAt,
-        }).eq("id", conversationId);
+  await Promise.all(Array.from(shards.values()).map(async (recipients) => {
+    for (const recipient of recipients) {
+      // Honor the per-recipient scheduled_at: sleep up to the tick budget so
+      // sent_at lands at the actual randomized timestamp (preserves jitter
+      // configured via delay_min/max_seconds), not the cron minute boundary.
+      const targetMs = new Date(recipient.scheduled_at).getTime();
+      const nowMs = Date.now();
+      const waitMs = targetMs - nowMs;
+      const remainingBudget = TICK_BUDGET_MS - (nowMs - tickStartedAt);
+      if (waitMs > 0 && remainingBudget > 0) {
+        await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
       }
-      sent++;
-    } catch (err) {
-      failed++;
-      const msg = err instanceof Error ? err.message : "Send failed";
-      await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
+      if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
+
+      const { data: locked } = await admin
+        .from("campaign_recipients")
+        .update({ status: "sending" })
+        .eq("id", recipient.id)
+        .eq("status", "scheduled")
+        .select("id")
+        .maybeSingle();
+      if (!locked) continue;
+
+      try {
+        const gsBody = await sendTemplate(admin, recipient);
+        const providerId = gsBody.messageId || null;
+        const tpl = recipient.campaigns?.message_templates;
+        const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
+        const renderedBody = renderTemplateBody(tpl?.body, variableNames, recipient.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
+        const sentAt = new Date().toISOString();
+
+        // Ensure a conversation exists so Inbox shows the thread starting from this opener
+        const conversationId = await ensureCampaignConversation(admin, recipient);
+
+        await admin.from("campaign_recipients").update({
+          status: "sent",
+          sent_at: sentAt,
+          provider_message_id: providerId,
+          conversation_id: conversationId,
+        }).eq("id", recipient.id);
+
+        if (conversationId) {
+          await admin.from("messages").insert({
+            user_id: recipient.user_id,
+            conversation_id: conversationId,
+            direction: "outbound",
+            body: renderedBody,
+            status: "sent",
+            provider_message_id: providerId,
+            metadata: {
+              campaign_id: recipient.campaign_id,
+              campaign_recipient_id: recipient.id,
+              template_id: tpl?.id ?? null,
+              template_name: tpl?.name ?? null,
+              source: "campaign_opener",
+              gupshup_response: gsBody,
+            },
+          });
+          await admin.from("conversations").update({
+            last_message_text: renderedBody.slice(0, 500),
+            last_message_at: sentAt,
+          }).eq("id", conversationId);
+        }
+        sentMu.inc();
+      } catch (err) {
+        sentMu.incFail();
+        const msg = err instanceof Error ? err.message : "Send failed";
+        await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
+      }
     }
-  }
+  }));
 
   const campaignIds = [...new Set((due ?? []).map((r: any) => r.campaign_id))];
   for (const id of campaignIds) {
