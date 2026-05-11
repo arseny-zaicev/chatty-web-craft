@@ -95,6 +95,9 @@ const SECTION_FILTER_OPTIONS: Array<[string, string]> = [
   ["banned", "Banned"],
 ];
 
+const EMPTY_ROWS: Row[] = [];
+const EMPTY_WORKSPACES: WS[] = [];
+
 type WS = { id: string; name: string; slug: string };
 
 const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
