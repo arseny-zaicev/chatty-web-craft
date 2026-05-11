@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     const { data: rows, error: pullErr } = await personal
       .from("audience_rows")
       .select("phone, payload, validation_status")
-      .eq("batch_tag", batch_id);
+      .eq("batch_id", batch_id);
     if (pullErr) {
       return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
