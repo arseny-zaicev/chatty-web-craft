@@ -81,8 +81,7 @@ Deno.serve(async (req) => {
     .from("slack_event_queue")
     .select("*")
     .eq("status", "pending")
-    // Honor per-event max_attempts (default 5) so a poisoned event terminates instead of looping forever.
-    .filter("attempts", "lt", "max_attempts")
+    // status='failed' is terminal (set below when attempts >= max_attempts), so filtering on status is sufficient.
     .order("created_at", { ascending: true })
     .limit(50);
 
