@@ -16,7 +16,9 @@ Deno.serve(async (req) => {
     const batchId: string = body.batch_id;
     if (!batchId) throw new Error("batch_id required");
 
-    const src = createClient(Deno.env.get("PERSONAL_SUPABASE_URL")!, Deno.env.get("PERSONAL_SUPABASE_SERVICE_ROLE_KEY")!);
+    const personal = Deno.env.get("PERSONAL_SUPABASE_URL")!;
+    const personalUrl = personal.startsWith("http") ? personal : `https://${personal}.supabase.co`;
+    const src = createClient(personalUrl, Deno.env.get("PERSONAL_SUPABASE_SERVICE_ROLE_KEY")!);
     const dst = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const PAGE = 1000;
