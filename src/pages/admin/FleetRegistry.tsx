@@ -618,6 +618,20 @@ const ViewTab = ({ active, onClick, icon, children }: { active: boolean; onClick
   <Button variant={active ? "default" : "outline"} size="sm" onClick={onClick} className="gap-1.5">{icon}{children}</Button>
 );
 
+const OverviewTile = ({ label, value, tone, active, onClick }: { label: string; value: number; tone: "emerald" | "amber" | "red"; active: boolean; onClick: () => void }) => {
+  const toneCls = tone === "emerald" ? "text-emerald-700 border-emerald-500/30" : tone === "amber" ? "text-amber-700 border-amber-500/30" : "text-red-700 border-red-500/30";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-lg border bg-card/40 px-3 py-2 hover:bg-card transition ${active ? "ring-2 ring-primary/40" : ""} ${toneCls}`}
+    >
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+    </button>
+  );
+};
+
 const FilterSelect = ({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: Array<[string, string]>; placeholder: string }) => (
   <Select value={value} onValueChange={onChange}>
     <SelectTrigger className="w-44 h-9"><SelectValue placeholder={placeholder} /></SelectTrigger>
@@ -630,9 +644,11 @@ type RowActions = {
   onEdit: (r: Row) => void;
   onDelete: (id: string) => void;
   onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => void;
+  onRecheck: (id: string) => void;
+  recheckingId: string | null;
 };
 
-function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   return (
     <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
       <Table className="whitespace-nowrap">
@@ -644,7 +660,7 @@ function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPat
         <TableBody>
           {rows.length === 0 ? (
             <TableRow><TableCell colSpan={20} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
-          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} />)}
+          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} onRecheck={onRecheck} recheckingId={recheckingId} />)}
         </TableBody>
       </Table>
     </div>
