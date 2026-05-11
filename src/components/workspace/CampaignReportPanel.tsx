@@ -1,15 +1,30 @@
-// Campaign report panel: download per-recipient CSV + generate AI insights summary.
+// Campaign report: tabs (Summary / Segments / Templates) + CSV export + AI insights.
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Download, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell } from "recharts";
+
+type SegmentRow = { value: string; n: number; sent: number; replied: number; positive: number; reply_rate: number; positive_rate: number };
+type Metrics = {
+  totals?: { total: number; sent: number; failed: number; replied: number; positive: number; meeting: number };
+  by_segment?: Record<string, SegmentRow[]>;
+  by_template?: SegmentRow[];
+  by_number?: SegmentRow[];
+};
 
 type Insight = {
   campaign_id: string;
   summary_md: string | null;
-  metrics: Record<string, unknown> | null;
+  metrics: Metrics | null;
   generated_at: string;
   model: string | null;
 };
@@ -41,6 +56,42 @@ async function downloadCsv(campaignId: string, campaignName: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(objUrl);
+}
+
+const SEGMENT_LABELS: Record<string, string> = {
+  industry: "Industry",
+  role: "Role",
+  title: "Job title",
+  country: "Country",
+  city: "City",
+  company_size: "Company size",
+  employees: "Employees",
+};
+
+const COLORS = ["hsl(var(--primary))", "hsl(var(--accent))", "#10b981", "#f59e0b", "#6366f1", "#ec4899", "#06b6d4", "#84cc16"];
+
+function SegmentChart({ rows, metric }: { rows: SegmentRow[]; metric: "positive_rate" | "reply_rate" }) {
+  const data = rows.slice(0, 8).map((r) => ({
+    name: r.value.length > 24 ? `${r.value.slice(0, 22)}…` : r.value,
+    value: r[metric],
+    n: r.n,
+  }));
+  return (
+    <ChartContainer
+      config={{ value: { label: metric === "positive_rate" ? "Positive %" : "Reply %", color: "hsl(var(--primary))" } }}
+      className="h-[220px] w-full"
+    >
+      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+        <XAxis type="number" tickFormatter={(v) => `${v}%`} />
+        <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+        <ChartTooltip content={<ChartTooltipContent />} />
+        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+          {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+        </Bar>
+      </BarChart>
+    </ChartContainer>
+  );
 }
 
 export function CampaignReportPanel({
@@ -80,10 +131,7 @@ export function CampaignReportPanel({
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      // For multi-number campaigns, download each child campaign's CSV.
-      for (const id of campaignIds) {
-        await downloadCsv(id, campaignName);
-      }
+      for (const id of campaignIds) await downloadCsv(id, campaignName);
     } catch (e) {
       toast({ title: "Download failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally {
@@ -91,12 +139,17 @@ export function CampaignReportPanel({
     }
   };
 
+  const metrics = insight?.metrics ?? null;
+  const totals = metrics?.totals;
+  const segments = metrics?.by_segment ?? {};
+  const templates = metrics?.by_template ?? [];
+
   return (
     <div className="rounded-md border border-border bg-card/30 p-3 mt-3">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Report</div>
-          <div className="text-[11px] text-muted-foreground">Download per-contact data or generate an AI summary of what worked.</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Intelligence report</div>
+          <div className="text-[11px] text-muted-foreground">AI summary, segment performance, full per-contact CSV.</div>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading}>
@@ -105,23 +158,78 @@ export function CampaignReportPanel({
           </Button>
           <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending}>
             {generate.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
-            {insight ? "Regenerate insights" : "Generate insights"}
+            {insight ? "Regenerate" : "Generate insights"}
           </Button>
         </div>
       </div>
 
       {loadingInsight ? (
         <div className="text-xs text-muted-foreground">Loading insights…</div>
-      ) : insight?.summary_md ? (
-        <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap rounded border border-border bg-background/40 p-3">
-          {insight.summary_md}
-          <div className="text-[10px] text-muted-foreground mt-2 not-prose">
-            Generated {new Date(insight.generated_at).toLocaleString()} · {insight.model}
-          </div>
+      ) : !insight ? (
+        <div className="text-xs text-muted-foreground">
+          No insights yet. They auto-generate within ~15 min after a campaign completes, or click <strong>Generate insights</strong>.
         </div>
       ) : (
-        <div className="text-xs text-muted-foreground">No insights yet. Generate one once the campaign has replies.</div>
+        <Tabs defaultValue="summary">
+          <TabsList className="h-8">
+            <TabsTrigger value="summary" className="text-xs">Summary</TabsTrigger>
+            <TabsTrigger value="segments" className="text-xs">Segments</TabsTrigger>
+            <TabsTrigger value="templates" className="text-xs">Templates</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="summary" className="mt-3 space-y-3">
+            {totals && (
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                <KpiMini label="Total" value={totals.total} />
+                <KpiMini label="Sent" value={totals.sent} tone="good" />
+                <KpiMini label="Failed" value={totals.failed} tone={totals.failed > 0 ? "bad" : undefined} />
+                <KpiMini label="Replied" value={totals.replied} />
+                <KpiMini label="Positive" value={totals.positive} tone="good" />
+                <KpiMini label="Meeting" value={totals.meeting} tone="good" />
+              </div>
+            )}
+            {insight.summary_md && (
+              <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap rounded border border-border bg-background/40 p-3">
+                {insight.summary_md}
+                <div className="text-[10px] text-muted-foreground mt-2 not-prose">
+                  Generated {new Date(insight.generated_at).toLocaleString()} · {insight.model}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="segments" className="mt-3 space-y-4">
+            {Object.keys(segments).length === 0 ? (
+              <div className="text-xs text-muted-foreground">Not enough segmented data. Add fields like industry, role, country to your audience payload.</div>
+            ) : (
+              Object.entries(segments).map(([field, rows]) => (
+                <div key={field}>
+                  <div className="text-xs font-semibold mb-1.5">{SEGMENT_LABELS[field] ?? field} - top by positive rate</div>
+                  <SegmentChart rows={rows} metric="positive_rate" />
+                </div>
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="templates" className="mt-3">
+            {templates.length === 0 ? (
+              <div className="text-xs text-muted-foreground">Only one template was used in this campaign.</div>
+            ) : (
+              <div>
+                <div className="text-xs font-semibold mb-1.5">Templates by reply rate</div>
+                <SegmentChart rows={templates} metric="reply_rate" />
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );
 }
+
+const KpiMini = ({ label, value, tone }: { label: string; value: number; tone?: "good" | "bad" }) => (
+  <div className="rounded-md border border-border bg-background/40 px-2 py-1.5">
+    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className={`text-sm font-semibold ${tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : ""}`}>{value}</div>
+  </div>
+);
