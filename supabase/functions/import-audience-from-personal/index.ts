@@ -51,17 +51,18 @@ Deno.serve(async (req) => {
     }
 
     // Connect to user's personal Supabase
-    const personal = createClient(
-      Deno.env.get("PERSONAL_SUPABASE_URL")!,
-      Deno.env.get("PERSONAL_SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const rawUrl = (Deno.env.get("PERSONAL_SUPABASE_URL") ?? "").trim().replace(/\/+$/, "");
+    const rawKey = (Deno.env.get("PERSONAL_SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
+    console.log("Personal URL:", JSON.stringify(rawUrl), "key length:", rawKey.length);
+    const personal = createClient(rawUrl, rawKey);
 
     const { data: rows, error: pullErr } = await personal
       .from("audience_rows")
       .select("phone, payload, validation_status")
       .eq("batch_id", batch_id);
     if (pullErr) {
-      return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}` }), {
+      console.error("pullErr", pullErr);
+      return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}`, details: pullErr }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
