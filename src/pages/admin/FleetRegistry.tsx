@@ -211,6 +211,9 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       active_campaigns: activeByNumber.get(n.id as string) ?? [],
       last_used_at: usageMap.get(n.id as string)?.last_used_at ?? null,
       last_used_workspace_id: usageMap.get(n.id as string)?.last_workspace_id ?? null,
+      quality_rating: (n.quality_rating as string) ?? null,
+      last_health_sync_at: (n.last_health_sync_at as string) ?? null,
+      last_health_sync_error: (n.last_health_sync_error as string) ?? null,
     };
   });
 
