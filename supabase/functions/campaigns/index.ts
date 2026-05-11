@@ -204,11 +204,24 @@ async function notifyLaunchSlack(workspace_id: string | null, payload: { name: s
 
 async function launchCampaign(admin: any, requesterId: string, body: any) {
   const name = String(body.name || "").trim().slice(0, 160);
-  const whatsappNumberId = String(body.whatsapp_number_id || "");
-  const templateId = String(body.template_id || "");
   const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
+
+  // Multi-number support: accept either legacy single (whatsapp_number_id+template_id)
+  // or new `numbers: [{number_id, template_id}, ...]`. ONE campaign row is created
+  // and recipients are round-robin distributed across the numbers; each recipient
+  // row stores its assigned whatsapp_number_id (and template id under variables.__tpl_id).
+  const rawNumbers: Array<{ number_id: string; template_id: string }> = Array.isArray(body.numbers) && body.numbers.length > 0
+    ? body.numbers
+        .map((n: any) => ({
+          number_id: String(n?.number_id || n?.numberId || ""),
+          template_id: String(n?.template_id || n?.templateId || ""),
+        }))
+        .filter((n: any) => uuidRegex.test(n.number_id) && uuidRegex.test(n.template_id))
+    : (uuidRegex.test(String(body.whatsapp_number_id || "")) && uuidRegex.test(String(body.template_id || ""))
+        ? [{ number_id: String(body.whatsapp_number_id), template_id: String(body.template_id) }]
+        : []);
 
   // New scheduling params
   const schedulerKind: "uniform" | "poisson" = body.scheduler_kind === "uniform" ? "uniform" : "poisson";
@@ -216,31 +229,48 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const windowStart: string = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : "09:00";
   const windowEnd: string = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : "18:00";
   const respectTz: boolean = body.respect_recipient_tz !== false;
-  const bucketIndex: number = Math.max(0, Number(body.bucket_index ?? 0) | 0);
-  const bucketCount: number = Math.max(1, Number(body.bucket_count ?? 1) | 0);
   const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
 
-  if (!name || !uuidRegex.test(whatsappNumberId) || !uuidRegex.test(templateId)) {
-    return json({ error: "Campaign name, number, and template are required" }, 400);
+  if (!name || rawNumbers.length === 0) {
+    return json({ error: "Campaign name and at least one number+template are required" }, 400);
   }
-  if (recipients.length < 1 || recipients.length > 1000) {
-    return json({ error: "Add 1-1000 recipients" }, 400);
+  if (recipients.length < 1 || recipients.length > 5000) {
+    return json({ error: "Add 1-5000 recipients" }, 400);
   }
 
-  const { data: number } = await admin
+  const numberIds = [...new Set(rawNumbers.map((n) => n.number_id))];
+  const { data: numberRows } = await admin
     .from("whatsapp_numbers")
     .select("id, user_id, workspace_id, phone_number, provider_app_id")
-    .eq("id", whatsappNumberId)
-    .maybeSingle();
-  if (!number) return json({ error: "WhatsApp number not found" }, 404);
-  if (!(await canAccessUser(admin, requesterId, number.user_id))) return json({ error: "Forbidden" }, 403);
+    .in("id", numberIds);
+  if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "WhatsApp number not found" }, 404);
+  const ownerId = numberRows[0].user_id;
+  const wsId = numberRows[0].workspace_id;
+  for (const n of numberRows) {
+    if (n.user_id !== ownerId || n.workspace_id !== wsId) {
+      return json({ error: "All numbers must belong to the same workspace" }, 400);
+    }
+  }
+  if (!(await canAccessUser(admin, requesterId, ownerId))) return json({ error: "Forbidden" }, 403);
 
-  const { data: template } = await admin
+  const templateIds = [...new Set(rawNumbers.map((n) => n.template_id))];
+  const { data: templateRows } = await admin
     .from("message_templates")
     .select("id, user_id, name, language, variables, provider_template_id")
-    .eq("id", templateId)
-    .maybeSingle();
-  if (!template || template.user_id !== number.user_id) return json({ error: "Template not found" }, 404);
+    .in("id", templateIds);
+  if (!templateRows || templateRows.length !== templateIds.length) return json({ error: "Template not found" }, 404);
+  for (const t of templateRows) {
+    if (t.user_id !== ownerId) return json({ error: "Template not found" }, 404);
+  }
+
+  // Primary number/template = first entry (for legacy campaigns.whatsapp_number_id / template_id)
+  const primary = rawNumbers[0];
+  const number = numberRows.find((n: any) => n.id === primary.number_id)!;
+  const template = templateRows.find((t: any) => t.id === primary.template_id)!;
+  const bucketIndex = 0;
+  const bucketCount = rawNumbers.length;
+  const whatsappNumberId = number.id;
+  const templateId = template.id;
 
   const cleanRecipients = recipients
     .map((r: any) => ({
@@ -276,122 +306,131 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     .single();
   if (campaignError || !campaign) return json({ error: campaignError?.message || "Failed to create campaign" }, 500);
 
-  // ------- Compute scheduled_at per recipient -------
+  // ------- Distribute recipients across numbers (round-robin) -------
+  type CleanRecipient = (typeof cleanRecipients)[number];
+  const assignments = new Map<string, { template_id: string; list: CleanRecipient[] }>();
+  rawNumbers.forEach((n) => assignments.set(n.number_id, { template_id: n.template_id, list: [] }));
+  cleanRecipients.forEach((r, idx) => {
+    const target = rawNumbers[idx % rawNumbers.length];
+    assignments.get(target.number_id)!.list.push(r);
+  });
+
+  // ------- Compute scheduled_at per recipient (per-number bucket) -------
   const wsMin = hhmmToMin(windowStart);
   const wsMax = hhmmToMin(windowEnd);
   const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
   const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
-  // Cross-number stagger: shift this bucket's first send by index * (avgDelay / bucketCount)
-  const bucketShiftSec = bucketCount > 1 ? Math.floor((avgDelay / bucketCount) * bucketIndex) : 0;
 
   const rows: any[] = [];
 
-  if (scheduledDates.length === 0) {
-    // Send-now path: respect [windowStart, windowEnd] in each recipient's TZ.
-    // If a send would land after windowEnd, roll cursor to next day's windowStart.
-    const nowMs = Date.now();
-    const startMs0 = nowMs + 5_000 + bucketShiftSec * 1000;
-    // Group by recipient TZ to keep per-TZ cursor independent
-    const perTz = new Map<string, typeof cleanRecipients>();
-    for (const r of cleanRecipients) {
-      const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
-      if (!perTz.has(tz)) perTz.set(tz, []);
-      perTz.get(tz)!.push(r);
-    }
-    const dayKey = (ms: number, tz: string) => {
-      try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms)); }
-      catch { return new Date(ms).toISOString().slice(0, 10); }
-    };
-    for (const [tz, list] of perTz) {
-      let cursorMs = startMs0;
-      // If we're past windowEnd today, jump to tomorrow's windowStart
-      const ensureInsideWindow = () => {
-        const today = dayKey(cursorMs, tz);
-        const todayStart = dateAtTzToUTC(today, windowStart, tz).getTime();
-        const todayEnd = dateAtTzToUTC(today, windowEnd, tz).getTime();
-        if (cursorMs < todayStart) cursorMs = todayStart;
-        if (cursorMs >= todayEnd) {
-          // jump to next day windowStart
-          const next = new Date(cursorMs + 24 * 3600_000);
-          const nextDate = dayKey(next.getTime(), tz);
-          cursorMs = dateAtTzToUTC(nextDate, windowStart, tz).getTime();
-        }
-      };
-      ensureInsideWindow();
-      for (const r of list) {
-        let gapSec: number;
-        if (schedulerKind === "poisson") {
-          gapSec = exponentialGap(1 / avgDelay);
-          gapSec = Math.max(minDelay, Math.min(Math.max(minDelay + 1, maxDelay * 3), gapSec));
-        } else {
-          gapSec = randomDelay(minDelay, maxDelay);
-        }
-        cursorMs += gapSec * 1000;
-        ensureInsideWindow();
-        rows.push({
-          ...r,
-          user_id: number.user_id,
-          workspace_id: number.workspace_id,
-          campaign_id: campaign.id,
-          status: "scheduled",
-          scheduled_at: new Date(cursorMs).toISOString(),
-        });
-      }
-    }
-    rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
-  } else {
-    // Multi-day path: split recipients evenly across dates, schedule inside window
-    const perDay = Math.ceil(cleanRecipients.length / scheduledDates.length);
-    for (let di = 0; di < scheduledDates.length; di++) {
-      const date = scheduledDates[di];
-      const slice = cleanRecipients.slice(di * perDay, (di + 1) * perDay);
-      if (slice.length === 0) continue;
-      // Per-recipient schedule: recipient TZ if respectTz, else workspace TZ (UTC fallback)
-      // Build per-recipient slot inside [windowStart, windowEnd] with poisson spacing
-      // Sort by tz so same-tz recipients get sequential slots; we still randomize inside.
-      const perTz = new Map<string, typeof slice>();
-      for (const r of slice) {
+  for (let bi = 0; bi < rawNumbers.length; bi++) {
+    const numId = rawNumbers[bi].number_id;
+    const tplId = rawNumbers[bi].template_id;
+    const bucket = assignments.get(numId)!;
+    const bucketRecipients = bucket.list;
+    if (bucketRecipients.length === 0) continue;
+    const bucketShiftSec = rawNumbers.length > 1 ? Math.floor((avgDelay / rawNumbers.length) * bi) : 0;
+
+    const tagRow = (base: any) => ({
+      ...base,
+      whatsapp_number_id: numId,
+      variables: { ...(base.variables || {}), __tpl_id: tplId },
+    });
+
+    if (scheduledDates.length === 0) {
+      const nowMs = Date.now();
+      const startMs0 = nowMs + 5_000 + bucketShiftSec * 1000;
+      const perTz = new Map<string, CleanRecipient[]>();
+      for (const r of bucketRecipients) {
         const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
         if (!perTz.has(tz)) perTz.set(tz, []);
         perTz.get(tz)!.push(r);
       }
+      const dayKey = (ms: number, tz: string) => {
+        try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms)); }
+        catch { return new Date(ms).toISOString().slice(0, 10); }
+      };
       for (const [tz, list] of perTz) {
-        const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
-        const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
-        const span = Math.max(60_000, endUtc - startUtc);
-        if (schedulerKind === "poisson") {
-          // exponential gaps with rate so expected total ≈ span
-          const rate = list.length / (span / 1000);
-          let cursor = startUtc;
-          for (const r of list) {
-            cursor += exponentialGap(rate) * 1000;
-            if (cursor > endUtc) cursor = endUtc - Math.floor(Math.random() * 60_000); // clamp
-            rows.push({
-              ...r,
-              user_id: number.user_id, workspace_id: number.workspace_id,
-              campaign_id: campaign.id, status: "scheduled",
-              scheduled_at: new Date(cursor).toISOString(),
-            });
+        let cursorMs = startMs0;
+        const ensureInsideWindow = () => {
+          const today = dayKey(cursorMs, tz);
+          const todayStart = dateAtTzToUTC(today, windowStart, tz).getTime();
+          const todayEnd = dateAtTzToUTC(today, windowEnd, tz).getTime();
+          if (cursorMs < todayStart) cursorMs = todayStart;
+          if (cursorMs >= todayEnd) {
+            const next = new Date(cursorMs + 24 * 3600_000);
+            const nextDate = dayKey(next.getTime(), tz);
+            cursorMs = dateAtTzToUTC(nextDate, windowStart, tz).getTime();
           }
-        } else {
-          // Uniform: evenly distributed slots + jitter
-          const step = span / Math.max(1, list.length);
-          for (let i = 0; i < list.length; i++) {
-            const jitter = (Math.random() - 0.5) * step * 0.4;
-            const ts = startUtc + i * step + jitter;
-            rows.push({
-              ...list[i],
-              user_id: number.user_id, workspace_id: number.workspace_id,
-              campaign_id: campaign.id, status: "scheduled",
-              scheduled_at: new Date(Math.min(endUtc, Math.max(startUtc, ts))).toISOString(),
-            });
+        };
+        ensureInsideWindow();
+        for (const r of list) {
+          let gapSec: number;
+          if (schedulerKind === "poisson") {
+            gapSec = exponentialGap(1 / avgDelay);
+            gapSec = Math.max(minDelay, Math.min(Math.max(minDelay + 1, maxDelay * 3), gapSec));
+          } else {
+            gapSec = randomDelay(minDelay, maxDelay);
+          }
+          cursorMs += gapSec * 1000;
+          ensureInsideWindow();
+          rows.push(tagRow({
+            ...r,
+            user_id: ownerId,
+            workspace_id: wsId,
+            campaign_id: campaign.id,
+            status: "scheduled",
+            scheduled_at: new Date(cursorMs).toISOString(),
+          }));
+        }
+      }
+    } else {
+      const perDay = Math.ceil(bucketRecipients.length / scheduledDates.length);
+      for (let di = 0; di < scheduledDates.length; di++) {
+        const date = scheduledDates[di];
+        const slice = bucketRecipients.slice(di * perDay, (di + 1) * perDay);
+        if (slice.length === 0) continue;
+        const perTz = new Map<string, CleanRecipient[]>();
+        for (const r of slice) {
+          const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
+          if (!perTz.has(tz)) perTz.set(tz, []);
+          perTz.get(tz)!.push(r);
+        }
+        for (const [tz, list] of perTz) {
+          const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
+          const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
+          const span = Math.max(60_000, endUtc - startUtc);
+          if (schedulerKind === "poisson") {
+            const rate = list.length / (span / 1000);
+            let cursor = startUtc;
+            for (const r of list) {
+              cursor += exponentialGap(rate) * 1000;
+              if (cursor > endUtc) cursor = endUtc - Math.floor(Math.random() * 60_000);
+              rows.push(tagRow({
+                ...r,
+                user_id: ownerId, workspace_id: wsId,
+                campaign_id: campaign.id, status: "scheduled",
+                scheduled_at: new Date(cursor).toISOString(),
+              }));
+            }
+          } else {
+            const step = span / Math.max(1, list.length);
+            for (let i = 0; i < list.length; i++) {
+              const jitter = (Math.random() - 0.5) * step * 0.4;
+              const ts = startUtc + i * step + jitter;
+              rows.push(tagRow({
+                ...list[i],
+                user_id: ownerId, workspace_id: wsId,
+                campaign_id: campaign.id, status: "scheduled",
+                scheduled_at: new Date(Math.min(endUtc, Math.max(startUtc, ts))).toISOString(),
+              }));
+            }
           }
         }
       }
     }
-    // Sort by scheduled_at to keep DB insert tidy
-    rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
   }
+  rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
 
   const { error: recipientsError } = await admin.from("campaign_recipients").insert(rows);
   if (recipientsError) return json({ error: recipientsError.message }, 500);
@@ -723,13 +762,56 @@ async function processQueue(admin: any) {
 
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", horizonIso)
     .eq("campaigns.status", "running")
     .order("scheduled_at", { ascending: true })
     .limit(perTickLimit);
   if (error) return json({ error: error.message }, 500);
+
+  // Resolve per-recipient number/template overrides (multi-number campaigns).
+  // recipient.whatsapp_number_id is the assigned number; variables.__tpl_id is its template id.
+  const overrideNumberIds = new Set<string>();
+  const overrideTemplateIds = new Set<string>();
+  for (const r of (due ?? [])) {
+    const nid = (r as any).whatsapp_number_id;
+    const tid = (r as any)?.variables?.__tpl_id;
+    if (nid && nid !== r.campaigns?.whatsapp_number_id) overrideNumberIds.add(nid);
+    if (typeof tid === "string" && tid !== r.campaigns?.message_templates?.id) overrideTemplateIds.add(tid);
+  }
+  const numberCache = new Map<string, any>();
+  const templateCache = new Map<string, any>();
+  if (overrideNumberIds.size > 0) {
+    const { data: nrows } = await admin
+      .from("whatsapp_numbers")
+      .select("id, phone_number, provider_app_id, provider_api_key, display_name")
+      .in("id", [...overrideNumberIds]);
+    for (const n of nrows ?? []) numberCache.set(n.id, n);
+  }
+  if (overrideTemplateIds.size > 0) {
+    const { data: trows } = await admin
+      .from("message_templates")
+      .select("id, name, language, body, variables, provider_template_id")
+      .in("id", [...overrideTemplateIds]);
+    for (const t of trows ?? []) templateCache.set(t.id, t);
+  }
+  // Apply overrides in-place so downstream code sees the right number/template.
+  for (const r of (due ?? [])) {
+    const nid = (r as any).whatsapp_number_id;
+    const tid = (r as any)?.variables?.__tpl_id;
+    if (nid && nid !== r.campaigns?.whatsapp_number_id) {
+      const n = numberCache.get(nid);
+      if (n && r.campaigns) {
+        r.campaigns.whatsapp_number_id = n.id;
+        r.campaigns.whatsapp_numbers = n;
+      }
+    }
+    if (typeof tid === "string" && tid !== r.campaigns?.message_templates?.id) {
+      const t = templateCache.get(tid);
+      if (t && r.campaigns) r.campaigns.message_templates = t;
+    }
+  }
 
   // Shard by sender number so each WhatsApp number processes its queue
   // independently and in parallel. Within a shard we still sleep up to the

@@ -568,76 +568,58 @@ export default function LaunchWizard() {
         throw new Error("Add recipients");
       }
 
-      // Distribute recipients across numbers
-      const buckets = new Map<string, Recipient[]>();
       const targets = resolution.ok;
-      if (targets.length === 1) {
-        buckets.set(targets[0].numberId, workingRecipients);
-      } else {
-        targets.forEach((t) => buckets.set(t.numberId, []));
-        workingRecipients.forEach((r, i) => {
-          const t = targets[i % targets.length];
-          buckets.get(t.numberId)!.push(r);
-        });
-      }
+      const allRowIds = audienceSource === "database"
+        ? workingRecipients.map((r) => rowIdByPhone.get(r.phone)).filter((x): x is string => !!x)
+        : [];
 
+      // ONE campaign across all selected numbers (recipients distributed server-side)
       const results: Array<{ ok: boolean; numberId: string; res?: any; error?: string; rowIds?: string[] }> = [];
       try {
-        for (const t of targets) {
-          const list = buckets.get(t.numberId) ?? [];
-          if (list.length === 0) continue;
-          const bucketRowIds = audienceSource === "database"
-            ? list.map((r) => rowIdByPhone.get(r.phone)).filter((x): x is string => !!x)
-            : [];
-          const subname = targets.length > 1
-            ? `${campaignName} :: ${(numbers.find((n) => n.id === t.numberId)?.label ?? `+${numbers.find((n) => n.id === t.numberId)?.phone_number}`)}`
-            : campaignName;
-          const bucketIndex = targets.indexOf(t);
-          const { data: res, error } = await supabase.functions.invoke("campaigns", {
-            body: {
-              action: "launch",
-              name: subname,
-              whatsapp_number_id: t.numberId,
-              template_id: t.template.id,
-              delay_min_seconds: delayMin,
-              delay_max_seconds: delayMax,
-              recipients: list,
-              // Scheduling
-              scheduler_kind: schedulerKind,
-              scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
-              window_start: windowStart,
-              window_end: windowEnd,
-              respect_recipient_tz: respectTz,
-              bucket_index: bucketIndex,
-              bucket_count: targets.length,
-              pipeline_id: pipelineId || null,
-            },
-          });
-          if (error) results.push({ ok: false, numberId: t.numberId, error: error.message, rowIds: bucketRowIds });
-          else if ((res as any)?.error) results.push({ ok: false, numberId: t.numberId, error: (res as any).error, rowIds: bucketRowIds });
-          else results.push({ ok: true, numberId: t.numberId, res, rowIds: bucketRowIds });
+        const { data: res, error } = await supabase.functions.invoke("campaigns", {
+          body: {
+            action: "launch",
+            name: campaignName,
+            numbers: targets.map((t) => ({ number_id: t.numberId, template_id: t.template.id })),
+            delay_min_seconds: delayMin,
+            delay_max_seconds: delayMax,
+            recipients: workingRecipients,
+            scheduler_kind: schedulerKind,
+            scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
+            window_start: windowStart,
+            window_end: windowEnd,
+            respect_recipient_tz: respectTz,
+            pipeline_id: pipelineId || null,
+          },
+        });
+        const failed = !!error || !!(res as any)?.error;
+        if (failed) {
+          const errMsg = error?.message || (res as any)?.error || "Launch failed";
+          // Mark all targets as failed so reserved rows get released below
+          for (const t of targets) results.push({ ok: false, numberId: t.numberId, error: errMsg, rowIds: allRowIds });
+        } else {
+          // One ok entry; carry rowIds on first target so mark-used uses the campaign id
+          for (let i = 0; i < targets.length; i++) {
+            results.push({ ok: true, numberId: targets[i].numberId, res, rowIds: i === 0 ? allRowIds : [] });
+          }
         }
       } catch (e) {
-        // Outer failure -> release everything still reserved
         if (reservedRowIds.length > 0) {
           try { await releaseRows(reservedRowIds); } catch { /* swallow */ }
         }
         throw e;
       }
 
-      // Mark used / release per bucket result
+      // Mark used / release per overall result
       if (audienceSource === "database") {
-        for (const r of results) {
-          const ids = r.rowIds ?? [];
-          if (ids.length === 0) continue;
-          if (r.ok) {
-            const cid = (r.res as any)?.campaign_id;
-            if (cid) {
-              try { await markRowsUsed(ids, cid); } catch { /* ignore */ }
-            }
-          } else {
-            try { await releaseRows(ids); } catch { /* ignore */ }
+        const anyOk = results.some((r) => r.ok);
+        if (anyOk) {
+          const cid = (results.find((r) => r.ok)?.res as any)?.campaign_id;
+          if (cid && allRowIds.length > 0) {
+            try { await markRowsUsed(allRowIds, cid); } catch { /* ignore */ }
           }
+        } else if (reservedRowIds.length > 0) {
+          try { await releaseRows(reservedRowIds); } catch { /* ignore */ }
         }
       }
 
@@ -648,8 +630,8 @@ export default function LaunchWizard() {
     onSuccess: async (results) => {
       const ok = results.filter((r) => r.ok).length;
       const failed = results.length - ok;
-      if (failed === 0) toast.success(`Launched ${ok} campaign${ok === 1 ? "" : "s"}`);
-      else toast.error(`Launched ${ok}, failed ${failed}: ${results.find((r) => !r.ok)?.error ?? ""}`);
+      if (failed === 0) toast.success(results.length > 1 ? `Launched 1 campaign across ${results.length} numbers` : "Launched 1 campaign");
+      else toast.error(`Launch failed: ${results.find((r) => !r.ok)?.error ?? ""}`);
       qc.invalidateQueries({ queryKey: ["crm", "campaigns"] });
       qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace?.id) });
     },
@@ -1127,7 +1109,7 @@ export default function LaunchWizard() {
                       <Badge variant="outline" className="text-[10px]">Will reserve {dbTargetCount} row{dbTargetCount === 1 ? "" : "s"} on launch</Badge>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Rows are reserved when you click Launch, marked used after each sub-campaign succeeds, and released automatically if a sub-campaign fails.
+                      Rows are reserved when you click Launch, marked used after the campaign succeeds, and released automatically if it fails.
                     </p>
                   </>
                 )}
@@ -1317,7 +1299,7 @@ export default function LaunchWizard() {
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
           <p className="text-[11px] text-muted-foreground">
-            {resolution.ok.length > 1 ? `Will create ${resolution.ok.length} sub-campaigns, one per number.` : "Single campaign."}
+            {resolution.ok.length > 1 ? `One campaign across ${resolution.ok.length} numbers (recipients distributed automatically).` : "Single campaign."}
           </p>
         </aside>
       </div>
