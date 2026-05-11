@@ -873,6 +873,24 @@ export type Database = {
         }
         Relationships: []
       }
+      fleet_health_snapshots: {
+        Row: {
+          captured_at: string
+          id: number
+          summary: Json
+        }
+        Insert: {
+          captured_at?: string
+          id?: number
+          summary?: Json
+        }
+        Update: {
+          captured_at?: string
+          id?: number
+          summary?: Json
+        }
+        Relationships: []
+      }
       form_analytics: {
         Row: {
           created_at: string

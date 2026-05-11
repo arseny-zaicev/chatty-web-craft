@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2, Copy, Check, AlertTriangle,
+  Loader2, ArrowLeft, Search, ExternalLink, Plus, Phone, Layers, Building2, Inbox as InboxIcon, Pencil, Trash2, Copy, Check, AlertTriangle, Activity, RefreshCw,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -60,6 +60,9 @@ type Row = {
   active_campaigns: ActiveCampaign[];
   last_used_at: string | null;
   last_used_workspace_id: string | null;
+  quality_rating: string | null;
+  last_health_sync_at: string | null;
+  last_health_sync_error: string | null;
 };
 
 type ActiveCampaign = {
@@ -208,6 +211,9 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       active_campaigns: activeByNumber.get(n.id as string) ?? [],
       last_used_at: usageMap.get(n.id as string)?.last_used_at ?? null,
       last_used_workspace_id: usageMap.get(n.id as string)?.last_workspace_id ?? null,
+      quality_rating: (n.quality_rating as string) ?? null,
+      last_health_sync_at: (n.last_health_sync_at as string) ?? null,
+      last_health_sync_error: (n.last_health_sync_error as string) ?? null,
     };
   });
 
@@ -256,6 +262,10 @@ export default function FleetRegistry() {
     | { kind: "reassign"; row: Row; targetWs: string | null }
     | null
   >(null);
+  const [healthSummary, setHealthSummary] = useState<
+    | { total: number; synced: number; changed: number; failed: number; at: number }
+    | null
+  >(null);
 
   useEffect(() => {
     let mounted = true;
@@ -301,6 +311,39 @@ export default function FleetRegistry() {
       return true;
     });
   }, [rows, q, view, fStatus, fUsage]);
+
+  const overview = useMemo(() => {
+    const o = { active: 0, restricted: 0, banned: 0, unreachable: 0 };
+    for (const r of rows) {
+      if (!r.is_active) continue;
+      if (r.status === "active" || r.status === "ready") o.active++;
+      else if (r.status === "restricted") o.restricted++;
+      else if (r.status === "banned") o.banned++;
+      if (r.last_health_sync_error) o.unreachable++;
+    }
+    return o;
+  }, [rows]);
+
+  // Run Gupshup health sweep
+  const healthCheck = useMutation({
+    mutationFn: async (numberId?: string) => {
+      const { data: res, error } = await supabase.functions.invoke("numbers-health-sync", {
+        body: numberId ? { number_id: numberId } : {},
+      });
+      if (error) throw error;
+      return res as { total: number; synced: number; changed: number; failed: number };
+    },
+    onSuccess: async (res, numberId) => {
+      if (!numberId) {
+        setHealthSummary({ ...res, at: Date.now() });
+        toast.success(`Checked ${res.total} · ${res.changed} changed · ${res.failed} failed`);
+      } else {
+        toast.success(res.changed > 0 ? "Number updated from Gupshup" : "Number is up to date");
+      }
+      await qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Health check failed"),
+  });
 
   // Reassign / unassign
   const reassign = useMutation({
@@ -401,12 +444,41 @@ export default function FleetRegistry() {
                 autoFocus
               />
             </div>
+            <Button size="sm" variant="outline" onClick={() => healthCheck.mutate(undefined)} disabled={healthCheck.isPending} title="Sync status, quality and tier from Gupshup for all numbers">
+              {healthCheck.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Activity className="w-4 h-4 mr-1" />}
+              Run health check
+            </Button>
             <Button size="sm" onClick={() => setAdderOpen(true)}><Plus className="w-4 h-4 mr-1" />Add number</Button>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <OverviewTile label="Active" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
+          <OverviewTile label="Restricted" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
+          <OverviewTile label="Banned" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
+          <OverviewTile label="Sync failed" value={overview.unreachable} tone="red" active={false} onClick={() => {}} />
+        </div>
+
+        {healthSummary && (
+          <div className="rounded-md border border-border bg-card/50 px-3 py-2 flex items-center gap-3 text-sm">
+            <Activity className="w-4 h-4 text-emerald-600" />
+            <span>
+              Checked <b>{healthSummary.total}</b> ·
+              {" "}<span className="text-emerald-700">{Math.max(0, healthSummary.synced - healthSummary.changed)} unchanged</span> ·
+              {" "}<span className="text-amber-700">{healthSummary.changed} changed</span>
+              {healthSummary.failed > 0 && <> · <span className="text-red-700">{healthSummary.failed} failed</span></>}
+            </span>
+            <span className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={() => healthCheck.mutate(undefined)} disabled={healthCheck.isPending}>
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${healthCheck.isPending ? "animate-spin" : ""}`} />Re-run
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setHealthSummary(null)}>Dismiss</Button>
+            </span>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-2 items-center">
           <ViewTab active={view === "all"} onClick={() => setView("all")} icon={<Layers className="w-3.5 h-3.5" />}>All numbers</ViewTab>
           <ViewTab active={view === "by-client"} onClick={() => setView("by-client")} icon={<Building2 className="w-3.5 h-3.5" />}>Group by client</ViewTab>
@@ -446,6 +518,8 @@ export default function FleetRegistry() {
             onEdit: setEditing,
             onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => quickPatch.mutate({ row, patch }),
             onDelete: handleDelete,
+            onRecheck: (id: string) => healthCheck.mutate(id),
+            recheckingId: healthCheck.isPending ? (healthCheck.variables ?? null) : null,
           };
           return view === "by-client"
             ? <GroupedByClient rows={filtered} {...common} />
@@ -544,6 +618,20 @@ const ViewTab = ({ active, onClick, icon, children }: { active: boolean; onClick
   <Button variant={active ? "default" : "outline"} size="sm" onClick={onClick} className="gap-1.5">{icon}{children}</Button>
 );
 
+const OverviewTile = ({ label, value, tone, active, onClick }: { label: string; value: number; tone: "emerald" | "amber" | "red"; active: boolean; onClick: () => void }) => {
+  const toneCls = tone === "emerald" ? "text-emerald-700 border-emerald-500/30" : tone === "amber" ? "text-amber-700 border-amber-500/30" : "text-red-700 border-red-500/30";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-lg border bg-card/40 px-3 py-2 hover:bg-card transition ${active ? "ring-2 ring-primary/40" : ""} ${toneCls}`}
+    >
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+    </button>
+  );
+};
+
 const FilterSelect = ({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: Array<[string, string]>; placeholder: string }) => (
   <Select value={value} onValueChange={onChange}>
     <SelectTrigger className="w-44 h-9"><SelectValue placeholder={placeholder} /></SelectTrigger>
@@ -556,9 +644,11 @@ type RowActions = {
   onEdit: (r: Row) => void;
   onDelete: (id: string) => void;
   onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => void;
+  onRecheck: (id: string) => void;
+  recheckingId: string | null;
 };
 
-function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   return (
     <div className="rounded-lg border border-border bg-card/30 overflow-x-auto">
       <Table className="whitespace-nowrap">
@@ -570,14 +660,14 @@ function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPat
         <TableBody>
           {rows.length === 0 ? (
             <TableRow><TableCell colSpan={20} className="text-center text-sm text-muted-foreground py-10">No numbers match the filters.</TableCell></TableRow>
-          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} />)}
+          ) : rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} onRecheck={onRecheck} recheckingId={recheckingId} />)}
         </TableBody>
       </Table>
     </div>
   );
 }
 
-function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   const groups = useMemo(() => {
     const map = new Map<string, { ws: WS | null; rows: Row[] }>();
     for (const r of rows) {
@@ -624,7 +714,7 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQui
               </TableRow>
             </TableHeader>
             <TableBody>
-              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} hideClientCol />)}
+              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} onRecheck={onRecheck} recheckingId={recheckingId} hideClientCol />)}
             </TableBody>
           </Table>
         </div>
@@ -706,7 +796,7 @@ function TruncCell({ value, max = 140 }: { value: string | null; max?: number })
   return <span className="font-mono text-[11px] text-muted-foreground truncate inline-block align-middle" style={{ maxWidth: max }} title={value}>{value}</span>;
 }
 
-function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
+function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
@@ -762,7 +852,14 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
       <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
       <TableCell>
-        <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
+        <div className="flex flex-col gap-0.5">
+          <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
+          {r.last_health_sync_error ? (
+            <span className="text-[9px] text-red-700 truncate max-w-[140px]" title={r.last_health_sync_error}>● sync failed</span>
+          ) : r.last_health_sync_at ? (
+            <span className="text-[9px] text-muted-foreground" title={new Date(r.last_health_sync_at).toLocaleString()}>● synced {formatDistanceToNow(new Date(r.last_health_sync_at), { addSuffix: true })}</span>
+          ) : null}
+        </div>
       </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell>
@@ -787,6 +884,9 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
       <TableCell className="text-xs text-muted-foreground whitespace-nowrap" title={r.last_campaign_name ?? ""}>{r.last_campaign_at ? formatDistanceToNow(new Date(r.last_campaign_at), { addSuffix: true }) : "—"}</TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onRecheck(r.id)} disabled={recheckingId === r.id} title="Re-check health from Gupshup">
+            {recheckingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </Button>
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(r)} title="Edit">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
