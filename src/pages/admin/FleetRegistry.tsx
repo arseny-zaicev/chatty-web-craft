@@ -76,6 +76,8 @@ type DnStatus = "pending" | "approved" | "rejected";
 
 const BAN_DURATION_DAYS = 30;
 
+type WS = { id: string; name: string; slug: string };
+
 const isBlockedNumber = (r: Row) => r.status === "restricted" || r.status === "banned";
 const isReadyUnassignedNumber = (r: Row) => (
   r.workspace_id === null
@@ -97,8 +99,6 @@ const SECTION_FILTER_OPTIONS: Array<[string, string]> = [
 
 const EMPTY_ROWS: Row[] = [];
 const EMPTY_WORKSPACES: WS[] = [];
-
-type WS = { id: string; name: string; slug: string };
 
 const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
   const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: templates }, { data: lastEvents }, { data: recipients }, { data: campaignsData }, { data: convs }, { data: outMsgs }] =
