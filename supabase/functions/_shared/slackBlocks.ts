@@ -67,6 +67,7 @@ export function buildCampaignGroupBlocks(args: {
     campaign_cancelled:{ emoji: "🛑", verb: "cancelled" },
     campaign_scheduled:{ emoji: "📅", verb: "scheduled" },
     campaign_failed:   { emoji: "❌", verb: "failed" },
+    campaign_day_completed: { emoji: "✅", verb: "day finished" },
   };
   const m = meta[event] || { emoji: "📣", verb: event };
   const numbersWord = parts.length > 1 ? `${parts.length} numbers` : "1 number";
