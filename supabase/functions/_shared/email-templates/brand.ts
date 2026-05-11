@@ -1,9 +1,9 @@
 // ISKRA brand tokens for emails. Body remains white per email best practices.
 export const BRAND = {
   name: 'ISKRA',
-  logoUrl: 'https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/email-assets/iskra-logo-wordmark.png',
-  logoWidth: 150,
-  logoHeight: 40,
+  logoUrl: 'https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/email-assets/iskra-logo-email-v2.png',
+  logoWidth: 180,
+  logoHeight: 48,
   colors: {
     emerald: '#1f8f5e',         // hsl(152 65% 35%)
     emeraldDark: '#176a47',     // hsl(152 60% 25%)
