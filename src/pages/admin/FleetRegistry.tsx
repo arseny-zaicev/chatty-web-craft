@@ -796,7 +796,7 @@ function TruncCell({ value, max = 140 }: { value: string | null; max?: number })
   return <span className="font-mono text-[11px] text-muted-foreground truncate inline-block align-middle" style={{ maxWidth: max }} title={value}>{value}</span>;
 }
 
-function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
+function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
