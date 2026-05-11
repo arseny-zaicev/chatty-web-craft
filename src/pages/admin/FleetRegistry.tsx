@@ -995,6 +995,12 @@ function AddNumberDrawer({
         <div className="space-y-4 py-2">
           <Field label="Phone (digits only)" required>
             <Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^\d]/g, ""))} placeholder="971500000000" />
+            {dupPhone && (
+              <div className="text-[11px] text-red-600 mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                +{dupPhone.phone_number} already in Fleet ({dupPhone.workspace_name || "unassigned"} · {dupPhone.label || "no label"})
+              </div>
+            )}
           </Field>
 
           <Field label="Messaging limit">
