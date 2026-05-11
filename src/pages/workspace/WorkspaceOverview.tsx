@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { fetchWorkspaceOverview, portfolioKeys } from "@/lib/portfolioMetrics";
 import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { LatestReportCard } from "@/components/workspace/LatestReportCard";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const HEALTH = {
@@ -72,6 +73,8 @@ export default function WorkspaceOverview() {
         {canManage && <Kpi icon={Phone} label="Numbers ready" value={`${data.numbers_ready}/${data.numbers_total}`} />}
         {canManage && <Kpi icon={FileText} label="Approved templates" value={data.templates_approved} />}
       </div>
+
+      <LatestReportCard workspaceId={workspace.id} slug={slug} />
 
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Recent launches */}
