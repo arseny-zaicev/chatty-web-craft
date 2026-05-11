@@ -634,18 +634,28 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQui
 }
 
 function BanCell({ r }: { r: Row }) {
-  const isBanned = r.status === "restricted" || r.status === "banned";
-  if (isBanned && r.restricted_at) {
-    const startedMs = new Date(r.restricted_at).getTime();
-    const elapsedDays = Math.floor((Date.now() - startedMs) / 86400000);
-    const remaining = Math.max(0, BAN_DURATION_DAYS - elapsedDays);
-    return (
-      <span className="text-red-700 font-medium" title={`restricted ${elapsedDays}d ago`}>
-        Unban in {remaining}d
-      </span>
-    );
+  if (r.status === "banned") {
+    // Bans are permanent (only lifted via Meta review, rare).
+    if (r.restricted_at) {
+      const days = Math.floor((Date.now() - new Date(r.restricted_at).getTime()) / 86400000);
+      return (
+        <span className="text-red-700 font-medium" title={`banned ${days}d ago - permanent unless Meta review succeeds`}>
+          Banned · permanent
+        </span>
+      );
+    }
+    return <span className="text-red-700 font-medium">Banned · permanent</span>;
   }
-  if (isBanned) {
+  if (r.status === "restricted") {
+    if (r.restricted_at) {
+      const elapsedDays = Math.floor((Date.now() - new Date(r.restricted_at).getTime()) / 86400000);
+      const remaining = Math.max(0, BAN_DURATION_DAYS - elapsedDays);
+      return (
+        <span className="text-red-700 font-medium" title={`restricted ${elapsedDays}d ago - lifts automatically`}>
+          Restricted · {remaining}d left
+        </span>
+      );
+    }
     return <span className="text-red-700 font-medium">Restricted</span>;
   }
   if (r.unrestricted_at) {
