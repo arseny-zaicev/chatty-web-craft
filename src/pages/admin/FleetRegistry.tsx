@@ -312,6 +312,39 @@ export default function FleetRegistry() {
     });
   }, [rows, q, view, fStatus, fUsage]);
 
+  const overview = useMemo(() => {
+    const o = { active: 0, restricted: 0, banned: 0, unreachable: 0 };
+    for (const r of rows) {
+      if (!r.is_active) continue;
+      if (r.status === "active" || r.status === "ready") o.active++;
+      else if (r.status === "restricted") o.restricted++;
+      else if (r.status === "banned") o.banned++;
+      if (r.last_health_sync_error) o.unreachable++;
+    }
+    return o;
+  }, [rows]);
+
+  // Run Gupshup health sweep
+  const healthCheck = useMutation({
+    mutationFn: async (numberId?: string) => {
+      const { data: res, error } = await supabase.functions.invoke("numbers-health-sync", {
+        body: numberId ? { number_id: numberId } : {},
+      });
+      if (error) throw error;
+      return res as { total: number; synced: number; changed: number; failed: number };
+    },
+    onSuccess: async (res, numberId) => {
+      if (!numberId) {
+        setHealthSummary({ ...res, at: Date.now() });
+        toast.success(`Checked ${res.total} · ${res.changed} changed · ${res.failed} failed`);
+      } else {
+        toast.success(res.changed > 0 ? "Number updated from Gupshup" : "Number is up to date");
+      }
+      await qc.invalidateQueries({ queryKey: ["fleet-registry"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Health check failed"),
+  });
+
   // Reassign / unassign
   const reassign = useMutation({
     mutationFn: async ({ id, workspaceId }: { id: string; workspaceId: string | null }) => {
