@@ -269,6 +269,15 @@ export default function PipelineConfigSheet({
     }
     const sending_window =
       winStart && winEnd ? { start: winStart, end: winEnd, timezone } : null;
+
+    // Day-1 conservative cap default: 30 per ready sender if user didn't set one.
+    let effectiveCap: number | null = dailyCap ? Math.max(1, parseInt(dailyCap, 10)) : null;
+    if (autoOutreach && !effectiveCap) {
+      effectiveCap = 30 * Math.max(1, readySenders.length || senderIds.length);
+      setDailyCap(String(effectiveCap));
+      toast.message(`Daily cap defaulted to ${effectiveCap} (30 × senders) for safe rollout.`);
+    }
+
     const { error } = await supabase
       .from("pipelines")
       .update({
@@ -276,7 +285,7 @@ export default function PipelineConfigSheet({
         first_touch_template_id: templateId || null,
         default_sender_number_ids: senderIds,
         slack_channel_id: slackChannel.trim() || null,
-        daily_cap: dailyCap ? Math.max(1, parseInt(dailyCap, 10)) : null,
+        daily_cap: effectiveCap,
         sending_window,
       })
       .eq("id", pipeId);
@@ -285,6 +294,24 @@ export default function PipelineConfigSheet({
     qc.invalidateQueries({ queryKey: ["pipelines", wsId] });
     qc.invalidateQueries({ queryKey: ["pipeline-numbers", wsId] });
   };
+
+  const togglePause = async () => {
+    if (!pipeId) return;
+    const paused = autoOutreach; // currently on -> pause; currently off -> resume
+    const { data, error } = await supabase.functions.invoke("pipeline-pause", {
+      body: { pipeline_id: pipeId, paused },
+    });
+    if (error) return toast.error(error.message);
+    if ((data as any)?.error) return toast.error((data as any).error);
+    setAutoOutreach(!paused);
+    toast.success(
+      paused
+        ? `Pipeline paused. ${(data as any)?.affected_campaigns ?? 0} active campaign(s) stopped.`
+        : `Pipeline resumed. ${(data as any)?.affected_campaigns ?? 0} campaign(s) re-running.`,
+    );
+    qc.invalidateQueries({ queryKey: ["pipelines", wsId] });
+  };
+
 
   const refreshTemplates = async () => {
     if (!wsId) return;
@@ -699,6 +726,13 @@ export default function PipelineConfigSheet({
 
         <div className="mt-6 flex justify-end gap-2 sticky bottom-0 bg-background pt-3 pb-1 border-t border-border">
           <Button variant="ghost" onClick={onClose}>Close</Button>
+          <Button
+            variant={autoOutreach ? "destructive" : "secondary"}
+            onClick={togglePause}
+            title={autoOutreach ? "Stop sending and pause running first-touch campaigns" : "Resume sending"}
+          >
+            {autoOutreach ? "Pause pipeline" : "Resume pipeline"}
+          </Button>
           <Button onClick={saveOutreach}>Save changes</Button>
         </div>
       </SheetContent>
