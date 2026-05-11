@@ -716,8 +716,8 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
         <div className="flex items-center gap-1.5">
           <span>+{r.phone_number}</span>
           {r.active_campaigns.length > 0 && (
-            <Badge variant="outline" className="text-[9px] bg-red-500/15 text-red-700 border-red-500/30" title={r.active_campaigns.map((c) => `${c.name} (${c.status})`).join("\n")}>
-              in use · {r.active_campaigns.length}
+            <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-700 border-emerald-500/30" title={`Currently sending in ${r.active_campaigns.length} campaign(s):\n` + r.active_campaigns.map((c) => `• ${c.name} (${c.status})`).join("\n")}>
+              {r.active_campaigns.length} active campaign{r.active_campaigns.length > 1 ? "s" : ""}
             </Badge>
           )}
           {r.active_campaigns.length === 0 && r.last_used_at && (Date.now() - new Date(r.last_used_at).getTime()) < 30 * 86400000 && (
