@@ -313,7 +313,8 @@ export default function FleetRegistry() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (view === "unassigned" && r.workspace_id !== null) return false;
+      // "Unassigned" view = real Stock only (exclude banned/restricted - they're not usable)
+      if (view === "unassigned" && bucketOf(r) !== "stock") return false;
       if (fStatus !== "all") {
         if (fStatus === "sync_failed") {
           if (!r.last_health_sync_error) return false;
