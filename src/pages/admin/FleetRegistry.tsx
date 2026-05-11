@@ -58,6 +58,8 @@ type Row = {
   display_name_status: DnStatus;
   display_name_checked_at: string | null;
   active_campaigns: ActiveCampaign[];
+  pending_recipients: number;
+  is_sending_now: boolean;
   last_used_at: string | null;
   last_used_workspace_id: string | null;
   quality_rating: string | null;
