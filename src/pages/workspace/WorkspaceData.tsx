@@ -395,18 +395,45 @@ function PresetsSection({
                     </pre>
                   </div>
                   <DialogFooter>
-                    <Button variant="ghost" onClick={() => { setCreating(null); setCreatedBatchId(null); }}>Done</Button>
-                    <Button variant="outline" onClick={async () => {
-                      const tid = toast.loading("Pulling rows from your Supabase...");
-                      const { data, error } = await supabase.functions.invoke("import-audience-from-personal", { body: { batch_id: createdBatchId } });
-                      toast.dismiss(tid);
-                      const errMsg = (error as any)?.message || (data as any)?.error;
-                      if (errMsg) { toast.error(`Pull failed: ${errMsg}`); return; }
-                      toast.success(`Imported ${(data as any)?.inserted ?? 0} rows`);
+                    <Button variant="ghost" disabled={pulling} onClick={() => { setCreating(null); setCreatedBatchId(null); }}>Done</Button>
+                    <Button variant="outline" disabled={pulling || !createdBatchId} onClick={async () => {
+                      if (!createdBatchId) return;
+                      setPulling(true);
+                      const tid = toast.loading("Pulling rows from your Supabase... (can take 30-60s for big batches)");
+                      try {
+                        // Direct fetch so we can read the JSON error body (functions.invoke hides it).
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-audience-from-personal`;
+                        const res = await fetch(url, {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                            "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                          },
+                          body: JSON.stringify({ batch_id: createdBatchId }),
+                        });
+                        const json = await res.json().catch(() => ({}));
+                        toast.dismiss(tid);
+                        if (!res.ok) {
+                          toast.error(`Pull failed: ${json?.error ?? `HTTP ${res.status}`}`);
+                          return;
+                        }
+                        toast.success(`Imported ${json?.inserted ?? 0} rows from your Supabase`);
+                        qc.invalidateQueries({ queryKey: audienceKeys.batches(workspace?.id) });
+                        qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace?.id) });
+                      } catch (e: any) {
+                        toast.dismiss(tid);
+                        toast.error(`Pull failed: ${e?.message ?? String(e)}`);
+                      } finally {
+                        setPulling(false);
+                      }
                     }}>
-                      <Database className="w-3.5 h-3.5 mr-1" /> Pull from my Supabase
+                      {pulling
+                        ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Pulling...</>
+                        : <><Database className="w-3.5 h-3.5 mr-1" /> Pull from my Supabase</>}
                     </Button>
-                    <Button onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId }), `${creating.name} prompt`)}>
+                    <Button disabled={pulling} onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId }), `${creating.name} prompt`)}>
                       <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
                     </Button>
                   </DialogFooter>
