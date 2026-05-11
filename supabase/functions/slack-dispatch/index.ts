@@ -233,6 +233,30 @@ Deno.serve(async (req) => {
         // Operational noise: do not notify clients in their pipeline channel.
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
+      } else if (ev.event_type === "member_added") {
+        const p = ev.payload as any;
+        const wsTag = ws?.name ? `${ws.name}${ws.internal_code ? `-${ws.internal_code}` : ""}` : "Workspace";
+        const who = p?.full_name || p?.email || "New user";
+        const role = String(p?.role || "member");
+        const email = p?.email ? ` · ${p.email}` : "";
+        const text = `🟢 New user joined CRM: *${who}*${email} · role: \`${role}\` · ${wsTag}`;
+        const msg = {
+          text,
+          blocks: [
+            { type: "header", text: { type: "plain_text", text: "🟢 New user joined CRM", emoji: true } },
+            { type: "context", elements: [{ type: "mrkdwn", text: `*${wsTag}*` }] },
+            { type: "section", text: { type: "mrkdwn", text: `*${who}*${email}\nRole: \`${role}\`` } },
+          ],
+        };
+        // Notify client's own Slack channel (if configured) so they see access was granted
+        if (workspaceChannel) {
+          try { await postSlack(workspaceChannel, msg); } catch (e) { console.warn("member_added client channel failed", e); }
+        }
+        // Notify our internal ops channel (delivery-leads) so we see it too
+        const ISKRA_INTERNAL = "delivery-leads";
+        if (workspaceChannel !== ISKRA_INTERNAL) {
+          try { await postSlack(ISKRA_INTERNAL, msg); } catch (e) { console.warn("member_added ops channel failed", e); }
+        }
       } else if (ev.event_type === "gupshup_mail_alert") {
         const p = ev.payload as any;
         const msg = buildGupshupMailAlertBlocks({
