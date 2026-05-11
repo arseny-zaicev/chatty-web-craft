@@ -470,6 +470,7 @@ export default function FleetRegistry() {
 
       <AddNumberDrawer open={adderOpen || !!editing} onOpenChange={(v) => { if (!v) { setAdderOpen(false); setEditing(null); } else setAdderOpen(true); }} workspaces={workspaces}
         editing={editing}
+        existingRows={rows}
         onCreated={async () => { await qc.invalidateQueries({ queryKey: ["fleet-registry"] }); }} />
     </div>
   );
