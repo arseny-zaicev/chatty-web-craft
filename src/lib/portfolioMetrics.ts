@@ -23,6 +23,11 @@ export type WorkspaceMetrics = {
   campaign_end: string | null;
   running_campaign_name: string | null;
   scheduled_campaign_name: string | null;
+  active_campaign_name: string | null;
+  active_campaign_status: "running" | "scheduled" | null;
+  active_campaign_sent: number;
+  active_campaign_total: number;
+  active_campaign_kind: "marketing" | "utility" | "manual" | string | null;
   health: WorkspaceHealth;
 };
 
@@ -57,7 +62,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     supabase.from("workspaces").select("id").eq("is_active", true),
     supabase.from("conversations").select("id, workspace_id, unread_count, last_message_at"),
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
-    supabase.from("campaigns").select("workspace_id, name, status, scheduled_start_at, scheduled_dates, recurrence_end_at").in("status", ["scheduled", "running", "paused", "draft"]),
+    supabase.from("campaigns").select("workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients").in("status", ["scheduled", "running", "paused", "draft"]),
     supabase.from("messages").select("conversation_id, direction, created_at, status").gte("created_at", today),
   ]);
   const bookedToday: { id: string }[] = [];
@@ -79,6 +84,11 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
         campaign_end: null,
         running_campaign_name: null,
         scheduled_campaign_name: null,
+        active_campaign_name: null,
+        active_campaign_status: null,
+        active_campaign_sent: 0,
+        active_campaign_total: 0,
+        active_campaign_kind: null,
         health: "idle",
       };
     }
@@ -104,24 +114,50 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     if (n.is_active && n.connected_in_gupshup && n.connected_in_iskra) m.numbers_ready += 1;
   });
 
+  // Track aggregated sent/total per workspace for the "active" campaign group
+  // (running siblings preferred; otherwise next-scheduled siblings) using base name.
   const nowIso = new Date().toISOString();
-  (campaigns ?? []).forEach((c) => {
-    const m = ensure(c.workspace_id);
-    if (c.status === "scheduled" || c.status === "running") m.active_campaigns += 1;
-
+  const baseOf = (name: string) => splitBase(name ?? "");
+  // First pass: pick active group base per workspace (running > soonest scheduled)
+  const activeBase: Record<string, { base: string; status: "running" | "scheduled"; kind: string | null; startsAt?: string }> = {};
+  (campaigns ?? []).forEach((c: any) => {
+    const wsId = c.workspace_id as string;
     const dates = (c.scheduled_dates as string[] | null) ?? [];
     const endDate = c.recurrence_end_at || (dates.length ? dates[dates.length - 1] : null);
+    const m = ensure(wsId);
+    if (c.status === "scheduled" || c.status === "running") m.active_campaigns += 1;
 
     if (c.status === "running") {
       if (!m.running_campaign_name) m.running_campaign_name = c.name ?? null;
       if (endDate && (!m.campaign_end || endDate > m.campaign_end)) m.campaign_end = endDate;
+      const cur = activeBase[wsId];
+      if (!cur || cur.status !== "running") {
+        activeBase[wsId] = { base: baseOf(c.name), status: "running", kind: c.kind ?? null };
+      }
     } else if (c.status === "scheduled" && c.scheduled_start_at && c.scheduled_start_at > nowIso) {
       if (!m.next_launch || c.scheduled_start_at < m.next_launch) {
         m.next_launch = c.scheduled_start_at;
         m.scheduled_campaign_name = c.name ?? null;
       }
       if (endDate && (!m.campaign_end || endDate > m.campaign_end)) m.campaign_end = endDate;
+      const cur = activeBase[wsId];
+      if (!cur || (cur.status === "scheduled" && (!cur.startsAt || c.scheduled_start_at < cur.startsAt))) {
+        activeBase[wsId] = { base: baseOf(c.name), status: "scheduled", kind: c.kind ?? null, startsAt: c.scheduled_start_at };
+      }
     }
+  });
+  // Second pass: aggregate sent/total across siblings in the active group
+  (campaigns ?? []).forEach((c: any) => {
+    const wsId = c.workspace_id as string;
+    const grp = activeBase[wsId];
+    if (!grp) return;
+    if (baseOf(c.name) !== grp.base) return;
+    const m = ensure(wsId);
+    m.active_campaign_name = grp.base;
+    m.active_campaign_status = grp.status;
+    m.active_campaign_kind = grp.kind;
+    m.active_campaign_sent += c.sent_count ?? 0;
+    m.active_campaign_total += c.total_recipients ?? 0;
   });
 
   (msgsToday ?? []).forEach((msg) => {
@@ -256,6 +292,11 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     campaign_end: null,
     running_campaign_name: null,
     scheduled_campaign_name: null,
+    active_campaign_name: null,
+    active_campaign_status: null,
+    active_campaign_sent: 0,
+    active_campaign_total: 0,
+    active_campaign_kind: null,
     health,
     templates_approved: (templates ?? []).length,
     recent_launches,

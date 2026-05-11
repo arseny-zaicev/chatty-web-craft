@@ -268,11 +268,11 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
 }
 
 const HEALTH_META = {
-  running:   { label: "Running",            cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: Rocket },
-  scheduled: { label: "Scheduled",          cls: "bg-sky-500/10 text-sky-600 border-sky-500/30",              icon: Calendar },
-  idle:      { label: "Ready to launch",    cls: "bg-muted text-muted-foreground border-border",              icon: CheckCircle2 },
-  attention: { label: "Attention",          cls: "bg-amber-500/10 text-amber-600 border-amber-500/30",        icon: AlertTriangle },
-  blocked:   { label: "No active numbers",  cls: "bg-red-500/10 text-red-600 border-red-500/30",              icon: AlertTriangle },
+  running:   { label: "Active",              cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: CheckCircle2 },
+  scheduled: { label: "Active",              cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: CheckCircle2 },
+  idle:      { label: "Active",              cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",  icon: CheckCircle2 },
+  attention: { label: "Attention",           cls: "bg-amber-500/10 text-amber-600 border-amber-500/30",        icon: AlertTriangle },
+  blocked:   { label: "No active numbers",   cls: "bg-red-500/10 text-red-600 border-red-500/30",              icon: AlertTriangle },
 } as const;
 
 function daysUntil(iso: string): number {
@@ -365,44 +365,52 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
       <CardContent className="space-y-3 flex-1 flex flex-col">
         {/* Headline metric: campaign info */}
         <div className="rounded-md border border-border bg-card/40 p-3">
-          {m?.health === "running" && (
+          {m?.health === "blocked" ? (
             <>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Rocket className="w-3.5 h-3.5" />Campaign running</div>
-              <div className="font-medium text-sm mt-0.5 truncate">{m.running_campaign_name ?? "Active campaign"}</div>
-              {m.campaign_end && (
-                <div className="text-xs text-muted-foreground mt-1">Ends {formatDateShort(m.campaign_end)} · {daysUntil(m.campaign_end)} day{daysUntil(m.campaign_end) === 1 ? "" : "s"} left</div>
-              )}
+              <div className="flex items-center gap-1.5 text-xs text-red-600"><AlertTriangle className="w-3.5 h-3.5" />No active numbers</div>
+              <div className="font-medium text-sm mt-0.5">Connect a WhatsApp number first</div>
+              <div className="text-xs text-muted-foreground mt-1">{numbersTotal === 0 ? "No numbers added yet" : `${numbersTotal} number${numbersTotal === 1 ? "" : "s"} present, none active`}</div>
             </>
-          )}
-          {m?.health === "scheduled" && m.next_launch && (
-            <>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Calendar className="w-3.5 h-3.5" />Next launch</div>
-              <div className="font-medium text-sm mt-0.5 truncate">{m.scheduled_campaign_name ?? "Scheduled campaign"}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Starts {formatDateShort(m.next_launch)} · in {daysUntil(m.next_launch)} day{daysUntil(m.next_launch) === 1 ? "" : "s"}
-                {m.campaign_end ? ` · ends ${formatDateShort(m.campaign_end)}` : ""}
-              </div>
-            </>
-          )}
-          {m?.health === "idle" && (
-            <>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="w-3.5 h-3.5" />No campaign scheduled</div>
-              <div className="font-medium text-sm mt-0.5">{numbersActive} active number{numbersActive === 1 ? "" : "s"} ready</div>
-              <div className="text-xs text-muted-foreground mt-1">Plan a launch when you're ready</div>
-            </>
-          )}
-          {m?.health === "attention" && (
+          ) : m?.health === "attention" && !m?.active_campaign_name ? (
             <>
               <div className="flex items-center gap-1.5 text-xs text-amber-600"><AlertTriangle className="w-3.5 h-3.5" />Replies piling up</div>
               <div className="font-medium text-sm mt-0.5">{unread} unread message{unread === 1 ? "" : "s"}</div>
               <div className="text-xs text-muted-foreground mt-1">Open inbox to handle them</div>
             </>
-          )}
-          {m?.health === "blocked" && (
+          ) : m?.active_campaign_name ? (
+            (() => {
+              const sent = m.active_campaign_sent ?? 0;
+              const total = m.active_campaign_total ?? 0;
+              const pct = total > 0 ? Math.min(100, Math.round((sent / total) * 100)) : 0;
+              const isRunning = m.active_campaign_status === "running";
+              const label = isRunning ? "Campaign in progress" : "Next campaign";
+              const Icon = isRunning ? Rocket : Calendar;
+              return (
+                <>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon className="w-3.5 h-3.5" />{label}</div>
+                  <div className="font-medium text-sm mt-0.5 truncate">{m.active_campaign_name}</div>
+                  {total > 0 && (
+                    <>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1 tabular-nums">
+                        {pct}% sent · {sent.toLocaleString()}/{total.toLocaleString()}
+                        {isRunning ? ` · ${m.delivered_today ?? 0} today` : m.next_launch ? ` · starts ${formatDateShort(m.next_launch)}` : ""}
+                      </div>
+                    </>
+                  )}
+                  {total === 0 && m.next_launch && (
+                    <div className="text-xs text-muted-foreground mt-1">Starts {formatDateShort(m.next_launch)}</div>
+                  )}
+                </>
+              );
+            })()
+          ) : (
             <>
-              <div className="flex items-center gap-1.5 text-xs text-red-600"><AlertTriangle className="w-3.5 h-3.5" />No active numbers</div>
-              <div className="font-medium text-sm mt-0.5">Connect a WhatsApp number first</div>
-              <div className="text-xs text-muted-foreground mt-1">{numbersTotal === 0 ? "No numbers added yet" : `${numbersTotal} number${numbersTotal === 1 ? "" : "s"} present, none active`}</div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="w-3.5 h-3.5" />No campaign scheduled</div>
+              <div className="font-medium text-sm mt-0.5">{numbersActive} active number{numbersActive === 1 ? "" : "s"} ready</div>
+              <div className="text-xs text-muted-foreground mt-1">Plan a launch when you're ready</div>
             </>
           )}
         </div>
