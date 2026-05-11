@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { workspaceKeys } from "@/lib/workspaces";
 import { toast } from "sonner";
-import { Globe, Sparkles } from "lucide-react";
+import { Globe, Sparkles, Hash } from "lucide-react";
 import { IskraLogo } from "@/components/IskraLogo";
 
 const normalizeUrl = (s: string) => {
@@ -25,7 +25,7 @@ export default function BrandEditor({ workspaceId }: { workspaceId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("workspaces")
-        .select("id, name, website_url, logo_url, color")
+        .select("id, name, website_url, logo_url, color, slack_channel_id")
         .eq("id", workspaceId)
         .single();
       if (error) throw error;
@@ -35,11 +35,13 @@ export default function BrandEditor({ workspaceId }: { workspaceId: string }) {
 
   const [website, setWebsite] = useState("");
   const [logo, setLogo] = useState("");
+  const [slackChannel, setSlackChannel] = useState("");
 
   useEffect(() => {
     if (!data) return;
     setWebsite(data.website_url ?? "");
     setLogo(data.logo_url ?? "");
+    setSlackChannel(data.slack_channel_id ?? "");
   }, [data]);
 
   const save = useMutation({
@@ -47,9 +49,10 @@ export default function BrandEditor({ workspaceId }: { workspaceId: string }) {
       const websiteUrl = normalizeUrl(website);
       const dom = domainOf(website);
       const logoUrl = logo.trim() || (dom ? `https://logo.clearbit.com/${dom}` : null);
+      const slackId = slackChannel.trim() || null;
       const { error } = await supabase
         .from("workspaces")
-        .update({ website_url: websiteUrl, logo_url: logoUrl })
+        .update({ website_url: websiteUrl, logo_url: logoUrl, slack_channel_id: slackId })
         .eq("id", workspaceId);
       if (error) throw error;
     },
@@ -84,6 +87,16 @@ export default function BrandEditor({ workspaceId }: { workspaceId: string }) {
         <div className="space-y-1.5">
           <Label htmlFor="ws-logo">Logo URL (optional)</Label>
           <Input id="ws-logo" value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="Auto-detected from website if empty" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="ws-slack">Slack channel ID (for client notifications)</Label>
+          <div className="relative">
+            <Hash className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input id="ws-slack" value={slackChannel} onChange={(e) => setSlackChannel(e.target.value)} placeholder="C0123456789 or #general" className="pl-9 font-mono text-xs" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            We'll post campaign updates, lead replies and "user joined CRM" alerts here. Ask the client to invite our Slack bot to the channel first (private channels require it).
+          </p>
         </div>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save brand"}
