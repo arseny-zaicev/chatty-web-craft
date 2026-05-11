@@ -315,6 +315,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
       setLoadingMessages(false);
     });
     void markConversationRead(activeId).catch(() => {});
+    setConversations((cs) => cs.map((c) => (c.id === activeId ? { ...c, unread_count: 0 } : c)));
     void touchResponder(activeId);
     return () => {
       cancelled = true;
