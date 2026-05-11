@@ -85,11 +85,25 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
         .select("whatsapp_number_id, event_type, error_message, received_at")
         .order("received_at", { ascending: false }).limit(20000),
       supabase.from("campaign_recipients").select("whatsapp_number_id, status, sent_at"),
-      supabase.from("campaigns").select("id, name, whatsapp_number_id, scheduled_start_at, created_at"),
+      supabase.from("campaigns").select("id, name, status, workspace_id, whatsapp_number_id, scheduled_start_at, created_at"),
       supabase.from("conversations").select("id, whatsapp_number_id"),
       supabase.from("messages").select("conversation_id, direction"),
     ]);
   if (nErr) throw nErr; if (wErr) throw wErr;
+
+  const { data: usage } = await supabase.from("whatsapp_number_usage_summary").select("*");
+  const usageMap = new Map<string, { last_used_at: string | null; last_workspace_id: string | null }>();
+  for (const u of (usage ?? []) as Array<{ number_id: string; last_used_at: string | null; last_workspace_id: string | null }>) {
+    usageMap.set(u.number_id, { last_used_at: u.last_used_at, last_workspace_id: u.last_workspace_id });
+  }
+  const activeByNumber = new Map<string, ActiveCampaign[]>();
+  for (const c of (campaignsData ?? []) as Array<{ id: string; name: string; status: string; workspace_id: string | null; whatsapp_number_id: string | null }>) {
+    if (!c.whatsapp_number_id) continue;
+    if (!["scheduled", "running", "paused"].includes(c.status)) continue;
+    const arr = activeByNumber.get(c.whatsapp_number_id) ?? [];
+    arr.push({ id: c.id, name: c.name, status: c.status, workspace_id: c.workspace_id });
+    activeByNumber.set(c.whatsapp_number_id, arr);
+  }
 
   const wsMap = new Map((workspaces ?? []).map((w) => [w.id, w]));
   const tpl = new Map<string, { total: number; approved: number }>();
