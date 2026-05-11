@@ -245,6 +245,12 @@ function CampaignDetail({
           </table>
         </div>
       )}
+
+      <CampaignReportPanel
+        campaignIds={campaignIds}
+        primaryCampaignId={campaignIds[0]}
+        campaignName={group.displayName}
+      />
     </div>
   );
 }
