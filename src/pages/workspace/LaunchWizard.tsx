@@ -369,12 +369,22 @@ export default function LaunchWizard() {
     return mm ? `${h}h ${mm}m` : `${h}h`;
   };
   const eta = useMemo(() => {
-    const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
+    const numbers = Math.max(1, activeNumbers.length);
+    if (scheduleMode === "scheduled") {
+      const dailyCap = numbers * Math.max(1, perNumberQuota);
+      const daysNeeded = Math.max(1, Math.ceil(recipients.length / dailyCap));
+      if (!recipients.length) return "-";
+      const [sh, sm] = (windowStart || "09:00").split(":").map(Number);
+      const [eh, em] = (windowEnd || "20:00").split(":").map(Number);
+      const winH = Math.max(1, ((eh * 3600 + em * 60) - (sh * 3600 + sm * 60)) / 3600);
+      return `${daysNeeded} day(s) × ${winH.toFixed(1)}h window`;
+    }
+    const perNumber = Math.ceil(recipients.length / numbers);
     const avgSec = Math.round(perNumber * (delayMin + delayMax) / 2);
     const maxSec = Math.round(perNumber * delayMax);
     if (!perNumber) return "-";
     return `${fmtDur(avgSec)} avg · up to ${fmtDur(maxSec)}`;
-  }, [recipients.length, activeNumbers.length, delayMin, delayMax]);
+  }, [recipients.length, activeNumbers.length, delayMin, delayMax, scheduleMode, perNumberQuota, windowStart, windowEnd]);
 
   // ----- Recipient region clock & realistic pacing -----
   const recipientTz = useMemo(() => COUNTRY_TZ[poolCountry?.toUpperCase() ?? ""] ?? null, [poolCountry]);
