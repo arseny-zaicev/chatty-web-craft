@@ -518,6 +518,8 @@ export default function FleetRegistry() {
             onEdit: setEditing,
             onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => quickPatch.mutate({ row, patch }),
             onDelete: handleDelete,
+            onRecheck: (id: string) => healthCheck.mutate(id),
+            recheckingId: healthCheck.isPending ? (healthCheck.variables ?? null) : null,
           };
           return view === "by-client"
             ? <GroupedByClient rows={filtered} {...common} />
