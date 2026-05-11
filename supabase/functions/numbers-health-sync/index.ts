@@ -99,11 +99,13 @@ async function fetchAppHealth(appId: string, perKey: string | null): Promise<{
     merged.nameStatus || merged.displayNameStatus || ""
   ).toUpperCase() || undefined;
 
-  // Map to our status enum: active | restricted | blocked
+  // Map to our status enum: active | restricted | banned
   let status: string | undefined;
-  if (accountState === "BANNED" || accountState === "DISABLED") status = "blocked";
+  if (accountState === "BANNED" || accountState === "DISABLED") status = "banned";
   else if (accountState === "FLAGGED" || accountState === "RESTRICTED" || quality === "RED") status = "restricted";
-  else if (accountState === "LIVE" || accountState === "CONNECTED" || (quality && quality !== "RED")) status = "active";
+  // Note: do NOT auto-promote to "active" here. Numbers in "stock"/"ready"/"warming"
+  // states are managed manually; we only push status downward (toward banned/restricted)
+  // based on Gupshup signals. Quality + messaging_limit fields still update.
 
   return { status, messagingLimit, quality, displayNameStatus, raw: merged };
 }
