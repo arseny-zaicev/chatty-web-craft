@@ -420,8 +420,8 @@ function PresetsSection({
                           return;
                         }
                         toast.success(`Imported ${json?.inserted ?? 0} rows from your Supabase`);
-                        qc.invalidateQueries({ queryKey: audienceKeys.batches(workspace?.id) });
-                        qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace?.id) });
+                        qc.invalidateQueries({ queryKey: audienceKeys.batches(workspaceId) });
+                        qc.invalidateQueries({ queryKey: audienceKeys.stats(workspaceId) });
                       } catch (e: any) {
                         toast.dismiss(tid);
                         toast.error(`Pull failed: ${e?.message ?? String(e)}`);
