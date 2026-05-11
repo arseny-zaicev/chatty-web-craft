@@ -28,6 +28,7 @@ export type WorkspaceMetrics = {
   active_campaign_sent: number;
   active_campaign_total: number;
   active_campaign_kind: "marketing" | "utility" | "manual" | string | null;
+  is_sending_now: boolean;
   health: WorkspaceHealth;
 };
 
