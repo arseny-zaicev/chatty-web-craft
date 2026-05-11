@@ -58,6 +58,8 @@ type Row = {
   display_name_status: DnStatus;
   display_name_checked_at: string | null;
   active_campaigns: ActiveCampaign[];
+  pending_recipients: number;
+  is_sending_now: boolean;
   last_used_at: string | null;
   last_used_workspace_id: string | null;
   quality_rating: string | null;
@@ -150,14 +152,16 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
     if (!nid) continue;
     totalSent.set(nid, (totalSent.get(nid) ?? 0) + 1);
   }
-  // campaign recipients sent/failed
+  // campaign recipients sent/failed/pending per number
+  const pendingByNumber = new Map<string, number>();
   for (const r of (recipients ?? []) as Array<{ whatsapp_number_id: string | null; status: string }>) {
     if (!r.whatsapp_number_id) continue;
     if (r.status === "sent" || r.status === "delivered" || r.status === "read") {
       totalSent.set(r.whatsapp_number_id, (totalSent.get(r.whatsapp_number_id) ?? 0) + 1);
-    }
-    if (r.status === "failed") {
+    } else if (r.status === "failed") {
       totalErrors.set(r.whatsapp_number_id, (totalErrors.get(r.whatsapp_number_id) ?? 0) + 1);
+    } else if (r.status === "pending" || r.status === "scheduled" || r.status === "sending") {
+      pendingByNumber.set(r.whatsapp_number_id, (pendingByNumber.get(r.whatsapp_number_id) ?? 0) + 1);
     }
   }
   // webhook failed events
@@ -228,6 +232,8 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       display_name_status: ((n.display_name_status as DnStatus) ?? "pending"),
       display_name_checked_at: (n.display_name_checked_at as string) ?? null,
       active_campaigns: activeByNumber.get(n.id as string) ?? [],
+      pending_recipients: pendingByNumber.get(n.id as string) ?? 0,
+      is_sending_now: (activeByNumber.get(n.id as string) ?? []).some((c) => c.status === "running") && (pendingByNumber.get(n.id as string) ?? 0) > 0,
       last_used_at: usageMap.get(n.id as string)?.last_used_at ?? null,
       last_used_workspace_id: usageMap.get(n.id as string)?.last_workspace_id ?? null,
       quality_rating: (n.quality_rating as string) ?? null,
@@ -325,7 +331,7 @@ export default function FleetRegistry() {
     if (isReadyUnassignedNumber(r)) return "stock";
     if (r.workspace_id === null) return "other";
     if (!r.is_active) return "other";
-    if ((r.active_campaigns?.length ?? 0) > 0) return "active";
+    if (r.is_sending_now) return "active";
     if (r.status === "active" || r.status === "ready") return "allocated";
     return "other";
   };
@@ -503,9 +509,9 @@ export default function FleetRegistry() {
       <main className="container mx-auto px-4 py-6 space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           <OverviewTile label="Allocated" hint="idle on a client" value={overview.allocated} tone="slate" active={fStatus === "allocated"} onClick={() => setFStatus(fStatus === "allocated" ? "all" : "allocated")} />
-          <OverviewTile label="Active" hint="running campaign" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
+          <OverviewTile label="Sending now" hint="messages flowing" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
           <OverviewTile label="Warming" hint="heating up" value={overview.warming} tone="amber" active={fStatus === "warming"} onClick={() => setFStatus(fStatus === "warming" ? "all" : "warming")} />
-          <OverviewTile label="Unassigned" hint="can allocate" value={overview.stock} tone="emerald" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
+          <OverviewTile label="Unassigned" hint="no client" value={overview.stock} tone="emerald" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
           <OverviewTile label="Restricted" hint="30-day block" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
           <OverviewTile label="Banned" hint="permanent" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
         </div>

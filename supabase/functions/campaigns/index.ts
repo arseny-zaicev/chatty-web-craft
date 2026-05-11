@@ -833,6 +833,14 @@ async function processQueue(admin: any) {
     }).eq("id", id);
   }
 
+  // Reaper: catch any 'running' campaign whose recipients all reached terminal state
+  // but the per-tick recount above never touched it (no recipient was due this tick).
+  try {
+    await admin.rpc("reap_finished_campaigns", { p_idle_minutes: 5 });
+  } catch (err) {
+    console.warn("reap_finished_campaigns failed", err);
+  }
+
   return json({ ok: true, processed: (due ?? []).length, sent, failed });
 }
 

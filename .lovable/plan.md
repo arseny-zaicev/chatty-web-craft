@@ -1,66 +1,83 @@
-## Problem
+## What I found
 
-Two issues with the Launch wizard "Today fits" hint and the multi-day flow:
+### 1) Unassigned filter — root cause
+Database currently has **9 stock + 1 banned** numbers with `workspace_id IS NULL` (out of 17). The screenshot showing "Unassigned 0" is from **before** the previous fix landed — the `isReadyUnassignedNumber` predicate has already been loosened to `workspace_id IS NULL && !banned/restricted`, so the tile and filter will start counting these 9 once the page reloads.
 
-1. **Wrong per-day math.** The hint computes "1 msg every 28s" and "Today fits ≈ 2,194 of 2,808" against the **full** recipient count, ignoring two real constraints:
-   - The launcher already splits recipients evenly across selected days (`perDay = ceil(total / N days)` in backend `launchCampaign`).
-   - There's a hard cap: `perNumberQuota` (default 200) per number per day. With 2 numbers that's 400/day max, so 2808 over 5 days (562/day) is **impossible** - the cap forces 400/day and the campaign actually needs ≥ 8 days.
-   The hint should make this obvious instead of pretending all 2808 should fit in today's 11h window.
+What's still wrong, though, is **how we communicate it** and the data freshness:
+- The tile/filter counts the same 9 numbers but says "can allocate", which is misleading because some of them aren't actually ready (no templates, no webhook, etc.). They're just sitting on the shelf.
+- Fleet data is fetched once per session and doesn't auto-refresh after reassign/admin actions in other tabs.
 
-2. **No heads-up between days.** When today's batch finishes, the team has no Slack signal telling them when tomorrow's batch starts and how big it is.
+### 2) "Running" campaigns that are actually finished — root cause
+Salesforge has 2 campaigns marked `status='running'`:
+- recipients: **49 sent + 1 failed = 50 terminal, 0 pending**
+- but `campaigns.sent_count` is stale (23 + 24 = 47, not 49) and `status` is still `running`.
+
+In `supabase/functions/campaigns/index.ts` (line ~822), the recount + status flip to `completed` only runs **inside the same tick that processed at least one due recipient**. Once a campaign has no pending recipients, no future tick touches it — so it's stuck at `running` forever. That's why the admin card and the workspace badge still scream "Running".
+
+Separately, the workspace "Active" badge already conflates two ideas:
+- *the client account is active* (subscription, has numbers, you can talk to them)
+- *a send is happening right now* (a number is actively pushing messages)
+
+The user wants these split.
+
+---
 
 ## Plan
 
-### 1. Honest per-day math in `src/pages/workspace/LaunchWizard.tsx`
+### A. Unassigned filter & tile (Fleet Registry)
 
-Recompute in `pacing` + `feasibility` memos (lines 399-431) using:
+1. **Keep** the loosened `isReadyUnassignedNumber` (workspace_id null, not restricted/banned). That fixes the empty-list bug.
+2. **Rename for clarity:**
+   - Tile label stays "Unassigned", hint changes from "can allocate" to **"no client"** so it doesn't promise readiness.
+   - Add a small sub-counter inside the tile: `9 · 4 ready to allocate` (computed from the old strict predicate). Clicking "ready to allocate" applies an extra filter pill.
+3. **Auto-refresh:** after `reassign`, `remove`, and on tab focus, invalidate `["fleet-registry"]` so the count updates without a manual reload. Also subscribe to `whatsapp_numbers` realtime changes and invalidate on `UPDATE/INSERT/DELETE`.
 
-- `numbers = activeNumbers.length`
-- `daysSelected = scheduledDates.length` (Pick-days mode)
-- `dailyCap = numbers * perNumberQuota` (e.g. 2 × 200 = 400/day)
-- `idealPerDay = ceil(recipients.length / max(1, daysSelected))` (e.g. 562)
-- `effectivePerDay = min(idealPerDay, dailyCap)` (e.g. 400)
-- `daysNeeded = ceil(recipients.length / dailyCap)` (e.g. 8)
-- `pacing.perNumber` (for the gap calc) becomes `ceil(effectivePerDay / numbers)` (e.g. 200), so "1 msg every X" reflects today's real load (200 msgs / 11h ≈ 1 every ~3.3 min).
-- `feasibility.totalQueued` becomes `effectivePerDay` (today's share), `fitsToday` / `overflow` recomputed against that.
+### B. Campaigns: fix "stuck Running"
 
-Banner rules (Pick-days mode):
-- **Cap not exceeded** (idealPerDay ≤ dailyCap): "Today's share: ~X of Y total (split across N days, ~X/day). Fits before <windowEnd> in recipient TZ."
-- **Cap exceeded** (idealPerDay > dailyCap): amber warning - "⚠ Selected N day(s) can't hold Y messages at <quota>/number/day on <numbers> number(s) (max <dailyCap>/day = <N×dailyCap> total). You need at least <daysNeeded> days, or raise quota / add numbers. Today will send <dailyCap>; the rest auto-rolls forward day by day."
-- **Today not in selected dates**: "Nothing scheduled for today. First batch (<effectivePerDay> msgs) starts <firstDate> at <windowStart> recipient TZ."
-- **Today in selected dates but past windowEnd**: "Today's window already closed. Today's <effectivePerDay> will roll into <nextDate>."
+**Backend (one-time + ongoing):**
+1. **Backfill sweep** — one SQL run that, for every `campaigns` row with `status='running'`:
+   - recomputes `sent_count`, `failed_count` from `campaign_recipients`,
+   - if there are zero recipients in `pending/scheduled/sending`, sets `status='completed'`.
+   This unsticks Salesforge immediately.
+2. **Add a reaper to `processCampaignsTick`** — at the end of each tick, regardless of whether recipients were due, scan `campaigns` where `status='running' AND updated_at < now() - interval '5 minutes'`, run the same recount, flip to `completed` when terminal. Cheap query, prevents future drift.
+3. **(Optional, defer):** also flip `status='running'` → `completed` when the last selected `scheduled_dates` day is in the past and there are zero pending recipients, even if updated_at is recent.
 
-Also update Review pane (right side):
-- `Per number` → show `ceil(effectivePerDay / numbers)` (today's per-number load, not lifetime).
-- New row `Per day` → `effectivePerDay`.
-- New row `Days needed` → `daysNeeded` (highlighted amber if > daysSelected).
-- `ETA` → recompute as `daysNeeded × windowHours` (currently shows 35h6m for the impossible 5-day plan).
+### C. Campaigns + numbers: separate "active" from "sending now"
 
-### 2. End-of-day Slack notification
+Introduce two derived signals (no schema change required, computed in `portfolioMetrics.ts` and `FleetRegistry.tsx`):
 
-Add `campaign_day_completed` event fired when:
-- Campaign is multi-day (`scheduled_dates` length > 1 OR overflow into a new day occurred).
-- All `campaign_recipients` for today (scheduled_at::date = today) are terminal (`sent`/`failed`/`skipped`).
-- The campaign still has future scheduled rows.
+| Signal | Meaning | How to compute |
+|---|---|---|
+| **client.active** | Active client account | `workspaces.is_active = true` (existing) |
+| **campaign.sendingNow** | A send is actually flowing | campaign has `status='running'` AND `pending+scheduled+sending recipients > 0` AND at least one recipient sent in the last 15 min |
+| **campaign.done** | All recipients terminal | `pending+scheduled+sending = 0` |
+| **number.sendingNow** | This specific number is pushing | belongs to a `campaign.sendingNow` AND has its own pending recipients |
 
-Implementation:
+**Admin Portfolio card (per workspace):**
+- Badge stays green "Active" when the client is active. Yellow "Paused" if `is_active=false`.
+- Campaign block:
+  - if `sendingNow` → "🚀 Sending now · <name> · X% (sent/total) · Y today"
+  - else if `done` and finished today → "✅ Done · <name> · X% sent (Y/total)"
+  - else if scheduled future day → "📅 Next: <name> · starts <date>"
+  - else → "No campaign scheduled"
+- No more "Campaign running" when nothing is being sent.
 
-a. **Migration:** add `campaigns.last_day_completed_date date` (nullable) to dedupe.
+**Fleet Registry tiles + Status column:**
+- "ACTIVE" tile relabel: **"Sending now"** (count of numbers where `number.sendingNow` is true). Today shows `2`; after the reaper runs, Salesforge's two numbers will drop to `0` because their campaigns are done.
+- New tile **"Allocated"** (already exists) keeps numbers that have a client but aren't sending.
+- Per-row `Status` column: replace single "active" pill with one of `Sending now / Allocated / Warming / Stock / Restricted / Banned / Done (today)`.
 
-b. **Edge function** `campaign-day-rollover` (new):
-   - Loop running campaigns with multi-day plans.
-   - For each, compute today's `sent / failed / total` and tomorrow's `next batch size` + `start time` (windowStart in recipient TZ, based on pool country).
-   - When today's pending = 0 and `last_day_completed_date != today`, insert into `slack_event_queue` with payload `{ campaign_id, name, day, sent_today, failed_today, next_day, next_day_start_local, next_day_recipients }` and stamp `last_day_completed_date`.
+### D. Order of execution
 
-c. **Cron:** schedule via `supabase--insert` (pg_cron + pg_net) every 15 min.
+1. Backend reaper + one-shot backfill (B) — unsticks Salesforge.
+2. Frontend signals + relabels (C) — admin card + Fleet tiles read the new derived state.
+3. Fleet UI polish + auto-refresh (A) — clear copy, keeps numbers tile/filter fresh.
 
-d. **Slack formatter** `supabase/functions/_shared/slackBlocks.ts`:
-   - Add `campaign_day_completed` block: "✅ Day finished - <name>: <sent_today> sent, <failed_today> failed today. 📅 Next batch (<next_day_recipients> msgs) starts <next_day> at <next_day_start_local> recipient TZ."
+### Files I expect to touch
+- `supabase/functions/campaigns/index.ts` — add reaper in `processCampaignsTick`.
+- one migration / ad-hoc insert SQL — backfill running→completed.
+- `src/lib/portfolioMetrics.ts` — add `campaign.sendingNow`, `campaign.done`, expose `delivered_today` per active group.
+- `src/pages/AdminPanel.tsx` — relabel badge + campaign block.
+- `src/pages/admin/FleetRegistry.tsx` — derived `number.sendingNow`, tile relabel, sub-count, realtime invalidation.
 
-This rides the existing `slack_event_queue` → `slack-dispatch` pipeline, so it auto-posts to the workspace Slack channel if connected and silently skips if not. No per-campaign opt-in needed.
-
-## Technical notes
-
-- Backend `launchCampaign` already does even split per day, but does **not** enforce `per_number_quota` against scheduled_dates today - that limit only kicks in on the worker via `delayMin/Max`. So the frontend warning is the only place a user can see "your day count is too low". Worth a follow-up to also auto-extend `scheduled_dates` server-side, but that's separate.
-- Recipient-TZ next-day start: pool country → primary TZ map already exists (`COUNTRY_TZ` in LaunchWizard). Reuse the same logic in the edge function (small lookup table).
-- `campaign_day_completed` will not fire if `daysSelected = 1` and there's no overflow (campaign just finishes → existing `campaign_completed` covers it).
+No schema changes required.

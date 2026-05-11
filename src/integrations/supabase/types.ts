@@ -2411,6 +2411,10 @@ export type Database = {
           read_ct: number
         }[]
       }
+      reap_finished_campaigns: {
+        Args: { p_idle_minutes?: number }
+        Returns: number
+      }
       record_heartbeat: { Args: never; Returns: undefined }
       release_audience_rows: { Args: { _row_ids: string[] }; Returns: number }
       reserve_audience_rows: {
@@ -2457,6 +2461,7 @@ export type Database = {
         | "completed"
         | "failed"
         | "scheduled"
+        | "cancelled"
       form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access"
       gupshup_mail_category:
         | "quality_drop"
@@ -2655,6 +2660,7 @@ export const Constants = {
         "completed",
         "failed",
         "scheduled",
+        "cancelled",
       ],
       form_type: ["qualification", "seller_leads", "demo_request", "bm_access"],
       gupshup_mail_category: [
