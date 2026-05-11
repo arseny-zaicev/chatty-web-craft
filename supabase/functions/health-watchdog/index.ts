@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       if ((recentInbound ?? 0) === 0) {
         alerts.push({
           kind: "inbound_silence",
-          text: `:warning: No inbound WhatsApp messages received in last ${INBOUND_SILENCE_MIN}m across ${activeNumCount} active number(s). Webhook may be down.\n\n_Hint: re-set Gupshup callback via gupshup-set-callback._`,
+          text: `:eyes: *Webhook* — no inbound WhatsApp replies received in last ${INBOUND_SILENCE_MIN}m across ${activeNumCount} active number(s).\n\n*This does NOT mean lead imports are broken* — it only tracks _inbound replies from contacts_. If lead ingestion was failing you'd see a separate \`leads_pending_backlog\` / \`sheets_sync_*\` alert.\n\nLikely causes (in order): (1) genuinely quiet hour for the audience, (2) Gupshup webhook misconfigured for this number, (3) our \`whatsapp-webhook\` handler crashing.\n\n_Hint: check edge-logs of \`whatsapp-webhook\` — if requests are arriving it's quiet hours; if zero requests, re-register via \`gupshup-set-callback\`._`,
         });
       }
     }
