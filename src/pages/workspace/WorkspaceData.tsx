@@ -395,6 +395,16 @@ function PresetsSection({
                   </div>
                   <DialogFooter>
                     <Button variant="ghost" onClick={() => { setCreating(null); setCreatedBatchId(null); }}>Done</Button>
+                    <Button variant="outline" onClick={async () => {
+                      const tid = toast.loading("Pulling rows from your Supabase...");
+                      const { data, error } = await supabase.functions.invoke("import-audience-from-personal", { body: { batch_id: createdBatchId } });
+                      toast.dismiss(tid);
+                      const errMsg = (error as any)?.message || (data as any)?.error;
+                      if (errMsg) { toast.error(`Pull failed: ${errMsg}`); return; }
+                      toast.success(`Imported ${(data as any)?.inserted ?? 0} rows`);
+                    }}>
+                      <Database className="w-3.5 h-3.5 mr-1" /> Pull from my Supabase
+                    </Button>
                     <Button onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId }), `${creating.name} prompt`)}>
                       <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
                     </Button>
