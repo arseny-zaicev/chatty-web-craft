@@ -262,6 +262,10 @@ export default function FleetRegistry() {
     | { kind: "reassign"; row: Row; targetWs: string | null }
     | null
   >(null);
+  const [healthSummary, setHealthSummary] = useState<
+    | { total: number; synced: number; changed: number; failed: number; at: number }
+    | null
+  >(null);
 
   useEffect(() => {
     let mounted = true;
