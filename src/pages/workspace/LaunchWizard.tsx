@@ -395,19 +395,47 @@ export default function LaunchWizard() {
     return recipientNow >= windowStart && recipientNow <= windowEnd;
   }, [recipientNow, windowStart, windowEnd]);
 
-  // Realistic per-message gap when window mode is active
+  // Per-day capacity model honors per_number_quota cap.
+  const dayPlan = useMemo(() => {
+    const numbers = Math.max(1, activeNumbers.length);
+    const total = recipients.length;
+    const dailyCap = Math.max(1, numbers * Math.max(1, perNumberQuota));
+    const daysSelected = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
+    const idealPerDay = Math.ceil(total / daysSelected);
+    const effectivePerDay = Math.min(idealPerDay, dailyCap);
+    const daysNeeded = Math.max(1, Math.ceil(total / dailyCap));
+    const capExceeded = idealPerDay > dailyCap;
+    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded };
+  }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length]);
+
+  // Realistic per-message gap when window mode is active (based on today's effective load)
   const pacing = useMemo(() => {
-    const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
-    if (!perNumber || !windowStart || !windowEnd) return null;
+    const perNumber = Math.max(1, Math.ceil(dayPlan.effectivePerDay / dayPlan.numbers));
+    if (!windowStart || !windowEnd) return null;
     const [sh, sm] = windowStart.split(":").map(Number);
     const [eh, em] = windowEnd.split(":").map(Number);
     const windowSec = Math.max(60, (eh * 3600 + em * 60) - (sh * 3600 + sm * 60));
     const avgGapSec = Math.floor(windowSec / Math.max(1, perNumber));
     return { perNumber, windowSec, avgGapSec };
-  }, [recipients.length, activeNumbers.length, windowStart, windowEnd]);
+  }, [dayPlan.effectivePerDay, dayPlan.numbers, windowStart, windowEnd]);
 
-  // Feasibility: how many of today's volume actually fits before windowEnd in recipient TZ.
-  // Applies to BOTH Send now (60-120s gaps) and Pick days (window-spread gaps).
+  // Today's selected status (Pick-days mode)
+  const todayInfo = useMemo(() => {
+    if (scheduleMode !== "scheduled") return { todayInList: true, firstDate: null as string | null, nextDate: null as string | null };
+    if (!recipientTz) return { todayInList: true, firstDate: scheduledDates[0] ?? null, nextDate: null };
+    let todayLocal = "";
+    try {
+      const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: recipientTz, year: "numeric", month: "2-digit", day: "2-digit" });
+      todayLocal = fmt.format(new Date(nowTick));
+    } catch { todayLocal = ""; }
+    const sorted = [...scheduledDates].sort();
+    const todayInList = sorted.includes(todayLocal);
+    const firstDate = sorted[0] ?? null;
+    const nextDate = sorted.find((d) => d > todayLocal) ?? null;
+    return { todayInList, firstDate, nextDate, todayLocal };
+  }, [scheduleMode, scheduledDates, recipientTz, nowTick]);
+
+  // Feasibility: today's effective load vs the remaining window in recipient TZ.
   const feasibility = useMemo(() => {
     if (!pacing || !recipientNow) return null;
     const [nh, nm] = recipientNow.split(":").map(Number);
@@ -416,7 +444,6 @@ export default function LaunchWizard() {
     const nowSec = nh * 3600 + nm * 60;
     const endSec = eh * 3600 + em * 60;
     const startSec = sh * 3600 + sm * 60;
-    // If we're before the window, today's full window is available; if inside, only what's left; if past, 0.
     const remainingSec = nowSec < startSec
       ? pacing.windowSec
       : nowSec >= endSec ? 0 : Math.max(0, endSec - nowSec);
@@ -424,11 +451,13 @@ export default function LaunchWizard() {
       ? Math.max(1, (delayMin + delayMax) / 2)
       : Math.max(1, pacing.avgGapSec);
     const perNumberFits = Math.floor(remainingSec / gapSec);
-    const fitsToday = Math.min(recipients.length, perNumberFits * Math.max(1, activeNumbers.length));
-    const totalQueued = recipients.length;
-    const overflow = Math.max(0, totalQueued - fitsToday);
-    return { remainingSec, fitsToday, overflow, totalQueued, gapSec };
-  }, [pacing, recipientNow, scheduleMode, windowEnd, windowStart, activeNumbers.length, recipients.length, delayMin, delayMax]);
+    const todayQueued = scheduleMode === "scheduled"
+      ? (todayInfo.todayInList ? dayPlan.effectivePerDay : 0)
+      : recipients.length;
+    const fitsToday = Math.min(todayQueued, perNumberFits * dayPlan.numbers);
+    const overflow = Math.max(0, todayQueued - fitsToday);
+    return { remainingSec, fitsToday, overflow, totalQueued: todayQueued, gapSec };
+  }, [pacing, recipientNow, scheduleMode, windowEnd, windowStart, dayPlan, recipients.length, delayMin, delayMax, todayInfo]);
 
 
 
