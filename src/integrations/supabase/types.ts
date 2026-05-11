@@ -461,6 +461,7 @@ export type Database = {
           failed_count: number
           id: string
           kind: string
+          last_day_completed_date: string | null
           name: string
           parent_campaign_id: string | null
           per_number_quota: number
@@ -489,6 +490,7 @@ export type Database = {
           failed_count?: number
           id?: string
           kind?: string
+          last_day_completed_date?: string | null
           name: string
           parent_campaign_id?: string | null
           per_number_quota?: number
@@ -517,6 +519,7 @@ export type Database = {
           failed_count?: number
           id?: string
           kind?: string
+          last_day_completed_date?: string | null
           name?: string
           parent_campaign_id?: string | null
           per_number_quota?: number
