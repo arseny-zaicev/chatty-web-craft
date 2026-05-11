@@ -667,7 +667,7 @@ function FleetTable({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPat
   );
 }
 
-function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch }: { rows: Row[]; workspaces: WS[] } & RowActions) {
+function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId }: { rows: Row[]; workspaces: WS[] } & RowActions) {
   const groups = useMemo(() => {
     const map = new Map<string, { ws: WS | null; rows: Row[] }>();
     for (const r of rows) {
