@@ -299,6 +299,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     active_campaign_sent: 0,
     active_campaign_total: 0,
     active_campaign_kind: null,
+    is_sending_now: false,
     health,
     templates_approved: (templates ?? []).length,
     recent_launches,
