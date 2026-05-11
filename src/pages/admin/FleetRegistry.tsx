@@ -467,7 +467,7 @@ export default function FleetRegistry() {
           <span className="text-xs text-muted-foreground">{filtered.length} of {rows.length}</span>
           {unassignedCount > 0 && view !== "unassigned" && (
             <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-500/30">
-              {unassignedCount} unassigned
+              {unassignedCount} unassigned ready
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -505,7 +505,7 @@ export default function FleetRegistry() {
           <OverviewTile label="Allocated" hint="idle on a client" value={overview.allocated} tone="slate" active={fStatus === "allocated"} onClick={() => setFStatus(fStatus === "allocated" ? "all" : "allocated")} />
           <OverviewTile label="Active" hint="running campaign" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
           <OverviewTile label="Warming" hint="heating up" value={overview.warming} tone="amber" active={fStatus === "warming"} onClick={() => setFStatus(fStatus === "warming" ? "all" : "warming")} />
-          <OverviewTile label="Stock" hint="unassigned" value={overview.stock} tone="slate" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
+          <OverviewTile label="Unassigned ready" hint="can allocate" value={overview.stock} tone="emerald" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
           <OverviewTile label="Restricted" hint="30-day block" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
           <OverviewTile label="Banned" hint="permanent" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
         </div>
@@ -532,12 +532,12 @@ export default function FleetRegistry() {
           <ViewTab active={view === "all"} onClick={() => setView("all")} icon={<Layers className="w-3.5 h-3.5" />}>All numbers</ViewTab>
           <ViewTab active={view === "by-client"} onClick={() => setView("by-client")} icon={<Building2 className="w-3.5 h-3.5" />}>Group by client</ViewTab>
           <ViewTab active={view === "unassigned"} onClick={() => setView("unassigned")} icon={<InboxIcon className="w-3.5 h-3.5" />}>
-            Unassigned{unassignedCount > 0 ? ` · ${unassignedCount}` : ""}
+            Unassigned ready{unassignedCount > 0 ? ` · ${unassignedCount}` : ""}
           </ViewTab>
 
           <div className="w-px h-6 bg-border mx-1" />
 
-          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ...STATUS_OPTIONS]} />
+          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All sections" options={SECTION_FILTER_OPTIONS} />
           <FilterSelect value={fUsage} onChange={setFUsage} placeholder="All use cases" options={[["all", "All use cases"], ["marketing", "marketing"], ["utility", "utility"], ["both", "both"]]} />
         </div>
 
