@@ -219,7 +219,7 @@ async function handleWebhook(req: Request): Promise<Response> {
   }
 
   // Build template props from payload.data (HookData structure)
-  const templateProps = {
+  const templateProps: Record<string, unknown> = {
     siteName: SITE_NAME,
     siteUrl: `https://${ROOT_DOMAIN}`,
     recipient: payload.data.email,
@@ -228,6 +228,35 @@ async function handleWebhook(req: Request): Promise<Response> {
     email: payload.data.email,
     oldEmail: payload.data.old_email,
     newEmail: payload.data.new_email,
+  }
+
+  // Co-branding for invite emails: extract workspace slug from redirect_to and look up its brand
+  if (emailType === 'invite' && payload.data.url) {
+    try {
+      const u = new URL(payload.data.url)
+      const redirect = u.searchParams.get('redirect_to')
+      if (redirect) {
+        const ru = new URL(redirect)
+        const slug = ru.searchParams.get('ws')
+        if (slug) {
+          const sb = createClient(
+            Deno.env.get('SUPABASE_URL')!,
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          )
+          const { data: wsRow } = await sb
+            .from('workspaces')
+            .select('name, logo_url')
+            .eq('slug', slug)
+            .maybeSingle()
+          if (wsRow?.name) {
+            templateProps.partnerName = wsRow.name
+            templateProps.partnerLogoUrl = wsRow.logo_url ?? undefined
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Co-brand lookup failed', e)
+    }
   }
 
   // Render React Email to HTML and plain text
