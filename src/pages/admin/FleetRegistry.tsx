@@ -646,8 +646,12 @@ const ViewTab = ({ active, onClick, icon, children }: { active: boolean; onClick
   <Button variant={active ? "default" : "outline"} size="sm" onClick={onClick} className="gap-1.5">{icon}{children}</Button>
 );
 
-const OverviewTile = ({ label, value, tone, active, onClick }: { label: string; value: number; tone: "emerald" | "amber" | "red"; active: boolean; onClick: () => void }) => {
-  const toneCls = tone === "emerald" ? "text-emerald-700 border-emerald-500/30" : tone === "amber" ? "text-amber-700 border-amber-500/30" : "text-red-700 border-red-500/30";
+const OverviewTile = ({ label, hint, value, tone, active, onClick }: { label: string; hint?: string; value: number; tone: "emerald" | "amber" | "red" | "slate"; active: boolean; onClick: () => void }) => {
+  const toneCls =
+    tone === "emerald" ? "text-emerald-700 border-emerald-500/30"
+    : tone === "amber" ? "text-amber-700 border-amber-500/30"
+    : tone === "red" ? "text-red-700 border-red-500/30"
+    : "text-foreground border-border";
   return (
     <button
       type="button"
@@ -655,7 +659,8 @@ const OverviewTile = ({ label, value, tone, active, onClick }: { label: string; 
       className={`text-left rounded-lg border bg-card/40 px-3 py-2 hover:bg-card transition ${active ? "ring-2 ring-primary/40" : ""} ${toneCls}`}
     >
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="text-2xl font-semibold tabular-nums leading-tight">{value}</div>
+      {hint && <div className="text-[10px] text-muted-foreground mt-0.5">{hint}</div>}
     </button>
   );
 };
