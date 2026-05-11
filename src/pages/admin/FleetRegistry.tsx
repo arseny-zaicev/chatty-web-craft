@@ -331,7 +331,7 @@ export default function FleetRegistry() {
     if (isReadyUnassignedNumber(r)) return "stock";
     if (r.workspace_id === null) return "other";
     if (!r.is_active) return "other";
-    if ((r.active_campaigns?.length ?? 0) > 0) return "active";
+    if (r.is_sending_now) return "active";
     if (r.status === "active" || r.status === "ready") return "allocated";
     return "other";
   };
