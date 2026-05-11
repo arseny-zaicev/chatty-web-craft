@@ -68,6 +68,21 @@ function buildFirstReplyBlocks(ws: any, p: any) {
   return { text: `💬 New reply from ${name} · ${wsTag}`, blocks };
 }
 
+// Cross-event dedupe: did we already send a Slack notification of this event_type
+// for this conversation in the last 60 minutes? Used to suppress duplicate
+// pipeline-channel pings when both positive_lead and lead.first_reply fire
+// for the same reply.
+async function alreadyNotified(supabase: any, eventType: string, conversationId: string): Promise<boolean> {
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { count } = await supabase
+    .from("slack_event_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("event_type", eventType)
+    .eq("status", "sent")
+    .gte("processed_at", since)
+    .filter("payload->>conversation_id", "eq", conversationId);
+  return (count ?? 0) > 0;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
