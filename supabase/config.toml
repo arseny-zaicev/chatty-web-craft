@@ -39,4 +39,6 @@ project_id = "xglfamaaotmwulglwcui"
     verify_jwt = false
   [functions.health-watchdog]
     verify_jwt = false
+  [functions.numbers-health-digest]
+    verify_jwt = false
 
