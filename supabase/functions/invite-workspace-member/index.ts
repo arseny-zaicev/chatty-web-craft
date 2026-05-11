@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       invitedUserId = existing.id;
     } else {
       const APP_BASE_URL = Deno.env.get("APP_BASE_URL") || "https://iskra.ae";
-      const redirectTo = `${APP_BASE_URL.replace(/\/$/, "")}/accept-invite`;
+      const redirectTo = `${APP_BASE_URL.replace(/\/$/, "")}/accept-invite?ws=${encodeURIComponent(ws.slug ?? "")}`;
       const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
         redirectTo,
       });
