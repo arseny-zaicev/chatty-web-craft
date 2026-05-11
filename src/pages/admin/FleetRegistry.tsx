@@ -414,25 +414,122 @@ export default function FleetRegistry() {
           <FilterSelect value={fUsage} onChange={setFUsage} placeholder="All use cases" options={[["all", "All use cases"], ["marketing", "marketing"], ["utility", "utility"], ["both", "both"]]} />
         </div>
 
-        {view === "by-client" ? (
-          <GroupedByClient rows={filtered} workspaces={workspaces}
-            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
-            onEdit={setEditing}
-            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
-            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
-        ) : (
-          <FleetTable rows={filtered} workspaces={workspaces}
-            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
-            onEdit={setEditing}
-            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
-            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
-        )}
+        {(() => {
+          const handleReassign = (id: string, wid: string | null) => {
+            const row = rows.find((r) => r.id === id);
+            if (!row) return;
+            if (row.workspace_id === wid) return;
+            if (row.active_campaigns.length > 0) {
+              setPendingDanger({ kind: "reassign", row, targetWs: wid });
+              return;
+            }
+            reassign.mutate({ id, workspaceId: wid });
+          };
+          const handleDelete = (id: string) => {
+            const row = rows.find((r) => r.id === id);
+            if (!row) return;
+            if (row.active_campaigns.length > 0) {
+              setPendingDanger({ kind: "delete", row });
+              return;
+            }
+            if (confirm("Delete this number from Fleet?")) remove.mutate(id);
+          };
+          const common = {
+            workspaces,
+            onReassign: handleReassign,
+            onEdit: setEditing,
+            onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => quickPatch.mutate({ row, patch }),
+            onDelete: handleDelete,
+          };
+          return view === "by-client"
+            ? <GroupedByClient rows={filtered} {...common} />
+            : <FleetTable rows={filtered} {...common} />;
+        })()}
       </main>
+
+      <DangerConfirmDialog
+        pending={pendingDanger}
+        workspaces={workspaces}
+        onCancel={() => setPendingDanger(null)}
+        onConfirm={() => {
+          if (!pendingDanger) return;
+          if (pendingDanger.kind === "delete") {
+            remove.mutate(pendingDanger.row.id);
+          } else {
+            reassign.mutate({ id: pendingDanger.row.id, workspaceId: pendingDanger.targetWs });
+          }
+          setPendingDanger(null);
+        }}
+      />
 
       <AddNumberDrawer open={adderOpen || !!editing} onOpenChange={(v) => { if (!v) { setAdderOpen(false); setEditing(null); } else setAdderOpen(true); }} workspaces={workspaces}
         editing={editing}
         onCreated={async () => { await qc.invalidateQueries({ queryKey: ["fleet-registry"] }); }} />
     </div>
+  );
+}
+
+function DangerConfirmDialog({
+  pending, workspaces, onCancel, onConfirm,
+}: {
+  pending:
+    | { kind: "delete"; row: Row }
+    | { kind: "reassign"; row: Row; targetWs: string | null }
+    | null;
+  workspaces: WS[];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const open = !!pending;
+  const row = pending?.row ?? null;
+  const targetName = pending?.kind === "reassign"
+    ? (pending.targetWs ? (workspaces.find((w) => w.id === pending.targetWs)?.name ?? "another client") : "Unassigned")
+    : null;
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-red-700">
+            {pending?.kind === "delete" ? "Delete number with active campaigns?" : "Reassign number with active campaigns?"}
+          </DialogTitle>
+          <DialogDescription>
+            {row && (
+              <>
+                <span className="font-mono">+{row.phone_number}</span>
+                {pending?.kind === "reassign" && <> will move from <b>{row.workspace_name}</b> to <b>{targetName}</b>.</>}
+                {pending?.kind === "delete" && <> will be permanently removed from Fleet.</>}
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">Active campaigns currently bound to this number:</div>
+          <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
+            {row?.active_campaigns.map((c) => {
+              const ws = workspaces.find((w) => w.id === c.workspace_id);
+              return (
+                <li key={c.id} className="flex items-center justify-between border border-border/60 rounded-md px-2 py-1.5">
+                  <span className="truncate">{c.name}</span>
+                  <span className="flex items-center gap-2 text-xs">
+                    <Badge variant="outline" className="text-[10px]">{c.status}</Badge>
+                    <span className="text-muted-foreground">{ws?.name ?? "unknown ws"}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-xs text-amber-700 mt-2">
+            Proceeding will likely break these campaigns - the system won't be able to send through this number from its current workspace. Pause or cancel them first if possible.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            {pending?.kind === "delete" ? "Delete anyway" : "Reassign anyway"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
