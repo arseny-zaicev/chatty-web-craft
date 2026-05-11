@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 import { splitBase, groupCampaigns, type CampaignRow, type CampaignGroup } from "@/lib/campaigns";
+import { CampaignReportPanel } from "@/components/workspace/CampaignReportPanel";
 
 const statusTone: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
@@ -244,6 +245,12 @@ function CampaignDetail({
           </table>
         </div>
       )}
+
+      <CampaignReportPanel
+        campaignIds={campaignIds}
+        primaryCampaignId={campaignIds[0]}
+        campaignName={group.displayName}
+      />
     </div>
   );
 }

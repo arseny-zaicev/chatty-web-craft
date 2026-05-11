@@ -339,6 +339,36 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_insights: {
+        Row: {
+          campaign_id: string
+          generated_at: string
+          generated_by: string | null
+          metrics: Json
+          model: string | null
+          summary_md: string | null
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          generated_at?: string
+          generated_by?: string | null
+          metrics?: Json
+          model?: string | null
+          summary_md?: string | null
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          generated_at?: string
+          generated_by?: string | null
+          metrics?: Json
+          model?: string | null
+          summary_md?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       campaign_number_allocations: {
         Row: {
           allocated_count: number
@@ -639,6 +669,54 @@ export type Database = {
           sheet_name?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      conversation_insights: {
+        Row: {
+          conversation_id: string
+          first_reply_at: string | null
+          first_reply_text: string | null
+          model: string | null
+          raw: Json
+          reply_intent: string | null
+          reply_sentiment: string | null
+          summary: string | null
+          tagged_at: string
+          tagged_by: string
+          tagged_by_user_id: string | null
+          time_to_first_reply_seconds: number | null
+          workspace_id: string
+        }
+        Insert: {
+          conversation_id: string
+          first_reply_at?: string | null
+          first_reply_text?: string | null
+          model?: string | null
+          raw?: Json
+          reply_intent?: string | null
+          reply_sentiment?: string | null
+          summary?: string | null
+          tagged_at?: string
+          tagged_by?: string
+          tagged_by_user_id?: string | null
+          time_to_first_reply_seconds?: number | null
+          workspace_id: string
+        }
+        Update: {
+          conversation_id?: string
+          first_reply_at?: string | null
+          first_reply_text?: string | null
+          model?: string | null
+          raw?: Json
+          reply_intent?: string | null
+          reply_sentiment?: string | null
+          summary?: string | null
+          tagged_at?: string
+          tagged_by?: string
+          tagged_by_user_id?: string | null
+          time_to_first_reply_seconds?: number | null
+          workspace_id?: string
         }
         Relationships: []
       }
@@ -2319,6 +2397,54 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_report_rows: {
+        Row: {
+          campaign_id: string | null
+          campaign_name: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          conversation_id: string | null
+          delivery_status: string | null
+          error_message: string | null
+          first_reply_at: string | null
+          first_reply_text: string | null
+          last_message_at: string | null
+          lead_payload: Json | null
+          pipeline_id: string | null
+          provider_message_id: string | null
+          recipient_id: string | null
+          replied: boolean | null
+          reply_intent: string | null
+          reply_sentiment: string | null
+          scheduled_at: string | null
+          sent_at: string | null
+          template_body: string | null
+          template_id: string | null
+          template_name: string | null
+          time_to_first_reply_seconds: number | null
+          unread_count: number | null
+          whatsapp_number: string | null
+          whatsapp_number_id: string | null
+          whatsapp_number_label: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_recipients_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_number_usage_summary: {
         Row: {
           active_campaign_count: number | null
@@ -2356,6 +2482,45 @@ export type Database = {
         Returns: string
       }
       ensure_pipeline_stage: { Args: { _user_id: string }; Returns: string }
+      get_campaign_report: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          campaign_id: string | null
+          campaign_name: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          conversation_id: string | null
+          delivery_status: string | null
+          error_message: string | null
+          first_reply_at: string | null
+          first_reply_text: string | null
+          last_message_at: string | null
+          lead_payload: Json | null
+          pipeline_id: string | null
+          provider_message_id: string | null
+          recipient_id: string | null
+          replied: boolean | null
+          reply_intent: string | null
+          reply_sentiment: string | null
+          scheduled_at: string | null
+          sent_at: string | null
+          template_body: string | null
+          template_id: string | null
+          template_name: string | null
+          time_to_first_reply_seconds: number | null
+          unread_count: number | null
+          whatsapp_number: string | null
+          whatsapp_number_id: string | null
+          whatsapp_number_label: string | null
+          workspace_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "campaign_report_rows"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_workspace_member_display: {
         Args: { _workspace_id: string }
         Returns: {

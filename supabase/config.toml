@@ -41,4 +41,10 @@ project_id = "xglfamaaotmwulglwcui"
     verify_jwt = false
   [functions.numbers-health-digest]
     verify_jwt = false
+  [functions.classify-replies]
+    verify_jwt = false
+  [functions.campaign-report-export]
+    verify_jwt = false
+  [functions.campaign-insights]
+    verify_jwt = false
 

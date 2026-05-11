@@ -1,0 +1,1 @@
+ALTER VIEW public.campaign_report_rows SET (security_invoker = on);
