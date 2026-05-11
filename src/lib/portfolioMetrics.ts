@@ -90,6 +90,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
         active_campaign_sent: 0,
         active_campaign_total: 0,
         active_campaign_kind: null,
+        is_sending_now: false,
         health: "idle",
       };
     }
