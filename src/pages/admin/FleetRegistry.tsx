@@ -78,6 +78,28 @@ const BAN_DURATION_DAYS = 30;
 
 type WS = { id: string; name: string; slug: string };
 
+const isBlockedNumber = (r: Row) => r.status === "restricted" || r.status === "banned";
+const isReadyUnassignedNumber = (r: Row) => (
+  r.workspace_id === null
+  && !isBlockedNumber(r)
+  && r.is_active
+  && (r.status === "active" || r.status === "ready")
+  && Boolean(r.provider_app_id && r.provider_api_key && r.webhook_connected && r.templates_approved > 0)
+);
+
+const SECTION_FILTER_OPTIONS: Array<[string, string]> = [
+  ["all", "All sections"],
+  ["allocated", "Allocated"],
+  ["active", "Active campaign"],
+  ["warming", "Warming"],
+  ["stock", "Unassigned ready"],
+  ["restricted", "Restricted"],
+  ["banned", "Banned"],
+];
+
+const EMPTY_ROWS: Row[] = [];
+const EMPTY_WORKSPACES: WS[] = [];
+
 const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
   const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: templates }, { data: lastEvents }, { data: recipients }, { data: campaignsData }, { data: convs }, { data: outMsgs }] =
     await Promise.all([
@@ -290,8 +312,8 @@ export default function FleetRegistry() {
     queryFn: fetchFleet,
     enabled: authChecked,
   });
-  const rows = data?.rows ?? [];
-  const workspaces = data?.workspaces ?? [];
+  const rows = data?.rows ?? EMPTY_ROWS;
+  const workspaces = data?.workspaces ?? EMPTY_WORKSPACES;
 
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewMode>("all");
@@ -303,7 +325,8 @@ export default function FleetRegistry() {
     if (r.status === "banned") return "banned";
     if (r.status === "restricted") return "restricted";
     if (r.status === "warming") return "warming";
-    if (r.workspace_id === null) return "stock";
+    if (isReadyUnassignedNumber(r)) return "stock";
+    if (r.workspace_id === null) return "other";
     if (!r.is_active) return "other";
     if ((r.active_campaigns?.length ?? 0) > 0) return "active";
     if (r.status === "active" || r.status === "ready") return "allocated";
@@ -313,8 +336,8 @@ export default function FleetRegistry() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((r) => {
-      // "Unassigned" view = real Stock only (exclude banned/restricted - they're not usable)
-      if (view === "unassigned" && bucketOf(r) !== "stock") return false;
+      // "Unassigned" means launch-ready numbers with no client. Blocked/restricted and setup stock stay out.
+      if (view === "unassigned" && !isReadyUnassignedNumber(r)) return false;
       if (fStatus !== "all") {
         if (fStatus === "sync_failed") {
           if (!r.last_health_sync_error) return false;
@@ -436,7 +459,7 @@ export default function FleetRegistry() {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const unassignedCount = rows.filter((r) => r.workspace_id === null).length;
+  const unassignedCount = rows.filter(isReadyUnassignedNumber).length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -447,7 +470,7 @@ export default function FleetRegistry() {
           <span className="text-xs text-muted-foreground">{filtered.length} of {rows.length}</span>
           {unassignedCount > 0 && view !== "unassigned" && (
             <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-500/30">
-              {unassignedCount} unassigned
+              {unassignedCount} unassigned ready
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -485,7 +508,7 @@ export default function FleetRegistry() {
           <OverviewTile label="Allocated" hint="idle on a client" value={overview.allocated} tone="slate" active={fStatus === "allocated"} onClick={() => setFStatus(fStatus === "allocated" ? "all" : "allocated")} />
           <OverviewTile label="Active" hint="running campaign" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
           <OverviewTile label="Warming" hint="heating up" value={overview.warming} tone="amber" active={fStatus === "warming"} onClick={() => setFStatus(fStatus === "warming" ? "all" : "warming")} />
-          <OverviewTile label="Stock" hint="unassigned" value={overview.stock} tone="slate" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
+          <OverviewTile label="Unassigned ready" hint="can allocate" value={overview.stock} tone="emerald" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
           <OverviewTile label="Restricted" hint="30-day block" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
           <OverviewTile label="Banned" hint="permanent" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
         </div>
@@ -512,12 +535,12 @@ export default function FleetRegistry() {
           <ViewTab active={view === "all"} onClick={() => setView("all")} icon={<Layers className="w-3.5 h-3.5" />}>All numbers</ViewTab>
           <ViewTab active={view === "by-client"} onClick={() => setView("by-client")} icon={<Building2 className="w-3.5 h-3.5" />}>Group by client</ViewTab>
           <ViewTab active={view === "unassigned"} onClick={() => setView("unassigned")} icon={<InboxIcon className="w-3.5 h-3.5" />}>
-            Unassigned{unassignedCount > 0 ? ` · ${unassignedCount}` : ""}
+            Unassigned ready{unassignedCount > 0 ? ` · ${unassignedCount}` : ""}
           </ViewTab>
 
           <div className="w-px h-6 bg-border mx-1" />
 
-          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All statuses" options={[["all", "All statuses"], ...STATUS_OPTIONS]} />
+          <FilterSelect value={fStatus} onChange={setFStatus} placeholder="All sections" options={SECTION_FILTER_OPTIONS} />
           <FilterSelect value={fUsage} onChange={setFUsage} placeholder="All use cases" options={[["all", "All use cases"], ["marketing", "marketing"], ["utility", "utility"], ["both", "both"]]} />
         </div>
 
@@ -735,8 +758,8 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQui
             ) : (
               <>
                 <InboxIcon className="w-3.5 h-3.5 text-amber-600" />
-                <span className="font-medium text-amber-700">Unassigned</span>
-                <span className="text-xs text-muted-foreground">- not yet allocated to any client</span>
+                <span className="font-medium text-amber-700">Unassigned setup stock</span>
+                <span className="text-xs text-muted-foreground">- not client-allocated, not counted as launch-ready</span>
               </>
             )}
             <span className="ml-auto text-xs text-muted-foreground">{g.rows.length} number{g.rows.length === 1 ? "" : "s"}</span>
