@@ -298,11 +298,29 @@ export default function FleetRegistry() {
   const [fStatus, setFStatus] = useState<string>("all");
   const [fUsage, setFUsage] = useState<string>("all");
 
+  // Lifecycle bucket - single source of truth used by overview tiles + filter
+  const bucketOf = (r: Row): "allocated" | "active" | "warming" | "stock" | "restricted" | "banned" | "other" => {
+    if (r.status === "banned") return "banned";
+    if (r.status === "restricted") return "restricted";
+    if (r.status === "warming") return "warming";
+    if (r.workspace_id === null) return "stock";
+    if (!r.is_active) return "other";
+    if ((r.active_campaigns?.length ?? 0) > 0) return "active";
+    if (r.status === "active" || r.status === "ready") return "allocated";
+    return "other";
+  };
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (view === "unassigned" && r.workspace_id !== null) return false;
-      if (fStatus !== "all" && r.status !== fStatus) return false;
+      if (fStatus !== "all") {
+        if (fStatus === "sync_failed") {
+          if (!r.last_health_sync_error) return false;
+        } else if (bucketOf(r) !== fStatus) {
+          return false;
+        }
+      }
       if (fUsage !== "all" && r.usage_type !== fUsage) return false;
       if (term) {
         const hay = `${r.phone_number} ${r.display_name ?? ""} ${r.label ?? ""} ${r.workspace_name} ${r.notes ?? ""}`.toLowerCase();
@@ -313,13 +331,11 @@ export default function FleetRegistry() {
   }, [rows, q, view, fStatus, fUsage]);
 
   const overview = useMemo(() => {
-    const o = { active: 0, restricted: 0, banned: 0, unreachable: 0 };
+    const o = { allocated: 0, active: 0, warming: 0, stock: 0, restricted: 0, banned: 0, sync_failed: 0 };
     for (const r of rows) {
-      if (!r.is_active) continue;
-      if (r.status === "active" || r.status === "ready") o.active++;
-      else if (r.status === "restricted") o.restricted++;
-      else if (r.status === "banned") o.banned++;
-      if (r.last_health_sync_error) o.unreachable++;
+      const b = bucketOf(r);
+      if (b !== "other") o[b]++;
+      if (r.last_health_sync_error) o.sync_failed++;
     }
     return o;
   }, [rows]);
@@ -448,17 +464,29 @@ export default function FleetRegistry() {
               {healthCheck.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Activity className="w-4 h-4 mr-1" />}
               Run health check
             </Button>
+            {overview.sync_failed > 0 && (
+              <button
+                type="button"
+                onClick={() => setFStatus(fStatus === "sync_failed" ? "all" : "sync_failed")}
+                title="Numbers whose last health sync failed - click to filter"
+                className={`text-[11px] px-2 py-1 rounded border border-red-500/30 text-red-700 bg-red-500/10 hover:bg-red-500/15 ${fStatus === "sync_failed" ? "ring-2 ring-red-500/40" : ""}`}
+              >
+                ⚠ Sync failed: {overview.sync_failed}
+              </button>
+            )}
             <Button size="sm" onClick={() => setAdderOpen(true)}><Plus className="w-4 h-4 mr-1" />Add number</Button>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <OverviewTile label="Active" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
-          <OverviewTile label="Restricted" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
-          <OverviewTile label="Banned" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
-          <OverviewTile label="Sync failed" value={overview.unreachable} tone="red" active={false} onClick={() => {}} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <OverviewTile label="Allocated" hint="idle on a client" value={overview.allocated} tone="slate" active={fStatus === "allocated"} onClick={() => setFStatus(fStatus === "allocated" ? "all" : "allocated")} />
+          <OverviewTile label="Active" hint="running campaign" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
+          <OverviewTile label="Warming" hint="heating up" value={overview.warming} tone="amber" active={fStatus === "warming"} onClick={() => setFStatus(fStatus === "warming" ? "all" : "warming")} />
+          <OverviewTile label="Stock" hint="unassigned" value={overview.stock} tone="slate" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
+          <OverviewTile label="Restricted" hint="30-day block" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
+          <OverviewTile label="Banned" hint="permanent" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
         </div>
 
         {healthSummary && (
@@ -618,8 +646,12 @@ const ViewTab = ({ active, onClick, icon, children }: { active: boolean; onClick
   <Button variant={active ? "default" : "outline"} size="sm" onClick={onClick} className="gap-1.5">{icon}{children}</Button>
 );
 
-const OverviewTile = ({ label, value, tone, active, onClick }: { label: string; value: number; tone: "emerald" | "amber" | "red"; active: boolean; onClick: () => void }) => {
-  const toneCls = tone === "emerald" ? "text-emerald-700 border-emerald-500/30" : tone === "amber" ? "text-amber-700 border-amber-500/30" : "text-red-700 border-red-500/30";
+const OverviewTile = ({ label, hint, value, tone, active, onClick }: { label: string; hint?: string; value: number; tone: "emerald" | "amber" | "red" | "slate"; active: boolean; onClick: () => void }) => {
+  const toneCls =
+    tone === "emerald" ? "text-emerald-700 border-emerald-500/30"
+    : tone === "amber" ? "text-amber-700 border-amber-500/30"
+    : tone === "red" ? "text-red-700 border-red-500/30"
+    : "text-foreground border-border";
   return (
     <button
       type="button"
@@ -627,7 +659,8 @@ const OverviewTile = ({ label, value, tone, active, onClick }: { label: string; 
       className={`text-left rounded-lg border bg-card/40 px-3 py-2 hover:bg-card transition ${active ? "ring-2 ring-primary/40" : ""} ${toneCls}`}
     >
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="text-2xl font-semibold tabular-nums leading-tight">{value}</div>
+      {hint && <div className="text-[10px] text-muted-foreground mt-0.5">{hint}</div>}
     </button>
   );
 };
