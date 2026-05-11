@@ -75,8 +75,6 @@ Deno.serve(async (req) => {
       batch_id,
       workspace_id: batch.workspace_id,
       phone: r.phone,
-      full_name: r.full_name ?? null,
-      country_code: r.country_code ?? null,
       payload: r.payload ?? {},
       validation_status: r.validation_status ?? "valid",
       usage_status: "unused",
