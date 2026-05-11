@@ -593,7 +593,21 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
   return (
     <TableRow className="h-12 [&>td]:align-middle [&>td]:whitespace-nowrap [&>td]:py-0 [&>td]:h-12 [&>td]:leading-none">
-      <TableCell className="font-mono text-xs whitespace-nowrap">+{r.phone_number}</TableCell>
+      <TableCell className="font-mono text-xs whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <span>+{r.phone_number}</span>
+          {r.active_campaigns.length > 0 && (
+            <Badge variant="outline" className="text-[9px] bg-red-500/15 text-red-700 border-red-500/30" title={r.active_campaigns.map((c) => `${c.name} (${c.status})`).join("\n")}>
+              in use · {r.active_campaigns.length}
+            </Badge>
+          )}
+          {r.active_campaigns.length === 0 && r.last_used_at && (Date.now() - new Date(r.last_used_at).getTime()) < 30 * 86400000 && (
+            <Badge variant="outline" className="text-[9px] bg-amber-500/15 text-amber-700 border-amber-500/30" title={`Last used ${formatDistanceToNow(new Date(r.last_used_at), { addSuffix: true })}`}>
+              recent
+            </Badge>
+          )}
+        </div>
+      </TableCell>
       <TableCell className="text-xs">{r.label ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">
         <div className="flex items-center gap-2">
