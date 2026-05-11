@@ -10,10 +10,9 @@ interface Props {
   siteUrl: string
   confirmationUrl: string
   partnerName?: string
-  partnerLogoUrl?: string
 }
 
-export const InviteEmail = ({ siteUrl, confirmationUrl, partnerName, partnerLogoUrl }: Props) => {
+export const InviteEmail = ({ siteUrl, confirmationUrl, partnerName }: Props) => {
   const hasPartner = !!partnerName
   return (
     <Html lang="en" dir="ltr">
@@ -34,11 +33,7 @@ export const InviteEmail = ({ siteUrl, confirmationUrl, partnerName, partnerLogo
                     <>
                       <td style={{ verticalAlign: 'middle', padding: '0 12px', color: BRAND.colors.muted, fontSize: 22, fontWeight: 300 }}>×</td>
                       <td style={{ verticalAlign: 'middle' }}>
-                        {partnerLogoUrl ? (
-                          <Img src={partnerLogoUrl} alt={partnerName!} height={BRAND.logoHeight} style={{ display: 'block', maxHeight: BRAND.logoHeight, width: 'auto' }} />
-                        ) : (
-                          <Text style={{ margin: 0, fontSize: 20, fontWeight: 600, color: BRAND.colors.ink, letterSpacing: '-0.01em' }}>{partnerName}</Text>
-                        )}
+                        <Text style={{ margin: 0, fontSize: 20, fontWeight: 600, color: BRAND.colors.ink, letterSpacing: '0' }}>{partnerName}</Text>
                       </td>
                     </>
                   )}
