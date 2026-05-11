@@ -232,6 +232,8 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       display_name_status: ((n.display_name_status as DnStatus) ?? "pending"),
       display_name_checked_at: (n.display_name_checked_at as string) ?? null,
       active_campaigns: activeByNumber.get(n.id as string) ?? [],
+      pending_recipients: pendingByNumber.get(n.id as string) ?? 0,
+      is_sending_now: (activeByNumber.get(n.id as string) ?? []).some((c) => c.status === "running") && (pendingByNumber.get(n.id as string) ?? 0) > 0,
       last_used_at: usageMap.get(n.id as string)?.last_used_at ?? null,
       last_used_workspace_id: usageMap.get(n.id as string)?.last_workspace_id ?? null,
       quality_rating: (n.quality_rating as string) ?? null,
