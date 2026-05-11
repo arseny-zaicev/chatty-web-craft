@@ -68,6 +68,21 @@ function buildFirstReplyBlocks(ws: any, p: any) {
   return { text: `💬 New reply from ${name} · ${wsTag}`, blocks };
 }
 
+// Cross-event dedupe: did we already send a Slack notification of this event_type
+// for this conversation in the last 60 minutes? Used to suppress duplicate
+// pipeline-channel pings when both positive_lead and lead.first_reply fire
+// for the same reply.
+async function alreadyNotified(supabase: any, eventType: string, conversationId: string): Promise<boolean> {
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { count } = await supabase
+    .from("slack_event_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("event_type", eventType)
+    .eq("status", "sent")
+    .gte("processed_at", since)
+    .filter("payload->>conversation_id", "eq", conversationId);
+  return (count ?? 0) > 0;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -201,6 +216,13 @@ Deno.serve(async (req) => {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
+        // Cross-event dedupe: if a lead.first_reply already posted for this
+        // conversation in the last hour, the operator already saw the reply -
+        // skip the positive_lead to avoid double-pinging the pipeline channel.
+        if (p?.conversation_id && (await alreadyNotified(supabase, "lead.first_reply", p.conversation_id))) {
+          await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString(), error: "deduped vs lead.first_reply" }).eq("id", ev.id);
+          continue;
+        }
         const msg = buildPositiveLeadBlocks({ ws, payload: p });
         await postSlack(pipelineChannel, msg);
       } else if (ev.event_type === "inbox_unread_spike") {
@@ -219,7 +241,13 @@ Deno.serve(async (req) => {
           continue;
         }
         const msg = buildFirstReplyBlocks(ws, p);
-        await postSlack(pipelineChannel, msg);
+        // Cross-event dedupe: if positive_lead already posted for this
+        // conversation, skip the pipeline post but still mirror to delivery-leads
+        // (positive_lead does NOT mirror, so ops still needs the signal).
+        const dupedByPositive = p?.conversation_id && (await alreadyNotified(supabase, "positive_lead", p.conversation_id));
+        if (!dupedByPositive) {
+          await postSlack(pipelineChannel, msg);
+        }
         const ISKRA_INTERNAL = "delivery-leads";
         if (pipelineChannel !== ISKRA_INTERNAL) {
           try { await postSlack(ISKRA_INTERNAL, msg); } catch (e) { console.warn("mirror first_reply failed", e); }

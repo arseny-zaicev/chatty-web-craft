@@ -400,16 +400,21 @@ Deno.serve(async (req) => {
     }).then(() => {}, () => {});
 
     // Stuck queued recovery: any lead in `queued` >10m without sent_at goes back
-    // to `pending` so the next tick can re-attempt. Orphan recipient is marked failed.
+    // to `pending` so the next tick can re-attempt. We only recover leads whose
+    // linked recipient is ALSO stuck (status='scheduled') - skip recipients in
+    // 'sending' (currently being processed) or 'sent' (mirror trigger may not
+    // have fired yet) to avoid double-sends and false-failures.
     const stuckCutoff = new Date(Date.now() - 10 * 60_000).toISOString();
-    const { data: stuck } = await admin
+    const { data: stuckRaw } = await admin
       .from("lead_imports")
-      .select("id, campaign_recipient_id")
+      .select("id, campaign_recipient_id, campaign_recipients!inner(id, status)")
       .eq("status", "queued")
       .is("sent_at", null)
       .lt("scheduled_at", stuckCutoff)
+      .eq("campaign_recipients.status", "scheduled")
       .limit(200);
-    if (stuck && stuck.length > 0) {
+    const stuck = (stuckRaw ?? []) as any[];
+    if (stuck.length > 0) {
       const stuckIds = stuck.map((s: any) => s.id);
       const stuckRecIds = stuck.map((s: any) => s.campaign_recipient_id).filter(Boolean);
       console.log(`[lead-dispatch] recovering ${stuckIds.length} stuck queued lead(s)`);
@@ -417,7 +422,7 @@ Deno.serve(async (req) => {
         await admin.from("campaign_recipients")
           .update({ status: "failed", error_message: "stuck queued >10m, recovered" })
           .in("id", stuckRecIds)
-          .in("status", ["scheduled", "pending"]);
+          .eq("status", "scheduled"); // double-check status hasn't changed since SELECT
       }
       await admin.from("lead_imports")
         .update({ status: "pending", campaign_recipient_id: null, scheduled_at: null, error: "recovered from stuck queued" })
