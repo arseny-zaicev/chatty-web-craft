@@ -369,12 +369,22 @@ export default function LaunchWizard() {
     return mm ? `${h}h ${mm}m` : `${h}h`;
   };
   const eta = useMemo(() => {
-    const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
+    const numbers = Math.max(1, activeNumbers.length);
+    if (scheduleMode === "scheduled") {
+      const dailyCap = numbers * Math.max(1, perNumberQuota);
+      const daysNeeded = Math.max(1, Math.ceil(recipients.length / dailyCap));
+      if (!recipients.length) return "-";
+      const [sh, sm] = (windowStart || "09:00").split(":").map(Number);
+      const [eh, em] = (windowEnd || "20:00").split(":").map(Number);
+      const winH = Math.max(1, ((eh * 3600 + em * 60) - (sh * 3600 + sm * 60)) / 3600);
+      return `${daysNeeded} day(s) × ${winH.toFixed(1)}h window`;
+    }
+    const perNumber = Math.ceil(recipients.length / numbers);
     const avgSec = Math.round(perNumber * (delayMin + delayMax) / 2);
     const maxSec = Math.round(perNumber * delayMax);
     if (!perNumber) return "-";
     return `${fmtDur(avgSec)} avg · up to ${fmtDur(maxSec)}`;
-  }, [recipients.length, activeNumbers.length, delayMin, delayMax]);
+  }, [recipients.length, activeNumbers.length, delayMin, delayMax, scheduleMode, perNumberQuota, windowStart, windowEnd]);
 
   // ----- Recipient region clock & realistic pacing -----
   const recipientTz = useMemo(() => COUNTRY_TZ[poolCountry?.toUpperCase() ?? ""] ?? null, [poolCountry]);
@@ -395,19 +405,47 @@ export default function LaunchWizard() {
     return recipientNow >= windowStart && recipientNow <= windowEnd;
   }, [recipientNow, windowStart, windowEnd]);
 
-  // Realistic per-message gap when window mode is active
+  // Per-day capacity model honors per_number_quota cap.
+  const dayPlan = useMemo(() => {
+    const numbers = Math.max(1, activeNumbers.length);
+    const total = recipients.length;
+    const dailyCap = Math.max(1, numbers * Math.max(1, perNumberQuota));
+    const daysSelected = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
+    const idealPerDay = Math.ceil(total / daysSelected);
+    const effectivePerDay = Math.min(idealPerDay, dailyCap);
+    const daysNeeded = Math.max(1, Math.ceil(total / dailyCap));
+    const capExceeded = idealPerDay > dailyCap;
+    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded };
+  }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length]);
+
+  // Realistic per-message gap when window mode is active (based on today's effective load)
   const pacing = useMemo(() => {
-    const perNumber = activeNumbers.length > 0 ? Math.ceil(recipients.length / activeNumbers.length) : recipients.length;
-    if (!perNumber || !windowStart || !windowEnd) return null;
+    const perNumber = Math.max(1, Math.ceil(dayPlan.effectivePerDay / dayPlan.numbers));
+    if (!windowStart || !windowEnd) return null;
     const [sh, sm] = windowStart.split(":").map(Number);
     const [eh, em] = windowEnd.split(":").map(Number);
     const windowSec = Math.max(60, (eh * 3600 + em * 60) - (sh * 3600 + sm * 60));
     const avgGapSec = Math.floor(windowSec / Math.max(1, perNumber));
     return { perNumber, windowSec, avgGapSec };
-  }, [recipients.length, activeNumbers.length, windowStart, windowEnd]);
+  }, [dayPlan.effectivePerDay, dayPlan.numbers, windowStart, windowEnd]);
 
-  // Feasibility: how many of today's volume actually fits before windowEnd in recipient TZ.
-  // Applies to BOTH Send now (60-120s gaps) and Pick days (window-spread gaps).
+  // Today's selected status (Pick-days mode)
+  const todayInfo = useMemo(() => {
+    if (scheduleMode !== "scheduled") return { todayInList: true, firstDate: null as string | null, nextDate: null as string | null };
+    if (!recipientTz) return { todayInList: true, firstDate: scheduledDates[0] ?? null, nextDate: null };
+    let todayLocal = "";
+    try {
+      const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: recipientTz, year: "numeric", month: "2-digit", day: "2-digit" });
+      todayLocal = fmt.format(new Date(nowTick));
+    } catch { todayLocal = ""; }
+    const sorted = [...scheduledDates].sort();
+    const todayInList = sorted.includes(todayLocal);
+    const firstDate = sorted[0] ?? null;
+    const nextDate = sorted.find((d) => d > todayLocal) ?? null;
+    return { todayInList, firstDate, nextDate, todayLocal };
+  }, [scheduleMode, scheduledDates, recipientTz, nowTick]);
+
+  // Feasibility: today's effective load vs the remaining window in recipient TZ.
   const feasibility = useMemo(() => {
     if (!pacing || !recipientNow) return null;
     const [nh, nm] = recipientNow.split(":").map(Number);
@@ -416,7 +454,6 @@ export default function LaunchWizard() {
     const nowSec = nh * 3600 + nm * 60;
     const endSec = eh * 3600 + em * 60;
     const startSec = sh * 3600 + sm * 60;
-    // If we're before the window, today's full window is available; if inside, only what's left; if past, 0.
     const remainingSec = nowSec < startSec
       ? pacing.windowSec
       : nowSec >= endSec ? 0 : Math.max(0, endSec - nowSec);
@@ -424,11 +461,13 @@ export default function LaunchWizard() {
       ? Math.max(1, (delayMin + delayMax) / 2)
       : Math.max(1, pacing.avgGapSec);
     const perNumberFits = Math.floor(remainingSec / gapSec);
-    const fitsToday = Math.min(recipients.length, perNumberFits * Math.max(1, activeNumbers.length));
-    const totalQueued = recipients.length;
-    const overflow = Math.max(0, totalQueued - fitsToday);
-    return { remainingSec, fitsToday, overflow, totalQueued, gapSec };
-  }, [pacing, recipientNow, scheduleMode, windowEnd, windowStart, activeNumbers.length, recipients.length, delayMin, delayMax]);
+    const todayQueued = scheduleMode === "scheduled"
+      ? (todayInfo.todayInList ? dayPlan.effectivePerDay : 0)
+      : recipients.length;
+    const fitsToday = Math.min(todayQueued, perNumberFits * dayPlan.numbers);
+    const overflow = Math.max(0, todayQueued - fitsToday);
+    return { remainingSec, fitsToday, overflow, totalQueued: todayQueued, gapSec };
+  }, [pacing, recipientNow, scheduleMode, windowEnd, windowStart, dayPlan, recipients.length, delayMin, delayMax, todayInfo]);
 
 
 
@@ -953,18 +992,30 @@ export default function LaunchWizard() {
                   );
                 })() : pacing && pacing.perNumber > 1 ? (
                   <div>
-                    {scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. <b>{pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h ≈ 1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average (jittered ±20% for organic feel). The 60-120s "Min/Max delay" field does not apply here - gaps are derived from the window so messages spread across the full session.
+                    {scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. Cap <b>{perNumberQuota}/number/day</b> on <b>{dayPlan.numbers} number(s)</b> = max <b>{dayPlan.dailyCap.toLocaleString()}/day</b>.{" "}
+                    Today's load: <b>{dayPlan.effectivePerDay.toLocaleString()} msgs</b> ({pacing.perNumber}/number) ÷ {(pacing.windowSec / 3600).toFixed(1)}h ≈ <b>1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> (jittered ±20%).
                   </div>
                 ) : (
                   <div>{scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in recipient's local time" : "in your time zone"}.</div>
                 )}
+                {scheduleMode === "scheduled" && dayPlan.capExceeded && (
+                  <div className="mt-1 px-2 py-1.5 rounded-md border text-[11px] border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500">
+                    ⚠ Selected <b>{dayPlan.daysSelected} day(s)</b> can't hold <b>{dayPlan.total.toLocaleString()}</b> msgs at <b>{perNumberQuota}/number/day</b> on <b>{dayPlan.numbers}</b> number(s). Max throughput: <b>{dayPlan.dailyCap.toLocaleString()}/day</b> = <b>{(dayPlan.dailyCap * dayPlan.daysSelected).toLocaleString()} total</b>.
+                    Need at least <b>{dayPlan.daysNeeded} days</b>, or raise quota / add numbers. Each day will send <b>{dayPlan.dailyCap.toLocaleString()}</b>; the rest auto-rolls forward day by day.
+                  </div>
+                )}
+                {scheduleMode === "scheduled" && !todayInfo.todayInList && todayInfo.firstDate && (
+                  <div className="mt-1 px-2 py-1.5 rounded-md border text-[11px] border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400">
+                    Nothing scheduled for today. First batch (<b>{dayPlan.effectivePerDay.toLocaleString()}</b> msgs) starts <b>{todayInfo.firstDate}</b> at <b>{windowStart}</b> {respectTz ? "in recipient's local time" : "in your time zone"}.
+                  </div>
+                )}
                 {feasibility && feasibility.totalQueued > 0 && (
                   <div className={`mt-1 px-2 py-1.5 rounded-md border text-[11px] ${feasibility.overflow > 0 ? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"}`}>
-                    <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd} ({recipientNow} now in {poolCountry}).
+                    <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd} ({recipientNow} now in {poolCountry}){scheduleMode === "scheduled" ? <> · today's share of <b>{dayPlan.total.toLocaleString()}</b> total across {dayPlan.daysNeeded} day(s)</> : null}.
                     {feasibility.overflow > 0
-                      ? ` ${feasibility.overflow.toLocaleString()} will auto-roll to tomorrow's window (${windowStart}-${windowEnd}) and queue up there with status "scheduled". No action needed - they're saved.`
+                      ? ` ${feasibility.overflow.toLocaleString()} will auto-roll to ${todayInfo.nextDate ?? "tomorrow"}'s window (${windowStart}-${windowEnd}) with status "scheduled". No action needed.`
                       : " Everything fits today."}
-                    <div className="opacity-80 mt-0.5">Campaign stays <b>running</b> across days. <b>sent_count</b> grows live; leftovers keep <b>scheduled_at</b> = next available slot. You'll see "X / Y sent · Z scheduled for tomorrow" on the campaign page.</div>
+                    <div className="opacity-80 mt-0.5">Campaign stays <b>running</b> across days. Slack pings the team when each day finishes with tomorrow's start time.</div>
                   </div>
                 )}
               </div>
@@ -1238,7 +1289,18 @@ export default function LaunchWizard() {
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
-          <Row label="Per number" value={activeNumbers.length ? Math.ceil(recipients.length / activeNumbers.length) : "-"} />
+          <Row label="Per day" value={scheduleMode === "scheduled" ? dayPlan.effectivePerDay.toLocaleString() : recipients.length.toLocaleString()} />
+          <Row label="Per number / day" value={activeNumbers.length ? Math.ceil((scheduleMode === "scheduled" ? dayPlan.effectivePerDay : recipients.length) / activeNumbers.length) : "-"} />
+          {scheduleMode === "scheduled" && (
+            <Row
+              label="Days needed"
+              value={
+                <span className={dayPlan.daysNeeded > dayPlan.daysSelected ? "text-amber-600 font-medium" : undefined}>
+                  {dayPlan.daysNeeded}{dayPlan.daysNeeded > dayPlan.daysSelected ? ` (you picked ${dayPlan.daysSelected})` : ""}
+                </span>
+              }
+            />
+          )}
           <Row label="Speed" value={delayMin === 0 && delayMax === 0 ? "Blast" : `${delayMin}-${delayMax}s`} />
           <Row label="ETA" value={eta} />
           {resolution.missing.length > 0 && (
