@@ -152,14 +152,16 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
     if (!nid) continue;
     totalSent.set(nid, (totalSent.get(nid) ?? 0) + 1);
   }
-  // campaign recipients sent/failed
+  // campaign recipients sent/failed/pending per number
+  const pendingByNumber = new Map<string, number>();
   for (const r of (recipients ?? []) as Array<{ whatsapp_number_id: string | null; status: string }>) {
     if (!r.whatsapp_number_id) continue;
     if (r.status === "sent" || r.status === "delivered" || r.status === "read") {
       totalSent.set(r.whatsapp_number_id, (totalSent.get(r.whatsapp_number_id) ?? 0) + 1);
-    }
-    if (r.status === "failed") {
+    } else if (r.status === "failed") {
       totalErrors.set(r.whatsapp_number_id, (totalErrors.get(r.whatsapp_number_id) ?? 0) + 1);
+    } else if (r.status === "pending" || r.status === "scheduled" || r.status === "sending") {
+      pendingByNumber.set(r.whatsapp_number_id, (pendingByNumber.get(r.whatsapp_number_id) ?? 0) + 1);
     }
   }
   // webhook failed events
