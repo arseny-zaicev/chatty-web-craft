@@ -852,7 +852,14 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
       <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
       <TableCell>
-        <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
+        <div className="flex flex-col gap-0.5">
+          <InlineStatusSelect value={r.status} onChange={(v) => onQuickPatch(r, { status: v })} />
+          {r.last_health_sync_error ? (
+            <span className="text-[9px] text-red-700 truncate max-w-[140px]" title={r.last_health_sync_error}>● sync failed</span>
+          ) : r.last_health_sync_at ? (
+            <span className="text-[9px] text-muted-foreground" title={new Date(r.last_health_sync_at).toLocaleString()}>● synced {formatDistanceToNow(new Date(r.last_health_sync_at), { addSuffix: true })}</span>
+          ) : null}
+        </div>
       </TableCell>
       <TableCell><Badge variant="outline" className={`text-[10px] ${auth === "ready" ? statusTone.ready : statusTone.warming}`}>{auth}</Badge></TableCell>
       <TableCell>
