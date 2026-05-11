@@ -884,6 +884,9 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
       <TableCell className="text-xs text-muted-foreground whitespace-nowrap" title={r.last_campaign_name ?? ""}>{r.last_campaign_at ? formatDistanceToNow(new Date(r.last_campaign_at), { addSuffix: true }) : "—"}</TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onRecheck(r.id)} disabled={recheckingId === r.id} title="Re-check health from Gupshup">
+            {recheckingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </Button>
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(r)} title="Edit">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
