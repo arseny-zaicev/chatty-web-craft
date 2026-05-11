@@ -161,6 +161,12 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     m.active_campaign_sent += c.sent_count ?? 0;
     m.active_campaign_total += c.total_recipients ?? 0;
   });
+  // "Sending now" = campaign is in running state AND still has recipients to send
+  Object.values(byWorkspace).forEach((m) => {
+    m.is_sending_now = m.active_campaign_status === "running"
+      && m.active_campaign_total > 0
+      && m.active_campaign_sent < m.active_campaign_total;
+  });
 
   (msgsToday ?? []).forEach((msg) => {
     const wsId = convWs.get(msg.conversation_id as unknown as string);
