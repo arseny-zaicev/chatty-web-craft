@@ -57,6 +57,16 @@ type Row = {
   unrestricted_at: string | null;
   display_name_status: DnStatus;
   display_name_checked_at: string | null;
+  active_campaigns: ActiveCampaign[];
+  last_used_at: string | null;
+  last_used_workspace_id: string | null;
+};
+
+type ActiveCampaign = {
+  id: string;
+  name: string;
+  status: string;
+  workspace_id: string | null;
 };
 
 type DnStatus = "pending" | "approved" | "rejected";
@@ -75,11 +85,25 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
         .select("whatsapp_number_id, event_type, error_message, received_at")
         .order("received_at", { ascending: false }).limit(20000),
       supabase.from("campaign_recipients").select("whatsapp_number_id, status, sent_at"),
-      supabase.from("campaigns").select("id, name, whatsapp_number_id, scheduled_start_at, created_at"),
+      supabase.from("campaigns").select("id, name, status, workspace_id, whatsapp_number_id, scheduled_start_at, created_at"),
       supabase.from("conversations").select("id, whatsapp_number_id"),
       supabase.from("messages").select("conversation_id, direction"),
     ]);
   if (nErr) throw nErr; if (wErr) throw wErr;
+
+  const { data: usage } = await supabase.from("whatsapp_number_usage_summary").select("*");
+  const usageMap = new Map<string, { last_used_at: string | null; last_workspace_id: string | null }>();
+  for (const u of (usage ?? []) as Array<{ number_id: string; last_used_at: string | null; last_workspace_id: string | null }>) {
+    usageMap.set(u.number_id, { last_used_at: u.last_used_at, last_workspace_id: u.last_workspace_id });
+  }
+  const activeByNumber = new Map<string, ActiveCampaign[]>();
+  for (const c of (campaignsData ?? []) as Array<{ id: string; name: string; status: string; workspace_id: string | null; whatsapp_number_id: string | null }>) {
+    if (!c.whatsapp_number_id) continue;
+    if (!["scheduled", "running", "paused"].includes(c.status)) continue;
+    const arr = activeByNumber.get(c.whatsapp_number_id) ?? [];
+    arr.push({ id: c.id, name: c.name, status: c.status, workspace_id: c.workspace_id });
+    activeByNumber.set(c.whatsapp_number_id, arr);
+  }
 
   const wsMap = new Map((workspaces ?? []).map((w) => [w.id, w]));
   const tpl = new Map<string, { total: number; approved: number }>();
@@ -181,6 +205,9 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       unrestricted_at: unrestrictedAt,
       display_name_status: ((n.display_name_status as DnStatus) ?? "pending"),
       display_name_checked_at: (n.display_name_checked_at as string) ?? null,
+      active_campaigns: activeByNumber.get(n.id as string) ?? [],
+      last_used_at: usageMap.get(n.id as string)?.last_used_at ?? null,
+      last_used_workspace_id: usageMap.get(n.id as string)?.last_workspace_id ?? null,
     };
   });
 
@@ -224,6 +251,11 @@ export default function FleetRegistry() {
   const [authChecked, setAuthChecked] = useState(false);
   const [adderOpen, setAdderOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [pendingDanger, setPendingDanger] = useState<
+    | { kind: "delete"; row: Row }
+    | { kind: "reassign"; row: Row; targetWs: string | null }
+    | null
+  >(null);
 
   useEffect(() => {
     let mounted = true;
@@ -382,25 +414,122 @@ export default function FleetRegistry() {
           <FilterSelect value={fUsage} onChange={setFUsage} placeholder="All use cases" options={[["all", "All use cases"], ["marketing", "marketing"], ["utility", "utility"], ["both", "both"]]} />
         </div>
 
-        {view === "by-client" ? (
-          <GroupedByClient rows={filtered} workspaces={workspaces}
-            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
-            onEdit={setEditing}
-            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
-            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
-        ) : (
-          <FleetTable rows={filtered} workspaces={workspaces}
-            onReassign={(id, wid) => reassign.mutate({ id, workspaceId: wid })}
-            onEdit={setEditing}
-            onQuickPatch={(row, patch) => quickPatch.mutate({ row, patch })}
-            onDelete={(id) => { if (confirm("Delete this number from Fleet?")) remove.mutate(id); }} />
-        )}
+        {(() => {
+          const handleReassign = (id: string, wid: string | null) => {
+            const row = rows.find((r) => r.id === id);
+            if (!row) return;
+            if (row.workspace_id === wid) return;
+            if (row.active_campaigns.length > 0) {
+              setPendingDanger({ kind: "reassign", row, targetWs: wid });
+              return;
+            }
+            reassign.mutate({ id, workspaceId: wid });
+          };
+          const handleDelete = (id: string) => {
+            const row = rows.find((r) => r.id === id);
+            if (!row) return;
+            if (row.active_campaigns.length > 0) {
+              setPendingDanger({ kind: "delete", row });
+              return;
+            }
+            if (confirm("Delete this number from Fleet?")) remove.mutate(id);
+          };
+          const common = {
+            workspaces,
+            onReassign: handleReassign,
+            onEdit: setEditing,
+            onQuickPatch: (row: Row, patch: Partial<Pick<Row, "status" | "display_name_status" | "webhook_connected">>) => quickPatch.mutate({ row, patch }),
+            onDelete: handleDelete,
+          };
+          return view === "by-client"
+            ? <GroupedByClient rows={filtered} {...common} />
+            : <FleetTable rows={filtered} {...common} />;
+        })()}
       </main>
+
+      <DangerConfirmDialog
+        pending={pendingDanger}
+        workspaces={workspaces}
+        onCancel={() => setPendingDanger(null)}
+        onConfirm={() => {
+          if (!pendingDanger) return;
+          if (pendingDanger.kind === "delete") {
+            remove.mutate(pendingDanger.row.id);
+          } else {
+            reassign.mutate({ id: pendingDanger.row.id, workspaceId: pendingDanger.targetWs });
+          }
+          setPendingDanger(null);
+        }}
+      />
 
       <AddNumberDrawer open={adderOpen || !!editing} onOpenChange={(v) => { if (!v) { setAdderOpen(false); setEditing(null); } else setAdderOpen(true); }} workspaces={workspaces}
         editing={editing}
         onCreated={async () => { await qc.invalidateQueries({ queryKey: ["fleet-registry"] }); }} />
     </div>
+  );
+}
+
+function DangerConfirmDialog({
+  pending, workspaces, onCancel, onConfirm,
+}: {
+  pending:
+    | { kind: "delete"; row: Row }
+    | { kind: "reassign"; row: Row; targetWs: string | null }
+    | null;
+  workspaces: WS[];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const open = !!pending;
+  const row = pending?.row ?? null;
+  const targetName = pending?.kind === "reassign"
+    ? (pending.targetWs ? (workspaces.find((w) => w.id === pending.targetWs)?.name ?? "another client") : "Unassigned")
+    : null;
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-red-700">
+            {pending?.kind === "delete" ? "Delete number with active campaigns?" : "Reassign number with active campaigns?"}
+          </DialogTitle>
+          <DialogDescription>
+            {row && (
+              <>
+                <span className="font-mono">+{row.phone_number}</span>
+                {pending?.kind === "reassign" && <> will move from <b>{row.workspace_name}</b> to <b>{targetName}</b>.</>}
+                {pending?.kind === "delete" && <> will be permanently removed from Fleet.</>}
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground">Active campaigns currently bound to this number:</div>
+          <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
+            {row?.active_campaigns.map((c) => {
+              const ws = workspaces.find((w) => w.id === c.workspace_id);
+              return (
+                <li key={c.id} className="flex items-center justify-between border border-border/60 rounded-md px-2 py-1.5">
+                  <span className="truncate">{c.name}</span>
+                  <span className="flex items-center gap-2 text-xs">
+                    <Badge variant="outline" className="text-[10px]">{c.status}</Badge>
+                    <span className="text-muted-foreground">{ws?.name ?? "unknown ws"}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-xs text-amber-700 mt-2">
+            Proceeding will likely break these campaigns - the system won't be able to send through this number from its current workspace. Pause or cancel them first if possible.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            {pending?.kind === "delete" ? "Delete anyway" : "Reassign anyway"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -566,7 +695,21 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
   const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
   return (
     <TableRow className="h-12 [&>td]:align-middle [&>td]:whitespace-nowrap [&>td]:py-0 [&>td]:h-12 [&>td]:leading-none">
-      <TableCell className="font-mono text-xs whitespace-nowrap">+{r.phone_number}</TableCell>
+      <TableCell className="font-mono text-xs whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <span>+{r.phone_number}</span>
+          {r.active_campaigns.length > 0 && (
+            <Badge variant="outline" className="text-[9px] bg-red-500/15 text-red-700 border-red-500/30" title={r.active_campaigns.map((c) => `${c.name} (${c.status})`).join("\n")}>
+              in use · {r.active_campaigns.length}
+            </Badge>
+          )}
+          {r.active_campaigns.length === 0 && r.last_used_at && (Date.now() - new Date(r.last_used_at).getTime()) < 30 * 86400000 && (
+            <Badge variant="outline" className="text-[9px] bg-amber-500/15 text-amber-700 border-amber-500/30" title={`Last used ${formatDistanceToNow(new Date(r.last_used_at), { addSuffix: true })}`}>
+              recent
+            </Badge>
+          )}
+        </div>
+      </TableCell>
       <TableCell className="text-xs">{r.label ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs">
         <div className="flex items-center gap-2">
