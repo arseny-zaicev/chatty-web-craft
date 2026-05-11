@@ -98,6 +98,9 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
           <Field label="Logo URL (optional)">
             <Input value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="Auto-detected from website if empty" />
           </Field>
+          <Field label="Rate per delivered message ($)">
+            <Input type="number" step="0.001" min="0" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" />
+          </Field>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
