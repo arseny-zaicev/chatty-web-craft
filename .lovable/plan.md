@@ -1,109 +1,58 @@
-# План: защита pipeline лидов и WhatsApp от перебоев
+## Что происходит
 
-Цель — чтобы инциденты "лиды не уходят 2 часа" и "ответы не маршрутизируются в нужный pipeline" больше не повторялись, а если что-то ломается — мы узнавали об этом в течение минут, а не часов.
+В базе данных у `jk4016447`, `sankeetha847`, `Large Media Solution`, `jamalpuri pradeepraj`, `Hitesh` уже стоит `unread_count = 0` - то есть API исправно сбрасывает счётчик. Но UI продолжает показывать значки "2" / "1". Кнопка "прочитано" формально срабатывает (UPDATE доходит до БД), просто визуально ничего не меняется.
 
----
+Корень проблемы - в `src/pages/CRM.tsx`:
 
-## 1. Cron-расписание и здоровье ingestion
+- `markRead` / `markUnread` делают только запрос в Supabase и **не обновляют локальный state**. Они полагаются на realtime-событие `UPDATE conversations`, чтобы перерисовать список.
+- При открытии чата (`useEffect` на `activeId`) тоже вызывается `markConversationRead`, и снова без локального обновления.
+- Если realtime-событие не дошло (потеря соединения, переподписка после смены `activeId`, RLS-фильтр), бейдж зависает на старом значении до полной перезагрузки страницы.
 
-Сейчас всё держится на pg_cron. Нужно сделать так, чтобы остановка одного cron не убивала весь поток.
+Плюс отдельная UX-проблема: счётчик **не сбрасывается, когда менеджер отправляет ответ**. Пользователь ответил - чат логически "прочитан", но цифра остаётся, пока он явно не кликнет на бейдж или не откроет диалог.
 
-- **Двойной cron для `google-sheets-sync`**: основной — каждые 2 минуты, страховочный — каждые 10 минут (offset 1 мин). Если основной висит, страховочный подберёт хвост.
-- **Двойной cron для `lead-dispatch`**: каждую минуту + страховочный каждые 5 мин.
-- **Cron на `health-watchdog`**: каждые 3 минуты (сейчас 5).
-- **Cron self-check**: новая функция `cron-heartbeat` пишет в `system_heartbeats(name, last_run_at)` каждый запуск каждого крона. Watchdog алертит, если heartbeat для любой записи старше 2× ожидаемого интервала — это ловит ситуацию "cron вообще выключен/упал на стороне Postgres".
+## Что предлагаю сделать
 
-## 2. Расширение health-watchdog
+1. **Оптимистичные обновления в `CRM.tsx`**
+   - В `markRead` сразу `setConversations(prev => prev.map(...))` ставим `unread_count: 0`, потом отправляем запрос; если ошибка - откатываем.
+   - То же для `markUnread` (`unread_count: Math.max(1, prev)`).
+   - В `useEffect` на смену `activeId` локально обнуляем `unread_count` для активного диалога перед/после `markConversationRead`.
 
-Сейчас он проверяет только sheets sync errors, stale sheets, pending/queued backlog. Добавить:
+2. **Авто-сброс при ответе менеджера** (триггер в БД)
+   - Добавить триггер `AFTER INSERT ON public.messages`: если `direction='outbound'` и `sent_by_user_id IS NOT NULL` (то есть ответ человека, не автомат) - `UPDATE conversations SET unread_count = 0 WHERE id = NEW.conversation_id`.
+   - Это автоматически снимает бейдж как только манагер отправил сообщение, для всех клиентов сразу через realtime.
 
-- **Inbound webhook silence**: если за 30 минут не было ни одного входящего сообщения от Gupshup при наличии активных номеров — алерт (раньше ловили глазами).
-- **Outbound send failure rate**: если за последний час доля `lead_imports.status='failed'` > 20% — алерт.
-- **Pipeline routing mismatch**: запрос ищет `conversations` с `pipeline_id IS NULL` при том, что у соответствующего `campaign_recipients` есть pipeline — алерт + список conversation_id.
-- **Source connection без последнего sync > 15 мин и без ошибки** — отдельный алерт (сейчас падает в общую stale-категорию).
-- **Gupshup mail log severity=error за 30 мин** — алерт (мы ловим письма от Gupshup о деградации номера, но сейчас не алертим).
-- **Watchdog self-error**: оборачиваем сам watchdog в try/catch и пишем в `system_alerts` если он упал — иначе тишина watchdog'а = тишина алертов.
-
-## 3. Идемпотентные счётчики и backfill
-
-- В `google-sheets-sync` уже есть `last_synced_row` курсор. Добавить **safety re-scan**: каждый 10-й запуск пересматривать последние 50 строк выше курсора, чтобы поймать строки, которые были вставлены ретроспективно (Google Sheets позволяет вставку в середину).
-- В `lead-dispatch` добавить **stuck claim recovery**: если лид в статусе `queued` > 10 минут — сбросить в `pending` и логировать.
-- Добавить retry с экспоненциальной задержкой в `send-whatsapp` (сейчас одна попытка, при 5xx от Gupshup лид падает в failed).
-
-## 4. Маршрутизация ответов (фикс уже сделан, добавить защиту)
-
-- **Trigger в БД**: при INSERT в `messages` direction='inbound' проверять, что у conversation проставлен `pipeline_id`. Если нет — взять из последнего `campaign_recipients` для этого телефона. Это фоллбек на случай, если webhook-функция снова забудет.
-- **Backfill-скрипт**: разовая миграция, которая пройдёт по всем conversations с `pipeline_id IS NULL` и проставит из последнего campaign_recipient (если есть). Чтобы старые битые разговоры не висели в Main.
-- **Алерт в watchdog** (см. п.2) на новые случаи.
-
-## 5. Slack-алерты: каналы и приоритеты
-
-- Создать отдельный канал `#alerts-critical` для P0 (sync down, dispatch down, webhook silence) — без debounce 30 мин, debounce только 10 мин.
-- Канал `#alerts-info` для warnings (одиночные ошибки строк, низкая deliverability).
-- Каждый алерт должен содержать: что сломалось, с какого времени, ссылку на конкретный source/pipeline и **подсказку первого шага** ("проверь edge logs google-sheets-sync"). Сейчас алерты слишком общие.
-
-## 6. Дашборд "System Health" в админке
-
-Страница `/admin/ops` уже есть. Добавить виджет **Pipeline Vitals**:
-- Время последнего успешного sheet sync на каждый source (зелёный/жёлтый/красный).
-- Время последнего отправленного лида на каждый pipeline.
-- Время последнего входящего webhook на каждый whatsapp_number.
-- Кол-во лидов в `pending`/`queued` сейчас.
-- Последние 10 системных алертов из `system_alerts` с timestamp.
-
-Это даёт глазами увидеть проблему до того, как Slack заспамит.
-
-## 7. Тесты edge-функций
-
-- Deno-тесты для `whatsapp-webhook`: 4 кейса входящего сообщения (известный recipient с pipeline, без pipeline, новый контакт, дубликат) — проверяют, что `conversation.pipeline_id` всегда заполняется правильно.
-- Тест для `google-sheets-sync`: пустой sheet, sheet без новых строк, sheet с invalid phone — все помечают source как healthy.
-- Тест для `lead-dispatch`: stuck queued recovery.
-
-Запускать через `supabase test_edge_functions` в CI после каждого деплоя.
-
-## 8. Логирование и трассировка
-
-- В каждой функции логировать `correlation_id` (uuid на запрос) во всех console.log — для прохождения через лог-агрегатор.
-- В `lead_imports` уже есть `error` поле; добавить `error_at` timestamp чтобы отличать свежие ошибки от старых.
-
----
+3. **Защитная подстраховка для realtime**
+   - В обработчике `useRealtimeTable` на `conversations` уже есть merge по `id` - оставляем как есть.
+   - Дополнительно: при `markConversationRead` не ждать realtime, локальный state - источник правды до прихода серверного значения (см. п.1).
 
 ## Технические детали
 
-**Новые таблицы:**
-- `system_heartbeats(name text PK, last_run_at timestamptz, payload jsonb)` — один upsert на запуск cron.
+Файлы:
+- `src/pages/CRM.tsx` - оптимистичные `setConversations` в `markRead`, `markUnread`, и в `useEffect` по `activeId`.
+- Миграция БД: новая функция `public.reset_unread_on_manager_reply()` + триггер на `public.messages`.
 
-**Новые edge functions:**
-- `cron-heartbeat` — принимает `{name}`, делает upsert в `system_heartbeats`. Дёргается из тела каждого pg_cron job-а до основного вызова.
+```sql
+CREATE OR REPLACE FUNCTION public.reset_unread_on_manager_reply()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.direction = 'outbound' AND NEW.sent_by_user_id IS NOT NULL THEN
+    UPDATE public.conversations
+       SET unread_count = 0
+     WHERE id = NEW.conversation_id
+       AND unread_count > 0;
+  END IF;
+  RETURN NEW;
+END $$;
 
-**Изменения функций:**
-- `health-watchdog/index.ts` — новые проверки (см. п.2).
-- `google-sheets-sync/index.ts` — safety re-scan каждый N-й запуск.
-- `lead-dispatch/index.ts` — stuck queued recovery.
-- `send-whatsapp/index.ts` — retry с backoff на 5xx.
-- `whatsapp-webhook/index.ts` — defensive pipeline_id resolution (fallback из последнего recipient).
-
-**Миграция:**
-- Триггер `messages_inbound_set_pipeline` — на INSERT inbound проставлять `conversations.pipeline_id`.
-- Backfill UPDATE для conversations с NULL pipeline_id.
-- Таблица `system_heartbeats` + RLS (только service role).
-
-**Cron-расписание (через supabase--insert, не через миграции):**
-```text
-google-sheets-sync       */2 * * * *   (основной)
-google-sheets-sync       2-59/10 * * * * (страховочный)
-lead-dispatch            * * * * *
-lead-dispatch            */5 * * * *  (страховочный)
-health-watchdog          */3 * * * *
+CREATE TRIGGER reset_unread_on_manager_reply
+AFTER INSERT ON public.messages
+FOR EACH ROW EXECUTE FUNCTION public.reset_unread_on_manager_reply();
 ```
 
-**Дашборд:**
-- `src/pages/admin/OpsLive.tsx` — добавить секцию Pipeline Vitals с realtime подпиской на `system_heartbeats`, `source_connections`, `lead_imports`.
+Условие `sent_by_user_id IS NOT NULL` важно - чтобы исходящие из автоматических кампаний/first-touch не сбрасывали счётчик новых входящих, которые пришли уже после рассылки.
 
----
+## Что НЕ делаю
 
-## Что НЕ входит в план
-- Замена Gupshup или переезд с pg_cron — это отдельный архитектурный разговор.
-- Полноценный observability стек (Sentry/Datadog) — пока обходимся Slack + дашбордом.
-
-После твоего ОК начну с п.1-2 (cron + watchdog) — это даёт максимум защиты за минимум времени, потом п.4 (routing trigger), потом остальное.
+- Не трогаю `whatsapp-webhook` - там логика инкремента счётчика на входящие правильная.
+- Не меняю RLS-политики conversations.
+- Не трогаю realtime-публикацию (`conversations` уже в `supabase_realtime`, `replica identity full`).
