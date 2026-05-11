@@ -699,10 +699,14 @@ async function processQueue(admin: any) {
   // Floor 50 (single-number safe), 20 recipients per active number, hard cap 500.
   let perTickLimit = 200;
   try {
+    // Count both 'active' and 'ready' numbers (matches lead-dispatch sender filter).
+    // Previously only counted 'ready', which capped throughput at 50/min once
+    // numbers transitioned to 'active' status.
     const { count: activeNumbers } = await admin
       .from("whatsapp_numbers")
       .select("id", { count: "exact", head: true })
-      .eq("status", "ready");
+      .in("status", ["active", "ready"])
+      .eq("is_active", true);
     const n = activeNumbers ?? 0;
     perTickLimit = Math.min(500, Math.max(50, n * 20));
   } catch (_) {
