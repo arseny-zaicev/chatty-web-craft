@@ -840,8 +840,8 @@ function InlineDnSelect({ value, checkedAt, onChange }: { value: DnStatus; check
 
 // Add Number drawer ---------------------------------------------------------
 function AddNumberDrawer({
-  open, onOpenChange, workspaces, editing, onCreated,
-}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; editing?: Row | null; onCreated: () => Promise<void> | void }) {
+  open, onOpenChange, workspaces, editing, existingRows, onCreated,
+}: { open: boolean; onOpenChange: (v: boolean) => void; workspaces: WS[]; editing?: Row | null; existingRows: Row[]; onCreated: () => Promise<void> | void }) {
   const [phone, setPhone] = useState("");
   const [appName, setAppName] = useState("");
   const [displayName, setDisplayName] = useState("");
