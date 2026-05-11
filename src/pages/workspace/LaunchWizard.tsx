@@ -982,18 +982,30 @@ export default function LaunchWizard() {
                   );
                 })() : pacing && pacing.perNumber > 1 ? (
                   <div>
-                    {scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. <b>{pacing.perNumber} msgs/number ÷ {(pacing.windowSec / 3600).toFixed(1)}h ≈ 1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> on average (jittered ±20% for organic feel). The 60-120s "Min/Max delay" field does not apply here - gaps are derived from the window so messages spread across the full session.
+                    {scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. Cap <b>{perNumberQuota}/number/day</b> on <b>{dayPlan.numbers} number(s)</b> = max <b>{dayPlan.dailyCap.toLocaleString()}/day</b>.{" "}
+                    Today's load: <b>{dayPlan.effectivePerDay.toLocaleString()} msgs</b> ({pacing.perNumber}/number) ÷ {(pacing.windowSec / 3600).toFixed(1)}h ≈ <b>1 msg every {pacing.avgGapSec >= 60 ? `${Math.round(pacing.avgGapSec / 60)} min` : `${pacing.avgGapSec}s`}</b> (jittered ±20%).
                   </div>
                 ) : (
                   <div>{scheduledDates.length || 0} day(s) × {windowStart}-{windowEnd} {respectTz ? "in recipient's local time" : "in your time zone"}.</div>
                 )}
+                {scheduleMode === "scheduled" && dayPlan.capExceeded && (
+                  <div className="mt-1 px-2 py-1.5 rounded-md border text-[11px] border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500">
+                    ⚠ Selected <b>{dayPlan.daysSelected} day(s)</b> can't hold <b>{dayPlan.total.toLocaleString()}</b> msgs at <b>{perNumberQuota}/number/day</b> on <b>{dayPlan.numbers}</b> number(s). Max throughput: <b>{dayPlan.dailyCap.toLocaleString()}/day</b> = <b>{(dayPlan.dailyCap * dayPlan.daysSelected).toLocaleString()} total</b>.
+                    Need at least <b>{dayPlan.daysNeeded} days</b>, or raise quota / add numbers. Each day will send <b>{dayPlan.dailyCap.toLocaleString()}</b>; the rest auto-rolls forward day by day.
+                  </div>
+                )}
+                {scheduleMode === "scheduled" && !todayInfo.todayInList && todayInfo.firstDate && (
+                  <div className="mt-1 px-2 py-1.5 rounded-md border text-[11px] border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400">
+                    Nothing scheduled for today. First batch (<b>{dayPlan.effectivePerDay.toLocaleString()}</b> msgs) starts <b>{todayInfo.firstDate}</b> at <b>{windowStart}</b> {respectTz ? "in recipient's local time" : "in your time zone"}.
+                  </div>
+                )}
                 {feasibility && feasibility.totalQueued > 0 && (
                   <div className={`mt-1 px-2 py-1.5 rounded-md border text-[11px] ${feasibility.overflow > 0 ? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"}`}>
-                    <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd} ({recipientNow} now in {poolCountry}).
+                    <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd} ({recipientNow} now in {poolCountry}){scheduleMode === "scheduled" ? <> · today's share of <b>{dayPlan.total.toLocaleString()}</b> total across {dayPlan.daysNeeded} day(s)</> : null}.
                     {feasibility.overflow > 0
-                      ? ` ${feasibility.overflow.toLocaleString()} will auto-roll to tomorrow's window (${windowStart}-${windowEnd}) and queue up there with status "scheduled". No action needed - they're saved.`
+                      ? ` ${feasibility.overflow.toLocaleString()} will auto-roll to ${todayInfo.nextDate ?? "tomorrow"}'s window (${windowStart}-${windowEnd}) with status "scheduled". No action needed.`
                       : " Everything fits today."}
-                    <div className="opacity-80 mt-0.5">Campaign stays <b>running</b> across days. <b>sent_count</b> grows live; leftovers keep <b>scheduled_at</b> = next available slot. You'll see "X / Y sent · Z scheduled for tomorrow" on the campaign page.</div>
+                    <div className="opacity-80 mt-0.5">Campaign stays <b>running</b> across days. Slack pings the team when each day finishes with tomorrow's start time.</div>
                   </div>
                 )}
               </div>
