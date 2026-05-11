@@ -57,6 +57,16 @@ type Row = {
   unrestricted_at: string | null;
   display_name_status: DnStatus;
   display_name_checked_at: string | null;
+  active_campaigns: ActiveCampaign[];
+  last_used_at: string | null;
+  last_used_workspace_id: string | null;
+};
+
+type ActiveCampaign = {
+  id: string;
+  name: string;
+  status: string;
+  workspace_id: string | null;
 };
 
 type DnStatus = "pending" | "approved" | "rejected";
