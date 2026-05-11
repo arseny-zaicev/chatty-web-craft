@@ -251,6 +251,11 @@ export default function FleetRegistry() {
   const [authChecked, setAuthChecked] = useState(false);
   const [adderOpen, setAdderOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [pendingDanger, setPendingDanger] = useState<
+    | { kind: "delete"; row: Row }
+    | { kind: "reassign"; row: Row; targetWs: string | null }
+    | null
+  >(null);
 
   useEffect(() => {
     let mounted = true;
