@@ -1,0 +1,1 @@
+UPDATE public.pipelines SET slack_channel_id = NULL WHERE id = '28e660ae-11c1-4511-9c59-a6c6b14fffd2';
