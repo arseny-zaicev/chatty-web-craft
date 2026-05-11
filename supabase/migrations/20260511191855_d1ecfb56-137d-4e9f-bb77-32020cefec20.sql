@@ -1,0 +1,1 @@
+ALTER TABLE public.workspaces ADD COLUMN IF NOT EXISTS delivered_rate_usd numeric NOT NULL DEFAULT 0;
