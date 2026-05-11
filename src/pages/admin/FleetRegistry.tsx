@@ -714,7 +714,7 @@ function GroupedByClient({ rows, workspaces, onReassign, onEdit, onDelete, onQui
               </TableRow>
             </TableHeader>
             <TableBody>
-              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} hideClientCol />)}
+              {g.rows.map((r) => <FleetRowView key={r.id} r={r} workspaces={workspaces} onReassign={onReassign} onEdit={onEdit} onDelete={onDelete} onQuickPatch={onQuickPatch} onRecheck={onRecheck} recheckingId={recheckingId} hideClientCol />)}
             </TableBody>
           </Table>
         </div>
