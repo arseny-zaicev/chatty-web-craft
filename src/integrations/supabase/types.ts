@@ -556,6 +556,13 @@ export type Database = {
             foreignKeyName: "campaigns_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
             isOneToOne: false
+            referencedRelation: "whatsapp_number_usage_summary"
+            referencedColumns: ["number_id"]
+          },
+          {
+            foreignKeyName: "campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
@@ -694,6 +701,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "conversations_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_number_usage_summary"
+            referencedColumns: ["number_id"]
+          },
           {
             foreignKeyName: "conversations_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
@@ -998,6 +1012,13 @@ export type Database = {
             foreignKeyName: "gupshup_mail_log_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
             isOneToOne: false
+            referencedRelation: "whatsapp_number_usage_summary"
+            referencedColumns: ["number_id"]
+          },
+          {
+            foreignKeyName: "gupshup_mail_log_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
@@ -1244,6 +1265,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "message_templates_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_number_usage_summary"
+            referencedColumns: ["number_id"]
+          },
           {
             foreignKeyName: "message_templates_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
@@ -2269,6 +2297,24 @@ export type Database = {
           workspace_id: string | null
         }
         Relationships: []
+      }
+      whatsapp_number_usage_summary: {
+        Row: {
+          active_campaign_count: number | null
+          last_campaign_id: string | null
+          last_used_at: string | null
+          last_workspace_id: string | null
+          number_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_recipients_campaign_id_fkey"
+            columns: ["last_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
