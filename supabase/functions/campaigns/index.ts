@@ -762,13 +762,56 @@ async function processQueue(admin: any) {
 
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, whatsapp_numbers(phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
     .eq("status", "scheduled")
     .lte("scheduled_at", horizonIso)
     .eq("campaigns.status", "running")
     .order("scheduled_at", { ascending: true })
     .limit(perTickLimit);
   if (error) return json({ error: error.message }, 500);
+
+  // Resolve per-recipient number/template overrides (multi-number campaigns).
+  // recipient.whatsapp_number_id is the assigned number; variables.__tpl_id is its template id.
+  const overrideNumberIds = new Set<string>();
+  const overrideTemplateIds = new Set<string>();
+  for (const r of (due ?? [])) {
+    const nid = (r as any).whatsapp_number_id;
+    const tid = (r as any)?.variables?.__tpl_id;
+    if (nid && nid !== r.campaigns?.whatsapp_number_id) overrideNumberIds.add(nid);
+    if (typeof tid === "string" && tid !== r.campaigns?.message_templates?.id) overrideTemplateIds.add(tid);
+  }
+  const numberCache = new Map<string, any>();
+  const templateCache = new Map<string, any>();
+  if (overrideNumberIds.size > 0) {
+    const { data: nrows } = await admin
+      .from("whatsapp_numbers")
+      .select("id, phone_number, provider_app_id, provider_api_key, display_name")
+      .in("id", [...overrideNumberIds]);
+    for (const n of nrows ?? []) numberCache.set(n.id, n);
+  }
+  if (overrideTemplateIds.size > 0) {
+    const { data: trows } = await admin
+      .from("message_templates")
+      .select("id, name, language, body, variables, provider_template_id")
+      .in("id", [...overrideTemplateIds]);
+    for (const t of trows ?? []) templateCache.set(t.id, t);
+  }
+  // Apply overrides in-place so downstream code sees the right number/template.
+  for (const r of (due ?? [])) {
+    const nid = (r as any).whatsapp_number_id;
+    const tid = (r as any)?.variables?.__tpl_id;
+    if (nid && nid !== r.campaigns?.whatsapp_number_id) {
+      const n = numberCache.get(nid);
+      if (n && r.campaigns) {
+        r.campaigns.whatsapp_number_id = n.id;
+        r.campaigns.whatsapp_numbers = n;
+      }
+    }
+    if (typeof tid === "string" && tid !== r.campaigns?.message_templates?.id) {
+      const t = templateCache.get(tid);
+      if (t && r.campaigns) r.campaigns.message_templates = t;
+    }
+  }
 
   // Shard by sender number so each WhatsApp number processes its queue
   // independently and in parallel. Within a shard we still sleep up to the
