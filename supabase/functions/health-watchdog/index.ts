@@ -39,11 +39,19 @@ Deno.serve(async (req) => {
       .select("id,name,last_error,last_ingest_at,created_at")
       .eq("kind", "google_sheet")
       .eq("status", "active");
-    const errored = (sheets ?? []).filter((s) => s.last_error);
+    // Only alert if the error has persisted — i.e. no successful ingest in the last
+    // STALE_SYNC_MIN minutes. This avoids paging on transient Google API hiccups
+    // (e.g. sheets_api_503 / connection refused) that the very next cron run clears.
+    const persistentErrCutoff = Date.now() - STALE_SYNC_MIN * 60_000;
+    const errored = (sheets ?? []).filter((s) => {
+      if (!s.last_error) return false;
+      if (!s.last_ingest_at) return true; // never succeeded — definitely broken
+      return new Date(s.last_ingest_at).getTime() < persistentErrCutoff;
+    });
     if (errored.length > 0) {
       alerts.push({
         kind: "sheets_sync_error",
-        text: `:rotating_light: Google Sheets sync errors on ${errored.length} source(s): ${errored.map((s) => `${s.name}: ${s.last_error}`).join(" | ")}`,
+        text: `:rotating_light: Google Sheets sync errors persisting >${STALE_SYNC_MIN}m on ${errored.length} source(s): ${errored.map((s) => `${s.name}: ${s.last_error}`).join(" | ")}`,
       });
     }
 
