@@ -89,29 +89,29 @@ Deno.serve(async (req) => {
 
     if (!invitedUserId) return json({ error: "User id missing" }, 500);
 
-    // Upsert membership
-    const { error: memErr } = await admin
+    // Upsert membership. New invites are marked invited (joined_at = null) so
+    // the Slack "joined CRM" alert only fires after the user actually signs in.
+    const nowIso = new Date().toISOString();
+    const { data: existingMem } = await admin
       .from("workspace_members")
-      .upsert(
-        { workspace_id, user_id: invitedUserId, role },
-        { onConflict: "workspace_id,user_id" },
-      );
-    if (memErr) {
-      // workspace_members has no unique constraint? fall back to manual
-      const { data: existingMem } = await admin
+      .select("id, joined_at")
+      .eq("workspace_id", workspace_id)
+      .eq("user_id", invitedUserId)
+      .maybeSingle();
+
+    if (existingMem) {
+      await admin.from("workspace_members").update({ role }).eq("id", existingMem.id);
+    } else {
+      const { error: insErr } = await admin
         .from("workspace_members")
-        .select("id")
-        .eq("workspace_id", workspace_id)
-        .eq("user_id", invitedUserId)
-        .maybeSingle();
-      if (existingMem) {
-        await admin.from("workspace_members").update({ role }).eq("id", existingMem.id);
-      } else {
-        const { error: insErr } = await admin
-          .from("workspace_members")
-          .insert({ workspace_id, user_id: invitedUserId, role });
-        if (insErr) return json({ error: insErr.message }, 500);
-      }
+        .insert({
+          workspace_id,
+          user_id: invitedUserId,
+          role,
+          invited_at: nowIso,
+          joined_at: null,
+        });
+      if (insErr) return json({ error: insErr.message }, 500);
     }
 
     return json({ ok: true, user_id: invitedUserId, invited, workspace: ws.slug, role });

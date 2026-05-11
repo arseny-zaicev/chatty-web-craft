@@ -188,6 +188,8 @@ Deno.serve(async (req) => {
             user_id: userId,
             role: link.role,
             allowed_pipeline_ids: memberPipes,
+            invited_at: new Date().toISOString(),
+            joined_at: new Date().toISOString(),
           });
         if (insErr) return json({ error: insErr.message }, 500);
 
@@ -247,7 +249,7 @@ Deno.serve(async (req) => {
       // total sign-ins (auth metadata), and 30-day active minutes / sessions.
       const { data: rows, error: memErr } = await admin
         .from("workspace_members")
-        .select("id, user_id, role, can_view_stats, allowed_pipeline_ids, created_at")
+        .select("id, user_id, role, can_view_stats, allowed_pipeline_ids, created_at, invited_at, joined_at")
         .eq("workspace_id", workspace_id)
         .order("created_at", { ascending: true });
       if (memErr) return json({ error: memErr.message }, 500);
@@ -304,7 +306,9 @@ Deno.serve(async (req) => {
           role: r.role,
           can_view_stats: Boolean((r as { can_view_stats?: boolean }).can_view_stats),
           allowed_pipeline_ids: ((r as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null) as string[] | null,
-          joined_at: r.created_at,
+          joined_at: (r as { joined_at?: string | null }).joined_at ?? null,
+          invited_at: (r as { invited_at?: string | null }).invited_at ?? r.created_at,
+          membership_created_at: r.created_at,
           email: auth.email,
           full_name: prof.full_name,
           account_created_at: auth.created_at,

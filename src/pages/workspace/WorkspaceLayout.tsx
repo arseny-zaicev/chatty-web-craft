@@ -50,6 +50,8 @@ export default function WorkspaceLayout() {
         navigate("/portal-auth", { replace: true });
         return;
       }
+      // Mark any pending invite as "joined" so the Slack alert fires now (not on invite send).
+      try { await supabase.rpc("mark_membership_joined" as never); } catch { /* non-fatal */ }
       setAuthChecked(true);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
