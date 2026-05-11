@@ -857,7 +857,22 @@ function AddNumberDrawer({
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
-  
+
+  const dupPhone = useMemo(() => {
+    const clean = phone.replace(/[^\d]/g, "");
+    if (!clean) return null;
+    return existingRows.find((r) => r.phone_number === clean && r.id !== editing?.id) ?? null;
+  }, [phone, existingRows, editing]);
+  const dupAppName = useMemo(() => {
+    const v = appName.trim().toLowerCase();
+    if (!v) return null;
+    return existingRows.find((r) => (r.label ?? "").trim().toLowerCase() === v && r.id !== editing?.id) ?? null;
+  }, [appName, existingRows, editing]);
+  const dupAppId = useMemo(() => {
+    const v = appId.trim().toLowerCase();
+    if (!v) return null;
+    return existingRows.find((r) => (r.provider_app_id ?? "").trim().toLowerCase() === v && r.id !== editing?.id) ?? null;
+  }, [appId, existingRows, editing]);
 
   const reset = () => {
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
