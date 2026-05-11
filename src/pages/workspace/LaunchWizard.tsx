@@ -1279,7 +1279,18 @@ export default function LaunchWizard() {
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
-          <Row label="Per number" value={activeNumbers.length ? Math.ceil(recipients.length / activeNumbers.length) : "-"} />
+          <Row label="Per day" value={scheduleMode === "scheduled" ? dayPlan.effectivePerDay.toLocaleString() : recipients.length.toLocaleString()} />
+          <Row label="Per number / day" value={activeNumbers.length ? Math.ceil((scheduleMode === "scheduled" ? dayPlan.effectivePerDay : recipients.length) / activeNumbers.length) : "-"} />
+          {scheduleMode === "scheduled" && (
+            <Row
+              label="Days needed"
+              value={
+                <span className={dayPlan.daysNeeded > dayPlan.daysSelected ? "text-amber-600 font-medium" : undefined}>
+                  {dayPlan.daysNeeded}{dayPlan.daysNeeded > dayPlan.daysSelected ? ` (you picked ${dayPlan.daysSelected})` : ""}
+                </span>
+              }
+            />
+          )}
           <Row label="Speed" value={delayMin === 0 && delayMax === 0 ? "Blast" : `${delayMin}-${delayMax}s`} />
           <Row label="ETA" value={eta} />
           {resolution.missing.length > 0 && (
