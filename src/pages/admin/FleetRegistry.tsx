@@ -60,6 +60,9 @@ type Row = {
   active_campaigns: ActiveCampaign[];
   last_used_at: string | null;
   last_used_workspace_id: string | null;
+  quality_rating: string | null;
+  last_health_sync_at: string | null;
+  last_health_sync_error: string | null;
 };
 
 type ActiveCampaign = {
