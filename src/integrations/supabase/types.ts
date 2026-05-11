@@ -2457,6 +2457,7 @@ export type Database = {
         | "completed"
         | "failed"
         | "scheduled"
+        | "cancelled"
       form_type: "qualification" | "seller_leads" | "demo_request" | "bm_access"
       gupshup_mail_category:
         | "quality_drop"
@@ -2655,6 +2656,7 @@ export const Constants = {
         "completed",
         "failed",
         "scheduled",
+        "cancelled",
       ],
       form_type: ["qualification", "seller_leads", "demo_request", "bm_access"],
       gupshup_mail_category: [
