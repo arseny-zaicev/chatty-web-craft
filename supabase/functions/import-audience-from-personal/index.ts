@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const { data: rows, error: pullErr } = await personal
       .from("audience_rows")
-      .select("phone, full_name, country_code, payload, validation_status")
+      .select("phone, payload, validation_status")
       .eq("batch_tag", batch_id);
     if (pullErr) {
       return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}` }), {
