@@ -312,8 +312,8 @@ export default function FleetRegistry() {
     queryFn: fetchFleet,
     enabled: authChecked,
   });
-  const rows = data?.rows ?? [];
-  const workspaces = data?.workspaces ?? [];
+  const rows = data?.rows ?? EMPTY_ROWS;
+  const workspaces = data?.workspaces ?? EMPTY_WORKSPACES;
 
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewMode>("all");
