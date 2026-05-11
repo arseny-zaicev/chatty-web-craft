@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, ArrowLeft, BarChart3, AlertTriangle, Send, CheckCircle2, Eye, MessageCircle } from "lucide-react";
+import { Loader2, ArrowLeft, BarChart3, AlertTriangle, Send, CheckCircle2, Eye, MessageCircle, DollarSign, Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
-type Period = "7" | "30" | "90";
+type Period = "1" | "7" | "30" | "90";
+
+const DAILY_CAP_PER_NUMBER = 200;
 
 type EventRow = {
   whatsapp_number_id: string | null;
@@ -43,10 +45,16 @@ type CampaignRow = {
   reply_count: number;
 };
 
-const fetchAnalytics = async (period: Period) => {
-  const sinceIso = new Date(Date.now() - parseInt(period) * 24 * 60 * 60 * 1000).toISOString();
+type Stats = { sent: number; delivered: number; read: number; failed: number; lastSent: string | null };
+const newStats = (): Stats => ({ sent: 0, delivered: 0, read: 0, failed: 0, lastSent: null });
 
-  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }, { data: convs }] =
+const isActiveStatus = (s: string) => s === "active";
+
+const fetchAnalytics = async (period: Period) => {
+  const periodDays = parseInt(period);
+  const sinceIso = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }] =
     await Promise.all([
       supabase.from("whatsapp_message_events")
         .select("whatsapp_number_id, event_type, error_code, error_message, received_at, campaign_recipient_id")
@@ -54,22 +62,22 @@ const fetchAnalytics = async (period: Period) => {
         .order("received_at", { ascending: false })
         .limit(50000),
       supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, status, workspace_id"),
-      supabase.from("workspaces").select("id, name"),
+      supabase.from("workspaces").select("id, name, delivered_rate_usd"),
       supabase.from("campaigns").select("id, name, status, total_recipients, sent_count, failed_count, created_at, workspace_id")
         .gte("created_at", sinceIso)
         .order("created_at", { ascending: false }),
-      supabase.from("conversations").select("whatsapp_number_id, last_message_at, unread_count"),
     ]);
 
   if (eErr) throw eErr;
 
-  const wsMap = new Map((workspaces ?? []).map((w) => [w.id, w.name]));
+  const wsMap = new Map((workspaces ?? []).map((w) => [w.id, { name: w.name, rate: Number(w.delivered_rate_usd ?? 0) }]));
+  const numberToWs = new Map((numbers ?? []).map((n) => [n.id, n.workspace_id]));
 
   // Per-number aggregation
-  const perNumber = new Map<string, { sent: number; delivered: number; read: number; failed: number; lastSent: string | null }>();
+  const perNumber = new Map<string, Stats>();
   for (const e of (events ?? []) as EventRow[]) {
     if (!e.whatsapp_number_id) continue;
-    const cur = perNumber.get(e.whatsapp_number_id) ?? { sent: 0, delivered: 0, read: 0, failed: 0, lastSent: null };
+    const cur = perNumber.get(e.whatsapp_number_id) ?? newStats();
     if (e.event_type === "sent" || e.event_type === "enqueued") {
       cur.sent += 1;
       if (!cur.lastSent || e.received_at > cur.lastSent) cur.lastSent = e.received_at;
@@ -80,29 +88,60 @@ const fetchAnalytics = async (period: Period) => {
     perNumber.set(e.whatsapp_number_id, cur);
   }
 
-  const numberRows: (NumberRow & { sent: number; delivered: number; read: number; failed: number; lastSent: string | null })[] =
-    (numbers ?? []).map((n) => {
-      const stats = perNumber.get(n.id) ?? { sent: 0, delivered: 0, read: 0, failed: 0, lastSent: null };
-      return {
-        id: n.id,
-        phone_number: n.phone_number,
-        display_name: n.display_name,
-        label: n.label,
-        status: n.status,
-        workspace_id: n.workspace_id,
-        workspace_name: n.workspace_id ? (wsMap.get(n.workspace_id) ?? "—") : "Unassigned",
-        ...stats,
-      };
-    });
+  const numberRows = (numbers ?? []).map((n) => {
+    const stats = perNumber.get(n.id) ?? newStats();
+    const cap = isActiveStatus(n.status) ? DAILY_CAP_PER_NUMBER * periodDays : 0;
+    return {
+      id: n.id,
+      phone_number: n.phone_number,
+      display_name: n.display_name,
+      label: n.label,
+      status: n.status,
+      workspace_id: n.workspace_id,
+      workspace_name: n.workspace_id ? (wsMap.get(n.workspace_id)?.name ?? "—") : "Unassigned",
+      cap,
+      ...stats,
+    };
+  });
+
+  // Per-client aggregation
+  type ClientAgg = { workspace_id: string; name: string; rate: number; numbers: number; activeNumbers: number; cap: number; sent: number; delivered: number; failed: number };
+  const perClient = new Map<string, ClientAgg>();
+  for (const n of numberRows) {
+    if (!n.workspace_id) continue;
+    let agg = perClient.get(n.workspace_id);
+    if (!agg) {
+      const ws = wsMap.get(n.workspace_id);
+      agg = { workspace_id: n.workspace_id, name: ws?.name ?? "—", rate: ws?.rate ?? 0, numbers: 0, activeNumbers: 0, cap: 0, sent: 0, delivered: 0, failed: 0 };
+      perClient.set(n.workspace_id, agg);
+    }
+    agg.numbers += 1;
+    if (isActiveStatus(n.status)) agg.activeNumbers += 1;
+    agg.cap += n.cap;
+    agg.sent += n.sent;
+    agg.delivered += n.delivered;
+    agg.failed += n.failed;
+  }
+  const clientRows = Array.from(perClient.values()).sort((a, b) => (b.delivered * b.rate) - (a.delivered * a.rate));
 
   // Totals
-  let totSent = 0, totDelivered = 0, totRead = 0, totFailed = 0;
+  let totSent = 0, totDelivered = 0, totRead = 0, totFailed = 0, totRevenue = 0;
   for (const e of (events ?? []) as EventRow[]) {
     if (e.event_type === "sent" || e.event_type === "enqueued") totSent += 1;
-    else if (e.event_type === "delivered") totDelivered += 1;
+    else if (e.event_type === "delivered") {
+      totDelivered += 1;
+      const wsId = e.whatsapp_number_id ? numberToWs.get(e.whatsapp_number_id) : null;
+      if (wsId) {
+        const rate = wsMap.get(wsId)?.rate ?? 0;
+        totRevenue += rate;
+      }
+    }
     else if (e.event_type === "read") totRead += 1;
     else if (e.event_type === "failed" || e.event_type === "error") totFailed += 1;
   }
+
+  const totalCap = numberRows.reduce((s, n) => s + n.cap, 0);
+  const activeNumbers = numberRows.filter((n) => isActiveStatus(n.status)).length;
 
   // Top errors
   const errorMap = new Map<string, number>();
@@ -111,12 +150,9 @@ const fetchAnalytics = async (period: Period) => {
     const key = e.error_message?.trim() || e.error_code || "Unknown error";
     errorMap.set(key, (errorMap.get(key) ?? 0) + 1);
   }
-  const topErrors = Array.from(errorMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([msg, count]) => ({ msg, count }));
+  const topErrors = Array.from(errorMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([msg, count]) => ({ msg, count }));
 
-  // Hour heatmap (sent events by hour 0-23)
+  // Hour heatmap
   const hourBuckets = new Array(24).fill(0);
   for (const e of (events ?? []) as EventRow[]) {
     if (e.event_type !== "sent" && e.event_type !== "enqueued") continue;
@@ -124,9 +160,6 @@ const fetchAnalytics = async (period: Period) => {
     hourBuckets[h] += 1;
   }
 
-  // Campaign performance: get reply count via inbound conversations matching campaign window
-  // Simpler proxy: sum of unread_count + last_message_at >= campaign created_at on that workspace's numbers.
-  // For accuracy without heavy joins, just leave reply_count 0 for now and show core stats.
   const campaignRows: CampaignRow[] = (campaigns ?? []).map((c) => ({
     id: c.id,
     name: c.name,
@@ -135,21 +168,21 @@ const fetchAnalytics = async (period: Period) => {
     sent_count: c.sent_count,
     failed_count: c.failed_count,
     created_at: c.created_at,
-    workspace_name: wsMap.get(c.workspace_id) ?? "—",
+    workspace_name: wsMap.get(c.workspace_id)?.name ?? "—",
     reply_count: 0,
   }));
 
-  // Active numbers in period
-  const activeNumbers = numberRows.filter((n) => n.sent > 0).length;
-
   return {
-    totals: { sent: totSent, delivered: totDelivered, read: totRead, failed: totFailed, activeNumbers },
+    totals: { sent: totSent, delivered: totDelivered, read: totRead, failed: totFailed, activeNumbers, capacity: totalCap, revenue: totRevenue },
     numbers: numberRows.sort((a, b) => b.sent - a.sent),
+    clients: clientRows,
     topErrors,
     hourBuckets,
     campaigns: campaignRows,
   };
 };
+
+const fmtMoney = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function FleetAnalytics() {
   const navigate = useNavigate();
@@ -189,6 +222,7 @@ export default function FleetAnalytics() {
   }
 
   const t = data!.totals;
+  const periodLabel = period === "1" ? "24h" : `${period}d`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -198,11 +232,11 @@ export default function FleetAnalytics() {
           <h1 className="font-display text-lg font-semibold flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />Fleet Analytics
           </h1>
-          <span className="text-xs text-muted-foreground">Internal data only - Gupshup billing/quality not yet wired</span>
+          <span className="text-xs text-muted-foreground hidden md:inline">Capacity baseline {DAILY_CAP_PER_NUMBER}/number/day - blocked numbers excluded</span>
           <div className="ml-auto flex gap-1">
-            {(["7", "30", "90"] as Period[]).map((p) => (
+            {(["1", "7", "30", "90"] as Period[]).map((p) => (
               <Button key={p} size="sm" variant={period === p ? "default" : "outline"} onClick={() => setPeriod(p)}>
-                {p}d
+                {p === "1" ? "24h" : `${p}d`}
               </Button>
             ))}
           </div>
@@ -211,16 +245,13 @@ export default function FleetAnalytics() {
 
       <main className="container mx-auto px-4 py-6 space-y-6">
         {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <KpiCard icon={<Send className="w-4 h-4" />} label="Sent" value={t.sent.toLocaleString()} />
-          <KpiCard icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} label="Delivered"
-            value={t.delivered.toLocaleString()} sub={`${pct(t.delivered, t.sent)}% of sent`} />
-          <KpiCard icon={<Eye className="w-4 h-4 text-sky-600" />} label="Read"
-            value={t.read.toLocaleString()} sub={`${pct(t.read, t.delivered)}% of delivered`} />
-          <KpiCard icon={<AlertTriangle className="w-4 h-4 text-red-600" />} label="Failed"
-            value={t.failed.toLocaleString()} sub={`${pct(t.failed, t.sent + t.failed)}% failure rate`} />
-          <KpiCard icon={<MessageCircle className="w-4 h-4 text-amber-600" />} label="Active numbers"
-            value={String(t.activeNumbers)} sub={`sent ≥1 msg / ${period}d`} />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <KpiCard icon={<Gauge className="w-4 h-4 text-muted-foreground" />} label="Capacity" value={t.capacity.toLocaleString()} sub={`${t.activeNumbers} active × ${DAILY_CAP_PER_NUMBER} × ${period === "1" ? "1d" : period + "d"}`} />
+          <KpiCard icon={<Send className="w-4 h-4" />} label="Sent" value={t.sent.toLocaleString()} sub={`${pct(t.sent, t.capacity)}% of capacity`} />
+          <KpiCard icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} label="Delivered" value={t.delivered.toLocaleString()} sub={`${pct(t.delivered, t.sent)}% of sent`} />
+          <KpiCard icon={<AlertTriangle className="w-4 h-4 text-red-600" />} label="Failed" value={t.failed.toLocaleString()} sub={`${pct(t.failed, t.sent + t.failed)}% fail rate`} />
+          <KpiCard icon={<Eye className="w-4 h-4 text-sky-600" />} label="Read" value={t.read.toLocaleString()} sub={`${pct(t.read, t.delivered)}% of delivered`} />
+          <KpiCard icon={<DollarSign className="w-4 h-4 text-amber-600" />} label="Revenue" value={fmtMoney(t.revenue)} sub={`delivered × client rate (${periodLabel})`} />
         </div>
 
         {/* Hour heatmap */}
@@ -240,6 +271,48 @@ export default function FleetAnalytics() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Per-client revenue */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Per-client breakdown (last {periodLabel})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead className="text-right">Numbers</TableHead>
+                  <TableHead className="text-right">Capacity</TableHead>
+                  <TableHead className="text-right">Sent</TableHead>
+                  <TableHead className="text-right">Delivered</TableHead>
+                  <TableHead className="text-right">Failed</TableHead>
+                  <TableHead className="text-right">Deliv%</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data!.clients.map((c) => (
+                  <TableRow key={c.workspace_id}>
+                    <TableCell className="text-xs font-medium">{c.name}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">{c.activeNumbers}/{c.numbers}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums text-muted-foreground">{c.cap.toLocaleString()}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">{c.sent.toLocaleString()}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums font-medium text-emerald-700">{c.delivered.toLocaleString()}</TableCell>
+                    <TableCell className={`text-xs text-right tabular-nums ${c.failed > 0 ? "text-red-600" : ""}`}>{c.failed.toLocaleString()}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">{c.sent > 0 ? `${pct(c.delivered, c.sent)}%` : "—"}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums text-muted-foreground">{c.rate > 0 ? fmtMoney(c.rate) : "—"}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums font-semibold">{fmtMoney(c.delivered * c.rate)}</TableCell>
+                  </TableRow>
+                ))}
+                {data!.clients.length === 0 && (
+                  <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-6">No clients with numbers yet.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
 
@@ -266,7 +339,7 @@ export default function FleetAnalytics() {
           {/* Per-number health */}
           <Card className="lg:col-span-2">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Per-number health (last {period} days)</CardTitle>
+              <CardTitle className="text-sm">Per-number health (last {periodLabel})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -274,21 +347,23 @@ export default function FleetAnalytics() {
                   <TableRow>
                     <TableHead>Number</TableHead>
                     <TableHead>Client</TableHead>
+                    <TableHead className="text-right">Cap</TableHead>
                     <TableHead className="text-right">Sent</TableHead>
-                    <TableHead className="text-right">Deliv%</TableHead>
-                    <TableHead className="text-right">Read%</TableHead>
+                    <TableHead className="text-right">Used%</TableHead>
+                    <TableHead className="text-right">Deliv</TableHead>
                     <TableHead className="text-right">Fail%</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data!.numbers.slice(0, 20).map((n) => (
+                  {data!.numbers.slice(0, 25).map((n) => (
                     <TableRow key={n.id}>
                       <TableCell className="font-mono text-xs whitespace-nowrap">+{n.phone_number}<div className="text-[10px] text-muted-foreground">{n.label || n.display_name || "—"}</div></TableCell>
                       <TableCell className="text-xs">{n.workspace_name}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-muted-foreground">{n.cap > 0 ? n.cap.toLocaleString() : "—"}</TableCell>
                       <TableCell className="text-xs text-right tabular-nums font-medium">{n.sent.toLocaleString()}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">{n.sent > 0 ? `${pct(n.delivered, n.sent)}%` : "—"}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">{n.delivered > 0 ? `${pct(n.read, n.delivered)}%` : "—"}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">{n.cap > 0 ? `${pct(n.sent, n.cap)}%` : "—"}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums text-emerald-700">{n.delivered.toLocaleString()}</TableCell>
                       <TableCell className={`text-xs text-right tabular-nums ${pct(n.failed, n.sent + n.failed) > 5 ? "text-red-600 font-medium" : ""}`}>
                         {(n.sent + n.failed) > 0 ? `${pct(n.failed, n.sent + n.failed)}%` : "—"}
                       </TableCell>
@@ -298,7 +373,7 @@ export default function FleetAnalytics() {
                     </TableRow>
                   ))}
                   {data!.numbers.length === 0 && (
-                    <TableRow><TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-6">No data yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-6">No data yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -309,7 +384,7 @@ export default function FleetAnalytics() {
         {/* Campaign performance */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Campaign performance (last {period} days)</CardTitle>
+            <CardTitle className="text-sm">Campaign performance (last {periodLabel})</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
