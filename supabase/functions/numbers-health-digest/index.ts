@@ -10,7 +10,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ALERT_CHANNEL = Deno.env.get("SLACK_OPS_NUMBERS_CHANNEL_ID") || "delivery-leads";
+const ALERT_CHANNEL = Deno.env.get("SLACK_OPS_NUMBERS_CHANNEL_ID") || "numbers-health";
 
 type N = {
   id: string;
