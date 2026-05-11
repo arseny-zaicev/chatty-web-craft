@@ -1109,7 +1109,7 @@ export default function LaunchWizard() {
                       <Badge variant="outline" className="text-[10px]">Will reserve {dbTargetCount} row{dbTargetCount === 1 ? "" : "s"} on launch</Badge>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Rows are reserved when you click Launch, marked used after each sub-campaign succeeds, and released automatically if a sub-campaign fails.
+                      Rows are reserved when you click Launch, marked used after the campaign succeeds, and released automatically if it fails.
                     </p>
                   </>
                 )}
