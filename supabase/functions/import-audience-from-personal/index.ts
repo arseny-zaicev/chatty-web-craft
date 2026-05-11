@@ -51,27 +51,46 @@ Deno.serve(async (req) => {
     }
 
     // Connect to user's personal Supabase
-    const personal = createClient(
-      Deno.env.get("PERSONAL_SUPABASE_URL")!,
-      Deno.env.get("PERSONAL_SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const rawUrl = (Deno.env.get("PERSONAL_SUPABASE_URL") ?? "").trim().replace(/\/+$/, "");
+    const rawKey = (Deno.env.get("PERSONAL_SUPABASE_SERVICE_ROLE_KEY") ?? "").trim();
+    console.log("Personal URL:", JSON.stringify(rawUrl), "key length:", rawKey.length);
+    const personal = createClient(rawUrl, rawKey);
 
-    const { data: rows, error: pullErr } = await personal
-      .from("audience_rows")
-      .select("phone, payload, validation_status")
-      .eq("batch_tag", batch_id);
-    if (pullErr) {
-      return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}` }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Paginate pull from personal (Supabase caps each select at 1000)
+    const PAGE = 1000;
+    const allRows: Array<{ phone: string; payload: any; validation_status: string }> = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data: page, error: pullErr } = await personal
+        .from("audience_rows")
+        .select("phone, payload, validation_status")
+        .eq("batch_id", batch_id)
+        .order("phone")
+        .range(from, from + PAGE - 1);
+      if (pullErr) {
+        console.error("pullErr", pullErr);
+        return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}`, details: pullErr }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!page || page.length === 0) break;
+      allRows.push(...page);
+      if (page.length < PAGE) break;
     }
-    if (!rows || rows.length === 0) {
+    if (allRows.length === 0) {
       return new Response(JSON.stringify({ inserted: 0, message: "No rows found in personal Supabase for this batch_id" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const toInsert = rows.map((r: any) => ({
+    // Idempotency: wipe any previously-imported rows for this batch in CRM
+    const { error: delErr } = await crm.from("audience_rows").delete().eq("batch_id", batch_id);
+    if (delErr) {
+      return new Response(JSON.stringify({ error: `Reset failed: ${delErr.message}` }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const toInsert = allRows.map((r) => ({
       batch_id,
       workspace_id: batch.workspace_id,
       phone: r.phone,
@@ -80,16 +99,20 @@ Deno.serve(async (req) => {
       usage_status: "unused",
     }));
 
-    const { error: insErr, count } = await crm
-      .from("audience_rows")
-      .insert(toInsert, { count: "exact" });
-    if (insErr) {
-      return new Response(JSON.stringify({ error: `Insert failed: ${insErr.message}` }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let inserted = 0;
+    const CHUNK = 500;
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const slice = toInsert.slice(i, i + CHUNK);
+      const { error: insErr } = await crm.from("audience_rows").insert(slice);
+      if (insErr) {
+        return new Response(JSON.stringify({ error: `Insert failed at offset ${i}: ${insErr.message}`, inserted_so_far: inserted }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      inserted += slice.length;
     }
 
-    return new Response(JSON.stringify({ inserted: count ?? toInsert.length }), {
+    return new Response(JSON.stringify({ inserted, pulled: allRows.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
