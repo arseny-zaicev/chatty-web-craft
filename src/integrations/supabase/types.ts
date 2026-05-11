@@ -1478,6 +1478,7 @@ export type Database = {
           error: string | null
           event_type: string
           id: string
+          max_attempts: number
           payload: Json
           processed_at: string | null
           status: string
@@ -1489,6 +1490,7 @@ export type Database = {
           error?: string | null
           event_type: string
           id?: string
+          max_attempts?: number
           payload?: Json
           processed_at?: string | null
           status?: string
@@ -1500,6 +1502,7 @@ export type Database = {
           error?: string | null
           event_type?: string
           id?: string
+          max_attempts?: number
           payload?: Json
           processed_at?: string | null
           status?: string
