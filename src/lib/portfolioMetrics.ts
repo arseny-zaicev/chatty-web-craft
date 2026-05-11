@@ -84,6 +84,11 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
         campaign_end: null,
         running_campaign_name: null,
         scheduled_campaign_name: null,
+        active_campaign_name: null,
+        active_campaign_status: null,
+        active_campaign_sent: 0,
+        active_campaign_total: 0,
+        active_campaign_kind: null,
         health: "idle",
       };
     }
