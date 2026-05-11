@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       .eq("batch_id", batch_id);
     if (pullErr) {
       console.error("pullErr", pullErr);
-      return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}`, details: pullErr }), {
+      return new Response(JSON.stringify({ error: `Personal pull failed: ${pullErr.message}`, details: pullErr, debug_url_prefix: rawUrl.slice(0, 50), key_len: rawKey.length }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
