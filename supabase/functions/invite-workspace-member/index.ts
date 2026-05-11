@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     // Authorize: caller must be admin OR workspace owner
     const { data: ws } = await admin
       .from("workspaces")
-      .select("id, owner_user_id, slug, name")
+      .select("id, owner_user_id, slug, name, logo_url")
       .eq("id", workspace_id)
       .single();
     if (!ws) return json({ error: "Workspace not found" }, 404);
@@ -62,7 +62,10 @@ Deno.serve(async (req) => {
       invitedUserId = existing.id;
     } else {
       const APP_BASE_URL = Deno.env.get("APP_BASE_URL") || "https://iskra.ae";
-      const redirectTo = `${APP_BASE_URL.replace(/\/$/, "")}/accept-invite?ws=${encodeURIComponent(ws.slug ?? "")}`;
+      const inviteUrl = new URL(`${APP_BASE_URL.replace(/\/$/, "")}/accept-invite`);
+      inviteUrl.searchParams.set("ws", ws.slug ?? "");
+      inviteUrl.searchParams.set("wid", ws.id);
+      const redirectTo = inviteUrl.toString();
       const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
         redirectTo,
       });

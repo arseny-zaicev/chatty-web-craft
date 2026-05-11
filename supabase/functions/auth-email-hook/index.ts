@@ -67,6 +67,8 @@ const SAMPLE_DATA: Record<string, object> = {
     siteName: SITE_NAME,
     siteUrl: SAMPLE_PROJECT_URL,
     confirmationUrl: SAMPLE_PROJECT_URL,
+    partnerName: 'Salesforge',
+    partnerLogoUrl: 'https://logo.clearbit.com/salesforge.ai',
   },
   email_change: {
     siteName: SITE_NAME,
@@ -78,6 +80,14 @@ const SAMPLE_DATA: Record<string, object> = {
   reauthentication: {
     token: '123456',
   },
+}
+
+function normalizeLogoUrl(value?: string | null): string | undefined {
+  const raw = value?.trim()
+  if (!raw) return undefined
+  if (/^https?:\/\//i.test(raw)) return raw
+  const domain = raw.replace(/^www\./i, '').replace(/\/.*$/, '')
+  return domain.includes('.') ? `https://logo.clearbit.com/${domain}` : undefined
 }
 
 // Preview endpoint handler - returns rendered HTML without sending email
@@ -250,7 +260,7 @@ async function handleWebhook(req: Request): Promise<Response> {
             .maybeSingle()
           if (wsRow?.name) {
             templateProps.partnerName = wsRow.name
-            templateProps.partnerLogoUrl = wsRow.logo_url ?? undefined
+            templateProps.partnerLogoUrl = normalizeLogoUrl(wsRow.logo_url)
           }
         }
       }
