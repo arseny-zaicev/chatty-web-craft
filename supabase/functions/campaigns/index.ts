@@ -204,11 +204,24 @@ async function notifyLaunchSlack(workspace_id: string | null, payload: { name: s
 
 async function launchCampaign(admin: any, requesterId: string, body: any) {
   const name = String(body.name || "").trim().slice(0, 160);
-  const whatsappNumberId = String(body.whatsapp_number_id || "");
-  const templateId = String(body.template_id || "");
   const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
+
+  // Multi-number support: accept either legacy single (whatsapp_number_id+template_id)
+  // or new `numbers: [{number_id, template_id}, ...]`. ONE campaign row is created
+  // and recipients are round-robin distributed across the numbers; each recipient
+  // row stores its assigned whatsapp_number_id (and template id under variables.__tpl_id).
+  const rawNumbers: Array<{ number_id: string; template_id: string }> = Array.isArray(body.numbers) && body.numbers.length > 0
+    ? body.numbers
+        .map((n: any) => ({
+          number_id: String(n?.number_id || n?.numberId || ""),
+          template_id: String(n?.template_id || n?.templateId || ""),
+        }))
+        .filter((n: any) => uuidRegex.test(n.number_id) && uuidRegex.test(n.template_id))
+    : (uuidRegex.test(String(body.whatsapp_number_id || "")) && uuidRegex.test(String(body.template_id || ""))
+        ? [{ number_id: String(body.whatsapp_number_id), template_id: String(body.template_id) }]
+        : []);
 
   // New scheduling params
   const schedulerKind: "uniform" | "poisson" = body.scheduler_kind === "uniform" ? "uniform" : "poisson";
@@ -216,31 +229,48 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const windowStart: string = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : "09:00";
   const windowEnd: string = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : "18:00";
   const respectTz: boolean = body.respect_recipient_tz !== false;
-  const bucketIndex: number = Math.max(0, Number(body.bucket_index ?? 0) | 0);
-  const bucketCount: number = Math.max(1, Number(body.bucket_count ?? 1) | 0);
   const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
 
-  if (!name || !uuidRegex.test(whatsappNumberId) || !uuidRegex.test(templateId)) {
-    return json({ error: "Campaign name, number, and template are required" }, 400);
+  if (!name || rawNumbers.length === 0) {
+    return json({ error: "Campaign name and at least one number+template are required" }, 400);
   }
-  if (recipients.length < 1 || recipients.length > 1000) {
-    return json({ error: "Add 1-1000 recipients" }, 400);
+  if (recipients.length < 1 || recipients.length > 5000) {
+    return json({ error: "Add 1-5000 recipients" }, 400);
   }
 
-  const { data: number } = await admin
+  const numberIds = [...new Set(rawNumbers.map((n) => n.number_id))];
+  const { data: numberRows } = await admin
     .from("whatsapp_numbers")
     .select("id, user_id, workspace_id, phone_number, provider_app_id")
-    .eq("id", whatsappNumberId)
-    .maybeSingle();
-  if (!number) return json({ error: "WhatsApp number not found" }, 404);
-  if (!(await canAccessUser(admin, requesterId, number.user_id))) return json({ error: "Forbidden" }, 403);
+    .in("id", numberIds);
+  if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "WhatsApp number not found" }, 404);
+  const ownerId = numberRows[0].user_id;
+  const wsId = numberRows[0].workspace_id;
+  for (const n of numberRows) {
+    if (n.user_id !== ownerId || n.workspace_id !== wsId) {
+      return json({ error: "All numbers must belong to the same workspace" }, 400);
+    }
+  }
+  if (!(await canAccessUser(admin, requesterId, ownerId))) return json({ error: "Forbidden" }, 403);
 
-  const { data: template } = await admin
+  const templateIds = [...new Set(rawNumbers.map((n) => n.template_id))];
+  const { data: templateRows } = await admin
     .from("message_templates")
     .select("id, user_id, name, language, variables, provider_template_id")
-    .eq("id", templateId)
-    .maybeSingle();
-  if (!template || template.user_id !== number.user_id) return json({ error: "Template not found" }, 404);
+    .in("id", templateIds);
+  if (!templateRows || templateRows.length !== templateIds.length) return json({ error: "Template not found" }, 404);
+  for (const t of templateRows) {
+    if (t.user_id !== ownerId) return json({ error: "Template not found" }, 404);
+  }
+
+  // Primary number/template = first entry (for legacy campaigns.whatsapp_number_id / template_id)
+  const primary = rawNumbers[0];
+  const number = numberRows.find((n: any) => n.id === primary.number_id)!;
+  const template = templateRows.find((t: any) => t.id === primary.template_id)!;
+  const bucketIndex = 0;
+  const bucketCount = rawNumbers.length;
+  const whatsappNumberId = number.id;
+  const templateId = template.id;
 
   const cleanRecipients = recipients
     .map((r: any) => ({
