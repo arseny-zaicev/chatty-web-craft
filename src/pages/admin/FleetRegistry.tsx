@@ -444,6 +444,10 @@ export default function FleetRegistry() {
                 autoFocus
               />
             </div>
+            <Button size="sm" variant="outline" onClick={() => healthCheck.mutate(undefined)} disabled={healthCheck.isPending} title="Sync status, quality and tier from Gupshup for all numbers">
+              {healthCheck.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Activity className="w-4 h-4 mr-1" />}
+              Run health check
+            </Button>
             <Button size="sm" onClick={() => setAdderOpen(true)}><Plus className="w-4 h-4 mr-1" />Add number</Button>
           </div>
         </div>
