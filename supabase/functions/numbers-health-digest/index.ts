@@ -85,18 +85,43 @@ Deno.serve(async (req) => {
     byNumber[n.id] = { status: n.status, quality: n.quality_rating || null, tier: n.messaging_limit || null, phone: n.phone_number, label: n.label };
   }
 
-  const changes: string[] = [];
+  // Per-number diff vs last snapshot.
+  // We only care about regressions on previously-healthy numbers + sync failures.
+  // We deliberately do NOT report static counts of restricted/banned numbers -
+  // those are already known and create noise.
+  const HEALTHY = new Set(["active", "ready", "warming"]);
+  const QUALITY_RANK: Record<string, number> = { green: 3, yellow: 2, red: 1 };
+
+  type Regression = { who: string; kind: "broke" | "quality_dropped" | "recovered"; from: string; to: string };
+  const regressions: Regression[] = [];
+
   for (const [id, cur] of Object.entries(byNumber)) {
     const prevN = prevByNumber[id];
     if (!prevN) continue;
     const who = cur.label ? `${cur.label} (+${cur.phone})` : `+${cur.phone}`;
-    if (prevN.status !== cur.status) changes.push(`${who}: status ${prevN.status} → *${cur.status}*`);
-    else if ((prevN.quality || "") !== (cur.quality || "")) changes.push(`${who}: quality ${prevN.quality || "—"} → *${cur.quality || "—"}*`);
-    else if ((prevN.tier || "") !== (cur.tier || "")) changes.push(`${who}: tier ${prevN.tier || "—"} → *${cur.tier || "—"}*`);
+
+    // Status regression: was healthy, now not
+    if (prevN.status !== cur.status) {
+      const wasHealthy = HEALTHY.has(prevN.status);
+      const isHealthy = HEALTHY.has(cur.status);
+      if (wasHealthy && !isHealthy) {
+        regressions.push({ who, kind: "broke", from: prevN.status, to: cur.status });
+      } else if (!wasHealthy && isHealthy) {
+        regressions.push({ who, kind: "recovered", from: prevN.status, to: cur.status });
+      }
+      continue;
+    }
+    // Quality drop on a healthy number
+    if (HEALTHY.has(cur.status) && (prevN.quality || "") !== (cur.quality || "")) {
+      const prevRank = QUALITY_RANK[prevN.quality || ""] ?? 0;
+      const curRank = QUALITY_RANK[cur.quality || ""] ?? 0;
+      if (curRank > 0 && curRank < prevRank) {
+        regressions.push({ who, kind: "quality_dropped", from: prevN.quality || "—", to: cur.quality || "—" });
+      }
+    }
   }
 
-  const nonHealthy = (byStatus["restricted"] || 0) + (byStatus["banned"] || 0) + (byStatus["blocked"] || 0);
-  const shouldPost = force || changes.length > 0 || nonHealthy > 0 || summary.sync_failed > 0;
+  const shouldPost = force || regressions.length > 0 || summary.sync_failed > 0;
 
   // Persist new snapshot regardless (so next diff is correct)
   await supabase.from("fleet_health_snapshots").upsert({
@@ -106,42 +131,44 @@ Deno.serve(async (req) => {
   });
 
   if (!shouldPost) {
-    return new Response(JSON.stringify({ ok: true, posted: false, reason: "no changes, all healthy" }), {
+    return new Response(JSON.stringify({ ok: true, posted: false, reason: "no regressions" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  // Build Slack message
-  const fmtBucket = (b: Record<string, number>) =>
-    Object.entries(b).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v} ${k}`).join(" · ") || "—";
+  // Slack message: only what changed on working numbers + sync failures.
+  const lines: string[] = [];
+  const broke = regressions.filter((r) => r.kind === "broke");
+  const dropped = regressions.filter((r) => r.kind === "quality_dropped");
+  const recovered = regressions.filter((r) => r.kind === "recovered");
 
-  const lines = [
-    `*Fleet health digest*`,
-    `• Total active: *${summary.total}*`,
-    `• Status: ${fmtBucket(byStatus)}`,
-    `• Quality: ${fmtBucket(byQuality)}`,
-    `• Tier: ${fmtBucket(byTier)}`,
-  ];
+  if (broke.length > 0) {
+    lines.push(`:rotating_light: *${broke.length} number(s) stopped working:*`);
+    for (const r of broke.slice(0, 12)) lines.push(`• ${r.who}: ${r.from} → *${r.to}*`);
+    if (broke.length > 12) lines.push(`_+${broke.length - 12} more_`);
+  }
+  if (dropped.length > 0) {
+    if (lines.length) lines.push("");
+    lines.push(`:warning: *${dropped.length} number(s) - quality dropped:*`);
+    for (const r of dropped.slice(0, 12)) lines.push(`• ${r.who}: quality ${r.from} → *${r.to}*`);
+  }
+  if (recovered.length > 0) {
+    if (lines.length) lines.push("");
+    lines.push(`:white_check_mark: *${recovered.length} number(s) recovered:*`);
+    for (const r of recovered.slice(0, 12)) lines.push(`• ${r.who}: ${r.from} → *${r.to}*`);
+  }
   if (summary.sync_failed > 0) {
-    lines.push(`• :rotating_light: Sync failed for *${summary.sync_failed}* number(s)`);
-  }
-  if (changes.length > 0) {
-    lines.push("");
-    lines.push(`*Changes since last digest (${changes.length}):*`);
-    for (const c of changes.slice(0, 12)) lines.push(`• ${c}`);
-    if (changes.length > 12) lines.push(`_+${changes.length - 12} more_`);
-  } else if (nonHealthy > 0) {
-    lines.push("");
-    lines.push(`_No changes since last digest, but ${nonHealthy} number(s) still in non-healthy state._`);
+    if (lines.length) lines.push("");
+    lines.push(`:rotating_light: Health sync is failing for *${summary.sync_failed}* number(s) - cannot read their status from Gupshup.`);
   }
 
-  const text = lines.join("\n");
+  const text = lines.join("\n") || "Fleet health digest (forced) - no regressions.";
   await postSlack(ALERT_CHANNEL, {
     text,
     blocks: [{ type: "section", text: { type: "mrkdwn", text } }],
   });
 
-  return new Response(JSON.stringify({ ok: true, posted: true, changes: changes.length, summary }), {
+  return new Response(JSON.stringify({ ok: true, posted: true, regressions: regressions.length, summary }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
