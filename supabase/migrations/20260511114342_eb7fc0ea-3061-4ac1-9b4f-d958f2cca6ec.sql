@@ -1,0 +1,1 @@
+ALTER VIEW public.whatsapp_number_usage_summary SET (security_invoker = true);
