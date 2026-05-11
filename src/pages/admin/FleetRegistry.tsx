@@ -464,17 +464,29 @@ export default function FleetRegistry() {
               {healthCheck.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Activity className="w-4 h-4 mr-1" />}
               Run health check
             </Button>
+            {overview.sync_failed > 0 && (
+              <button
+                type="button"
+                onClick={() => setFStatus(fStatus === "sync_failed" ? "all" : "sync_failed")}
+                title="Numbers whose last health sync failed - click to filter"
+                className={`text-[11px] px-2 py-1 rounded border border-red-500/30 text-red-700 bg-red-500/10 hover:bg-red-500/15 ${fStatus === "sync_failed" ? "ring-2 ring-red-500/40" : ""}`}
+              >
+                ⚠ Sync failed: {overview.sync_failed}
+              </button>
+            )}
             <Button size="sm" onClick={() => setAdderOpen(true)}><Plus className="w-4 h-4 mr-1" />Add number</Button>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <OverviewTile label="Active" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
-          <OverviewTile label="Restricted" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
-          <OverviewTile label="Banned" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
-          <OverviewTile label="Sync failed" value={overview.unreachable} tone="red" active={false} onClick={() => {}} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <OverviewTile label="Allocated" hint="idle on a client" value={overview.allocated} tone="slate" active={fStatus === "allocated"} onClick={() => setFStatus(fStatus === "allocated" ? "all" : "allocated")} />
+          <OverviewTile label="Active" hint="running campaign" value={overview.active} tone="emerald" active={fStatus === "active"} onClick={() => setFStatus(fStatus === "active" ? "all" : "active")} />
+          <OverviewTile label="Warming" hint="heating up" value={overview.warming} tone="amber" active={fStatus === "warming"} onClick={() => setFStatus(fStatus === "warming" ? "all" : "warming")} />
+          <OverviewTile label="Stock" hint="unassigned" value={overview.stock} tone="slate" active={fStatus === "stock"} onClick={() => setFStatus(fStatus === "stock" ? "all" : "stock")} />
+          <OverviewTile label="Restricted" hint="30-day block" value={overview.restricted} tone="amber" active={fStatus === "restricted"} onClick={() => setFStatus(fStatus === "restricted" ? "all" : "restricted")} />
+          <OverviewTile label="Banned" hint="permanent" value={overview.banned} tone="red" active={fStatus === "banned"} onClick={() => setFStatus(fStatus === "banned" ? "all" : "banned")} />
         </div>
 
         {healthSummary && (
