@@ -1055,6 +1055,12 @@ function AddNumberDrawer({
           <div className="grid grid-cols-2 gap-3">
             <Field label="App ID">
               <Input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="uuid" />
+              {dupAppId && (
+                <div className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Already used by +{dupAppId.phone_number}
+                </div>
+              )}
             </Field>
             <Field label="API key">
               <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk_..." />
