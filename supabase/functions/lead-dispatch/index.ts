@@ -108,6 +108,13 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   const winStart = pipeline.sending_window?.start || "09:00";
   const winEnd = pipeline.sending_window?.end || "18:00";
 
+  // Rollout-safety backstop: refuse to dispatch if no Slack channel is wired.
+  // The UI already enforces this in the readiness checklist; this guards against
+  // direct DB edits or older pipelines flipped on without configuration.
+  if (!pipeline.slack_channel_id) {
+    return blocked(admin, pipeline, "missing_slack_channel", null);
+  }
+
   // Resolve template
   if (!pipeline.first_touch_template_id) {
     return blocked(admin, pipeline, "no_template", null);
