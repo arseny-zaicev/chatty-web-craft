@@ -203,6 +203,7 @@ function PresetsSection({
   const [batchNotes, setBatchNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
+  const [pulling, setPulling] = useState(false);
 
   const copy = async (text: string, label: string) => {
     try {
