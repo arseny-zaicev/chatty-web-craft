@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     .from("slack_event_queue")
     .select("*")
     .eq("status", "pending")
-    .lt("attempts", 5)
+    // status='failed' is terminal (set below when attempts >= max_attempts), so filtering on status is sufficient.
     .order("created_at", { ascending: true })
     .limit(50);
 
@@ -263,12 +263,13 @@ Deno.serve(async (req) => {
       const errMsg = e instanceof Error ? e.message : String(e);
       console.error("dispatch failed", ev.id, errMsg);
       const newAttempts = (ev.attempts || 0) + 1;
+      const cap = ev.max_attempts ?? 5;
       await supabase
         .from("slack_event_queue")
         .update({
           attempts: newAttempts,
           error: errMsg.slice(0, 1000),
-          status: newAttempts >= 5 ? "failed" : "pending",
+          status: newAttempts >= cap ? "failed" : "pending",
         })
         .eq("id", ev.id);
       failed++;
