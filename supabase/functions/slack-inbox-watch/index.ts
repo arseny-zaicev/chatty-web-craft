@@ -49,24 +49,46 @@ Deno.serve(async (req) => {
   }
 
   const cooldownMs = COOLDOWN_HOURS * 3_600_000;
-  const now = Date.now();
+  const cooldownSinceIso = new Date(Date.now() - cooldownMs).toISOString();
   let queued = 0;
 
-  for (const ws of workspaces || []) {
-    if (ws.last_inbox_spike_alert_at && (now - new Date(ws.last_inbox_spike_alert_at).getTime()) < cooldownMs) continue;
+  // Pre-fetch pipelines per workspace to know per-pipeline channel routing.
+  const wsIds = (workspaces || []).map((w: any) => w.id);
+  const { data: pipelinesAll } = wsIds.length
+    ? await supabase
+        .from("pipelines")
+        .select("id, name, workspace_id, slack_channel_id")
+        .in("workspace_id", wsIds)
+    : { data: [] as any[] } as any;
+  const pipelinesByWs: Record<string, any[]> = {};
+  for (const p of pipelinesAll || []) {
+    (pipelinesByWs[p.workspace_id] ||= []).push(p);
+  }
 
+  // Recent sent spike events (per workspace+pipeline) for cooldown.
+  const { data: recentSpikes } = await supabase
+    .from("slack_event_queue")
+    .select("workspace_id, payload, processed_at, status")
+    .eq("event_type", "inbox_unread_spike")
+    .in("status", ["sent", "pending"])
+    .gte("processed_at", cooldownSinceIso);
+  const cooldownKeys = new Set<string>();
+  for (const e of recentSpikes || []) {
+    const pid = (e.payload as any)?.pipeline_id || "_ws";
+    cooldownKeys.add(`${e.workspace_id}::${pid}`);
+  }
+
+  for (const ws of workspaces || []) {
     const { data: convsRaw, error: cErr } = await supabase
       .from("conversations")
-      .select("id, contact_name, contact_phone, unread_count, last_message_text")
+      .select("id, contact_name, contact_phone, unread_count, last_message_text, pipeline_id")
       .eq("workspace_id", ws.id)
       .gt("unread_count", 0)
       .order("unread_count", { ascending: false })
-      .limit(40);
+      .limit(80);
     if (cErr) { console.error("conv fetch", cErr.message); continue; }
 
-    // Drop conversations that are already terminal-no replies. Some imports
-    // still sit in an open CRM stage until an operator moves them, so stage
-    // filtering alone is not enough for Slack inbox alerts.
+    // Drop terminal-no replies
     let convs = (convsRaw || []).filter((c) => !isTerminalReply(c.last_message_text));
     if (convs.length > 0) {
       const ids = convs.map((c) => c.id);
@@ -79,19 +101,62 @@ Deno.serve(async (req) => {
           .filter((d: any) => d?.stage?.stage_type === "lost")
           .map((d: any) => d.conversation_id),
       );
-      convs = convs.filter((c) => !lostSet.has(c.id)).slice(0, 20);
+      convs = convs.filter((c) => !lostSet.has(c.id));
     }
 
-    const total = convs.reduce((acc, c) => acc + (c.unread_count || 0), 0);
-    if (total < UNREAD_THRESHOLD) continue;
+    // Group by pipeline. Pipelines with their own slack_channel_id get a
+    // dedicated digest routed to that channel. Conversations whose pipeline
+    // has no channel (or no pipeline at all) are aggregated into a single
+    // workspace-level digest routed to ws.slack_channel_id.
+    const pipelines = pipelinesByWs[ws.id] || [];
+    const channelByPipeline: Record<string, string | null> = {};
+    const nameByPipeline: Record<string, string> = {};
+    for (const p of pipelines) {
+      channelByPipeline[p.id] = p.slack_channel_id || null;
+      nameByPipeline[p.id] = p.name;
+    }
 
-    await supabase.from("slack_event_queue").insert({
-      event_type: "inbox_unread_spike",
-      workspace_id: ws.id,
-      payload: { unread_total: total, conversations: convs },
-    });
-    await supabase.from("workspaces").update({ last_inbox_spike_alert_at: new Date().toISOString() }).eq("id", ws.id);
-    queued++;
+    const groups: Record<string, { channel: string | null; pipelineId: string | null; pipelineName: string | null; convs: typeof convs }> = {};
+    for (const c of convs) {
+      const pid = c.pipeline_id as string | null;
+      const pipelineChannel = pid ? channelByPipeline[pid] : null;
+      const key = pipelineChannel || "_ws";
+      if (!groups[key]) {
+        groups[key] = {
+          channel: pipelineChannel,
+          pipelineId: pipelineChannel ? pid : null,
+          pipelineName: pipelineChannel && pid ? (nameByPipeline[pid] || null) : null,
+          convs: [],
+        };
+      }
+      groups[key].convs.push(c);
+    }
+
+    for (const g of Object.values(groups)) {
+      const total = g.convs.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+      if (total < UNREAD_THRESHOLD) continue;
+      const cooldownKey = `${ws.id}::${g.pipelineId || "_ws"}`;
+      if (cooldownKeys.has(cooldownKey)) continue;
+
+      const top = g.convs.slice(0, 20).map((c) => ({
+        id: c.id, contact_name: c.contact_name, contact_phone: c.contact_phone,
+        unread_count: c.unread_count, last_message_text: c.last_message_text,
+      }));
+
+      await supabase.from("slack_event_queue").insert({
+        event_type: "inbox_unread_spike",
+        workspace_id: ws.id,
+        payload: {
+          unread_total: total,
+          conversations: top,
+          pipeline_id: g.pipelineId,
+          pipeline_name: g.pipelineName,
+          slack_channel_id: g.channel,
+        },
+      });
+      cooldownKeys.add(cooldownKey);
+      queued++;
+    }
   }
 
   return new Response(JSON.stringify({ queued, scanned: workspaces?.length || 0 }), {

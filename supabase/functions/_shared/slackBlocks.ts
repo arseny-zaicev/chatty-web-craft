@@ -311,10 +311,12 @@ export function buildInboxSpikeBlocks(args: {
   ws: WorkspaceInfo;
   unreadCount: number;
   conversations: Array<{ contact_name: string | null; contact_phone: string; unread_count: number; last_message_text: string | null }>;
+  pipelineName?: string | null;
 }): BlockMessage {
-  const { ws, unreadCount, conversations } = args;
+  const { ws, unreadCount, conversations, pipelineName } = args;
   const tag = brandTag(ws.name, ws.internal_code);
-  const headline = `📨  ${tag}  ·  Inbox needs attention`;
+  const scope = pipelineName ? `${tag} · ${pipelineName}` : tag;
+  const headline = `📨  ${scope}  ·  Inbox needs attention`;
   const lines = conversations.slice(0, 8).map((c) => {
     const who = (c.contact_name || `+${c.contact_phone}`).trim();
     const preview = (c.last_message_text || "").slice(0, 80).replace(/\n/g, " ");

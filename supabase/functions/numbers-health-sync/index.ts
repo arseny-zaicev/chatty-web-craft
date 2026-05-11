@@ -99,11 +99,13 @@ async function fetchAppHealth(appId: string, perKey: string | null): Promise<{
     merged.nameStatus || merged.displayNameStatus || ""
   ).toUpperCase() || undefined;
 
-  // Map to our status enum: active | restricted | blocked
+  // Map to our status enum: active | restricted | banned
   let status: string | undefined;
-  if (accountState === "BANNED" || accountState === "DISABLED") status = "blocked";
+  if (accountState === "BANNED" || accountState === "DISABLED") status = "banned";
   else if (accountState === "FLAGGED" || accountState === "RESTRICTED" || quality === "RED") status = "restricted";
-  else if (accountState === "LIVE" || accountState === "CONNECTED" || (quality && quality !== "RED")) status = "active";
+  // Note: do NOT auto-promote to "active" here. Numbers in "stock"/"ready"/"warming"
+  // states are managed manually; we only push status downward (toward banned/restricted)
+  // based on Gupshup signals. Quality + messaging_limit fields still update.
 
   return { status, messagingLimit, quality, displayNameStatus, raw: merged };
 }
@@ -141,7 +143,12 @@ Deno.serve(async (req) => {
   let synced = 0, changed = 0, failed = 0;
   const details: any[] = [];
 
-  for (const n of (numbers || []) as NumberRow[]) {
+  // Parallelize per-number Gupshup fetches to keep total runtime under the
+  // edge function timeout when fleet grows. Each iteration still does its
+  // own DB update, so we cap concurrency to avoid hammering Gupshup.
+  const CONCURRENCY = 6;
+  const list = (numbers || []) as NumberRow[];
+  const processOne = async (n: NumberRow) => {
     const result = await fetchAppHealth(n.provider_app_id!, n.provider_api_key);
     const nowIso = new Date().toISOString();
 
@@ -152,7 +159,7 @@ Deno.serve(async (req) => {
         last_health_sync_error: (result?.error || "unknown").slice(0, 500),
       }).eq("id", n.id);
       details.push({ id: n.id, phone: n.phone_number, error: result?.error });
-      continue;
+      return;
     }
 
     const update: Record<string, unknown> = {
@@ -170,17 +177,21 @@ Deno.serve(async (req) => {
       didChange = true;
     }
     if (result.status === "restricted" && n.status !== "restricted") update.restricted_at = nowIso;
-    if (result.status === "active" && (n.status === "restricted" || n.status === "blocked")) update.unrestricted_at = nowIso;
 
     const { error: upErr } = await supabase.from("whatsapp_numbers").update(update).eq("id", n.id);
     if (upErr) {
       failed++;
       details.push({ id: n.id, phone: n.phone_number, error: upErr.message });
-      continue;
+      return;
     }
     synced++;
     if (didChange) changed++;
     details.push({ id: n.id, phone: n.phone_number, changed: didChange, ...result });
+  };
+
+  for (let i = 0; i < list.length; i += CONCURRENCY) {
+    const slice = list.slice(i, i + CONCURRENCY);
+    await Promise.all(slice.map(processOne));
   }
 
   return new Response(JSON.stringify({
