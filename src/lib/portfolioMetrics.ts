@@ -62,7 +62,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     supabase.from("workspaces").select("id").eq("is_active", true),
     supabase.from("conversations").select("id, workspace_id, unread_count, last_message_at"),
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
-    supabase.from("campaigns").select("workspace_id, name, status, scheduled_start_at, scheduled_dates, recurrence_end_at").in("status", ["scheduled", "running", "paused", "draft"]),
+    supabase.from("campaigns").select("workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients").in("status", ["scheduled", "running", "paused", "draft"]),
     supabase.from("messages").select("conversation_id, direction, created_at, status").gte("created_at", today),
   ]);
   const bookedToday: { id: string }[] = [];
