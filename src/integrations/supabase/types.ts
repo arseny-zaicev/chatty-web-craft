@@ -2080,6 +2080,8 @@ export type Database = {
           can_view_stats: boolean
           created_at: string
           id: string
+          invited_at: string | null
+          joined_at: string | null
           role: string
           user_id: string
           workspace_id: string
@@ -2089,6 +2091,8 @@ export type Database = {
           can_view_stats?: boolean
           created_at?: string
           id?: string
+          invited_at?: string | null
+          joined_at?: string | null
           role?: string
           user_id: string
           workspace_id: string
@@ -2098,6 +2102,8 @@ export type Database = {
           can_view_stats?: boolean
           created_at?: string
           id?: string
+          invited_at?: string | null
+          joined_at?: string | null
           role?: string
           user_id?: string
           workspace_id?: string
@@ -2316,6 +2322,7 @@ export type Database = {
         Args: { _campaign_id: string; _row_ids: string[] }
         Returns: number
       }
+      mark_membership_joined: { Args: never; Returns: number }
       member_pipeline_scope: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: string[]
