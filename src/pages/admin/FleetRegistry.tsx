@@ -298,11 +298,29 @@ export default function FleetRegistry() {
   const [fStatus, setFStatus] = useState<string>("all");
   const [fUsage, setFUsage] = useState<string>("all");
 
+  // Lifecycle bucket - single source of truth used by overview tiles + filter
+  const bucketOf = (r: Row): "allocated" | "active" | "warming" | "stock" | "restricted" | "banned" | "other" => {
+    if (r.status === "banned") return "banned";
+    if (r.status === "restricted") return "restricted";
+    if (r.status === "warming") return "warming";
+    if (r.workspace_id === null) return "stock";
+    if (!r.is_active) return "other";
+    if ((r.active_campaigns?.length ?? 0) > 0) return "active";
+    if (r.status === "active" || r.status === "ready") return "allocated";
+    return "other";
+  };
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (view === "unassigned" && r.workspace_id !== null) return false;
-      if (fStatus !== "all" && r.status !== fStatus) return false;
+      if (fStatus !== "all") {
+        if (fStatus === "sync_failed") {
+          if (!r.last_health_sync_error) return false;
+        } else if (bucketOf(r) !== fStatus) {
+          return false;
+        }
+      }
       if (fUsage !== "all" && r.usage_type !== fUsage) return false;
       if (term) {
         const hay = `${r.phone_number} ${r.display_name ?? ""} ${r.label ?? ""} ${r.workspace_name} ${r.notes ?? ""}`.toLowerCase();
@@ -313,13 +331,11 @@ export default function FleetRegistry() {
   }, [rows, q, view, fStatus, fUsage]);
 
   const overview = useMemo(() => {
-    const o = { active: 0, restricted: 0, banned: 0, unreachable: 0 };
+    const o = { allocated: 0, active: 0, warming: 0, stock: 0, restricted: 0, banned: 0, sync_failed: 0 };
     for (const r of rows) {
-      if (!r.is_active) continue;
-      if (r.status === "active" || r.status === "ready") o.active++;
-      else if (r.status === "restricted") o.restricted++;
-      else if (r.status === "banned") o.banned++;
-      if (r.last_health_sync_error) o.unreachable++;
+      const b = bucketOf(r);
+      if (b !== "other") o[b]++;
+      if (r.last_health_sync_error) o.sync_failed++;
     }
     return o;
   }, [rows]);
