@@ -82,9 +82,6 @@ const isBlockedNumber = (r: Row) => r.status === "restricted" || r.status === "b
 const isReadyUnassignedNumber = (r: Row) => (
   r.workspace_id === null
   && !isBlockedNumber(r)
-  && r.is_active
-  && (r.status === "active" || r.status === "ready")
-  && Boolean(r.provider_app_id && r.provider_api_key && r.webhook_connected && r.templates_approved > 0)
 );
 
 const SECTION_FILTER_OPTIONS: Array<[string, string]> = [
