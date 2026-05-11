@@ -23,6 +23,11 @@ export type WorkspaceMetrics = {
   campaign_end: string | null;
   running_campaign_name: string | null;
   scheduled_campaign_name: string | null;
+  active_campaign_name: string | null;
+  active_campaign_status: "running" | "scheduled" | null;
+  active_campaign_sent: number;
+  active_campaign_total: number;
+  active_campaign_kind: "marketing" | "utility" | "manual" | string | null;
   health: WorkspaceHealth;
 };
 
