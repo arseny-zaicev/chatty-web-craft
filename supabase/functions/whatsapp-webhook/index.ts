@@ -341,12 +341,22 @@ async function handleInbound(payload: Record<string, unknown>) {
     }
   }
 
-  // Positive reply Slack alert: if automation moved this conversation to a "positive"-named stage,
-  // enqueue a positive_lead Slack event (deduped per 24h per conversation).
+  // Positive reply Slack alert: only fire when the automation moved the conversation
+  // to a stage that is unambiguously positive. Previously a substring match treated
+  // "Not interested/Block" as positive (because of the word "interested"), spamming
+  // the channel on negative quick-replies.
   if (movedToStageId) {
     const stage = await loadStage(movedToStageId);
-    const stageName = (stage?.name ?? "").toLowerCase();
-    const isPositive = /positive|interested|booked|hot lead/.test(stageName);
+    const stageName = (stage?.name ?? "").toLowerCase().trim();
+    const stageType = (stage as any)?.stage_type ?? "open";
+    // Hard exclusions: lost/won stages or names that begin with a negation never count.
+    const isNegated = /\b(not|no|never|don't|do not|без)\b/.test(stageName)
+      || /\bblock\b/.test(stageName)
+      || /\bspam\b/.test(stageName)
+      || /\bunsubscribe\b/.test(stageName);
+    // Word-bounded match so "interested" inside "not interested" doesn't slip through.
+    const positiveHit = /(^|[^a-z])(positive|interested|booked|hot\s*lead|qualified|demo|meeting)([^a-z]|$)/.test(stageName);
+    const isPositive = stageType !== "lost" && stageType !== "won" && positiveHit && !isNegated;
     if (isPositive) {
       const { data: conv } = await supabase
         .from("conversations")
