@@ -108,6 +108,7 @@ export default function LaunchWizard() {
   const [newPipelineName, setNewPipelineName] = useState("");
   const [newPipelineColor, setNewPipelineColor] = useState("#6366f1");
   const [creatingPipeline, setCreatingPipeline] = useState(false);
+  const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
   const handleCreatePipeline = async () => {
     if (!workspace || !newPipelineName.trim()) return;
     setCreatingPipeline(true);
