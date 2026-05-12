@@ -24,6 +24,9 @@ export type LogicalTemplate = {
   category: "marketing" | "utility" | "authentication";
   variables: string[]; // unioned vars across variants
   body: string | null; // sample body (first variant)
+  // Sample copy for each variable index (aligned with `variables`).
+  // Pulled from Gupshup template "Sample" field at sync time.
+  variablesSample: string[];
   variants: Template[]; // approved/paused variants across numbers
   variantByNumber: Map<string, Template>;
 };
