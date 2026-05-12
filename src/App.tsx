@@ -62,7 +62,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AuthCacheReset from "@/components/AuthCacheReset";
-import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useParams } from "react-router-dom";
+
+const RedirectPartnerDetail = () => {
+  const { id } = useParams();
+  return <Navigate to={`/admin/partners/${id}`} replace />;
+};
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { IskraLoader } from "@/components/IskraLoader";
 import Index from "./pages/Index";
