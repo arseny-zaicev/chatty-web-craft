@@ -435,7 +435,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     // Group recipients by tz so each tz gets its own date/window calendar.
     const perTz = new Map<string, CleanRecipient[]>();
     for (const r of bucketRecipients) {
-      const tz = respectTz ? tzFromPhone(r.contact_phone) : (recipientTz || "UTC");
+      const tz = respectTz ? tzFromPhone(r.contact_phone) : (recipientCountry ? (COUNTRY_TZ[recipientCountry] ?? "UTC") : "UTC");
       if (!perTz.has(tz)) perTz.set(tz, []);
       perTz.get(tz)!.push(r);
     }
