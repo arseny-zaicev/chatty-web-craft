@@ -1434,6 +1434,12 @@ export default function LaunchWizard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PipelineConfigSheet
+        pipeline={pipelines.find((p) => p.id === pipelineId) ?? null}
+        open={pipelineConfigOpen}
+        onClose={() => setPipelineConfigOpen(false)}
+      />
     </div>
   );
 }
