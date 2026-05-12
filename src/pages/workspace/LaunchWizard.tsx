@@ -14,12 +14,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  fetchLaunchEssentials, fetchConversationsLite,
+  fetchLaunchEssentials, fetchConversationsLite, fetchTemplateGroups,
   groupLogicalTemplates, parseCsv, detectColumns, applyMapping,
   geoFromPhone, buildCampaignName, renderTemplateBody, groupNumbersByCountry,
   loadMapping, saveMapping, listSavedAudiences, saveAudience, deleteSavedAudience,
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
+import TemplateGroupsDialog from "@/components/workspace/TemplateGroupsDialog";
 import {
   audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows, parseStaticValues,
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
