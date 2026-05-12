@@ -1,46 +1,79 @@
 /**
  * Preset-based ingestion: hardcoded recipes the operator picks from.
- * No manual field/derived-variable setup required for the common cases.
  *
- * Each preset already encodes:
- *   - campaign type (marketing | utility)
- *   - the variable structure WhatsApp templates expect (var_1..var_N)
- *   - validation + dedupe rules
- *   - a Codex-ready prompt template
+ * Variable model (read this before changing anything):
  *
- * The prompt is generated deterministically from the preset + workspace context.
+ *   per_row          - changes per recipient. Source = a column in the raw data
+ *                      (e.g. var_1 from `first_name`). Name fallbacks like
+ *                      "there" are allowed when the source is empty.
+ *
+ *   campaign_static  - SAME text for every recipient in the campaign.
+ *                      Pasted by the operator at batch creation time
+ *                      (copied from Materials). Codex must NEVER apply name
+ *                      fallbacks ("your team", "your space", ...) to these.
+ *
+ * The Codex prompt is generated deterministically from the preset + the values
+ * the operator pasted in the Create-batch dialog.
  */
+
+export type PresetVariableKind = "per_row" | "campaign_static";
+
+export type PresetVariable = {
+  key: string;
+  kind: PresetVariableKind;
+  description: string;
+  /** Example text shown in the prompt (campaign_static value before operator overrides it). */
+  example: string;
+  /**
+   * For per_row vars: the source column to pull from (e.g. "first_name").
+   * For campaign_static vars: ignored.
+   */
+  source?: string;
+  /**
+   * For per_row vars: the fallback when the source is empty.
+   * Only meaningful for per_row.
+   */
+  fallback?: string;
+};
 
 export type PrepPreset = {
   id: string;
   name: string;
   campaignType: "marketing" | "utility";
-  /** Short blurb shown in the UI */
   blurb: string;
-  /** When to pick this one */
   recommendedFor: string;
-  /** Source columns Codex must extract / require from raw input */
   requiredSourceFields: string[];
   optionalSourceFields: string[];
-  /** Output variable structure used by the WhatsApp template */
-  variables: Array<{ key: string; description: string; example: string }>;
-  /** Recommended for the most common utility flow */
+  variables: PresetVariable[];
   isRecommended?: boolean;
 };
+
+/**
+ * Phrases that are valid name fallbacks for var_1, but indicate broken data
+ * if they ever land in var_2 / var_3 / etc. The Launch QA blocks on these.
+ */
+export const NAME_FALLBACK_PHRASES = [
+  "there",
+  "your team",
+  "your space",
+  "your area",
+  "your role",
+  "your company",
+] as const;
 
 export const PREP_PRESETS: PrepPreset[] = [
   {
     id: "utility_basic_3",
     name: "Utility Basic - 3 vars",
     campaignType: "utility",
-    blurb: "First name + 2 short context vars. Safe default for utility templates.",
+    blurb: "Name (per row) + 2 campaign-static lines pasted from Materials.",
     recommendedFor: "Standard utility template with 3 placeholders.",
     requiredSourceFields: ["phone", "first_name"],
     optionalSourceFields: ["company", "city"],
     variables: [
-      { key: "var_1", description: "First name", example: "Ahmed" },
-      { key: "var_2", description: "Company or city", example: "Dubai" },
-      { key: "var_3", description: "Short context (e.g. interest, product)", example: "off-plan" },
+      { key: "var_1", kind: "per_row", description: "First name", example: "Ahmed", source: "first_name", fallback: "there" },
+      { key: "var_2", kind: "campaign_static", description: "Short context line - same for everyone", example: "your recent inquiry" },
+      { key: "var_3", kind: "campaign_static", description: "Long pitch sentence - same for everyone", example: "We have a quick option that may be a fit." },
     ],
     isRecommended: true,
   },
@@ -48,65 +81,52 @@ export const PREP_PRESETS: PrepPreset[] = [
     id: "utility_personalized_proof",
     name: "Utility Personalized Proof",
     campaignType: "utility",
-    blurb: "First name + a personalized proof line referencing the lead's context.",
-    recommendedFor: "Utility template that opens with a name and one personalised sentence.",
-    requiredSourceFields: ["phone", "first_name", "context"],
+    blurb: "Name (per row) + 1 campaign-static proof sentence.",
+    recommendedFor: "Utility template that opens with a name and one campaign-static proof line.",
+    requiredSourceFields: ["phone", "first_name"],
     optionalSourceFields: ["company"],
     variables: [
-      { key: "var_1", description: "First name", example: "Sara" },
-      { key: "var_2", description: "Personalised proof sentence", example: "your recent inquiry about marina apartments" },
-    ],
-  },
-  {
-    id: "utility_4_vars",
-    name: "Utility - 4 vars",
-    campaignType: "utility",
-    blurb: "Four-variable utility template (name, company, role, interest).",
-    recommendedFor: "Longer utility templates with 4 placeholders.",
-    requiredSourceFields: ["phone", "first_name", "company"],
-    optionalSourceFields: ["role", "interest"],
-    variables: [
-      { key: "var_1", description: "First name", example: "Mark" },
-      { key: "var_2", description: "Company", example: "Acme Realty" },
-      { key: "var_3", description: "Role", example: "Sales lead" },
-      { key: "var_4", description: "Interest / product", example: "Q4 inventory" },
+      { key: "var_1", kind: "per_row", description: "First name", example: "Sara", source: "first_name", fallback: "there" },
+      { key: "var_2", kind: "campaign_static", description: "Proof / pitch sentence - same for everyone", example: "we run outreach for teams like yours" },
     ],
   },
   {
     id: "marketing_basic",
     name: "Marketing Basic",
     campaignType: "marketing",
-    blurb: "First name only, marketing category.",
+    blurb: "Name only, marketing category.",
     recommendedFor: "Broad marketing blasts (single-variable templates).",
     requiredSourceFields: ["phone", "first_name"],
     optionalSourceFields: ["city"],
-    variables: [{ key: "var_1", description: "First name", example: "Layla" }],
-  },
-  {
-    id: "marketing_per_row_2",
-    name: "Marketing Per-Row - 2 vars",
-    campaignType: "marketing",
-    blurb: "First name + 1 unique per-contact line. Required for 2-placeholder marketing templates.",
-    recommendedFor: "Marketing templates with {{1}} name + {{2}} per-contact context (industry, product, pain point).",
-    requiredSourceFields: ["phone", "first_name", "context"],
-    optionalSourceFields: ["company", "industry"],
     variables: [
-      { key: "var_1", description: "First name", example: "Mark" },
-      { key: "var_2", description: "Per-contact context line (UNIQUE per row, NEVER constant)", example: "retail channel expansion opportunities" },
+      { key: "var_1", kind: "per_row", description: "First name", example: "Layla", source: "first_name", fallback: "there" },
     ],
   },
   {
-    id: "marketing_per_row_3",
-    name: "Marketing Per-Row - 3 vars",
+    id: "marketing_static_2",
+    name: "Marketing - 2 vars (1 static)",
     campaignType: "marketing",
-    blurb: "First name + 2 unique per-contact lines. Required for 3-placeholder marketing templates (e.g. goflow, FB Marketing).",
-    recommendedFor: "Marketing templates with {{1}} name + {{2}} short context + {{3}} long pitch sentence.",
-    requiredSourceFields: ["phone", "first_name", "context", "pitch"],
+    blurb: "Name (per row) + 1 campaign-static line. Paste copy from Materials at batch creation.",
+    recommendedFor: "Marketing templates with {{1}} name + {{2}} campaign-static context line.",
+    requiredSourceFields: ["phone", "first_name"],
     optionalSourceFields: ["company", "industry"],
     variables: [
-      { key: "var_1", description: "First name", example: "Mark" },
-      { key: "var_2", description: "Short per-contact context (UNIQUE per row)", example: "retail channel expansion opportunities" },
-      { key: "var_3", description: "Long per-contact pitch sentence (UNIQUE per row)", example: "We have a few exclusive partnership opportunities with Amazon, Walmart, Target, and Macy's, and I wanted to see if it may be worth exploring if your products are a fit." },
+      { key: "var_1", kind: "per_row", description: "First name", example: "Mark", source: "first_name", fallback: "there" },
+      { key: "var_2", kind: "campaign_static", description: "Short context - same for everyone", example: "retail channel expansion opportunities" },
+    ],
+  },
+  {
+    id: "marketing_static_3",
+    name: "Marketing - 3 vars (2 static)",
+    campaignType: "marketing",
+    blurb: "Name (per row) + 2 campaign-static lines pasted from Materials. Use this for goflow / FB Marketing.",
+    recommendedFor: "Marketing templates with {{1}} name + {{2}} short context + {{3}} long pitch sentence (all campaign-static).",
+    requiredSourceFields: ["phone", "first_name"],
+    optionalSourceFields: ["company", "industry"],
+    variables: [
+      { key: "var_1", kind: "per_row", description: "First name", example: "Mark", source: "first_name", fallback: "there" },
+      { key: "var_2", kind: "campaign_static", description: "Short context - same for everyone", example: "retail channel expansion opportunities" },
+      { key: "var_3", kind: "campaign_static", description: "Long pitch sentence - same for everyone", example: "We have a few exclusive incentives and partnership opportunities available with Amazon, Walmart, Target, Macy's, Nordstrom, Best Buy, Home Depot, and Lowe's, and I wanted to see if it may be worth exploring if your products are a fit." },
     ],
   },
 ];
@@ -115,12 +135,44 @@ export const getPresetById = (id: string) => PREP_PRESETS.find((p) => p.id === i
 
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
 
+/**
+ * Map of campaign_static var key -> exact text for this batch.
+ * Provided by the operator in the Create batch dialog.
+ */
+export type StaticValues = Record<string, string>;
+
+/** Compact human-readable cheat sheet that we show in the UI next to every prompt. */
+export const VARIABLE_KIND_EXPLAINER = `How variables work
+- var_1 = per recipient (name). Fallback "there" allowed when name is missing.
+- var_2 / var_3 etc. = SAME text for everyone in this campaign. Paste exact copy from Materials.
+- Codex must never apply name fallbacks ("your team", "your space", ...) to var_2 / var_3.`;
+
+const indentBlock = (s: string) => s.split("\n").map((l) => `  ${l}`).join("\n");
+
 export function buildPresetPrompt(
   preset: PrepPreset,
-  ctx: { workspaceName: string; workspaceId: string; batchId?: string },
+  ctx: { workspaceName: string; workspaceId: string; batchId?: string; staticValues?: StaticValues },
 ): string {
-  const requiredVarKeys = preset.variables.map((v) => `"${v.key}": "${v.example}"`).join(", ");
-  const variableSpec = preset.variables.map((v) => `  - ${v.key}: ${v.description} (example: "${v.example}")`).join("\n");
+  const staticValues = ctx.staticValues ?? {};
+  const perRow = preset.variables.filter((v) => v.kind === "per_row");
+  const campaignStatic = preset.variables.filter((v) => v.kind === "campaign_static");
+
+  const variableSpec = preset.variables.map((v) => {
+    if (v.kind === "per_row") {
+      const fb = v.fallback ? ` ; if missing -> "${v.fallback}"` : "";
+      return `  - ${v.key}  [PER ROW]   <- source column "${v.source ?? "?"}"${fb}`;
+    }
+    const value = staticValues[v.key] ?? v.example;
+    return `  - ${v.key}  [SAME FOR EVERYONE]\n      """\n${indentBlock(value)}\n      """`;
+  }).join("\n");
+
+  const sampleDerived = preset.variables.map((v) => {
+    const val = v.kind === "campaign_static" ? (staticValues[v.key] ?? v.example) : v.example;
+    return `"${v.key}": ${JSON.stringify(val)}`;
+  }).join(", ");
+
+  const banList = NAME_FALLBACK_PHRASES.map((p) => `"${p}"`).join(", ");
+
   return `You are preparing a WhatsApp audience batch for the "${ctx.workspaceName}" workspace.
 
 PRESET: ${preset.name}
@@ -130,64 +182,43 @@ ${preset.blurb}
 GOAL
 Take the raw rows the operator gives you and produce a clean, validated dataset for direct insertion into public.audience_rows. Do NOT ask follow-up questions. Use the rules below as-is.
 
-REQUIRED SOURCE FIELDS (must be present and non-empty)
+REQUIRED SOURCE FIELDS (must be present)
   ${preset.requiredSourceFields.join(", ")}
 
 OPTIONAL SOURCE FIELDS
   ${preset.optionalSourceFields.join(", ") || "(none)"}
 
-OUTPUT VARIABLE STRUCTURE (one row per contact)
+VARIABLE CONTRACT (READ TWICE)
 ${variableSpec}
 
-TEMPLATE VARIABLE CONTRACT (CRITICAL)
-The WhatsApp template uses placeholders {{1}}, {{2}}, ... {{N}}.
-At launch time the wizard maps each placeholder to derived_payload.var_<N>:
-${preset.variables.map((v, i) => `  {{${i + 1}}} <- derived_payload.${v.key}  (${v.description})`).join("\n")}
-Every var_<N> beyond var_1 MUST be UNIQUE per row (per-contact context).
-If two rows would receive the same var_2 / var_3 value -- that is a data quality bug.
-NEVER copy the template's "Sample" text into every row -- that defeats the per-row variable system
-and means every contact receives identical filler text.
 VALIDATION RULES
   - phone: digits only (strip +, spaces, dashes); length 7-15; otherwise drop the row
-  - first_name: trim; if empty, use the fallback "there" (do NOT drop the row)
   - drop in-batch duplicate phones (keep first occurrence)
-  - trim every string value before using it (no leading/trailing whitespace, ever)
+  - trim every string value before using it
+${perRow.map((v) => `  - ${v.key}: trim; if empty use fallback "${v.fallback ?? ""}" (do NOT drop the row)`).join("\n")}
 
-NESTED VARIABLES (CRITICAL)
-  - The operator's instructions for a variable may themselves contain placeholders
-    referencing source columns, written as {Column Name} (case-insensitive, spaces allowed).
-    Example: var_2 = "a demo booking system for {Company Name}"
-    -> for each row, substitute {Company Name} with that row's "Company Name" value.
-  - Resolve EVERY {Placeholder} before writing the row. The final derived_payload value
-    must NEVER contain a literal "{...}" token, a trailing space, or a double space.
-  - If a referenced column is missing, empty, or whitespace-only for a row, replace the
-    placeholder with a smooth natural-language fallback so the sentence still reads clean.
-    Suggested fallbacks:
-      {Company Name}     -> "your team"
-      {company}          -> "your team"
-      {City}             -> "your area"
-      {Role} / {Title}   -> "your role"
-      {Industry}         -> "your space"
-      {First Name}       -> "there"
-      anything else      -> pick a neutral noun phrase that fits the surrounding sentence
-  - After substitution, collapse repeated whitespace to a single space and trim the result.
-  - NEVER leave a literal "{Company Name}" (or any other placeholder) inside derived_payload.
-  - NEVER drop a row just because an optional/nested field is missing - apply the fallback instead.
-
-PER-FIELD FALLBACKS
-  - Apply fallbacks at the variable level too: if a derived variable resolves to an empty
-    string after substitution, use the same neutral fallback rules above so the message
-    never has a blank gap.
+DO NOT
+  - apply name-fallbacks (${banList}) to any campaign_static variable (var_2, var_3, ...)
+  - paraphrase, shorten, translate or "personalize" campaign_static variables
+  - leave any campaign_static variable empty
+  - copy the template's Gupshup "Sample" text into rows
+  - invent values that are not present in the input
 
 OUTPUT (single JSON array, one object per VALID row)
 [
   {
     "phone": "9715xxxxxxxx",
     "payload": { /* original source columns minus phone */ },
-    "derived_payload": { ${requiredVarKeys} },
+    "derived_payload": { ${sampleDerived} },
     "validation_status": "valid"
   }
 ]
+
+Every row's derived_payload MUST contain the exact campaign_static values shown above, byte-for-byte.
+
+SANITY CHECK BEFORE INSERT (run on the full batch)
+${perRow.map((v) => `  - ${v.key}: distinct count > 50% of total_valid OR every row uses fallback "${v.fallback ?? ""}". If neither -> warn but allow.`).join("\n")}
+${campaignStatic.map((v) => `  - ${v.key}: every row equals the EXACT string above. Any deviation -> STOP, print failing rows, do NOT insert.`).join("\n")}
 
 EXPECTED COUNTS (report at the end)
   - total_input
@@ -202,25 +233,11 @@ INSERT TARGET (Supabase / Lovable Cloud)
   preset: ${preset.id}
 ${SUPABASE_URL ? `  project url: ${SUPABASE_URL}` : ""}
 
-IMPORTANT
-  - Every inserted row MUST include both workspace_id and batch_id exactly as above.
-  - Do NOT create a new audience_batches row - it already exists.
-
 WORKFLOW FOR CODEX
   1. Parse the raw input the operator pasted.
   2. Apply validation + dedupe rules above.
-  3. Render derived_payload using the variable structure (var_1..var_N).
-  4. Produce the JSON array.
+  3. Build derived_payload: per_row vars from the source columns, campaign_static vars copied byte-for-byte.
+  4. Run the SANITY CHECK above. If any campaign_static check fails, STOP.
   5. Insert the rows into public.audience_rows for the workspace_id and batch_id above.
-  6. Print the expected counts so the operator can refresh the Data page and launch.
-  7. SANITY CHECK before insert: for var_2 and above, count distinct values.
-     If distinct < 0.3 * total_valid -- print a warning and STOP. Do not insert.
-     The operator must provide more varied per-row data.
-
-DO NOT
-  - ask the operator to map columns manually
-  - invent values that are not present in the input
-  - include rows that fail validation
-  - re-use phones already marked "used" in this workspace
-  - copy the template "Sample" text into every row -- that defeats the per-row variable system`;
+  6. Print the expected counts so the operator can refresh the Data page and launch.`;
 }
