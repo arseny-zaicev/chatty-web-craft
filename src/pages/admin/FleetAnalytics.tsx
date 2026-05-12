@@ -311,6 +311,7 @@ export default function FleetAnalytics() {
                   <TableHead className="text-right">Delivered</TableHead>
                   <TableHead className="text-right">Failed</TableHead>
                   <TableHead className="text-right">Deliv%</TableHead>
+                  <TableHead className="text-right">Reply%</TableHead>
                   <TableHead className="text-right">Rate</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
                 </TableRow>
@@ -325,6 +326,9 @@ export default function FleetAnalytics() {
                     <TableCell className="text-xs text-right tabular-nums font-medium text-emerald-700">{c.delivered.toLocaleString()}</TableCell>
                     <TableCell className={`text-xs text-right tabular-nums ${c.failed > 0 ? "text-red-600" : ""}`}>{c.failed.toLocaleString()}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{c.sent > 0 ? `${pct(c.delivered, c.sent)}%` : "—"}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums font-medium text-violet-700" title={`${c.replied_convos}/${c.sent_convos} chats`}>
+                      {c.sent_convos > 0 ? `${pct(c.replied_convos, c.sent_convos)}%` : "—"}
+                    </TableCell>
                     <TableCell className="text-xs text-right tabular-nums text-muted-foreground">{c.rate > 0 ? fmtMoney(c.rate) : "—"}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums font-semibold">{fmtMoney(c.delivered * c.rate)}</TableCell>
                   </TableRow>
