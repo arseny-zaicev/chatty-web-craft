@@ -248,7 +248,8 @@ export default function LaunchWizard() {
   //   3) if v is numeric, use column "var_<v>" if present
   //   4) positional fallback: "var_<i+1>" if present
   useEffect(() => {
-    if (!variableNames.length || !columns.length) return;
+    if (!variableNames.length) return;
+    const sample = activeLogical?.variablesSample ?? [];
     setMapping((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -257,14 +258,22 @@ export default function LaunchWizard() {
         const lower = v.toLowerCase();
         const stripped = lower.replace(/^var_/, "");
         const tryCols = [lower, `var_${stripped}`, stripped, `var_${i + 1}`];
+        let matched = false;
         for (const candidate of tryCols) {
           const found = columns.find((c) => c.toLowerCase() === candidate);
-          if (found) { next[v] = found; changed = true; break; }
+          if (found) { next[v] = found; changed = true; matched = true; break; }
+        }
+        // Fallback: pre-fill from Gupshup template "Sample" copy when no column matches.
+        // Numeric variables ({1},{2},{3}) usually have no matching column and must
+        // come from the template's sample copy unless the operator overrides.
+        if (!matched && sample[i]) {
+          next[v] = `__static:${sample[i]}`;
+          changed = true;
         }
       });
       return changed ? next : prev;
     });
-  }, [variableNames, columns]);
+  }, [variableNames, columns, activeLogical?.variablesSample]);
 
   const mappedRecipients = useMemo(
     () => applyMapping(recipients, mapping, variableNames),
