@@ -543,10 +543,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   if (promoteErr) return json({ error: promoteErr.message }, 500);
 
   let immediate: any = null;
-  if (scheduledDates.length === 0 && minDelay === 0 && maxDelay === 0) {
-    await admin.from("campaign_recipients")
-      .update({ scheduled_at: new Date(Date.now() - 1000).toISOString() })
-      .eq("campaign_id", campaign.id);
+  if (scheduledDates.length === 0 && isBlastLaunch && firstMs <= Date.now() + 55_000) {
     try {
       const res = await processQueue(admin);
       immediate = await res.json();
