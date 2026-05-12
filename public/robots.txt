@@ -28,3 +28,17 @@ Sitemap: https://iskra.ae/sitemap.xml
 # Disallow admin and client areas
 Disallow: /admin
 Disallow: /client
+Disallow: /brand
+Disallow: /client-auth
+Disallow: /client-portal
+Disallow: /client-stats
+Disallow: /portal-auth
+Disallow: /reset-password
+Disallow: /accept-invite
+Disallow: /join/
+Disallow: /admin-auth
+Disallow: /tv/
+Disallow: /ws
+Disallow: /book
+Disallow: /booked
+Disallow: /bm-access
