@@ -520,6 +520,7 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
     ];
   }
   let upserted = 0;
+  let incompleteCount = 0;
   for (const t of templates) {
     const name = String(t.elementName || t.name || "").trim().slice(0, 120);
     if (!name) continue;
