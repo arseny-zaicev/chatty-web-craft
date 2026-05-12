@@ -821,9 +821,14 @@ export default function LaunchWizard() {
 
           {/* Step 2: Logical template */}
           <Step n={2} icon={FileText} title="Template" right={
-            <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
-              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${sync.isPending ? "animate-spin" : ""}`} />Sync Gupshup
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setGroupsDialogOpen(true)}>
+                <Layers className="w-3.5 h-3.5 mr-1" />Manage groups
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${sync.isPending ? "animate-spin" : ""}`} />Sync Gupshup
+              </Button>
+            </div>
           }>
             {visibleLogical.length === 0 ? (
               <div className="text-sm text-muted-foreground rounded-md border border-dashed border-border p-3">
