@@ -334,7 +334,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const templateIds = [...new Set(rawNumbers.map((n) => n.template_id))];
   const { data: templateRows } = await admin
     .from("message_templates")
-    .select("id, user_id, name, language, variables, provider_template_id")
+    .select("id, user_id, name, language, variables, provider_template_id, body")
     .in("id", templateIds);
   if (!templateRows || templateRows.length !== templateIds.length) return json({ error: "Template not found" }, 404);
   for (const t of templateRows) {
