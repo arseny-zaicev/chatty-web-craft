@@ -213,6 +213,7 @@ serve(async (req) => {
       const lines: string[] = [];
       lines.push(`*Templates updated · ${clientName}*`);
       const grand = { approved: 0, rejected: 0, paused: 0, pending: 0 };
+      const idsToBump: string[] = [];
       for (const d of diffs) {
         const phone = d.number.display_name || `+${d.number.phone_number}`;
         const changeBits = d.changes
@@ -224,10 +225,29 @@ serve(async (req) => {
         grand.rejected += d.totals.rejected;
         grand.paused += d.totals.paused;
         grand.pending += d.totals.pending;
+        idsToBump.push(...d.notifyIds);
       }
       lines.push(`Total across affected numbers: *${grand.approved} approved* · ${grand.pending} pending · ${grand.rejected} rejected · ${grand.paused} paused`);
       lines.push(`<${appBase}/admin/fleet|Open Fleet →>`);
-      await sendSlackMessage(slackChannel, lines.join("\n"));
+      try {
+        await sendSlackMessage(slackChannel, lines.join("\n"));
+        // Only bump last_notified_status after Slack confirms — failure leaves diff for next run.
+        if (idsToBump.length > 0) {
+          // Fetch current statuses to align last_notified_status with what we actually told Slack.
+          const { data: cur } = await admin
+            .from("message_templates")
+            .select("id, status")
+            .in("id", idsToBump);
+          for (const row of cur ?? []) {
+            await admin
+              .from("message_templates")
+              .update({ last_notified_status: row.status })
+              .eq("id", row.id);
+          }
+        }
+      } catch (e) {
+        console.warn(`Slack post failed for workspace ${wsId}:`, e instanceof Error ? e.message : e);
+      }
     }
   }
 
