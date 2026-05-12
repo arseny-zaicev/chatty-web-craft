@@ -47,7 +47,7 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
       const logoUrl = logo.trim() || (dom ? `https://logo.clearbit.com/${dom}` : null);
       const { data, error } = await supabase
         .from("workspaces")
-        .insert({ name: name.trim(), slug: finalSlug, color, owner_user_id: auth.user.id, website_url: websiteUrl, logo_url: logoUrl, delivered_rate_usd: Number(rate) || 0 })
+        .insert({ name: name.trim(), slug: finalSlug, color, owner_user_id: auth.user.id, website_url: websiteUrl, logo_url: logoUrl, delivered_rate_usd: Number(rate) || 0, internal_code: internalCode.trim() || null, slack_channel_id: slackChannelId.trim() || null })
         .select("slug")
         .single();
       if (error) {
