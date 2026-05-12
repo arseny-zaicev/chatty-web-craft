@@ -395,6 +395,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     () => conversations.filter((c) => repliedSet.has(c.id)).length,
     [conversations, repliedSet],
   );
+  // Conversation counts per sender number — feeds the "Numbers" dropdown.
+  // Numbers are presented as anonymised phone strings (no internal labels).
+  const numberCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of conversations) m.set(c.whatsapp_number_id, (m.get(c.whatsapp_number_id) ?? 0) + 1);
+    return m;
+  }, [conversations]);
+  const sortedNumbers = useMemo(
+    () => [...numbers].sort((a, b) => (numberCounts.get(b.id) ?? 0) - (numberCounts.get(a.id) ?? 0)),
+    [numbers, numberCounts],
+  );
 
   const filtered = sorted.filter((c) => {
     const isNegative = stageTypeByConv.get(c.id) === "lost";
