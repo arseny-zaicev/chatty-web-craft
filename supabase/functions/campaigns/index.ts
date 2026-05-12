@@ -795,7 +795,12 @@ async function sendTemplate(_admin: any, recipient: any) {
   const srcName = number.display_name ?? null;
 
   const variableNames = Array.isArray(template.variables) ? template.variables : [];
-  const params = variableNames.map((key: string) => String(recipient.variables?.[key] ?? ""));
+  const params = variableNames.map((key: string, idx: number) => {
+    const raw = String(recipient.variables?.[key] ?? "").trim();
+    // WhatsApp rejects empty params (#131008). First variable (recipient name) → "there"; others → " ".
+    if (raw) return raw;
+    return idx === 0 ? "there" : " ";
+  });
   const templateId = template.provider_template_id || template.name;
 
   // First attempt: stored key directly (same as inbox)
