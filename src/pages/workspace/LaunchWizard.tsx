@@ -1091,8 +1091,7 @@ export default function LaunchWizard() {
                   </Select>
                 </Field>
                 <Field label="Time zone basis">
-                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}
-                    disabled={false}>
+                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Recipient local (per phone prefix)</SelectItem>
