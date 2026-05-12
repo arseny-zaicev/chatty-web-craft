@@ -90,6 +90,10 @@ Deno.serve(async (req) => {
   // We deliberately do NOT report static counts of restricted/banned numbers -
   // those are already known and create noise.
   const HEALTHY = new Set(["active", "ready", "warming"]);
+  // Only genuine "bad" states count as breakage. Manual/inventory states
+  // like stock/draft/inactive are neutral and must NOT trigger
+  // broke/recovered alerts when an operator moves a number into/out of them.
+  const BROKEN = new Set(["restricted", "banned"]);
   const QUALITY_RANK: Record<string, number> = { green: 3, yellow: 2, red: 1 };
 
   type Regression = { who: string; kind: "broke" | "quality_dropped" | "recovered"; from: string; to: string };
@@ -100,15 +104,21 @@ Deno.serve(async (req) => {
     if (!prevN) continue;
     const who = cur.label ? `${cur.label} (+${cur.phone})` : `+${cur.phone}`;
 
-    // Status regression: was healthy, now not
+    // Status change
     if (prevN.status !== cur.status) {
       const wasHealthy = HEALTHY.has(prevN.status);
+      const wasBroken = BROKEN.has(prevN.status);
       const isHealthy = HEALTHY.has(cur.status);
-      if (wasHealthy && !isHealthy) {
+      const isBroken = BROKEN.has(cur.status);
+      // Broke: a healthy number transitioned into restricted/banned
+      if (wasHealthy && isBroken) {
         regressions.push({ who, kind: "broke", from: prevN.status, to: cur.status });
-      } else if (!wasHealthy && isHealthy) {
+      // Recovered: a previously broken number became healthy again
+      } else if (wasBroken && isHealthy) {
         regressions.push({ who, kind: "recovered", from: prevN.status, to: cur.status });
       }
+      // All other transitions (stock <-> active, draft -> ready, inactive -> active, etc.)
+      // are operator-driven inventory moves and are intentionally ignored.
       continue;
     }
     // Quality drop on a healthy number
