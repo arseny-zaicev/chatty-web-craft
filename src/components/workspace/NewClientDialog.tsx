@@ -20,8 +20,10 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [website, setWebsite] = useState("");
   const [logo, setLogo] = useState("");
   const [rate, setRate] = useState("0");
+  const [internalCode, setInternalCode] = useState("");
+  const [slackChannelId, setSlackChannelId] = useState("");
 
-  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); setWebsite(""); setLogo(""); setRate("0"); };
+  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); setWebsite(""); setLogo(""); setRate("0"); setInternalCode(""); setSlackChannelId(""); };
 
   const normalizeUrl = (s: string) => {
     const v = s.trim();
@@ -45,7 +47,7 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
       const logoUrl = logo.trim() || (dom ? `https://logo.clearbit.com/${dom}` : null);
       const { data, error } = await supabase
         .from("workspaces")
-        .insert({ name: name.trim(), slug: finalSlug, color, owner_user_id: auth.user.id, website_url: websiteUrl, logo_url: logoUrl, delivered_rate_usd: Number(rate) || 0 })
+        .insert({ name: name.trim(), slug: finalSlug, color, owner_user_id: auth.user.id, website_url: websiteUrl, logo_url: logoUrl, delivered_rate_usd: Number(rate) || 0, internal_code: internalCode.trim() || null, slack_channel_id: slackChannelId.trim() || null })
         .select("slug")
         .single();
       if (error) {
@@ -100,6 +102,12 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
           </Field>
           <Field label="Rate per delivered message ($)">
             <Input type="number" step="0.001" min="0" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" />
+          </Field>
+          <Field label="Internal code (optional)">
+            <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="e.g. GF, SF, ACME" />
+          </Field>
+          <Field label="Slack channel ID (optional)">
+            <Input value={slackChannelId} onChange={(e) => setSlackChannelId(e.target.value)} placeholder="C0123ABCDEF" />
           </Field>
         </div>
         <DialogFooter>

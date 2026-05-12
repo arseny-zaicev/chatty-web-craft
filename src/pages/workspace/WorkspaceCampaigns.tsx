@@ -23,7 +23,7 @@ const statusTone: Record<string, string> = {
   failed: "bg-red-500/15 text-red-600 border-red-500/30",
 };
 
-type RecipientLite = { id: string; status: string; scheduled_at: string | null; sent_at: string | null; campaign_id: string };
+type RecipientLite = { id: string; status: string; scheduled_at: string | null; sent_at: string | null; campaign_id: string; whatsapp_number_id: string | null };
 type RecipientFull = { id: string; status: string; sent_at: string | null; error_message: string | null; contact_phone: string; campaign_id: string };
 
 // Page through every recipient (no 500 cap) — only the small projection we need for stats.
@@ -35,7 +35,7 @@ async function fetchRecipientsLite(campaignIds: string[]): Promise<RecipientLite
     while (true) {
       const { data, error } = await supabase
         .from("campaign_recipients")
-        .select("id, status, scheduled_at, sent_at")
+        .select("id, status, scheduled_at, sent_at, whatsapp_number_id")
         .eq("campaign_id", id)
         .range(from, from + PAGE - 1);
       if (error) throw error;
@@ -422,31 +422,42 @@ function CampaignDetail({
         )}
       </div>
 
-      {/* Per-number breakdown — managers only */}
-      {canManage && group.campaigns.length > 1 && (
-        <div className="mb-3 rounded-md border border-border bg-card/30 p-2">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Per number</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {group.campaigns.map((c) => {
-              const total = c.total_recipients ?? 0;
-              const sent = c.sent_count ?? 0;
-              const failed = c.failed_count ?? 0;
-              const pending = Math.max(0, total - sent - failed);
-              const parts = [`${sent} sent`];
-              if (failed > 0) parts.push(`${failed} failed`);
-              if (pending > 0) parts.push(`${pending} pending`);
-              return (
-                <div key={c.id} className="flex items-center justify-between text-xs gap-3">
-                  <span className="truncate">{numberLabelFor(c.id)}</span>
-                  <span className="text-muted-foreground shrink-0 tabular-nums">
-                    {parts.join(" · ")} <span className="opacity-60">/ {total}</span>
-                  </span>
-                </div>
-              );
-            })}
+      {/* Per-number breakdown — derived from recipients (works for single or multi-campaign groups) */}
+      {canManage && (() => {
+        const byNum = new Map<string, { total: number; sent: number; failed: number; pending: number }>();
+        for (const r of liteRows ?? []) {
+          const key = r.whatsapp_number_id || "—";
+          const cur = byNum.get(key) ?? { total: 0, sent: 0, failed: 0, pending: 0 };
+          cur.total++;
+          if (r.status === "sent" || r.sent_at) cur.sent++;
+          else if (r.status === "failed") cur.failed++;
+          else cur.pending++;
+          byNum.set(key, cur);
+        }
+        const entries = Array.from(byNum.entries());
+        if (entries.length < 2) return null;
+        return (
+          <div className="mb-3 rounded-md border border-border bg-card/30 p-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Per number ({entries.length})</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {entries.map(([numId, s]) => {
+                const label = numId !== "—" && numberById.get(numId) ? friendlySenderLabel(numberById.get(numId)!) : "—";
+                const parts = [`${s.sent} sent`];
+                if (s.failed > 0) parts.push(`${s.failed} failed`);
+                if (s.pending > 0) parts.push(`${s.pending} pending`);
+                return (
+                  <div key={numId} className="flex items-center justify-between text-xs gap-3">
+                    <span className="truncate">{label}</span>
+                    <span className="text-muted-foreground shrink-0 tabular-nums">
+                      {parts.join(" · ")} <span className="opacity-60">/ {s.total}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Recipients list — collapsed by default */}
       <div className="rounded-md border border-border bg-card/30 mb-3">
