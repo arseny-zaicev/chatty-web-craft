@@ -118,6 +118,12 @@ export default function Demo() {
         <title>Request a Demo - ISKRA</title>
         <meta name="description" content="See how ISKRA WhatsApp campaigns work for your business. Fill out the form and book a demo call." />
         <link rel="canonical" href="https://iskra.ae/demo" />
+        <meta property="og:title" content="Request a Demo - ISKRA" />
+        <meta property="og:description" content="See how ISKRA WhatsApp campaigns work for your business. Book a demo call." />
+        <meta property="og:url" content="https://iskra.ae/demo" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Request a Demo - ISKRA" />
+        <meta name="twitter:description" content="See how ISKRA WhatsApp campaigns work for your business. Book a demo call." />
       </Helmet>
       <Navbar />
       <main className="min-h-screen bg-background pt-24 pb-16 flex items-center justify-center">
