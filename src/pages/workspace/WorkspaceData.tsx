@@ -471,7 +471,7 @@ function PresetsSection({
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Codex prompt (batch_id baked in)</div>
                     <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap font-mono max-h-[40vh] overflow-y-auto">
-{buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId })}
+{buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId, staticValues })}
                     </pre>
                   </div>
                   <DialogFooter>
