@@ -217,6 +217,53 @@ async function handleInbound(payload: Record<string, unknown>) {
     console.log("Linked inbound reply to campaign_recipient", recipient.id);
   }
 
+  // If the reply carries WhatsApp/Gupshup context but the opener is missing in our
+  // messages table, backfill it from the campaign recipient. This prevents chats
+  // from looking like they started with the customer's quick reply when the send
+  // row was not inserted or the provider used a different id in the reply context.
+  const context = (inner.context ?? {}) as Record<string, unknown>;
+  const contextIds = compactStrings([context.gsId, context.id]);
+  if (recipient && contextIds.length > 0) {
+    const { data: existingContextMessage } = await supabase
+      .from("messages")
+      .select("id")
+      .in("provider_message_id", contextIds)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingContextMessage) {
+      const { data: opener } = await supabase
+        .from("campaign_recipients")
+        .select("id, user_id, campaign_id, provider_message_id, sent_at, variables, campaigns!inner(message_templates(id, name, body, variables))")
+        .eq("id", recipient.id)
+        .maybeSingle();
+      const tpl = (opener as any)?.campaigns?.message_templates;
+      const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
+      const openerBody = renderTemplateBody(tpl?.body, variableNames, (opener as any)?.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
+      const openerProviderId = String((opener as any)?.provider_message_id ?? contextIds[0] ?? "").trim() || null;
+      if (openerProviderId && openerBody) {
+        await supabase.from("messages").insert({
+          user_id: (opener as any)?.user_id ?? number.user_id,
+          conversation_id: conversationId,
+          direction: "outbound",
+          body: openerBody,
+          status: "sent",
+          provider_message_id: openerProviderId,
+          created_at: (opener as any)?.sent_at ?? new Date(Date.now() - 1000).toISOString(),
+          metadata: {
+            campaign_id: (opener as any)?.campaign_id ?? recipient.campaign_id,
+            campaign_recipient_id: recipient.id,
+            template_id: tpl?.id ?? null,
+            template_name: tpl?.name ?? null,
+            source: "campaign_opener_backfill_from_reply_context",
+            reply_context_ids: contextIds,
+          },
+        });
+        console.log("Backfilled missing campaign opener from reply context", { conversationId, recipient_id: recipient.id, openerProviderId });
+      }
+    }
+  }
+
   // Insert message
   await supabase.from("messages").insert({
     user_id: number.user_id,
