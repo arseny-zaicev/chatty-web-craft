@@ -555,6 +555,40 @@ export default function LaunchWizard() {
     staleTime: 30_000,
   });
 
+  // ----- Pre-launch QA for campaign_static variables -----
+  // Reads expected static values from batch.notes (__static_values__=...) and
+  // verifies every loaded sample row matches. If any row mismatches we flag and
+  // block Launch.
+  const expectedStaticValues = useMemo(
+    () => audienceSource === "database" ? parseStaticValues(dbBatch?.notes) : {},
+    [audienceSource, dbBatch?.notes],
+  );
+  const staticQaIssues = useMemo(() => {
+    if (audienceSource !== "database") return [] as Array<{ key: string; reason: string }>;
+    const rows = sampleDbRowsQ.data ?? [];
+    if (rows.length === 0) return [];
+    const banned = new Set(NAME_FALLBACK_PHRASES.map((s) => s.toLowerCase()));
+    const out: Array<{ key: string; reason: string }> = [];
+    for (const [key, expected] of Object.entries(expectedStaticValues)) {
+      const got = rows.map((r) => String(r.derived_payload?.[key] ?? ""));
+      const bad = got.find((g) => g.trim() !== expected.trim());
+      if (bad !== undefined) {
+        out.push({ key, reason: `Expected campaign-static "${expected.slice(0, 60)}${expected.length > 60 ? "..." : ""}", found "${bad.slice(0, 60)}${bad.length > 60 ? "..." : ""}" in audience rows. Re-prepare the batch.` });
+      }
+    }
+    // Even without expected values, flag obvious name-fallbacks landing in var_2/var_3.
+    if (Object.keys(expectedStaticValues).length === 0 && rows.length > 0) {
+      for (const k of Object.keys(rows[0].derived_payload ?? {})) {
+        if (k === "var_1") continue;
+        const vals = rows.map((r) => String(r.derived_payload?.[k] ?? "").trim().toLowerCase());
+        if (vals.every((v) => banned.has(v))) {
+          out.push({ key: k, reason: `Every sampled row has name-fallback text in ${k}. Re-prepare with campaign-static copy from Materials.` });
+        }
+      }
+    }
+    return out;
+  }, [audienceSource, expectedStaticValues, sampleDbRowsQ.data]);
+
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
     if (!activeLogical) return [] as Array<{ phone: string; body: string; missing: string[] }>;
