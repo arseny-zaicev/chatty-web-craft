@@ -75,8 +75,9 @@ Deno.serve(async (req) => {
     if (!dates.includes(today)) continue;
 
     // Are there any future days remaining?
-    const nextDay = dates.filter((d) => d > today).sort()[0];
-    if (!nextDay) continue;
+    const nextDay = dates.filter((d) => d > today).sort()[0] ?? null;
+    // Don't skip when there is no next day — we still want to send the day
+    // summary and tell the client "Next batch: not scheduled yet".
 
     // Today's terminal-vs-pending counts
     const startIso = `${today}T00:00:00+00:00`;
