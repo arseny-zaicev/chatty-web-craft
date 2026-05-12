@@ -406,16 +406,22 @@ export default function LaunchWizard() {
   }, [recipientNow, windowStart, windowEnd]);
 
   // Per-day capacity model honors per_number_quota cap.
+  // For "Send now" we still apply the daily cap (numbers × perNumberQuota); the
+  // overflow auto-rolls forward day-by-day via campaign-day-rollover. This matches
+  // backend behaviour and prevents the UI from claiming we'll send 2k+ in one day.
   const dayPlan = useMemo(() => {
     const numbers = Math.max(1, activeNumbers.length);
     const total = recipients.length;
     const dailyCap = Math.max(1, numbers * Math.max(1, perNumberQuota));
-    const daysSelected = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
+    const daysSelected = scheduleMode === "scheduled"
+      ? Math.max(1, scheduledDates.length || 1)
+      : Math.max(1, Math.ceil(total / dailyCap)); // "now" mode: derive days from cap
     const idealPerDay = Math.ceil(total / daysSelected);
     const effectivePerDay = Math.min(idealPerDay, dailyCap);
     const daysNeeded = Math.max(1, Math.ceil(total / dailyCap));
-    const capExceeded = idealPerDay > dailyCap;
-    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded };
+    const capExceeded = scheduleMode === "scheduled" && idealPerDay > dailyCap;
+    const overflowToday = Math.max(0, total - effectivePerDay);
+    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded, overflowToday };
   }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length]);
 
   // Realistic per-message gap when window mode is active (based on today's effective load)
