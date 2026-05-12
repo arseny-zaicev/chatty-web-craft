@@ -207,14 +207,23 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate text-sm">{g.displayName}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {[canManage ? template?.name : null, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
+                      {headerSubtitle(g)}
+                    </div>
+                    {canManage && (
+                      <div className="text-[11px] text-muted-foreground/80 truncate mt-0.5">
+                        {[template?.name, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                    <div className="md:hidden mt-2 flex items-center gap-2">
+                      <ProgressBar value={g.sent} total={g.total} className="flex-1" />
+                      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                    <Stat label="Sent" value={`${g.sent.toLocaleString()}/${g.total.toLocaleString()}`} />
-                    <Stat label="Today" value={todaySummary(g)} />
-                    {g.failed > 0 && <Stat label="Failed" value={g.failed} tone="bad" />}
+                  <div className="hidden md:flex items-center gap-3 shrink-0 w-[180px]">
+                    <ProgressBar value={g.sent} total={g.total} className="flex-1" />
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-[80px] text-right">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
                   </div>
+                  {g.failed > 0 && <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{g.failed} failed</span>}
                   <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>
                 {open && (
