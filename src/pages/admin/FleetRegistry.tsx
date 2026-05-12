@@ -535,6 +535,8 @@ export default function FleetRegistry() {
           </div>
         )}
 
+        <FleetTemplatesHealth />
+
         <div className="flex flex-wrap gap-2 items-center">
           <ViewTab active={view === "all"} onClick={() => setView("all")} icon={<Layers className="w-3.5 h-3.5" />}>All numbers</ViewTab>
           <ViewTab active={view === "by-client"} onClick={() => setView("by-client")} icon={<Building2 className="w-3.5 h-3.5" />}>Group by client</ViewTab>
