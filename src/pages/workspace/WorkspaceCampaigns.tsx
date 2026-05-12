@@ -283,19 +283,32 @@ function CampaignDetail({
   const qc = useQueryClient();
 
   const callAction = async (
-    action: "pause" | "resume" | "cancel" | "redistribute",
+    action: "pause" | "resume" | "cancel" | "redistribute" | "retry_failed",
     extra?: Record<string, unknown>,
   ) => {
     setBusy(action);
     try {
-      const { data, error } = await supabase.functions.invoke("campaigns", {
-        body: { action, campaign_ids: campaignIds, ...extra },
-      });
-      if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
-      const verbs: Record<string, string> = {
-        pause: "Paused", resume: "Resumed", cancel: "Cancelled", redistribute: "Re-balanced",
-      };
-      toast.success(`${verbs[action]} ${campaignIds.length > 1 ? `${campaignIds.length} campaigns` : "campaign"}`);
+      if (action === "retry_failed") {
+        // Retry takes a single campaign_id; loop over the group.
+        let total = 0;
+        for (const id of campaignIds) {
+          const { data, error } = await supabase.functions.invoke("campaigns", {
+            body: { action, campaign_id: id, ...extra },
+          });
+          if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
+          total += Number((data as any)?.retried ?? 0);
+        }
+        toast.success(`Re-queued ${total} failed recipient${total === 1 ? "" : "s"}`);
+      } else {
+        const { data, error } = await supabase.functions.invoke("campaigns", {
+          body: { action, campaign_ids: campaignIds, ...extra },
+        });
+        if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
+        const verbs: Record<string, string> = {
+          pause: "Paused", resume: "Resumed", cancel: "Cancelled", redistribute: "Re-balanced",
+        };
+        toast.success(`${verbs[action]} ${campaignIds.length > 1 ? `${campaignIds.length} campaigns` : "campaign"}`);
+      }
       qc.invalidateQueries({ queryKey: ["campaigns", "summaries"] });
       qc.invalidateQueries({ queryKey: ["campaign-recipients-lite", group.key] });
     } catch (e) {
