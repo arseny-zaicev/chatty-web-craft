@@ -3,7 +3,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Loader2, Play, RefreshCw, Rocket, Users, FileText, Phone, Clock, Zap, Timer,
-  Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2, Database,
+  Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2, Database, Layers,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  fetchLaunchEssentials, fetchConversationsLite,
+  fetchLaunchEssentials, fetchConversationsLite, fetchTemplateGroups,
   groupLogicalTemplates, parseCsv, detectColumns, applyMapping,
   geoFromPhone, buildCampaignName, renderTemplateBody, groupNumbersByCountry,
   loadMapping, saveMapping, listSavedAudiences, saveAudience, deleteSavedAudience,
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
+import TemplateGroupsDialog from "@/components/workspace/TemplateGroupsDialog";
 import {
   audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows, parseStaticValues,
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
@@ -87,7 +88,19 @@ export default function LaunchWizard() {
 
   const numbers = data?.numbers ?? [];
   const templates = data?.templates ?? [];
-  const logicalTemplates = useMemo(() => groupLogicalTemplates(templates), [templates]);
+
+  const { data: templateGroups = [] } = useQuery({
+    queryKey: ["template-groups", workspace?.id ?? "all"],
+    queryFn: () => fetchTemplateGroups(workspace!.id),
+    enabled: Boolean(workspace),
+    staleTime: 60_000,
+  });
+  const [groupsDialogOpen, setGroupsDialogOpen] = useState(false);
+
+  const logicalTemplates = useMemo(
+    () => groupLogicalTemplates(templates, templateGroups),
+    [templates, templateGroups],
+  );
 
   // ----- State -----
   const [type, setType] = useState<CampaignType>("marketing");
@@ -808,9 +821,14 @@ export default function LaunchWizard() {
 
           {/* Step 2: Logical template */}
           <Step n={2} icon={FileText} title="Template" right={
-            <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
-              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${sync.isPending ? "animate-spin" : ""}`} />Sync Gupshup
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setGroupsDialogOpen(true)}>
+                <Layers className="w-3.5 h-3.5 mr-1" />Manage groups
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending}>
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${sync.isPending ? "animate-spin" : ""}`} />Sync Gupshup
+              </Button>
+            </div>
           }>
             {visibleLogical.length === 0 ? (
               <div className="text-sm text-muted-foreground rounded-md border border-dashed border-border p-3">
@@ -824,8 +842,11 @@ export default function LaunchWizard() {
                     {visibleLogical.map((t) => (
                       <SelectItem key={t.key} value={t.key}>
                         <span className="inline-flex items-center gap-2">
+                          {t.key.startsWith("group:") && <Layers className="w-3 h-3 text-primary" />}
                           <span>{t.label}</span>
-                          <span className="text-xs text-muted-foreground">({t.variants.length} variant{t.variants.length === 1 ? "" : "s"})</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({t.variants.length} variant{t.variants.length === 1 ? "" : "s"}{t.key.startsWith("group:") ? " · group" : ""})
+                          </span>
                         </span>
                       </SelectItem>
                     ))}
@@ -1590,6 +1611,15 @@ export default function LaunchWizard() {
         open={pipelineConfigOpen}
         onClose={() => setPipelineConfigOpen(false)}
       />
+
+      {workspace && (
+        <TemplateGroupsDialog
+          open={groupsDialogOpen}
+          onOpenChange={setGroupsDialogOpen}
+          workspaceId={workspace.id}
+          templates={templates}
+        />
+      )}
     </div>
   );
 }
