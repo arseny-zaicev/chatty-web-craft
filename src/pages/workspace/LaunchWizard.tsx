@@ -1300,29 +1300,9 @@ export default function LaunchWizard() {
             </Step>
           )}
 
-          {/* Step 6: Naming */}
-          <Step n={6} icon={Bookmark} title="Campaign name">
-            <Field label="Pipeline (board where replies will land)">
-              <div className="flex gap-2">
-                <Select value={pipelineId} onValueChange={setPipelineId}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Pick a pipeline" /></SelectTrigger>
-                  <SelectContent>
-                    {pipelines.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                          {p.name}{p.is_default && <span className="text-[10px] text-muted-foreground">(default)</span>}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={() => setShowCreatePipeline(true)}>
-                  <Plus className="w-3.5 h-3.5 mr-1" />New
-                </Button>
-              </div>
-            </Field>
-            <div className="grid sm:grid-cols-2 gap-2 mt-2">
+          {/* Step 7: Naming */}
+          <Step n={7} icon={Bookmark} title="Campaign name">
+            <div className="grid sm:grid-cols-2 gap-2">
               <Field label="Audience">
                 <Input value={audience} onChange={(e) => { setAudience(e.target.value); setAudienceDirty(true); }} placeholder="GTM Professionals" />
               </Field>
@@ -1355,8 +1335,8 @@ export default function LaunchWizard() {
             </div>
           </Step>
 
-          {/* Step 7: Preview */}
-          <Step n={7} icon={Eye} title="Rendered preview">
+          {/* Step 8: Preview */}
+          <Step n={8} icon={Eye} title="Rendered preview">
             {!activeLogical?.body ? (
               <p className="text-sm text-muted-foreground">No template body to preview.</p>
             ) : previewSamples.length === 0 ? (
