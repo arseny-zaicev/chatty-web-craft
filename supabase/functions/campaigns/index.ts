@@ -123,6 +123,34 @@ function parseGupshupExample(raw: any, varCount: number): string[] {
   return [];
 }
 
+// Gupshup also exposes samples as a fully-rendered "sampleText" where each
+// {{N}} placeholder has been replaced with [value]. We align it back to the
+// body template to recover individual variable values in order.
+function extractSamplesByAlignment(body: string, sample: string, varCount: number): string[] {
+  if (!body || !sample || varCount === 0) return [];
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = /\{\{\s*\w+\s*\}\}/g;
+  let pattern = "";
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  let count = 0;
+  while ((m = re.exec(body)) !== null) {
+    pattern += escape(body.slice(lastIdx, m.index)) + "\\[?(.+?)\\]?";
+    lastIdx = m.index + m[0].length;
+    count++;
+  }
+  pattern += escape(body.slice(lastIdx));
+  try {
+    const matched = new RegExp("^" + pattern + "$", "s").exec(sample);
+    if (matched) {
+      return matched.slice(1, count + 1).map((x) => String(x ?? "").replace(/^\[|\]$/g, "").trim()).filter((s) => s.length);
+    }
+  } catch { /* fallthrough */ }
+  // Fallback: just pull values in [...] in order.
+  const brackets = Array.from(sample.matchAll(/\[([^\]]+)\]/g)).map((x) => x[1].trim()).filter((s) => s.length);
+  return brackets.slice(0, Math.max(varCount, brackets.length));
+}
+
 async function resolveGupshupSendToken(appId: string | null | undefined, configuredToken: string) {
   if (!appId) return configuredToken;
   const appToken = await getGupshupAppToken(appId, configuredToken);
