@@ -742,7 +742,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                     {workspaceId && (
                       <div className="hidden md:block w-44">
                         <AssigneeSelect
