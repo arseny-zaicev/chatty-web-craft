@@ -781,7 +781,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                           }}
                         >
                           <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Pipeline..." />
+                            <SelectValue placeholder="Pipeline..." className="truncate" />
                           </SelectTrigger>
                           <SelectContent>
                             {pipelines.map((p) => (
