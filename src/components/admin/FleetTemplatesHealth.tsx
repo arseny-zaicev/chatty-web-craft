@@ -2,18 +2,21 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, Clock, FileText } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Loader2, RefreshCw, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, Clock, FileText, XCircle, PauseCircle } from "lucide-react";
+import { formatDistanceToNow, formatDistanceToNowStrict } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type Row = {
+type Template = {
   id: string;
   name: string;
   status: string;
+  language: string | null;
+  category: string | null;
   workspace_id: string | null;
   whatsapp_number_id: string | null;
   synced_at: string | null;
+  created_at: string | null;
 };
 
 type NumberRow = {
@@ -29,19 +32,33 @@ type Workspace = { id: string; name: string };
 
 type Bucket = {
   number: NumberRow;
+  templates: Template[];
   approved: number;
   pending: number;
   rejected: number;
   paused: number;
   total: number;
   lastSync: string | null;
+  oldestPendingAt: string | null;
 };
 
 type Group = { workspaceId: string | null; workspaceName: string; numbers: Bucket[]; totals: { approved: number; pending: number; rejected: number; paused: number } };
 
+const PENDING_STATUSES = new Set(["pending", "submitted", "in_review", "in_appeal"]);
+
+function statusBucket(s: string): "approved" | "pending" | "rejected" | "paused" | "other" {
+  const v = (s || "").toLowerCase();
+  if (v === "approved") return "approved";
+  if (v === "rejected" || v === "disabled" || v === "failed") return "rejected";
+  if (v === "paused" || v === "flagged") return "paused";
+  if (PENDING_STATUSES.has(v)) return "pending";
+  return "other";
+}
+
 export default function FleetTemplatesHealth() {
   const queryClient = useQueryClient();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [collapsedWs, setCollapsedWs] = useState<Record<string, boolean>>({});
+  const [openNumber, setOpenNumber] = useState<Record<string, boolean>>({});
   const [open, setOpen] = useState(true);
   const [syncingAll, setSyncingAll] = useState(false);
 
@@ -50,11 +67,11 @@ export default function FleetTemplatesHealth() {
     queryFn: async () => {
       const [{ data: numbers, error: nErr }, { data: tpls, error: tErr }, { data: workspaces, error: wErr }] = await Promise.all([
         supabase.from("whatsapp_numbers").select("id, phone_number, display_name, workspace_id, is_active, provider_app_id").eq("is_active", true).not("provider_app_id", "is", null),
-        supabase.from("message_templates").select("id, name, status, workspace_id, whatsapp_number_id, synced_at"),
+        supabase.from("message_templates").select("id, name, status, language, category, workspace_id, whatsapp_number_id, synced_at, created_at"),
         supabase.from("workspaces").select("id, name"),
       ]);
       if (nErr) throw nErr; if (tErr) throw tErr; if (wErr) throw wErr;
-      return { numbers: (numbers ?? []) as NumberRow[], templates: (tpls ?? []) as Row[], workspaces: (workspaces ?? []) as Workspace[] };
+      return { numbers: (numbers ?? []) as NumberRow[], templates: (tpls ?? []) as Template[], workspaces: (workspaces ?? []) as Workspace[] };
     },
     refetchInterval: 60_000,
   });
@@ -65,19 +82,35 @@ export default function FleetTemplatesHealth() {
     for (const w of data.workspaces) wsName.set(w.id, w.name);
     const byNumber = new Map<string, Bucket>();
     for (const n of data.numbers) {
-      byNumber.set(n.id, { number: n, approved: 0, pending: 0, rejected: 0, paused: 0, total: 0, lastSync: null });
+      byNumber.set(n.id, { number: n, templates: [], approved: 0, pending: 0, rejected: 0, paused: 0, total: 0, lastSync: null, oldestPendingAt: null });
     }
     for (const t of data.templates) {
       if (!t.whatsapp_number_id) continue;
       const b = byNumber.get(t.whatsapp_number_id);
       if (!b) continue;
+      b.templates.push(t);
       b.total++;
-      const s = t.status as keyof Bucket;
-      if (s === "approved") b.approved++;
-      else if (s === "rejected") b.rejected++;
-      else if (s === "paused") b.paused++;
-      else b.pending++;
+      const k = statusBucket(t.status);
+      if (k === "approved") b.approved++;
+      else if (k === "rejected") b.rejected++;
+      else if (k === "paused") b.paused++;
+      else if (k === "pending") {
+        b.pending++;
+        const ref = t.created_at || t.synced_at;
+        if (ref && (!b.oldestPendingAt || ref < b.oldestPendingAt)) b.oldestPendingAt = ref;
+      }
       if (t.synced_at && (!b.lastSync || t.synced_at > b.lastSync)) b.lastSync = t.synced_at;
+    }
+    // Sort templates inside each number: pending first (oldest first), then rejected, paused, approved
+    for (const b of byNumber.values()) {
+      b.templates.sort((a, b2) => {
+        const order = (s: string) => ({ pending: 0, rejected: 1, paused: 2, approved: 3, other: 4 }[statusBucket(s)] ?? 5);
+        const oa = order(a.status); const ob = order(b2.status);
+        if (oa !== ob) return oa - ob;
+        const ad = a.created_at || a.synced_at || "";
+        const bd = b2.created_at || b2.synced_at || "";
+        return ad.localeCompare(bd);
+      });
     }
     const byWs = new Map<string, Group>();
     for (const b of byNumber.values()) {
@@ -90,7 +123,11 @@ export default function FleetTemplatesHealth() {
     }
     const arr = [...byWs.values()];
     arr.sort((a, b) => a.workspaceName.localeCompare(b.workspaceName));
-    for (const g of arr) g.numbers.sort((a, b) => (a.number.display_name ?? a.number.phone_number).localeCompare(b.number.display_name ?? b.number.phone_number));
+    // Numbers: show those with pending first (most urgent), then by name
+    for (const g of arr) g.numbers.sort((a, b) => {
+      if ((b.pending > 0 ? 1 : 0) !== (a.pending > 0 ? 1 : 0)) return (b.pending > 0 ? 1 : 0) - (a.pending > 0 ? 1 : 0);
+      return (a.number.display_name ?? a.number.phone_number).localeCompare(b.number.display_name ?? b.number.phone_number);
+    });
     return arr;
   }, [data]);
 
@@ -151,12 +188,12 @@ export default function FleetTemplatesHealth() {
         <div className="border-t border-border divide-y divide-border">
           {groups.map((g) => {
             const key = g.workspaceId ?? "unassigned";
-            const isCollapsed = collapsed[key];
+            const isCollapsed = collapsedWs[key];
             const ready = g.totals.approved > 0 && g.totals.rejected === 0 && g.totals.pending === 0;
             const tone = ready ? "emerald" : g.totals.pending > 0 ? "amber" : g.totals.rejected > 0 ? "red" : "slate";
             return (
               <div key={key} className="px-3 py-2">
-                <button onClick={() => setCollapsed((c) => ({ ...c, [key]: !isCollapsed }))} className="w-full flex items-center gap-2 text-sm hover:bg-muted/20 -mx-1 px-1 py-1 rounded">
+                <button onClick={() => setCollapsedWs((c) => ({ ...c, [key]: !isCollapsed }))} className="w-full flex items-center gap-2 text-sm hover:bg-muted/20 -mx-1 px-1 py-1 rounded">
                   {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   <span className="font-medium">{g.workspaceName}</span>
                   <span className="text-xs text-muted-foreground">({g.numbers.length} {g.numbers.length === 1 ? "number" : "numbers"})</span>
@@ -170,23 +207,77 @@ export default function FleetTemplatesHealth() {
                 </button>
                 {!isCollapsed && (
                   <div className="mt-2 ml-5 space-y-1">
-                    {g.numbers.map((b) => (
-                      <div key={b.number.id} className="flex items-center gap-2 text-xs py-1 border-b border-border/40 last:border-0">
-                        <span className="font-mono text-foreground/90 min-w-[140px] truncate">{b.number.display_name || `+${b.number.phone_number}`}</span>
-                        <span className="text-muted-foreground">·</span>
-                        <Pill tone="emerald" subtle>{b.approved} ✓</Pill>
-                        {b.pending > 0 && <Pill tone="amber" subtle>{b.pending} pending</Pill>}
-                        {b.rejected > 0 && <Pill tone="red" subtle>{b.rejected} rejected</Pill>}
-                        {b.paused > 0 && <Pill tone="slate" subtle>{b.paused} paused</Pill>}
-                        {b.total === 0 && <span className="text-muted-foreground italic">no templates</span>}
-                        <span className="ml-auto text-muted-foreground">
-                          {b.lastSync ? `synced ${formatDistanceToNow(new Date(b.lastSync), { addSuffix: true })}` : "never synced"}
-                        </span>
-                        <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => syncOne.mutate(b.number.id)} disabled={syncOne.isPending}>
-                          <RefreshCw className={cn("w-3 h-3", syncOne.isPending && syncOne.variables === b.number.id && "animate-spin")} />
-                        </Button>
-                      </div>
-                    ))}
+                    {g.numbers.map((b) => {
+                      const numKey = b.number.id;
+                      const numOpen = !!openNumber[numKey];
+                      const phone = `+${b.number.phone_number}`;
+                      const label = b.number.display_name?.trim();
+                      const oldestAge = b.oldestPendingAt ? formatDistanceToNowStrict(new Date(b.oldestPendingAt), { addSuffix: false }) : null;
+                      return (
+                        <div key={numKey} className="border-b border-border/40 last:border-0">
+                          <button
+                            onClick={() => setOpenNumber((m) => ({ ...m, [numKey]: !numOpen }))}
+                            className="w-full flex items-center gap-2 text-xs py-1.5 hover:bg-muted/20 -mx-1 px-1 rounded"
+                          >
+                            {numOpen ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+                            <div className="flex flex-col items-start min-w-[200px]">
+                              {label && <span className="font-medium text-foreground/90 truncate max-w-[220px]">{label}</span>}
+                              <span className="font-mono text-muted-foreground">{phone}</span>
+                            </div>
+                            <span className="text-muted-foreground">·</span>
+                            <Pill tone="emerald" subtle>{b.approved} ✓</Pill>
+                            {b.pending > 0 && (
+                              <Pill tone="amber" subtle>
+                                {b.pending} pending{oldestAge ? ` · oldest ${oldestAge}` : ""}
+                              </Pill>
+                            )}
+                            {b.rejected > 0 && <Pill tone="red" subtle>{b.rejected} rejected</Pill>}
+                            {b.paused > 0 && <Pill tone="slate" subtle>{b.paused} paused</Pill>}
+                            {b.total === 0 && <span className="text-muted-foreground italic">no templates</span>}
+                            <span className="ml-auto text-muted-foreground hidden sm:inline">
+                              {b.lastSync ? `synced ${formatDistanceToNow(new Date(b.lastSync), { addSuffix: true })}` : "never synced"}
+                            </span>
+                            <span onClick={(e) => { e.stopPropagation(); syncOne.mutate(b.number.id); }} className="ml-1">
+                              <Button size="sm" variant="ghost" className="h-6 px-2" disabled={syncOne.isPending} asChild>
+                                <span><RefreshCw className={cn("w-3 h-3", syncOne.isPending && syncOne.variables === b.number.id && "animate-spin")} /></span>
+                              </Button>
+                            </span>
+                          </button>
+
+                          {numOpen && b.templates.length > 0 && (
+                            <div className="ml-5 mb-2 mt-1 rounded border border-border/60 bg-background/40 divide-y divide-border/40">
+                              {b.templates.map((t) => {
+                                const k = statusBucket(t.status);
+                                const ageRef = t.created_at || t.synced_at;
+                                const age = ageRef ? formatDistanceToNowStrict(new Date(ageRef), { addSuffix: true }) : null;
+                                return (
+                                  <div key={t.id} className="flex items-center gap-2 px-2 py-1 text-[11px]">
+                                    <StatusIcon kind={k} />
+                                    <span className="font-mono font-medium truncate max-w-[260px]" title={t.name}>{t.name}</span>
+                                    {t.language && <span className="text-muted-foreground">{t.language}</span>}
+                                    {t.category && <span className="text-muted-foreground hidden md:inline">· {t.category}</span>}
+                                    <Pill tone={k === "approved" ? "emerald" : k === "pending" ? "amber" : k === "rejected" ? "red" : "slate"} subtle>
+                                      {t.status}
+                                    </Pill>
+                                    {k === "pending" && age && (
+                                      <span className="text-amber-700 dark:text-amber-400 font-medium">waiting {age}</span>
+                                    )}
+                                    <span className="ml-auto text-muted-foreground">
+                                      {age && k !== "pending" ? age : ""}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {numOpen && b.templates.length === 0 && (
+                            <div className="ml-5 mb-2 mt-1 px-2 py-2 text-[11px] text-muted-foreground italic">
+                              No templates synced for this number yet. Click the refresh icon to pull from Gupshup.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -196,6 +287,14 @@ export default function FleetTemplatesHealth() {
       )}
     </div>
   );
+}
+
+function StatusIcon({ kind }: { kind: "approved" | "pending" | "rejected" | "paused" | "other" }) {
+  if (kind === "approved") return <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />;
+  if (kind === "pending") return <Clock className="w-3 h-3 text-amber-600 shrink-0" />;
+  if (kind === "rejected") return <XCircle className="w-3 h-3 text-red-600 shrink-0" />;
+  if (kind === "paused") return <PauseCircle className="w-3 h-3 text-slate-500 shrink-0" />;
+  return <FileText className="w-3 h-3 text-muted-foreground shrink-0" />;
 }
 
 function Pill({ children, tone, icon, subtle }: { children: React.ReactNode; tone: "emerald" | "amber" | "red" | "slate"; icon?: React.ReactNode; subtle?: boolean }) {
