@@ -700,30 +700,46 @@ export default function LaunchWizard() {
 
       // ONE campaign across all selected numbers (recipients distributed server-side)
       const results: Array<{ ok: boolean; numberId: string; res?: any; error?: string; rowIds?: string[] }> = [];
+      const invokeLaunch = async (force: boolean) => supabase.functions.invoke("campaigns", {
+        body: {
+          action: "launch",
+          force,
+          name: campaignName,
+          numbers: targets.map((t) => ({ number_id: t.numberId, template_id: t.template.id })),
+            delay_min_seconds: isMarketing ? 0 : delayMin,
+            delay_max_seconds: isMarketing ? 0 : delayMax,
+          recipients: workingRecipients,
+            scheduler_kind: isMarketing ? "poisson" : schedulerKind,
+          scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
+          window_start: windowStart,
+          window_end: windowEnd,
+          respect_recipient_tz: respectTz,
+          pipeline_id: pipelineId || null,
+          per_number_quota: perNumberQuota,
+        },
+      });
+
       try {
-        const { data: res, error } = await supabase.functions.invoke("campaigns", {
-          body: {
-            action: "launch",
-            name: campaignName,
-            numbers: targets.map((t) => ({ number_id: t.numberId, template_id: t.template.id })),
-              delay_min_seconds: isMarketing ? 0 : delayMin,
-              delay_max_seconds: isMarketing ? 0 : delayMax,
-            recipients: workingRecipients,
-              scheduler_kind: isMarketing ? "poisson" : schedulerKind,
-            scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
-            window_start: windowStart,
-            window_end: windowEnd,
-            respect_recipient_tz: respectTz,
-            pipeline_id: pipelineId || null,
-            per_number_quota: perNumberQuota,
-          },
-        });
+        let { data: res, error } = await invokeLaunch(false);
+        // Pre-flight soft warnings (409): confirm + retry with force.
+        const code = (res as any)?.code;
+        const warnings = (res as any)?.warnings as string[] | undefined;
+        if (code === "preflight_warnings" && Array.isArray(warnings) && warnings.length > 0) {
+          const proceed = window.confirm(
+            `Launch warnings:\n\n${warnings.map((w) => `• ${w}`).join("\n")}\n\nLaunch anyway?`,
+          );
+          if (!proceed) {
+            for (const t of targets) results.push({ ok: false, numberId: t.numberId, error: "Cancelled by user", rowIds: allRowIds });
+          } else {
+            ({ data: res, error } = await invokeLaunch(true));
+          }
+        }
         const failed = !!error || !!(res as any)?.error;
         if (failed) {
           const errMsg = error?.message || (res as any)?.error || "Launch failed";
           // Mark all targets as failed so reserved rows get released below
           for (const t of targets) results.push({ ok: false, numberId: t.numberId, error: errMsg, rowIds: allRowIds });
-        } else {
+        } else if (results.length === 0) {
           // One ok entry; carry rowIds on first target so mark-used uses the campaign id
           for (let i = 0; i < targets.length; i++) {
             results.push({ ok: true, numberId: targets[i].numberId, res, rowIds: i === 0 ? allRowIds : [] });
@@ -735,6 +751,7 @@ export default function LaunchWizard() {
         }
         throw e;
       }
+
 
       // Mark used / release per overall result
       if (audienceSource === "database") {
