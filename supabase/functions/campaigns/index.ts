@@ -1029,11 +1029,27 @@ async function processQueue(admin: any) {
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
 
+  // Per-campaign canary state. If the first 3 sends for a campaign in this
+  // tick all fail with the same provider error code (and zero successes),
+  // halt the campaign and skip its remaining recipients - caps damage at
+  // 3 wasted sends instead of 600 (Nov 2025 #131008 outage).
+  type CanaryState = { ok: number; fail: number; codes: Map<string, number>; aborted: boolean };
+  const canary = new Map<string, CanaryState>();
+  const getCanary = (cid: string) => {
+    let c = canary.get(cid);
+    if (!c) { c = { ok: 0, fail: 0, codes: new Map(), aborted: false }; canary.set(cid, c); }
+    return c;
+  };
+  const extractErrorCode = (msg: string): string => {
+    const m = msg.match(/#(\d{4,6})/);
+    return m ? `#${m[1]}` : msg.slice(0, 40).replace(/\s+/g, " ");
+  };
+
   await Promise.all(Array.from(shards.values()).map(async (recipients) => {
     for (const recipient of recipients) {
-      // Honor the per-recipient scheduled_at: sleep up to the tick budget so
-      // sent_at lands at the actual randomized timestamp (preserves jitter
-      // configured via delay_min/max_seconds), not the cron minute boundary.
+      const cState = getCanary(recipient.campaign_id);
+      if (cState.aborted) continue;
+
       const targetMs = new Date(recipient.scheduled_at).getTime();
       const nowMs = Date.now();
       const waitMs = targetMs - nowMs;
@@ -1060,7 +1076,6 @@ async function processQueue(admin: any) {
         const renderedBody = renderTemplateBody(tpl?.body, variableNames, recipient.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
         const sentAt = new Date().toISOString();
 
-        // Ensure a conversation exists so Inbox shows the thread starting from this opener
         const conversationId = await ensureCampaignConversation(admin, recipient);
 
         await admin.from("campaign_recipients").update({
@@ -1092,14 +1107,43 @@ async function processQueue(admin: any) {
             last_message_at: sentAt,
           }).eq("id", conversationId);
         }
+        cState.ok += 1;
         sentMu.inc();
       } catch (err) {
         sentMu.incFail();
         const msg = err instanceof Error ? err.message : "Send failed";
         await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
+
+        cState.fail += 1;
+        const code = extractErrorCode(msg);
+        cState.codes.set(code, (cState.codes.get(code) ?? 0) + 1);
+
+        if (!cState.aborted && cState.fail >= 3 && cState.ok === 0) {
+          const top = [...cState.codes.entries()].sort((a, b) => b[1] - a[1])[0];
+          if (top && top[1] === cState.fail) {
+            cState.aborted = true;
+            try {
+              await admin.from("campaigns").update({ status: "failed" }).eq("id", recipient.campaign_id);
+              await admin.from("slack_event_queue").insert({
+                event_type: "campaign_failed",
+                workspace_id: recipient.workspace_id,
+                payload: {
+                  campaign_id: recipient.campaign_id,
+                  reason: "canary_uniform_failure",
+                  error_code: top[0],
+                  failures: cState.fail,
+                  sample_error: msg.slice(0, 400),
+                },
+              });
+            } catch (abortErr) {
+              console.error("canary abort failed", abortErr);
+            }
+          }
+        }
       }
     }
   }));
+
 
   const campaignIds = [...new Set((due ?? []).map((r: any) => r.campaign_id))];
   if (campaignIds.length > 0) {
