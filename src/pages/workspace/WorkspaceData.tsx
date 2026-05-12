@@ -315,9 +315,10 @@ function PresetsSection({
         <h2 className="font-medium text-sm">Ingestion presets</h2>
         <Badge variant="outline" className="text-[10px]">primary workflow</Badge>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">
+      <p className="text-xs text-muted-foreground mb-2">
         Pick a preset → create the empty batch → copy its prompt → run it in Codex with the raw data. Codex inserts validated rows into <code>public.audience_rows</code> under the batch_id, then refresh below and launch.
       </p>
+      <pre className="text-[11px] bg-muted/40 border border-border rounded-md p-2 mb-3 whitespace-pre-wrap font-mono text-muted-foreground">{VARIABLE_KIND_EXPLAINER}</pre>
 
       <div className="grid gap-2 sm:grid-cols-2">
         {PREP_PRESETS.map((p) => (
