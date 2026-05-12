@@ -1072,8 +1072,8 @@ export default function LaunchWizard() {
               )}
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Field label="Window from"><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
-                <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+                <Field label={isMarketing ? "Launch from" : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
+                <Field label={isMarketing ? "Launch until" : "Window to"}><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
                 <Field label="Scheduler">
                   <Select value={isMarketing ? "poisson" : schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
                     disabled={isMarketing}>
@@ -1086,7 +1086,7 @@ export default function LaunchWizard() {
                 </Field>
                 <Field label="Time zone basis">
                   <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}
-                    disabled={type === "marketing" && scheduleMode === "now"}>
+                    disabled={false}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Recipient local (per phone prefix)</SelectItem>
