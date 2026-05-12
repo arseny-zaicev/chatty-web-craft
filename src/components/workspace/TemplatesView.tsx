@@ -68,10 +68,16 @@ export default function TemplatesView({ workspaceId }: { workspaceId: string }) 
       });
       if (error) throw error;
       if ((res as { error?: string })?.error) throw new Error((res as { error: string }).error);
-      return res as { fetched: number; upserted: number };
+      return res as { fetched: number; upserted: number; incomplete?: number };
     },
     onSuccess: async (res) => {
       toast.success(`Synced ${res.upserted}/${res.fetched} templates from Gupshup`);
+      if (res.incomplete && res.incomplete > 0) {
+        toast.warning(
+          `${res.incomplete} template${res.incomplete === 1 ? "" : "s"} missing sample copy. Open Gupshup → template → fill the "Sample" field for every {{1}}, {{2}}... then re-sync. Without samples, previews show {1}, {2} placeholders.`,
+          { duration: 10000 },
+        );
+      }
       await queryClient.invalidateQueries({ queryKey: crmKeys.campaigns(workspaceId) });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Sync failed"),
