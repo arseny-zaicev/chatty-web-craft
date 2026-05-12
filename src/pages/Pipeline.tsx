@@ -275,8 +275,15 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         prev.map((d) => (d.id === dealId ? { ...d, stage_id: prevStageId } : d)),
       );
     } else {
-      const stageName = stages.find((s) => s.id === targetStageId)?.name;
-      if (stageName) toast.success(`Moved to ${stageName}`);
+      const stage = stages.find((s) => s.id === targetStageId);
+      if (stage?.name) toast.success(`Moved to ${stage.name}`);
+      // Auto mark-read when moving to a lost stage (e.g. Block / Not interested),
+      // so unread chats don't keep haunting the Inbox.
+      if (stage?.stage_type === "lost" && deal.conversation_id) {
+        const cid = deal.conversation_id;
+        setConversations((prev) => prev.map((c) => (c.id === cid ? { ...c, unread_count: 0 } : c)));
+        void markConversationRead(cid).catch(() => {});
+      }
     }
   };
 
