@@ -8,15 +8,20 @@ const corsHeaders = {
 
 type Body = {
   workspace_id: string;
-  prep_profile_id?: string | null;
   /** Sample rows (frontend should send the first ~150 rows max) */
   parsed_rows: Array<Record<string, string>>;
   /** All headers from the source file */
   all_headers: string[];
-  /** Free-form hint from operator: "only AE", "skip dupes from last week" */
+  /** Free-form instructions from operator: "only AE", "Имя -> first_name", etc. */
   user_hint?: string | null;
-  /** Pasted message copy to match against existing approved templates */
+  /** Pasted message copy */
   pasted_copy?: string | null;
+  /** Operator already picked a template by name (optional). */
+  preferred_template_name?: string | null;
+  /** Variables expected by the chosen template (helps mapping). */
+  preferred_template_vars?: string[] | null;
+  /** marketing | utility */
+  campaign_type?: "marketing" | "utility" | null;
 };
 
 type AiResult = {
@@ -61,25 +66,15 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Load prep profile
-    let profile: any = null;
-    if (body.prep_profile_id) {
-      const { data } = await admin
-        .from("audience_prep_profiles")
-        .select("*")
-        .eq("id", body.prep_profile_id)
-        .eq("workspace_id", body.workspace_id)
-        .maybeSingle();
-      profile = data;
-    }
-
-    // Load approved templates (lite)
-    const { data: templates } = await admin
+    // Load approved templates (lite). Filter by category when operator picked a type.
+    let tplQuery = admin
       .from("message_templates")
-      .select("id, name, language, category, body, status")
+      .select("id, name, language, category, body, status, variables")
       .eq("workspace_id", body.workspace_id)
       .in("status", ["approved", "paused"])
       .limit(200);
+    if (body.campaign_type) tplQuery = tplQuery.eq("category", body.campaign_type);
+    const { data: templates } = await tplQuery;
 
     // Build country distribution locally (cheaper than asking AI)
     const distribution = computeCountryDistribution(body.parsed_rows);
@@ -87,19 +82,6 @@ Deno.serve(async (req) => {
     // Trim sample for the LLM
     const sample = body.parsed_rows.slice(0, 30);
     const sampleHeaders = body.all_headers;
-
-    const profileSummary = profile
-      ? {
-          name: profile.name,
-          campaign_type: profile.campaign_type,
-          template_label: profile.template_label,
-          description: profile.description,
-          required_fields: profile.required_fields,
-          optional_fields: profile.optional_fields,
-          derived_variables: profile.derived_variables,
-          fallback_rules: profile.fallback_rules,
-        }
-      : null;
 
     const templateCatalog = (templates ?? []).map((t) => ({
       id: t.id as string,
@@ -113,29 +95,33 @@ Deno.serve(async (req) => {
 Your job: take a sample of an uploaded contact file and produce a deterministic plan to ingest it.
 
 You DO:
-  - propose a mapping from source column names to canonical fields (phone, first_name, etc.) and to prep-profile fields
+  - propose a mapping from source column names to canonical fields (first_name, last_name, city, etc.) and to template variables
+  - if the operator pre-selected a template, prefer matching its variables over generic fields
   - propose static_values for variables that should be the same for everyone
-  - try to match the operator's pasted copy to one of the approved templates by body similarity
+  - if the operator did NOT pre-select a template, try to match the pasted copy to one of the approved templates by body similarity
   - propose a short audience name (date | country | audience-label)
-  - flag warnings (missing columns, low variability, suspicious data)
+  - flag warnings (missing columns, low variability, suspicious data, instructions that conflict with the data)
+  - obey free-form operator instructions (e.g. "only AE", "Имя -> first_name, capitalize", "city = Dubai for all")
 
 You DO NOT:
   - invent column data
   - create new templates
   - guess values you cannot derive from the sample
-
-Phone normalisation, dedup, validation are handled deterministically by the app — do not include those rules in mapping.
+  - include phone in column_mapping (the app handles phone normalisation, dedup, validation deterministically)
 
 Always return a single tool call with the structured plan.`;
 
     const userPrompt = JSON.stringify(
       {
         workspace_country_distribution: distribution,
-        prep_profile: profileSummary,
+        campaign_type: body.campaign_type ?? null,
+        preferred_template: body.preferred_template_name
+          ? { name: body.preferred_template_name, variables: body.preferred_template_vars ?? [] }
+          : null,
         sample_headers: sampleHeaders,
         sample_rows: sample,
         sample_total_rows: body.parsed_rows.length,
-        operator_hint: body.user_hint ?? null,
+        operator_instructions: body.user_hint ?? null,
         pasted_copy: body.pasted_copy ?? null,
         approved_templates: templateCatalog,
         date_today: new Date().toISOString().slice(0, 10),
