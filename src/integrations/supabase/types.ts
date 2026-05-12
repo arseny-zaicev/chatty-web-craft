@@ -489,6 +489,7 @@ export type Database = {
           delay_max_seconds: number
           delay_min_seconds: number
           failed_count: number
+          first_scheduled_at: string | null
           id: string
           kind: string
           last_day_completed_date: string | null
@@ -496,6 +497,7 @@ export type Database = {
           parent_campaign_id: string | null
           per_number_quota: number
           pipeline_id: string | null
+          recipient_country: string | null
           recurrence: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at: string | null
           respect_recipient_tz: boolean
@@ -506,6 +508,7 @@ export type Database = {
           sent_count: number
           status: Database["public"]["Enums"]["campaign_status"]
           template_id: string | null
+          today_recipients_count: number
           total_recipients: number
           updated_at: string
           user_id: string
@@ -518,6 +521,7 @@ export type Database = {
           delay_max_seconds?: number
           delay_min_seconds?: number
           failed_count?: number
+          first_scheduled_at?: string | null
           id?: string
           kind?: string
           last_day_completed_date?: string | null
@@ -525,6 +529,7 @@ export type Database = {
           parent_campaign_id?: string | null
           per_number_quota?: number
           pipeline_id?: string | null
+          recipient_country?: string | null
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
           respect_recipient_tz?: boolean
@@ -535,6 +540,7 @@ export type Database = {
           sent_count?: number
           status?: Database["public"]["Enums"]["campaign_status"]
           template_id?: string | null
+          today_recipients_count?: number
           total_recipients?: number
           updated_at?: string
           user_id: string
@@ -547,6 +553,7 @@ export type Database = {
           delay_max_seconds?: number
           delay_min_seconds?: number
           failed_count?: number
+          first_scheduled_at?: string | null
           id?: string
           kind?: string
           last_day_completed_date?: string | null
@@ -554,6 +561,7 @@ export type Database = {
           parent_campaign_id?: string | null
           per_number_quota?: number
           pipeline_id?: string | null
+          recipient_country?: string | null
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
           respect_recipient_tz?: boolean
@@ -564,6 +572,7 @@ export type Database = {
           sent_count?: number
           status?: Database["public"]["Enums"]["campaign_status"]
           template_id?: string | null
+          today_recipients_count?: number
           total_recipients?: number
           updated_at?: string
           user_id?: string

@@ -1,123 +1,88 @@
-Спасибо за уточнение. Переделываю план с учетом:
-- fallback фразы (`there`, `your team`, `your space`) допустимы ТОЛЬКО для `var_1` (имя), когда у конкретной строки нет имени.
-- `var_2` и `var_3` в нашей модели - campaign-static. Они одинаковые для всей кампании и приходят из copy в Materials, а не из колонок данных.
-- Текущая поломка goflow: оператор не передал в Codex значения для `{{2}}` и `{{3}}`, поэтому Codex применил name-fallbacks и к ним. Запись в БД формально валидна, но preview показывает мусор.
+# Slack: правильная семантика scheduled / launched / day completed
 
-Что нашел в данных goflow batch `2026-05-11 | US | WA Groups + Hubspot`:
-- 2808 valid rows
-- `var_2`: 100% = `your team`
-- `var_3`: 1089 = `your space`, остальные = названия групп
-- Должно быть из Materials:
-  - `var_2 = retail channel expansion opportunities`
-  - `var_3 = We have a few exclusive incentives and partnership opportunities available with Amazon, Walmart, Target, Macy's, Nordstrom, Best Buy, Home Depot, and Lowe's, and I wanted to see if it may be worth exploring if your products are a fit.`
+## Что не так сейчас
 
-План
+**Launch now:**
+- Кампания всегда создаётся со статусом `running` → триггер шлёт `campaign_launched` сразу, даже если первый месседж уйдёт через 12 часов.
+- В Slack показывается **общий объём базы** (7,571), а не сколько уйдёт сегодня.
+- `First send` = `now()`, а не реальное время первой отправки.
+- Подпись `09:00-20:00 UAE` захардкожена, хотя кампания может быть по US/NY.
 
-1) Concept fix in code: variable kinds
+**Конец дня (`campaign_day_completed`):**
+- Показывает только `Today: N sent · M failed` и `Next batch`.
+- Нет данных по ответам, позитиву и скорости менеджеров.
 
-   В `prepPresets.ts` каждый preset variable получает поле `kind`:
-   - `per_row` (var_1, source = `first_name`, fallback разрешен)
-   - `campaign_static` (var_2, var_3 - один и тот же текст для всех контактов кампании)
+## Целевое поведение
 
-   У `campaign_static` появляется поле `value: string` (заполняется при создании batch'а в UI - оператор вставляет текст из Materials).
+### 1. При нажатии Launch (вне окна или будущая дата)
+Клиент получает `📅 Campaign scheduled`:
+- **Today:** сколько уйдёт сегодня.
+  - Если сегодня ничего не уйдёт — показать дату следующего дня вместо "0 today" (например `Starts 13 May`).
+- **First send:** точное время первой отправки в TZ получателя (`Today 09:00 New York` / `13 May 09:00 New York`).
+- **Window:** `09:00-20:00 New York` (TZ из страны пула, не UAE).
 
-2) UI: Create batch dialog (Data screen)
+### 2. Когда первый месседж реально уходит
+`🚀 Campaign launched`:
+- **Today:** сколько уйдёт сегодня.
+- **Started:** фактическое время первого `sent`.
 
-   Когда оператор кликает Create batch на goflow preset, он видит:
-   - Country, Audience, Batch name (как сейчас)
-   - Поля для каждой `campaign_static` переменной с лейблами:
-     - "{{2}} - same text for everyone (paste from Materials):"
-     - "{{3}} - same text for everyone (paste from Materials):"
-   - Inline пояснение:
-     "var_1 = per-row name (auto). var_2 / var_3 = same for everyone in this campaign. Paste exact copy from Materials below."
-   - Validation: длина > 5 символов, не равно `your team / your space / there`, не содержит `{` / `}` / `{{`.
+### 3. Если Launch попадает прямо в окно
+Один месседж `🚀 Campaign launched` (today-count + правильная TZ).
 
-3) Prompt builder: hard contract
+### 4. В конце дня (`✅ Campaign day finished`)
+- **Sent today:** N
+- **Replies:** R (P% reply rate)
+- **Positive:** Q (S% of replies)
+- **Avg manager response (positive):** Xm Ys (если есть данные, иначе `—`)
+- **Next batch:** показывать ТОЛЬКО если есть запланированный следующий день. Если нет — `Next batch: not scheduled yet`.
 
-   `buildPresetPrompt` теперь печатает блок:
+## Технические шаги
 
-   ```
-   VARIABLE CONTRACT (READ TWICE)
-     var_1 (per_row): from `first_name`. If empty -> fallback "there". OK to repeat.
-     var_2 (campaign_static): EVERY row MUST have this exact value:
-       """
-       <pasted var_2>
-       """
-     var_3 (campaign_static): EVERY row MUST have this exact value:
-       """
-       <pasted var_3>
-       """
+### 1. Миграция БД
+Добавить в `campaigns`:
+- `today_recipients_count int default 0`
+- `recipient_country text` (ISO для TZ)
+- `first_scheduled_at timestamptz`
 
-   DO NOT
-     - apply name-fallbacks ("there", "your team", "your space", "your area", "your role", "your space") to var_2 / var_3
-     - paraphrase, shorten, translate, or "personalize" var_2 / var_3
-     - leave var_2 / var_3 empty
-     - copy template Gupshup "Sample" text
+Обновить триггер `enqueue_campaign_slack_event`: добавить эти поля в payload всех `campaign_*` событий.
 
-   SANITY CHECK BEFORE INSERT
-     - var_1 distinct count > 50% of rows OR all rows are anonymous (then fallback "there" allowed)
-     - var_2 == exact value above for 100% of rows
-     - var_3 == exact value above for 100% of rows
-     If any check fails -> STOP, print which rows failed, do not insert.
-   ```
+### 2. `supabase/functions/campaigns/index.ts` (createCampaign)
+- Считаем `rows`, сортируем по `scheduled_at`.
+- `firstScheduledAt = rows[0].scheduled_at`.
+- `todayCount` = строки, попадающие в «сегодня» в TZ получателя (по `country_code` основного номера).
+- Решаем статус:
+  - `firstScheduledAt > now + 120s` → INSERT `draft`, потом UPDATE → `scheduled` (триггер шлёт `campaign_scheduled`).
+  - Иначе → INSERT `running` (как сейчас, триггер шлёт `campaign_launched`).
+- Записываем `today_recipients_count`, `recipient_country`, `first_scheduled_at`, `scheduled_start_at = firstScheduledAt`.
 
-   Старое правило "var_2/var_3 must be unique per row" удаляется. Это была моя ошибка - оно не отражает реальную модель.
+### 3. Промоушен `scheduled → running`
+В начале `processQueue`:
+```sql
+UPDATE campaigns SET status='running'
+WHERE status='scheduled' AND first_scheduled_at <= now() + interval '60 seconds'
+```
 
-4) UI: tooltip / explainer near every prompt
+### 4. `supabase/functions/campaign-day-rollover/index.ts`
+Перед enqueue `campaign_day_completed` добавить за окно дня (по recipient TZ):
 
-   Над каждым "Copy prompt" блоком (Data presets и Custom prep profiles) выводится короткая шпаргалка в свернутом блоке:
+- **replies_today** — `count distinct conversation_id` из `messages` где `direction='inbound'` и conversation связан с этой кампанией.
+- **positive_today** — `count` из `conversation_insights` где `reply_intent IN ('positive','interested','warm')` и conversation из этой кампании.
+- **avg_manager_response_seconds** — средний интервал между первым `inbound` (positive) и следующим `outbound` менеджера (`sent_by_user_id IS NOT NULL`) в той же conversation.
+- **next_day** — оставить только если действительно есть запланированный день из `scheduled_dates` после сегодня; иначе передать `null`.
 
-   ```
-   How variables work:
-   - var_1 = per recipient (name). Fallback "there" allowed.
-   - var_2, var_3 = same for everyone in this campaign. Paste exact text in the Create batch step.
-   - Never use "your team", "your space" for var_2 / var_3.
-   ```
+### 5. `supabase/functions/_shared/slackBlocks.ts`
+- Для `campaign_scheduled` / `campaign_launched`:
+  - `Volume` → `Today` (`today_recipients_count` msgs). Если 0 — заменить на `Starts <date>` без слова "today".
+  - `Window` берёт TZ из `recipient_country`.
+  - `First send` / `Started` форматируется в TZ получателя.
+- Для `campaign_day_completed`:
+  - `Replies: R (P% reply rate)`.
+  - `Positive: Q (S% of replies)`.
+  - `Avg response: Xm Ys` (или `—`).
+  - `Next batch:` показываем только при наличии `next_day`; иначе `Next batch: not scheduled yet`.
 
-   Это снимает риск, что в следующий раз оператор отправит Codex prompt без значений.
-
-5) Launch Wizard: pre-launch QA на реальных строках
-
-   В Step 5 / Step 6 вычисляется per-batch QA по `audience_rows.derived_payload`:
-   - per_row variable: distinct ratio > 30% OR один константный fallback `there` (тогда warning, не блок)
-   - campaign_static variable:
-     - все строки должны иметь одно и то же значение
-     - значение не должно входить в banned list: `your team`, `your space`, `your area`, `your role`, `there`, пустая строка
-     - длина > 5 символов
-   - Если фейл - красный блок:
-     "var_2 looks broken: 2808 rows have value 'your team'. Expected campaign-static copy from Materials. Re-prepare the batch."
-   - Кнопка Launch блокируется при фейле campaign_static.
-
-6) Step 8 Preview: source breakdown
-
-   Под каждым sample message добавляется:
-
-   ```
-   {{1}} <- derived_payload.var_1 (per-row): "Ray Mondelle"
-   {{2}} <- derived_payload.var_2 (campaign-static): "retail channel expansion opportunities"
-   {{3}} <- derived_payload.var_3 (campaign-static): "We have a few exclusive..."
-   ```
-
-   Если значение в banned list, оно подсвечивается красным.
-
-7) Backfill текущего goflow batch
-
-   Migration: для batch `2e0706f3-9933-49e2-8d44-a9529a71c6a0`, для всех `validation_status = 'valid'` AND `usage_status = 'unused'`, обновить `derived_payload`:
-   - `var_2` = `retail channel expansion opportunities`
-   - `var_3` = `We have a few exclusive incentives and partnership opportunities available with Amazon, Walmart, Target, Macy's, Nordstrom, Best Buy, Home Depot, and Lowe's, and I wanted to see if it may be worth exploring if your products are a fit.`
-   - `var_1` оставить.
-
-   После этого preview будет показывать корректное сообщение.
-
-8) Что НЕ трогаю
-
-   - Код dispatcher / Gupshup отправки.
-   - `import-audience-from-personal` - отдельной задачей при необходимости (но добавлю в notes: сейчас функция не тянет `derived_payload`, так что pull из personal базы в любом случае ломает campaign-static модель и должен быть пересмотрен отдельно).
-   - Auto-variant generation, audience_batches схему.
-
-Результат
-
-- В UI рядом с каждым промптом будет короткое описание разницы var_1 vs var_2/var_3.
-- Codex получит жесткий contract с exact значениями для campaign-static переменных и явным запретом fallback.
-- Launch Wizard заблокирует запуск, если var_2/var_3 в БД сломаны.
-- Текущий goflow batch будет починен миграцией, и preview покажет правильное сообщение из Materials.
+## Файлы
+- `supabase/migrations/<new>.sql` — колонки + апдейт триггера
+- `supabase/functions/campaigns/index.ts` — статус-логика, today-count, промоушен
+- `supabase/functions/campaign-day-rollover/index.ts` — replies/positive/avg-response метрики + next_day гард
+- `supabase/functions/_shared/slackBlocks.ts` — рендер today/TZ + расширенный day-completed блок
