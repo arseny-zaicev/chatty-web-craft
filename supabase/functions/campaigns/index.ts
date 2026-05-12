@@ -400,6 +400,22 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
   const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
 
+  // Honor min 60s gap: cap effective per-day per number so window can fit it.
+  const minGapSec = Math.max(60, minDelay || 60);
+  const windowFitCap = Math.max(1, Math.floor(windowSeconds / minGapSec));
+  const effectiveQuota = Math.max(1, Math.min(perNumberQuota, windowFitCap));
+
+  const nextDateStr = (d: string) => {
+    const [y, m, day] = d.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, (m || 1) - 1, day || 1));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return dt.toISOString().slice(0, 10);
+  };
+  const todayKeyTz = (tz: string) => {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()); }
+    catch { return new Date().toISOString().slice(0, 10); }
+  };
+
   const rows: any[] = [];
 
   for (let bi = 0; bi < rawNumbers.length; bi++) {
@@ -416,94 +432,61 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       variables: { ...(base.variables || {}), __tpl_id: tplId },
     });
 
-    if (scheduledDates.length === 0) {
-      const nowMs = Date.now();
-      const startMs0 = nowMs + 5_000 + bucketShiftSec * 1000;
-      const perTz = new Map<string, CleanRecipient[]>();
-      for (const r of bucketRecipients) {
-        const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
-        if (!perTz.has(tz)) perTz.set(tz, []);
-        perTz.get(tz)!.push(r);
-      }
-      const dayKey = (ms: number, tz: string) => {
-        try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms)); }
-        catch { return new Date(ms).toISOString().slice(0, 10); }
-      };
-      for (const [tz, list] of perTz) {
-        let cursorMs = startMs0;
-        const ensureInsideWindow = () => {
-          const today = dayKey(cursorMs, tz);
-          const todayStart = dateAtTzToUTC(today, windowStart, tz).getTime();
-          const todayEnd = dateAtTzToUTC(today, windowEnd, tz).getTime();
-          if (cursorMs < todayStart) cursorMs = todayStart;
-          if (cursorMs >= todayEnd) {
-            const next = new Date(cursorMs + 24 * 3600_000);
-            const nextDate = dayKey(next.getTime(), tz);
-            cursorMs = dateAtTzToUTC(nextDate, windowStart, tz).getTime();
-          }
-        };
-        ensureInsideWindow();
-        for (const r of list) {
-          let gapSec: number;
-          if (schedulerKind === "poisson") {
-            gapSec = exponentialGap(1 / avgDelay);
-            gapSec = Math.max(minDelay, Math.min(Math.max(minDelay + 1, maxDelay * 3), gapSec));
-          } else {
-            gapSec = randomDelay(minDelay, maxDelay);
-          }
-          cursorMs += gapSec * 1000;
-          ensureInsideWindow();
-          rows.push(tagRow({
-            ...r,
-            user_id: ownerId,
-            workspace_id: wsId,
-            campaign_id: campaign.id,
-            status: "scheduled",
-            scheduled_at: new Date(cursorMs).toISOString(),
-          }));
-        }
-      }
-    } else {
-      const perDay = Math.ceil(bucketRecipients.length / scheduledDates.length);
-      for (let di = 0; di < scheduledDates.length; di++) {
-        const date = scheduledDates[di];
-        const slice = bucketRecipients.slice(di * perDay, (di + 1) * perDay);
+    // Group recipients by tz so each tz gets its own date/window calendar.
+    const perTz = new Map<string, CleanRecipient[]>();
+    for (const r of bucketRecipients) {
+      const tz = respectTz ? tzFromPhone(r.contact_phone) : (recipientTz || "UTC");
+      if (!perTz.has(tz)) perTz.set(tz, []);
+      perTz.get(tz)!.push(r);
+    }
+
+    for (const [tz, list] of perTz) {
+      // Build the date sequence for THIS tz: either explicit scheduledDates,
+      // or auto-starting from today; extend forward until everyone fits at
+      // <= effectiveQuota per day.
+      const baseDates = scheduledDates.length > 0
+        ? [...scheduledDates].sort()
+        : [todayKeyTz(tz)];
+      const dates = [...baseDates];
+      const need = Math.ceil(list.length / effectiveQuota);
+      while (dates.length < need) dates.push(nextDateStr(dates[dates.length - 1]));
+
+      let cursor = 0;
+      for (const date of dates) {
+        if (cursor >= list.length) break;
+        const slice = list.slice(cursor, cursor + effectiveQuota);
+        cursor += slice.length;
         if (slice.length === 0) continue;
-        const perTz = new Map<string, CleanRecipient[]>();
-        for (const r of slice) {
-          const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
-          if (!perTz.has(tz)) perTz.set(tz, []);
-          perTz.get(tz)!.push(r);
-        }
-        for (const [tz, list] of perTz) {
-          const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
-          const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
-          const span = Math.max(60_000, endUtc - startUtc);
-          if (schedulerKind === "poisson") {
-            const rate = list.length / (span / 1000);
-            let cursor = startUtc;
-            for (const r of list) {
-              cursor += exponentialGap(rate) * 1000;
-              if (cursor > endUtc) cursor = endUtc - Math.floor(Math.random() * 60_000);
-              rows.push(tagRow({
-                ...r,
-                user_id: ownerId, workspace_id: wsId,
-                campaign_id: campaign.id, status: "scheduled",
-                scheduled_at: new Date(cursor).toISOString(),
-              }));
-            }
-          } else {
-            const step = span / Math.max(1, list.length);
-            for (let i = 0; i < list.length; i++) {
-              const jitter = (Math.random() - 0.5) * step * 0.4;
-              const ts = startUtc + i * step + jitter;
-              rows.push(tagRow({
-                ...list[i],
-                user_id: ownerId, workspace_id: wsId,
-                campaign_id: campaign.id, status: "scheduled",
-                scheduled_at: new Date(Math.min(endUtc, Math.max(startUtc, ts))).toISOString(),
-              }));
-            }
+
+        const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
+        const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
+        // For "now" mode + today: don't schedule in the past — clamp to now+5s.
+        const earliest = Math.max(startUtc, Date.now() + 5_000);
+        const span = Math.max(60_000, endUtc - earliest);
+        if (schedulerKind === "poisson") {
+          const rate = slice.length / (span / 1000);
+          let c = earliest;
+          for (const r of slice) {
+            c += Math.max(minGapSec, exponentialGap(rate)) * 1000;
+            if (c > endUtc) c = endUtc - Math.floor(Math.random() * 60_000);
+            rows.push(tagRow({
+              ...r,
+              user_id: ownerId, workspace_id: wsId,
+              campaign_id: campaign.id, status: "scheduled",
+              scheduled_at: new Date(c).toISOString(),
+            }));
+          }
+        } else {
+          const step = Math.max(minGapSec * 1000, span / Math.max(1, slice.length));
+          for (let i = 0; i < slice.length; i++) {
+            const jitter = (Math.random() - 0.5) * step * 0.4;
+            const ts = earliest + i * step + jitter;
+            rows.push(tagRow({
+              ...slice[i],
+              user_id: ownerId, workspace_id: wsId,
+              campaign_id: campaign.id, status: "scheduled",
+              scheduled_at: new Date(Math.min(endUtc, Math.max(earliest, ts))).toISOString(),
+            }));
           }
         }
       }
