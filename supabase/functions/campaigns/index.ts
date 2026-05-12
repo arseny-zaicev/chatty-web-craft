@@ -277,6 +277,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
+  // Per-number/day cap. Hard ceiling 200 (Meta tier), floor 1.
+  const perNumberQuota = Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota ?? 200))));
 
   // Multi-number support: accept either legacy single (whatsapp_number_id+template_id)
   // or new `numbers: [{number_id, template_id}, ...]`. ONE campaign row is created
