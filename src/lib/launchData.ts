@@ -108,6 +108,7 @@ export function groupLogicalTemplates(templates: Template[]): LogicalTemplate[] 
         category: (t.category as any) ?? "marketing",
         variables: [],
         body: t.body ?? null,
+        variablesSample: [],
         variants: [],
         variantByNumber: new Map(),
       };
@@ -118,6 +119,9 @@ export function groupLogicalTemplates(templates: Template[]): LogicalTemplate[] 
     const vars = Array.isArray(t.variables) ? (t.variables as string[]) : [];
     for (const v of vars) if (!entry.variables.includes(v)) entry.variables.push(v);
     if (!entry.body && t.body) entry.body = t.body;
+    // Use the longest sample copy across variants (newest variant typically wins).
+    const sample = Array.isArray(t.variables_sample) ? (t.variables_sample as any[]).map((x) => String(x ?? "")) : [];
+    if (sample.length > entry.variablesSample.length) entry.variablesSample = sample;
   }
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
