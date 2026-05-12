@@ -196,29 +196,46 @@ export function buildCampaignLifecycleBlocks(args: {
   const headline = `${m.emoji}  ${tag}  ·  Campaign ${m.verb}`;
   const fields: { type: string; text: string }[] = [];
 
+  const tzi = tzInfo(payload.recipient_country || payload.recipient_tz);
+  const todayCount = Number(payload.today_recipients_count || 0);
+  const firstAt = (payload.first_scheduled_at as string | null) || (payload.scheduled_start_at as string | null);
+
   fields.push({ type: "mrkdwn", text: `*Campaign*\n${name}` });
-  fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
 
   if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
     const delivered = sent - failed;
     fields.push({ type: "mrkdwn", text: `*Sent*\n${fmtNumber(sent)} (${fmtPct(sent, total)})` });
     fields.push({ type: "mrkdwn", text: `*Delivered*\n${fmtNumber(delivered)} · ${fmtNumber(failed)} failed` });
   } else if (event === "campaign_scheduled" || event === "campaign_launched" || event === "campaign_resumed") {
-    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} UAE` });
-    fields.push({ type: "mrkdwn", text: `*First send*\n${fmtDate(payload.scheduled_start_at as string)}` });
+    fields.push({ type: "mrkdwn", text: `*Today*\n${fmtTodayOrStartDate(todayCount, firstAt, tzi.tz)}` });
+    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} ${tzi.label}` });
+    fields.push({ type: "mrkdwn", text: `*${event === "campaign_scheduled" ? "First send" : "Started"}*\n${fmtDate(firstAt, tzi.tz)} ${tzi.label}` });
   } else if (event === "campaign_paused") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
     fields.push({ type: "mrkdwn", text: `*Progress*\n${fmtNumber(sent)} / ${fmtNumber(total)} sent` });
     fields.push({ type: "mrkdwn", text: `*Failed*\n${fmtNumber(failed)}` });
   } else if (event === "campaign_day_completed") {
     const sentToday = Number(payload.sent_today || 0);
     const failedToday = Number(payload.failed_today || 0);
-    const nextDay = String(payload.next_day || "");
+    const repliesToday = Number(payload.replies_today || 0);
+    const positiveToday = Number(payload.positive_today || 0);
+    const avgRespSec = Number(payload.avg_manager_response_seconds || 0);
+    const nextDay = payload.next_day ? String(payload.next_day) : null;
     const nextStart = String(payload.next_day_start_local || payload.window_start || "09:00");
     const nextRecipients = Number(payload.next_day_recipients || 0);
-    const tz = payload.recipient_tz ? ` ${payload.recipient_tz}` : "";
-    fields[1] = { type: "mrkdwn", text: `*Today*\n${fmtNumber(sentToday)} sent · ${fmtNumber(failedToday)} failed` };
-    fields.push({ type: "mrkdwn", text: `*Next batch*\n${fmtNumber(nextRecipients)} msgs` });
-    fields.push({ type: "mrkdwn", text: `*Starts*\n${nextDay} at ${nextStart}${tz}` });
+
+    fields.push({ type: "mrkdwn", text: `*Sent today*\n${fmtNumber(sentToday)}${failedToday ? ` · ${fmtNumber(failedToday)} failed` : ""}` });
+    fields.push({ type: "mrkdwn", text: `*Replies*\n${fmtNumber(repliesToday)} (${fmtPct(repliesToday, sentToday)} reply rate)` });
+    fields.push({ type: "mrkdwn", text: `*Positive*\n${fmtNumber(positiveToday)}${repliesToday ? ` (${fmtPct(positiveToday, repliesToday)} of replies)` : ""}` });
+    fields.push({ type: "mrkdwn", text: `*Avg response (positive)*\n${fmtDuration(avgRespSec)}` });
+    if (nextDay) {
+      fields.push({ type: "mrkdwn", text: `*Next batch*\n${fmtNumber(nextRecipients)} msgs · ${nextDay} at ${nextStart} ${tzi.label}` });
+    } else {
+      fields.push({ type: "mrkdwn", text: `*Next batch*\nnot scheduled yet` });
+    }
+  } else {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
   }
 
   if (numberPhone) {
