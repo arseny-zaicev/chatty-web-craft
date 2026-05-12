@@ -1238,6 +1238,32 @@ export default function LaunchWizard() {
               </TabsContent>
             </Tabs>
 
+            {/* Audience schema vs template-variable contract */}
+            {variableNames.length > 0 && missingAudienceKeys.length > 0 && audienceSource !== "chats" && audienceSource !== "saved" && (
+              <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div>
+                    <b>This audience does not provide per-row values for {missingAudienceKeys.map((k) => `{${k.replace(/^var_/, "")}}`).join(", ")}.</b>
+                  </div>
+                  <div>
+                    Template needs columns: <code className="font-mono">{expectedAudienceKeys.join(", ")}</code>.
+                    {" "}Found columns: <code className="font-mono">{columns.length ? columns.join(", ") : "(none)"}</code>.
+                  </div>
+                  <div>
+                    {audienceSource === "database"
+                      ? "Re-prepare the batch with a preset that defines these var_N keys, otherwise Step 6 falls back to the same text for every contact."
+                      : "Add columns named " + missingAudienceKeys.join(", ") + " to your CSV, otherwise Step 6 falls back to the same text for every contact."}
+                  </div>
+                  {workspace && (
+                    <Link to={`/ws/${workspace.slug}/data`} className="inline-flex items-center gap-1 underline text-amber-800 dark:text-amber-300">
+                      Open Data prep →
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between flex-wrap gap-2 mt-3 text-xs text-muted-foreground">
               <span>
                 {audienceSource === "database"
