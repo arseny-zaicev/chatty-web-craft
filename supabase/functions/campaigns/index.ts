@@ -870,6 +870,17 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
 }
 
 async function processQueue(admin: any) {
+  // Lock contract: a recipient is "owned" by a tick once we successfully transition
+  // it from 'scheduled' -> 'sending' below (the conditional UPDATE acts as the lock).
+  // If a tick crashes or times out mid-send, the row stays in 'sending' indefinitely
+  // and is invisible to subsequent ticks (which only claim 'scheduled'). Reap stuck
+  // 'sending' rows older than 10 minutes back to 'scheduled' so they are retried.
+  try {
+    await admin.rpc("reap_stuck_sending_recipients", { p_idle_minutes: 10 });
+  } catch (err) {
+    console.warn("reap_stuck_sending_recipients failed", err);
+  }
+
   // Promote scheduled campaigns whose first send is imminent to running.
   // The campaigns_status_change trigger then enqueues a `campaign_launched`
   // Slack event with today_recipients_count + recipient_country.
@@ -1053,17 +1064,25 @@ async function processQueue(admin: any) {
   }));
 
   const campaignIds = [...new Set((due ?? []).map((r: any) => r.campaign_id))];
-  for (const id of campaignIds) {
-    const [{ count: sentCount }, { count: failedCount }, { count: pendingCount }] = await Promise.all([
-      admin.from("campaign_recipients").select("id", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "sent"),
-      admin.from("campaign_recipients").select("id", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "failed"),
-      admin.from("campaign_recipients").select("id", { count: "exact", head: true }).eq("campaign_id", id).in("status", ["pending", "scheduled", "sending"]),
-    ]);
-    await admin.from("campaigns").update({
-      sent_count: sentCount ?? 0,
-      failed_count: failedCount ?? 0,
-      status: pendingCount === 0 ? "completed" : "running",
-    }).eq("id", id);
+  if (campaignIds.length > 0) {
+    // Single aggregate call instead of 3 count(*) queries per campaign.
+    const { data: counts } = await admin.rpc("campaign_recipient_counts", { p_campaign_ids: campaignIds });
+    const byId = new Map<string, { sent: number; failed: number; pending: number }>();
+    for (const row of counts ?? []) {
+      byId.set(row.campaign_id, {
+        sent: Number(row.sent_count ?? 0),
+        failed: Number(row.failed_count ?? 0),
+        pending: Number(row.pending_count ?? 0),
+      });
+    }
+    for (const id of campaignIds) {
+      const c = byId.get(id) ?? { sent: 0, failed: 0, pending: 0 };
+      await admin.from("campaigns").update({
+        sent_count: c.sent,
+        failed_count: c.failed,
+        status: c.pending === 0 ? "completed" : "running",
+      }).eq("id", id);
+    }
   }
 
   // Reaper: catch any 'running' campaign whose recipients all reached terminal state

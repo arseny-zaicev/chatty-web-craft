@@ -1319,6 +1319,7 @@ export type Database = {
           header_text: string | null
           id: string
           language: string
+          last_notified_status: string | null
           name: string
           namespace: string | null
           provider_template_id: string | null
@@ -1344,6 +1345,7 @@ export type Database = {
           header_text?: string | null
           id?: string
           language?: string
+          last_notified_status?: string | null
           name: string
           namespace?: string | null
           provider_template_id?: string | null
@@ -1369,6 +1371,7 @@ export type Database = {
           header_text?: string | null
           id?: string
           language?: string
+          last_notified_status?: string | null
           name?: string
           namespace?: string | null
           provider_template_id?: string | null
@@ -2912,6 +2915,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      campaign_recipient_counts: {
+        Args: { p_campaign_ids: string[] }
+        Returns: {
+          campaign_id: string
+          failed_count: number
+          pending_count: number
+          sent_count: number
+        }[]
+      }
       can_access_pipeline: {
         Args: { _pipeline_id: string; _user_id: string; _workspace_id: string }
         Returns: boolean
@@ -2929,6 +2941,23 @@ export type Database = {
         Returns: string
       }
       ensure_pipeline_stage: { Args: { _user_id: string }; Returns: string }
+      fleet_number_summaries: {
+        Args: never
+        Returns: {
+          active_campaigns: Json
+          errors_since_unban: number
+          last_campaign_at: string
+          last_campaign_name: string
+          number_id: string
+          outbound_messages: number
+          recipients_failed: number
+          recipients_pending: number
+          recipients_sent: number
+          templates_approved: number
+          templates_total: number
+          webhook_errors: number
+        }[]
+      }
       generate_payout_run: {
         Args: { _from: string; _partner_id: string; _to: string }
         Returns: string
@@ -3085,6 +3114,10 @@ export type Database = {
         }[]
       }
       reap_finished_campaigns: {
+        Args: { p_idle_minutes?: number }
+        Returns: number
+      }
+      reap_stuck_sending_recipients: {
         Args: { p_idle_minutes?: number }
         Returns: number
       }

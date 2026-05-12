@@ -321,7 +321,9 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     const lu = leadUpdates[k];
     const rec = inserted[lu.recipient_idx];
     if (!rec) continue;
-    const { error: uErr } = await admin
+    // Atomic claim: returning rows lets us detect "another tick already claimed this lead"
+    // (uErr stays null on 0-row updates, so we MUST check the returned set).
+    const { data: claimed, error: uErr } = await admin
       .from("lead_imports")
       .update({
         status: "queued",
@@ -330,12 +332,16 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
         scheduled_at: rec.scheduled_at,
       })
       .eq("id", lu.id)
-      .in("status", ["pending", "awaiting_manual"]);
-    if (uErr) {
-      // Couldn't claim the lead -> cancel the orphan recipient so cron does not double-send
+      .in("status", ["pending", "awaiting_manual"])
+      .is("campaign_recipient_id", null) // race guard: another tick may have linked it already
+      .select("id");
+    const claimedOk = !uErr && Array.isArray(claimed) && claimed.length > 0;
+    if (!claimedOk) {
+      // Couldn't claim the lead (race or error) -> cancel the orphan recipient so it never sends.
+      const reason = uErr ? `lead update failed: ${uErr.message}` : "lead already claimed by another dispatch tick";
       await admin
         .from("campaign_recipients")
-        .update({ status: "failed", error_message: `lead update failed: ${uErr.message}` })
+        .update({ status: "failed", error_message: reason })
         .eq("id", rec.id);
       continue;
     }
