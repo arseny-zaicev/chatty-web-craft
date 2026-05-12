@@ -420,6 +420,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (starredOnly && !c.is_starred) return false;
     if (myOnly && meId && c.assigned_user_id !== meId) return false;
     if (repliedOnly && !repliedSet.has(c.id)) return false;
+    if (unreadOnly && (c.unread_count ?? 0) <= 0) return false;
     if (pipelineFilter === "unassigned") {
       if (c.pipeline_id) return false;
     } else if (pipelineFilter !== "all") {
