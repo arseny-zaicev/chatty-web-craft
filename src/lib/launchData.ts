@@ -64,7 +64,7 @@ export async function fetchLaunchEssentials(workspaceId?: string) {
 export async function fetchCampaignSummaries(workspaceId?: string) {
   let q = supabase
     .from("campaigns")
-    .select("id, name, status, total_recipients, sent_count, failed_count, created_at, whatsapp_number_id, template_id, workspace_id, delay_min_seconds, delay_max_seconds")
+    .select("id, name, status, total_recipients, sent_count, failed_count, created_at, whatsapp_number_id, template_id, workspace_id, delay_min_seconds, delay_max_seconds, today_recipients_count, first_scheduled_at, recipient_country, scheduled_dates, scheduled_start_at")
     .order("created_at", { ascending: false })
     .limit(50);
   if (workspaceId) q = q.eq("workspace_id", workspaceId);

@@ -32,6 +32,11 @@ export type CampaignRow = {
   created_at: string;
   whatsapp_number_id: string | null;
   template_id: string | null;
+  today_recipients_count?: number | null;
+  first_scheduled_at?: string | null;
+  recipient_country?: string | null;
+  scheduled_dates?: string[] | null;
+  scheduled_start_at?: string | null;
 };
 
 export type CampaignGroup = {
@@ -41,6 +46,10 @@ export type CampaignGroup = {
   total: number;
   sent: number;
   failed: number;
+  today: number;
+  firstScheduledAt: string | null;
+  recipientCountry: string | null;
+  scheduledDates: string[];
   created_at: string;
   template_id: string | null;
   whatsapp_number_ids: string[];
@@ -61,6 +70,10 @@ export const groupCampaigns = (rows: CampaignRow[]): CampaignGroup[] => {
         total: 0,
         sent: 0,
         failed: 0,
+        today: 0,
+        firstScheduledAt: null,
+        recipientCountry: c.recipient_country ?? null,
+        scheduledDates: [],
         created_at: c.created_at,
         template_id: c.template_id,
         whatsapp_number_ids: [],
@@ -71,6 +84,12 @@ export const groupCampaigns = (rows: CampaignRow[]): CampaignGroup[] => {
     g.total += c.total_recipients ?? 0;
     g.sent += c.sent_count ?? 0;
     g.failed += c.failed_count ?? 0;
+    g.today += c.today_recipients_count ?? 0;
+    if (c.first_scheduled_at) {
+      if (!g.firstScheduledAt || c.first_scheduled_at < g.firstScheduledAt) g.firstScheduledAt = c.first_scheduled_at;
+    }
+    if (!g.recipientCountry && c.recipient_country) g.recipientCountry = c.recipient_country;
+    for (const d of c.scheduled_dates ?? []) if (!g.scheduledDates.includes(d)) g.scheduledDates.push(d);
     if ((statusRank[c.status] ?? 0) > (statusRank[g.status] ?? 0)) g.status = c.status;
     if (c.created_at < g.created_at) g.created_at = c.created_at;
     if (c.whatsapp_number_id && !g.whatsapp_number_ids.includes(c.whatsapp_number_id)) {
@@ -78,5 +97,6 @@ export const groupCampaigns = (rows: CampaignRow[]): CampaignGroup[] => {
     }
     g.campaigns.push(c);
   }
+  for (const g of map.values()) g.scheduledDates.sort();
   return Array.from(map.values()).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 };

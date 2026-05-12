@@ -8,8 +8,9 @@ import { fetchCampaignSummaries } from "@/lib/launchData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
-import { splitBase, groupCampaigns, type CampaignRow, type CampaignGroup } from "@/lib/campaigns";
+import { groupCampaigns, type CampaignRow, type CampaignGroup } from "@/lib/campaigns";
 import { CampaignReportPanel } from "@/components/workspace/CampaignReportPanel";
+import { tzInfo, dateKeyInTz, todayKeyInTz, shortDateInTz, timeInTz } from "@/lib/timezones";
 
 const statusTone: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
@@ -20,18 +21,52 @@ const statusTone: Record<string, string> = {
   failed: "bg-red-500/15 text-red-600 border-red-500/30",
 };
 
-type RecipientRow = { id: string; status: string; sent_at: string | null; error_message: string | null; contact_phone: string };
+type RecipientLite = { id: string; status: string; scheduled_at: string | null; sent_at: string | null; campaign_id: string };
+type RecipientFull = { id: string; status: string; sent_at: string | null; error_message: string | null; contact_phone: string; campaign_id: string };
 
-const fetchRecipients = async (campaignId: string) => {
-  const { data, error } = await supabase
-    .from("campaign_recipients")
-    .select("id, status, sent_at, error_message, contact_phone")
-    .eq("campaign_id", campaignId)
-    .order("sent_at", { ascending: false, nullsFirst: false })
-    .limit(500);
-  if (error) throw error;
-  return (data ?? []) as RecipientRow[];
-};
+// Page through every recipient (no 500 cap) — only the small projection we need for stats.
+async function fetchRecipientsLite(campaignIds: string[]): Promise<RecipientLite[]> {
+  const out: RecipientLite[] = [];
+  const PAGE = 1000;
+  for (const id of campaignIds) {
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("campaign_recipients")
+        .select("id, status, scheduled_at, sent_at")
+        .eq("campaign_id", id)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as Omit<RecipientLite, "campaign_id">[];
+      rows.forEach((r) => out.push({ ...r, campaign_id: id }));
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+  return out;
+}
+
+async function fetchRecipientsFull(campaignIds: string[]): Promise<RecipientFull[]> {
+  const out: RecipientFull[] = [];
+  const PAGE = 1000;
+  for (const id of campaignIds) {
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("campaign_recipients")
+        .select("id, status, sent_at, error_message, contact_phone")
+        .eq("campaign_id", id)
+        .order("sent_at", { ascending: false, nullsFirst: false })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as Omit<RecipientFull, "campaign_id">[];
+      rows.forEach((r) => out.push({ ...r, campaign_id: id }));
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+  return out;
+}
 
 const fetchCampaignMeta = async (numberIds: string[], templateIds: string[]) => {
   const numbers = new Map<string, { id: string; phone_number: string; label: string | null }>();
@@ -46,6 +81,24 @@ const fetchCampaignMeta = async (numberIds: string[], templateIds: string[]) => 
   }
   return { numbers, templates };
 };
+
+function todaySummary(group: CampaignGroup): string {
+  const tz = tzInfo(group.recipientCountry).tz;
+  const tzLabel = tzInfo(group.recipientCountry).label;
+  if (group.today > 0 && group.firstScheduledAt) {
+    const todayKey = todayKeyInTz(tz);
+    const firstKey = dateKeyInTz(group.firstScheduledAt, tz);
+    if (firstKey === todayKey) {
+      return `${group.today.toLocaleString()} today @ ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+    }
+    return `${group.today.toLocaleString()} today`;
+  }
+  if (group.firstScheduledAt) {
+    return `Starts ${shortDateInTz(group.firstScheduledAt, tz)} @ ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+  }
+  if (group.scheduledDates.length > 0) return `Starts ${group.scheduledDates[0]}`;
+  return "Not scheduled yet";
+}
 
 export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId: string; slug: string }) {
   const { data: campaigns = [], isLoading, isFetching, refetch } = useQuery({
@@ -69,8 +122,6 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const numberById = meta?.numbers ?? new Map();
   const templateById = meta?.templates ?? new Map();
 
-  // Clients see merged groups (one row per logical campaign).
-  // Managers see every individual campaign so they can drill into a specific number.
   const groups = useMemo(() => groupCampaigns(campaigns as CampaignRow[]), [campaigns]);
 
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -102,7 +153,6 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
         <div className="rounded-lg border border-border bg-card/30 divide-y divide-border">
           {groups.map((g) => {
             const template = templateById.get(g.template_id ?? "");
-            // For multi-number groups, show "X numbers" instead of one number label
             const numberLabel = g.whatsapp_number_ids.length === 1
               ? (() => { const n = numberById.get(g.whatsapp_number_ids[0]); return n ? (n.label ?? `+${n.phone_number}`) : null; })()
               : (canManage ? `${g.whatsapp_number_ids.length} numbers` : null);
@@ -121,8 +171,9 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                       {[canManage ? template?.name : null, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
                     </div>
                   </div>
-                  <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                    <Stat label="Sent" value={`${g.sent}/${g.total}`} />
+                  <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
+                    <Stat label="Sent" value={`${g.sent.toLocaleString()}/${g.total.toLocaleString()}`} />
+                    <Stat label="Today" value={todaySummary(g)} />
                     {g.failed > 0 && <Stat label="Failed" value={g.failed} tone="bad" />}
                   </div>
                   <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
@@ -143,6 +194,29 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   );
 }
 
+type DayBucket = { date: string; firstScheduledAt: string | null; scheduled: number; sent: number; failed: number };
+
+function buildDayBuckets(rows: RecipientLite[], tz: string): DayBucket[] {
+  const map = new Map<string, DayBucket>();
+  for (const r of rows) {
+    const ref = r.scheduled_at ?? r.sent_at;
+    if (!ref) continue;
+    const key = dateKeyInTz(ref, tz);
+    let b = map.get(key);
+    if (!b) {
+      b = { date: key, firstScheduledAt: null, scheduled: 0, sent: 0, failed: 0 };
+      map.set(key, b);
+    }
+    b.scheduled += 1;
+    if (r.status === "failed") b.failed += 1;
+    if (r.sent_at && r.status !== "failed") b.sent += 1;
+    if (r.scheduled_at) {
+      if (!b.firstScheduledAt || r.scheduled_at < b.firstScheduledAt) b.firstScheduledAt = r.scheduled_at;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function CampaignDetail({
   group,
   canManage,
@@ -152,32 +226,43 @@ function CampaignDetail({
   canManage: boolean;
   numberById: Map<string, { id: string; phone_number: string; label: string | null }>;
 }) {
-  // Aggregate recipients across every sibling campaign in the group
   const campaignIds = group.campaigns.map((c) => c.id);
-  const { data, isLoading } = useQuery({
-    queryKey: ["campaign-recipients-group", group.key, campaignIds.join(",")],
-    queryFn: async () => {
-      const all: Array<RecipientRow & { campaign_id: string }> = [];
-      for (const id of campaignIds) {
-        const rows = await fetchRecipients(id);
-        rows.forEach((r) => all.push({ ...r, campaign_id: id }));
-      }
-      return all;
-    },
+  const tz = tzInfo(group.recipientCountry).tz;
+  const tzLabel = tzInfo(group.recipientCountry).label;
+  const [showRecipients, setShowRecipients] = useState(false);
+  const [showAllDays, setShowAllDays] = useState(false);
+
+  const { data: liteRows, isLoading: liteLoading } = useQuery({
+    queryKey: ["campaign-recipients-lite", group.key, campaignIds.join(",")],
+    queryFn: () => fetchRecipientsLite(campaignIds),
   });
 
-  const stats = useMemo(() => {
-    const r = data ?? [];
-    return {
-      total: r.length,
-      sent: r.filter((x) => x.sent_at && x.status !== "failed").length,
-      pending: r.filter((x) => x.status === "pending" || x.status === "scheduled").length,
-      sending: r.filter((x) => x.status === "sending").length,
-      failed: r.filter((x) => x.status === "failed").length,
-    };
-  }, [data]);
+  const { data: fullRows, isLoading: fullLoading } = useQuery({
+    queryKey: ["campaign-recipients-full", group.key, campaignIds.join(",")],
+    queryFn: () => fetchRecipientsFull(campaignIds),
+    enabled: showRecipients,
+  });
 
-  if (isLoading) return <div className="p-4 text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading…</div>;
+  const days = useMemo(() => buildDayBuckets(liteRows ?? [], tz), [liteRows, tz]);
+  const todayKey = todayKeyInTz(tz);
+  const visibleDays = useMemo(() => {
+    if (showAllDays) return days;
+    // Show today + future + last completed day before today
+    const future = days.filter((d) => d.date >= todayKey);
+    const past = days.filter((d) => d.date < todayKey);
+    const lastPast = past.length ? [past[past.length - 1]] : [];
+    return [...lastPast, ...future];
+  }, [days, todayKey, showAllDays]);
+  const hiddenCount = days.length - visibleDays.length;
+
+  // Authoritative totals from campaigns rows (not capped recipient query).
+  const totals = {
+    total: group.total,
+    sent: group.sent,
+    failed: group.failed,
+    pending: Math.max(0, group.total - group.sent - group.failed),
+    today: group.today,
+  };
 
   const numberLabelFor = (campaignId: string) => {
     const c = group.campaigns.find((x) => x.id === campaignId);
@@ -189,14 +274,73 @@ function CampaignDetail({
   return (
     <div className="px-4 pb-4 pt-2 bg-background/40">
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
-        <Stat label="Total" value={stats.total} />
-        <Stat label="Sent" value={stats.sent} tone="good" />
-        <Stat label="Sending" value={stats.sending} />
-        <Stat label="Pending" value={stats.pending} />
-        <Stat label="Failed" value={stats.failed} tone={stats.failed > 0 ? "bad" : undefined} />
+        <Stat label="Total" value={totals.total.toLocaleString()} />
+        <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
+        <Stat label="Pending" value={totals.pending.toLocaleString()} />
+        <Stat label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "bad" : undefined} />
+        <Stat
+          label="Today"
+          value={totals.today > 0 ? totals.today.toLocaleString() : "—"}
+          subtitle={(() => {
+            if (totals.today > 0 && group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) === todayKey) {
+              return `starts ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+            }
+            if (group.firstScheduledAt) return `next: ${shortDateInTz(group.firstScheduledAt, tz)} ${timeInTz(group.firstScheduledAt, tz)}`;
+            return "not scheduled";
+          })()}
+        />
       </div>
 
-      {/* Per-number breakdown is internal info — only show to managers */}
+      {/* Per-day breakdown */}
+      <div className="rounded-md border border-border bg-card/30 mb-3">
+        <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Day-by-day · {tzLabel}</div>
+          {hiddenCount > 0 && (
+            <button className="text-[11px] text-primary hover:underline" onClick={() => setShowAllDays(true)}>
+              Show {hiddenCount} earlier {hiddenCount === 1 ? "day" : "days"}
+            </button>
+          )}
+          {showAllDays && days.length > visibleDays.length + 0 && (
+            <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => setShowAllDays(false)}>Collapse</button>
+          )}
+        </div>
+        {liteLoading ? (
+          <div className="p-4 text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading…</div>
+        ) : visibleDays.length === 0 ? (
+          <div className="p-4 text-xs text-muted-foreground">No scheduled recipients yet.</div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead className="bg-muted/30">
+              <tr className="text-left text-muted-foreground">
+                <th className="px-3 py-1.5 font-medium">Date</th>
+                <th className="px-3 py-1.5 font-medium">Window start</th>
+                <th className="px-3 py-1.5 font-medium text-right">Scheduled</th>
+                <th className="px-3 py-1.5 font-medium text-right">Sent</th>
+                <th className="px-3 py-1.5 font-medium text-right">Failed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleDays.map((d) => {
+                const isToday = d.date === todayKey;
+                return (
+                  <tr key={d.date} className={`border-t border-border/60 ${isToday ? "bg-primary/5" : ""}`}>
+                    <td className="px-3 py-1.5">
+                      {shortDateInTz(`${d.date}T12:00:00Z`, "UTC")}
+                      {isToday && <span className="ml-2 text-[10px] uppercase tracking-wide text-primary">today</span>}
+                    </td>
+                    <td className="px-3 py-1.5 tabular-nums">{d.firstScheduledAt ? timeInTz(d.firstScheduledAt, tz) : "—"}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{d.scheduled.toLocaleString()}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">{d.sent.toLocaleString()}</td>
+                    <td className={`px-3 py-1.5 text-right tabular-nums ${d.failed > 0 ? "text-red-600" : ""}`}>{d.failed.toLocaleString()}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Per-number breakdown — managers only */}
       {canManage && group.campaigns.length > 1 && (
         <div className="mb-3 rounded-md border border-border bg-card/30 p-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Per number</div>
@@ -222,29 +366,53 @@ function CampaignDetail({
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground mb-2">Delivered / read / reply tracking will appear once provider receipts are wired in.</p>
-      {(data ?? []).length > 0 && (
-        <div className="rounded-md border border-border bg-card/30 max-h-64 overflow-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-muted/40 sticky top-0"><tr className="text-left text-muted-foreground">
-              <th className="px-2 py-1.5">Phone</th><th className="px-2 py-1.5">Status</th><th className="px-2 py-1.5">Sent at</th>
-              {canManage && <th className="px-2 py-1.5">Number</th>}
-              <th className="px-2 py-1.5">Error</th>
-            </tr></thead>
-            <tbody>
-              {(data ?? []).slice(0, 200).map((r) => (
-                <tr key={r.id} className="border-t border-border/60">
-                  <td className="px-2 py-1 font-mono">{r.contact_phone}</td>
-                  <td className="px-2 py-1 capitalize">{r.status}</td>
-                  <td className="px-2 py-1">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}</td>
-                  {canManage && <td className="px-2 py-1 text-muted-foreground">{numberLabelFor(r.campaign_id)}</td>}
-                  <td className="px-2 py-1 text-red-600 truncate max-w-[260px]">{r.error_message ?? ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Recipients list — collapsed by default */}
+      <div className="rounded-md border border-border bg-card/30 mb-3">
+        <button
+          className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium hover:bg-muted/20 transition-colors"
+          onClick={() => setShowRecipients((v) => !v)}
+        >
+          <span>{showRecipients ? "Hide" : "Show"} recipients ({totals.total.toLocaleString()})</span>
+          {showRecipients ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </button>
+        {showRecipients && (
+          <div className="border-t border-border">
+            {fullLoading ? (
+              <div className="p-4 text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Loading…</div>
+            ) : (fullRows ?? []).length === 0 ? (
+              <div className="p-4 text-xs text-muted-foreground">No recipients.</div>
+            ) : (
+              <div className="max-h-80 overflow-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40 sticky top-0">
+                    <tr className="text-left text-muted-foreground">
+                      <th className="px-2 py-1.5">Phone</th>
+                      <th className="px-2 py-1.5">Status</th>
+                      <th className="px-2 py-1.5">Sent at</th>
+                      {canManage && <th className="px-2 py-1.5">Number</th>}
+                      <th className="px-2 py-1.5">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(fullRows ?? []).slice(0, 500).map((r) => (
+                      <tr key={r.id} className="border-t border-border/60">
+                        <td className="px-2 py-1 font-mono">{r.contact_phone}</td>
+                        <td className="px-2 py-1 capitalize">{r.status}</td>
+                        <td className="px-2 py-1">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "—"}</td>
+                        {canManage && <td className="px-2 py-1 text-muted-foreground">{numberLabelFor(r.campaign_id)}</td>}
+                        <td className="px-2 py-1 text-red-600 truncate max-w-[260px]">{r.error_message ?? ""}</td>
+                      </tr>
+                    ))}
+                    {(fullRows ?? []).length > 500 && (
+                      <tr><td colSpan={canManage ? 5 : 4} className="px-2 py-2 text-center text-muted-foreground">Showing first 500 of {fullRows!.length.toLocaleString()}.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <CampaignReportPanel
         campaignIds={campaignIds}
@@ -255,9 +423,10 @@ function CampaignDetail({
   );
 }
 
-const Stat = ({ label, value, tone }: { label: string; value: number | string; tone?: "good" | "bad" }) => (
-  <div className="rounded-md border border-border bg-card/30 px-2 py-1.5">
+const Stat = ({ label, value, tone, subtitle }: { label: string; value: number | string; tone?: "good" | "bad"; subtitle?: string }) => (
+  <div className="rounded-md border border-border bg-card/30 px-2 py-1.5 min-w-0">
     <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-    <div className={`text-sm font-medium ${tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : ""}`}>{value}</div>
+    <div className={`text-sm font-medium truncate ${tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : ""}`}>{value}</div>
+    {subtitle && <div className="text-[10px] text-muted-foreground truncate">{subtitle}</div>}
   </div>
 );
