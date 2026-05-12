@@ -138,6 +138,17 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const canManage = isManagerLike(role);
   const canLaunch = isAdmin(role);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const o = searchParams.get("open");
+    if (o) {
+      setOpenKey(o);
+      const next = new URLSearchParams(searchParams);
+      next.delete("open");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const numberIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.whatsapp_number_id).filter(Boolean))) as string[], [campaigns]);
   const templateIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.template_id).filter(Boolean))) as string[], [campaigns]);
