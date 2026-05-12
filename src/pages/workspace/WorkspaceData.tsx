@@ -181,6 +181,16 @@ export default function WorkspaceData() {
         }}
       />
 
+      <SmartUploadDialog
+        open={openSmart}
+        onOpenChange={setOpenSmart}
+        workspaceId={workspace.id}
+        onUploaded={() => {
+          qc.invalidateQueries({ queryKey: audienceKeys.batches(workspace.id) });
+          qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace.id) });
+        }}
+      />
+
       <BatchDetailSheet batchId={activeBatchId} onClose={() => setActiveBatchId(null)} />
     </>
   );
