@@ -884,6 +884,20 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
 }
 
 async function processQueue(admin: any) {
+  // Promote scheduled campaigns whose first send is imminent to running.
+  // The campaigns_status_change trigger then enqueues a `campaign_launched`
+  // Slack event with today_recipients_count + recipient_country.
+  try {
+    await admin
+      .from("campaigns")
+      .update({ status: "running" })
+      .eq("status", "scheduled")
+      .lte("first_scheduled_at", new Date(Date.now() + 60_000).toISOString());
+  } catch (err) {
+    console.error("promote scheduled->running failed", err);
+  }
+
+
   // Scale the per-tick batch with the number of active ready numbers so utility
   // throughput is not bottlenecked by a fixed ceiling when multiple numbers are live.
   // Floor 50 (single-number safe), 20 recipients per active number, hard cap 500.
