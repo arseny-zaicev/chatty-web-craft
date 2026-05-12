@@ -60,6 +60,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [starredOnly, setStarredOnly] = useState(false);
   const [showNegative, setShowNegative] = useState(false);
   const [repliedOnly, setRepliedOnly] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [sortMode, setSortMode] = useState<"recent" | "unread" | "oldest" | "replied">("recent");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
