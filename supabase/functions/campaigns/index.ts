@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildTemplateParams,
+  renderTemplateBody as sharedRenderTemplateBody,
+  validateTemplateForLaunch,
+} from "../_shared/template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -329,7 +334,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const templateIds = [...new Set(rawNumbers.map((n) => n.template_id))];
   const { data: templateRows } = await admin
     .from("message_templates")
-    .select("id, user_id, name, language, variables, provider_template_id")
+    .select("id, user_id, name, language, variables, provider_template_id, body")
     .in("id", templateIds);
   if (!templateRows || templateRows.length !== templateIds.length) return json({ error: "Template not found" }, 404);
   for (const t of templateRows) {
@@ -355,6 +360,42 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     .filter((r: any) => r.contact_phone.length >= 8 && r.contact_phone.length <= 18);
 
   if (cleanRecipients.length === 0) return json({ error: "No valid phone numbers" }, 400);
+
+  // Pre-flight: validate every template that will be used against its actual
+  // recipient slice. This is the guard that would have caught the Nov 2025
+  // 599/600 #131008 outage at launch instead of after the fact.
+  // Caller can pass `force: true` to bypass soft warnings (not hard errors).
+  const force = body.force === true;
+  const allWarnings: string[] = [];
+  try {
+    for (const n of rawNumbers) {
+      const tpl = templateRows.find((t: any) => t.id === n.template_id);
+      if (!tpl) continue;
+      // Recipients that will be routed to this template (round-robin slice).
+      const idx = rawNumbers.findIndex((x) => x.number_id === n.number_id);
+      const sliceForTpl = cleanRecipients.filter(
+        (_: any, i: number) => i % rawNumbers.length === idx,
+      );
+      const { warnings } = validateTemplateForLaunch(
+        { name: tpl.name, body: (tpl as any).body ?? null, variables: tpl.variables },
+        sliceForTpl,
+      );
+      allWarnings.push(...warnings);
+    }
+  } catch (err) {
+    return json({
+      error: err instanceof Error ? err.message : "Template validation failed",
+      code: "preflight_failed",
+    }, 400);
+  }
+  if (allWarnings.length > 0 && !force) {
+    return json({
+      error: "Launch needs confirmation",
+      code: "preflight_warnings",
+      warnings: allWarnings,
+    }, 409);
+  }
+
 
   const recipientCountry = ((number as any).country_code as string | null | undefined)?.toUpperCase() || null;
 
@@ -794,13 +835,8 @@ async function sendTemplate(_admin: any, recipient: any) {
   const destination = String(recipient.contact_phone || "").replace(/[^\d]/g, "");
   const srcName = number.display_name ?? null;
 
-  const variableNames = Array.isArray(template.variables) ? template.variables : [];
-  const params = variableNames.map((key: string, idx: number) => {
-    const raw = String(recipient.variables?.[key] ?? "").trim();
-    // WhatsApp rejects empty params (#131008). First variable (recipient name) → "there"; others → " ".
-    if (raw) return raw;
-    return idx === 0 ? "there" : " ";
-  });
+  // Single source of truth - see supabase/functions/_shared/template.ts
+  const params = buildTemplateParams(template, recipient.variables);
   const templateId = template.provider_template_id || template.name;
 
   // First attempt: stored key directly (same as inbox)
@@ -824,20 +860,8 @@ async function sendTemplate(_admin: any, recipient: any) {
   return payload;
 }
 
-function renderTemplateBody(body: string | null | undefined, variableNames: string[], values: Record<string, unknown> | undefined | null): string {
-  if (!body) return "";
-  let out = String(body);
-  // Positional {{1}}, {{2}}, ... mapped to variableNames order
-  variableNames.forEach((name, idx) => {
-    const raw = String((values ?? {})[name] ?? "").trim();
-    // Fallback: first variable (typically the recipient name) → "there".
-    const v = raw || (idx === 0 ? "there" : "");
-    out = out.replaceAll(`{{${idx + 1}}}`, v);
-    out = out.replaceAll(`{${name}}`, v);
-    out = out.replaceAll(`{{${name}}}`, v);
-  });
-  return out;
-}
+// Single source of truth - see supabase/functions/_shared/template.ts
+const renderTemplateBody = sharedRenderTemplateBody;
 
 async function ensureCampaignConversation(admin: any, recipient: any): Promise<string | null> {
   const number = recipient.campaigns?.whatsapp_numbers;
@@ -1005,11 +1029,30 @@ async function processQueue(admin: any) {
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
 
+  // Per-campaign canary state. If the first 3 sends for a campaign in this
+  // tick all fail with the same provider error code (and zero successes),
+  // halt the campaign and skip its remaining recipients - caps damage at
+  // 3 wasted sends instead of 600 (Nov 2025 #131008 outage).
+  type CanaryState = { ok: number; fail: number; codes: Map<string, number>; aborted: boolean };
+  const canary = new Map<string, CanaryState>();
+  const getCanary = (cid: string) => {
+    let c = canary.get(cid);
+    if (!c) { c = { ok: 0, fail: 0, codes: new Map(), aborted: false }; canary.set(cid, c); }
+    return c;
+  };
+  const extractErrorCode = (msg: string): string => {
+    const m = msg.match(/#(\d{4,6})/);
+    return m ? `#${m[1]}` : msg.slice(0, 40).replace(/\s+/g, " ");
+  };
+
+  // Pacing guard map: per (campaign_id|number_id) last send time in this tick.
+  const lastSentMs = new Map<string, number>();
+
   await Promise.all(Array.from(shards.values()).map(async (recipients) => {
     for (const recipient of recipients) {
-      // Honor the per-recipient scheduled_at: sleep up to the tick budget so
-      // sent_at lands at the actual randomized timestamp (preserves jitter
-      // configured via delay_min/max_seconds), not the cron minute boundary.
+      const cState = getCanary(recipient.campaign_id);
+      if (cState.aborted) continue;
+
       const targetMs = new Date(recipient.scheduled_at).getTime();
       const nowMs = Date.now();
       const waitMs = targetMs - nowMs;
@@ -1019,6 +1062,22 @@ async function processQueue(admin: any) {
       }
       if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
 
+      // Pacing guard: enforce delay_min_seconds gap from the previous send
+      // for this (campaign, number). Skip the recipient until next tick if
+      // the required wait exceeds remaining budget.
+      const minGapMs = Math.max(60, recipient.campaigns?.delay_min_seconds || 60) * 1000;
+      const numKey = `${recipient.campaign_id}|${recipient.whatsapp_number_id ?? ""}`;
+      const lastMs = lastSentMs.get(numKey);
+      if (lastMs) {
+        const since = Date.now() - lastMs;
+        if (since < minGapMs) {
+          const extra = minGapMs - since;
+          const budgetLeft = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
+          if (extra > budgetLeft) break; // try next tick
+          await new Promise((r) => setTimeout(r, extra));
+        }
+      }
+
       const { data: locked } = await admin
         .from("campaign_recipients")
         .update({ status: "sending" })
@@ -1027,6 +1086,8 @@ async function processQueue(admin: any) {
         .select("id")
         .maybeSingle();
       if (!locked) continue;
+      lastSentMs.set(numKey, Date.now());
+
 
       try {
         const gsBody = await sendTemplate(admin, recipient);
@@ -1036,7 +1097,6 @@ async function processQueue(admin: any) {
         const renderedBody = renderTemplateBody(tpl?.body, variableNames, recipient.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
         const sentAt = new Date().toISOString();
 
-        // Ensure a conversation exists so Inbox shows the thread starting from this opener
         const conversationId = await ensureCampaignConversation(admin, recipient);
 
         await admin.from("campaign_recipients").update({
@@ -1068,14 +1128,43 @@ async function processQueue(admin: any) {
             last_message_at: sentAt,
           }).eq("id", conversationId);
         }
+        cState.ok += 1;
         sentMu.inc();
       } catch (err) {
         sentMu.incFail();
         const msg = err instanceof Error ? err.message : "Send failed";
         await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
+
+        cState.fail += 1;
+        const code = extractErrorCode(msg);
+        cState.codes.set(code, (cState.codes.get(code) ?? 0) + 1);
+
+        if (!cState.aborted && cState.fail >= 3 && cState.ok === 0) {
+          const top = [...cState.codes.entries()].sort((a, b) => b[1] - a[1])[0];
+          if (top && top[1] === cState.fail) {
+            cState.aborted = true;
+            try {
+              await admin.from("campaigns").update({ status: "failed" }).eq("id", recipient.campaign_id);
+              await admin.from("slack_event_queue").insert({
+                event_type: "campaign_failed",
+                workspace_id: recipient.workspace_id,
+                payload: {
+                  campaign_id: recipient.campaign_id,
+                  reason: "canary_uniform_failure",
+                  error_code: top[0],
+                  failures: cState.fail,
+                  sample_error: msg.slice(0, 400),
+                },
+              });
+            } catch (abortErr) {
+              console.error("canary abort failed", abortErr);
+            }
+          }
+        }
       }
     }
   }));
+
 
   const campaignIds = [...new Set((due ?? []).map((r: any) => r.campaign_id))];
   if (campaignIds.length > 0) {
@@ -1394,6 +1483,117 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
 }
 
 
+// ===== Retry failed recipients with the campaign's own pacing rules =====
+// Body: { campaign_id }. Resets all `failed` recipients to `scheduled`,
+// rebuilds scheduled_at per (whatsapp_number_id) honoring delay_min_seconds /
+// delay_max_seconds and the schedule window. Re-opens the campaign.
+//
+// This exists so re-queuing failures never has to be done with hand-written
+// SQL again (Nov 2025: ad-hoc retry blasted at 10x intended pace).
+async function retryFailedRecipients(admin: any, requesterId: string, body: any) {
+  const campaignId = String(body.campaign_id || "");
+  if (!uuidRegex.test(campaignId)) return json({ error: "campaign_id required" }, 400);
+
+  const { data: campaign } = await admin
+    .from("campaigns")
+    .select("id, user_id, workspace_id, status, delay_min_seconds, delay_max_seconds, schedule_window_start, schedule_window_end, recipient_country, respect_recipient_tz")
+    .eq("id", campaignId)
+    .maybeSingle();
+  if (!campaign) return json({ error: "Not found" }, 404);
+  if (!(await canAccessUser(admin, requesterId, campaign.user_id))) return json({ error: "Forbidden" }, 403);
+
+  const minDelay = Math.max(60, campaign.delay_min_seconds || 60);
+  const maxDelay = Math.max(minDelay, campaign.delay_max_seconds || 120);
+  const winStart = String(campaign.schedule_window_start || "09:00:00").slice(0, 5);
+  const winEnd = String(campaign.schedule_window_end || "18:00:00").slice(0, 5);
+  const respectTz = campaign.respect_recipient_tz !== false;
+  const recipientTz = campaign.recipient_country
+    ? (COUNTRY_TZ[String(campaign.recipient_country).toUpperCase()] ?? "UTC")
+    : "UTC";
+
+  const failed: any[] = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await admin
+      .from("campaign_recipients")
+      .select("id, contact_phone, whatsapp_number_id")
+      .eq("campaign_id", campaignId)
+      .eq("status", "failed")
+      .range(from, from + PAGE - 1);
+    if (error) return json({ error: error.message }, 500);
+    const rows = data ?? [];
+    failed.push(...rows);
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+  if (failed.length === 0) return json({ ok: true, retried: 0 });
+
+  const byNumber = new Map<string, any[]>();
+  for (const r of failed) {
+    const k = r.whatsapp_number_id || "__none__";
+    if (!byNumber.has(k)) byNumber.set(k, []);
+    byNumber.get(k)!.push(r);
+  }
+
+  const todayKeyTz = (tz: string) => {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()); }
+    catch { return new Date().toISOString().slice(0, 10); }
+  };
+  const nextDateStr = (d: string) => {
+    const [y, m, day] = d.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, (m || 1) - 1, day || 1));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return dt.toISOString().slice(0, 10);
+  };
+
+  const updates: Array<{ id: string; iso: string }> = [];
+  for (const list of byNumber.values()) {
+    const tz = respectTz && list[0]?.contact_phone ? tzFromPhone(list[0].contact_phone) : recipientTz;
+    let date = todayKeyTz(tz);
+    let cursor = Math.max(Date.now() + 5_000, dateAtTzToUTC(date, winStart, tz).getTime());
+    let endOfDay = dateAtTzToUTC(date, winEnd, tz).getTime();
+    if (cursor >= endOfDay) {
+      date = nextDateStr(date);
+      cursor = dateAtTzToUTC(date, winStart, tz).getTime();
+      endOfDay = dateAtTzToUTC(date, winEnd, tz).getTime();
+    }
+    for (const r of list) {
+      if (cursor >= endOfDay) {
+        date = nextDateStr(date);
+        cursor = dateAtTzToUTC(date, winStart, tz).getTime();
+        endOfDay = dateAtTzToUTC(date, winEnd, tz).getTime();
+      }
+      updates.push({ id: r.id, iso: new Date(cursor).toISOString() });
+      cursor += randomDelay(minDelay, maxDelay) * 1000;
+    }
+  }
+
+  for (let i = 0; i < updates.length; i += 200) {
+    const chunk = updates.slice(i, i + 200);
+    await Promise.all(chunk.map((u) =>
+      admin.from("campaign_recipients").update({
+        status: "scheduled",
+        scheduled_at: u.iso,
+        error_message: null,
+        provider_message_id: null,
+      }).eq("id", u.id)
+    ));
+  }
+
+  const firstIso = updates.length > 0 ? updates[0].iso : new Date().toISOString();
+  const initialStatus = new Date(firstIso).getTime() <= Date.now() + 120_000 ? "running" : "scheduled";
+  await admin.from("campaigns").update({
+    status: initialStatus,
+    failed_count: 0,
+    first_scheduled_at: firstIso,
+    scheduled_start_at: firstIso,
+  }).eq("id", campaignId);
+
+  return json({ ok: true, retried: updates.length, first_scheduled_at: firstIso, status: initialStatus });
+}
+
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -1429,6 +1629,7 @@ serve(async (req) => {
       return await setCampaignStatus(admin, auth.user.id, body, action);
     }
     if (action === "redistribute") return await redistributeCampaign(admin, auth.user.id, body);
+    if (action === "retry_failed") return await retryFailedRecipients(admin, auth.user.id, body);
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";

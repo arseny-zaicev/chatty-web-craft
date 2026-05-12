@@ -283,19 +283,32 @@ function CampaignDetail({
   const qc = useQueryClient();
 
   const callAction = async (
-    action: "pause" | "resume" | "cancel" | "redistribute",
+    action: "pause" | "resume" | "cancel" | "redistribute" | "retry_failed",
     extra?: Record<string, unknown>,
   ) => {
     setBusy(action);
     try {
-      const { data, error } = await supabase.functions.invoke("campaigns", {
-        body: { action, campaign_ids: campaignIds, ...extra },
-      });
-      if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
-      const verbs: Record<string, string> = {
-        pause: "Paused", resume: "Resumed", cancel: "Cancelled", redistribute: "Re-balanced",
-      };
-      toast.success(`${verbs[action]} ${campaignIds.length > 1 ? `${campaignIds.length} campaigns` : "campaign"}`);
+      if (action === "retry_failed") {
+        // Retry takes a single campaign_id; loop over the group.
+        let total = 0;
+        for (const id of campaignIds) {
+          const { data, error } = await supabase.functions.invoke("campaigns", {
+            body: { action, campaign_id: id, ...extra },
+          });
+          if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
+          total += Number((data as any)?.retried ?? 0);
+        }
+        toast.success(`Re-queued ${total} failed recipient${total === 1 ? "" : "s"}`);
+      } else {
+        const { data, error } = await supabase.functions.invoke("campaigns", {
+          body: { action, campaign_ids: campaignIds, ...extra },
+        });
+        if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
+        const verbs: Record<string, string> = {
+          pause: "Paused", resume: "Resumed", cancel: "Cancelled", redistribute: "Re-balanced",
+        };
+        toast.success(`${verbs[action]} ${campaignIds.length > 1 ? `${campaignIds.length} campaigns` : "campaign"}`);
+      }
       qc.invalidateQueries({ queryKey: ["campaigns", "summaries"] });
       qc.invalidateQueries({ queryKey: ["campaign-recipients-lite", group.key] });
     } catch (e) {
@@ -379,6 +392,23 @@ function CampaignDetail({
           >
             {busy === "cancel" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1.5" />}
             Cancel
+          </Button>
+        </div>
+      )}
+      {canManage && totals.failed > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy !== null}
+            onClick={() => {
+              if (confirm(`Re-queue ${totals.failed} failed recipient${totals.failed === 1 ? "" : "s"} using this campaign's pacing rules?`)) {
+                callAction("retry_failed");
+              }
+            }}
+          >
+            {busy === "retry_failed" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5 mr-1.5" />}
+            Retry {totals.failed} failed
           </Button>
         </div>
       )}

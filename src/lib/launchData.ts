@@ -187,25 +187,11 @@ function humanizeLabel(key: string) {
 }
 
 // ---------- Rendering ----------
-
-export function renderTemplateBody(
-  body: string | null | undefined,
-  variableNames: string[],
-  values: Record<string, unknown> | undefined | null,
-): string {
-  if (!body) return "";
-  let out = String(body);
-  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  variableNames.forEach((name, idx) => {
-    const raw = String((values ?? {})[name] ?? "").trim();
-    // Fallback: first variable (typically the recipient name) → "there".
-    const v = raw || (idx === 0 ? "there" : `{${name}}`);
-    out = out.replace(new RegExp(escape(`{{${idx + 1}}}`), "g"), v);
-    out = out.replace(new RegExp(escape(`{${name}}`), "g"), v);
-    out = out.replace(new RegExp(escape(`{{${name}}}`), "g"), v);
-  });
-  return out;
-}
+//
+// Re-export from the shared edge-function module so the wizard preview, the
+// inbox renderer, and the Gupshup send path can never disagree.
+// See supabase/functions/_shared/template.ts for the rationale.
+export { renderTemplateBody } from "../../supabase/functions/_shared/template";
 
 // ---------- Recipient parsing ----------
 
