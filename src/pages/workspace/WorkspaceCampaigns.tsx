@@ -395,6 +395,23 @@ function CampaignDetail({
           </Button>
         </div>
       )}
+      {canManage && totals.failed > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy !== null}
+            onClick={() => {
+              if (confirm(`Re-queue ${totals.failed} failed recipient${totals.failed === 1 ? "" : "s"} using this campaign's pacing rules?`)) {
+                callAction("retry_failed");
+              }
+            }}
+          >
+            {busy === "retry_failed" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5 mr-1.5" />}
+            Retry {totals.failed} failed
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
         <Stat label="Total" value={totals.total.toLocaleString()} />
         <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
