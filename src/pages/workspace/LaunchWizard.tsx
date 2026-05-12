@@ -32,6 +32,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
+import { friendlySenderLabel } from "@/lib/crmData";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
 
@@ -896,7 +897,7 @@ export default function LaunchWizard() {
                             const variant = activeLogical.variantByNumber.get(n.id);
                             return (
                               <div key={n.id} className="grid grid-cols-[1fr_1.4fr_auto_auto] gap-2 px-2 py-1.5 text-xs items-center">
-                                <div className="truncate">{n.label ?? `+${n.phone_number}`}</div>
+                                <div className="truncate">{friendlySenderLabel(n)}</div>
                                 <div className="truncate font-mono text-[11px]">
                                   {variant?.name ?? <span className="text-amber-600">- missing -</span>}
                                 </div>
@@ -979,7 +980,7 @@ export default function LaunchWizard() {
                           checked={selected}
                           onChange={() => toggleNumber(n.id)}
                         />
-                        <span className="truncate flex-1">{n.label ?? `+${n.phone_number}`}</span>
+                        <span className="truncate flex-1">{friendlySenderLabel(n)}</span>
                         {activeLogical && (
                           hasVariant
                             ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">ready</Badge>

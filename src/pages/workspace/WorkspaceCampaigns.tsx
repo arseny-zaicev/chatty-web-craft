@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Megaphone, Rocket, Loader2, ChevronRight, ChevronDown, RefreshCw, Pause, Play, X, SkipForward, RotateCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCampaignSummaries } from "@/lib/launchData";
+import { friendlySenderLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
@@ -155,7 +156,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
           {groups.map((g) => {
             const template = templateById.get(g.template_id ?? "");
             const numberLabel = g.whatsapp_number_ids.length === 1
-              ? (() => { const n = numberById.get(g.whatsapp_number_ids[0]); return n ? (n.label ?? `+${n.phone_number}`) : null; })()
+              ? (() => { const n = numberById.get(g.whatsapp_number_ids[0]); return n ? friendlySenderLabel(n) : null; })()
               : (canManage ? `${g.whatsapp_number_ids.length} numbers` : null);
             const open = openKey === g.key;
             const tone = statusTone[g.status] ?? statusTone.draft;
@@ -294,7 +295,7 @@ function CampaignDetail({
     const c = group.campaigns.find((x) => x.id === campaignId);
     if (!c?.whatsapp_number_id) return "—";
     const n = numberById.get(c.whatsapp_number_id);
-    return n ? (n.label ?? `+${n.phone_number}`) : "—";
+    return n ? friendlySenderLabel(n) : "—";
   };
 
   const isActive = group.status === "running" || group.status === "scheduled";
