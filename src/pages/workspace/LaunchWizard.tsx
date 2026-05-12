@@ -1042,16 +1042,6 @@ export default function LaunchWizard() {
                 </>
               )}
             </div>
-            {isMarketing && (
-              <div className="text-[11px] text-muted-foreground mt-1">
-                Marketing Blast uses selected days and launch times only - delay and scheduler stay locked.
-              </div>
-            )}
-            {!isMarketing && scheduleMode === "scheduled" && (
-              <div className="text-[11px] text-muted-foreground mt-1">
-                Min/Max delay is ignored when a window is set - gaps are computed from the window length below.
-              </div>
-            )}
 
             {/* Schedule */}
             <div className="mt-4 rounded-md border border-border/60 p-3 space-y-3">
