@@ -266,6 +266,15 @@ ${fallbackLines}
 DERIVED LAUNCH VARIABLES (computed per row, stored in derived_payload)
 ${derivedLines}
 
+TEMPLATE VARIABLE CONTRACT (CRITICAL)
+The WhatsApp template uses placeholders {{1}}, {{2}}, ... {{N}}.
+At launch time the wizard maps each placeholder to derived_payload.var_<N>:
+${profile.derived_variables.map((d, i) => `  {{${i + 1}}} <- derived_payload.${d.key}  (${d.strategy === "field" ? `from "${ph(d.source)}"` : d.strategy === "template" ? `template "${ph(d.template)}"` : `static "${ph(d.static)}"`})`).join("\n") || "  (no derived variables defined - template likely has no placeholders)"}
+Every var_<N> beyond var_1 MUST be UNIQUE per row (per-contact context).
+If two rows would receive the same var_2 / var_3 value -- that is a data quality bug.
+NEVER copy the template's Gupshup "Sample" text into every row -- that defeats the per-row
+variable system and means every contact receives identical filler text.
+
 QUICK REPLIES (informational only)
 ${quick}
 ${profile.sample_message_template ? `\nSAMPLE MESSAGE BODY (template; placeholders are derived variables and source fields)\n"""\n${profile.sample_message_template}\n"""\n` : ""}
@@ -286,10 +295,16 @@ INSERT TARGET (Supabase)
   batch_id: ${ctx.batchId ?? "<paste the batch id from the Data page>"}
   prep_profile_id: ${profile.id}
 
+SANITY CHECK BEFORE INSERT
+  For var_2 and above, count distinct values across all valid rows.
+  If distinct < 0.3 * total_valid -- print a warning and STOP. Do not insert.
+  The operator must provide more varied per-row data.
+
 DO NOT
   - invent values that are not present and not covered by a fallback
   - include rows that fail required-field or invalid-rule checks
-  - re-use phones that already exist as "used" in this workspace`;
+  - re-use phones that already exist as "used" in this workspace
+  - copy the template's Gupshup "Sample" text into every row`;
 }
 
 /**

@@ -82,6 +82,33 @@ export const PREP_PRESETS: PrepPreset[] = [
     optionalSourceFields: ["city"],
     variables: [{ key: "var_1", description: "First name", example: "Layla" }],
   },
+  {
+    id: "marketing_per_row_2",
+    name: "Marketing Per-Row - 2 vars",
+    campaignType: "marketing",
+    blurb: "First name + 1 unique per-contact line. Required for 2-placeholder marketing templates.",
+    recommendedFor: "Marketing templates with {{1}} name + {{2}} per-contact context (industry, product, pain point).",
+    requiredSourceFields: ["phone", "first_name", "context"],
+    optionalSourceFields: ["company", "industry"],
+    variables: [
+      { key: "var_1", description: "First name", example: "Mark" },
+      { key: "var_2", description: "Per-contact context line (UNIQUE per row, NEVER constant)", example: "retail channel expansion opportunities" },
+    ],
+  },
+  {
+    id: "marketing_per_row_3",
+    name: "Marketing Per-Row - 3 vars",
+    campaignType: "marketing",
+    blurb: "First name + 2 unique per-contact lines. Required for 3-placeholder marketing templates (e.g. goflow, FB Marketing).",
+    recommendedFor: "Marketing templates with {{1}} name + {{2}} short context + {{3}} long pitch sentence.",
+    requiredSourceFields: ["phone", "first_name", "context", "pitch"],
+    optionalSourceFields: ["company", "industry"],
+    variables: [
+      { key: "var_1", description: "First name", example: "Mark" },
+      { key: "var_2", description: "Short per-contact context (UNIQUE per row)", example: "retail channel expansion opportunities" },
+      { key: "var_3", description: "Long per-contact pitch sentence (UNIQUE per row)", example: "We have a few exclusive partnership opportunities with Amazon, Walmart, Target, and Macy's, and I wanted to see if it may be worth exploring if your products are a fit." },
+    ],
+  },
 ];
 
 export const getPresetById = (id: string) => PREP_PRESETS.find((p) => p.id === id) ?? null;
@@ -112,6 +139,14 @@ OPTIONAL SOURCE FIELDS
 OUTPUT VARIABLE STRUCTURE (one row per contact)
 ${variableSpec}
 
+TEMPLATE VARIABLE CONTRACT (CRITICAL)
+The WhatsApp template uses placeholders {{1}}, {{2}}, ... {{N}}.
+At launch time the wizard maps each placeholder to derived_payload.var_<N>:
+${preset.variables.map((v, i) => `  {{${i + 1}}} <- derived_payload.${v.key}  (${v.description})`).join("\n")}
+Every var_<N> beyond var_1 MUST be UNIQUE per row (per-contact context).
+If two rows would receive the same var_2 / var_3 value -- that is a data quality bug.
+NEVER copy the template's "Sample" text into every row -- that defeats the per-row variable system
+and means every contact receives identical filler text.
 VALIDATION RULES
   - phone: digits only (strip +, spaces, dashes); length 7-15; otherwise drop the row
   - first_name: trim; if empty, use the fallback "there" (do NOT drop the row)
@@ -178,10 +213,14 @@ WORKFLOW FOR CODEX
   4. Produce the JSON array.
   5. Insert the rows into public.audience_rows for the workspace_id and batch_id above.
   6. Print the expected counts so the operator can refresh the Data page and launch.
+  7. SANITY CHECK before insert: for var_2 and above, count distinct values.
+     If distinct < 0.3 * total_valid -- print a warning and STOP. Do not insert.
+     The operator must provide more varied per-row data.
 
 DO NOT
   - ask the operator to map columns manually
   - invent values that are not present in the input
   - include rows that fail validation
-  - re-use phones already marked "used" in this workspace`;
+  - re-use phones already marked "used" in this workspace
+  - copy the template "Sample" text into every row -- that defeats the per-row variable system`;
 }

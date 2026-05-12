@@ -241,15 +241,16 @@ export default function LaunchWizard() {
   const columns = audienceSource === "database" ? (dbBatch?.variable_schema ?? []) : csvColumns;
   const variableNames = activeLogical?.variables ?? [];
 
-  // Auto-map variables to columns. Fills dropdowns automatically; user can still override.
-  // Priority for each variable v (at position i):
-  //   1) exact lowercase match (e.g. "first_name" -> "First_Name")
-  //   2) match against "var_<v>" or strip "var_" prefix and match
-  //   3) if v is numeric, use column "var_<v>" if present
-  //   4) positional fallback: "var_<i+1>" if present
+  // VARIABLE SOURCE PRIORITY (per recipient):
+  //   1) audience column matching var_<n> or variable name        -> per-row (correct)
+  //   2) static value explicitly set by operator in Step 6        -> SAME for everyone
+  //   3) template Gupshup sample (variables_sample)               -> never auto-applied
+  //                                                                  (operator must opt-in)
+  // Anything below #1 means EVERY contact gets the same text -> data prep bug, not a feature.
+  // For Salesforge-style per-row variables prepare the audience batch with var_1..var_N
+  // columns in derived_payload (see prepPresets.ts / prepProfiles.ts).
   useEffect(() => {
     if (!variableNames.length) return;
-    const sample = activeLogical?.variablesSample ?? [];
     setMapping((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -258,22 +259,44 @@ export default function LaunchWizard() {
         const lower = v.toLowerCase();
         const stripped = lower.replace(/^var_/, "");
         const tryCols = [lower, `var_${stripped}`, stripped, `var_${i + 1}`];
-        let matched = false;
         for (const candidate of tryCols) {
           const found = columns.find((c) => c.toLowerCase() === candidate);
-          if (found) { next[v] = found; changed = true; matched = true; break; }
+          if (found) { next[v] = found; changed = true; break; }
         }
-        // Fallback: pre-fill from Gupshup template "Sample" copy when no column matches.
-        // Numeric variables ({1},{2},{3}) usually have no matching column and must
-        // come from the template's sample copy unless the operator overrides.
-        if (!matched && sample[i]) {
-          next[v] = `__static:${sample[i]}`;
-          changed = true;
-        }
+        // NO sample fallback. Numeric vars without a column = explicit operator action.
       });
       return changed ? next : prev;
     });
-  }, [variableNames, columns, activeLogical?.variablesSample]);
+  }, [variableNames, columns]);
+
+  // Classify each variable by data source: per-row column, same-for-all static, or unset.
+  const variableSourceKind = (v: string): "per_row" | "static" | "missing" => {
+    const m = mapping[v];
+    if (!m) return "missing";
+    if (m.startsWith("__static:")) return m.length > "__static:".length ? "static" : "missing";
+    return "per_row";
+  };
+  const sameForEveryoneVars = useMemo(
+    () => variableNames.filter((v) => variableSourceKind(v) === "static"),
+    [variableNames, mapping],
+  );
+
+  // Compute the var_N keys this template needs from the audience batch.
+  const expectedAudienceKeys = useMemo(() => {
+    return variableNames.map((v) => {
+      const lower = v.toLowerCase();
+      if (/^\d+$/.test(v)) return `var_${v}`;
+      return lower.startsWith("var_") ? lower : `var_${lower}`;
+    });
+  }, [variableNames]);
+
+  // For database/csv source: which expected keys are missing from the audience schema?
+  const missingAudienceKeys = useMemo(() => {
+    if (!variableNames.length) return [];
+    if (audienceSource !== "database" && audienceSource !== "upload" && audienceSource !== "paste") return [];
+    const lowerCols = columns.map((c) => c.toLowerCase());
+    return expectedAudienceKeys.filter((k) => !lowerCols.includes(k.toLowerCase()) && !lowerCols.includes(k.replace(/^var_/, "")));
+  }, [expectedAudienceKeys, columns, audienceSource, variableNames.length]);
 
   const mappedRecipients = useMemo(
     () => applyMapping(recipients, mapping, variableNames),
@@ -1215,6 +1238,32 @@ export default function LaunchWizard() {
               </TabsContent>
             </Tabs>
 
+            {/* Audience schema vs template-variable contract */}
+            {variableNames.length > 0 && missingAudienceKeys.length > 0 && audienceSource !== "chats" && audienceSource !== "saved" && (
+              <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div>
+                    <b>This audience does not provide per-row values for {missingAudienceKeys.map((k) => `{${k.replace(/^var_/, "")}}`).join(", ")}.</b>
+                  </div>
+                  <div>
+                    Template needs columns: <code className="font-mono">{expectedAudienceKeys.join(", ")}</code>.
+                    {" "}Found columns: <code className="font-mono">{columns.length ? columns.join(", ") : "(none)"}</code>.
+                  </div>
+                  <div>
+                    {audienceSource === "database"
+                      ? "Re-prepare the batch with a preset that defines these var_N keys, otherwise Step 6 falls back to the same text for every contact."
+                      : "Add columns named " + missingAudienceKeys.join(", ") + " to your CSV, otherwise Step 6 falls back to the same text for every contact."}
+                  </div>
+                  {workspace && (
+                    <Link to={`/ws/${workspace.slug}/data`} className="inline-flex items-center gap-1 underline text-amber-800 dark:text-amber-300">
+                      Open Data prep →
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between flex-wrap gap-2 mt-3 text-xs text-muted-foreground">
               <span>
                 {audienceSource === "database"
@@ -1261,14 +1310,22 @@ export default function LaunchWizard() {
                 </div>
               )}
               <div className="space-y-2">
-                {variableNames.map((v) => {
+                {variableNames.map((v, idx) => {
                   const current = mapping[v] ?? "";
                   const isStatic = current.startsWith("__static:");
                   const previewVal = variablePreviewValue(v);
                   const unmapped = unmappedVars.includes(v);
+                  const kind = variableSourceKind(v);
+                  const expectedKey = expectedAudienceKeys[idx];
+                  const sampleHint = activeLogical?.variablesSample?.[idx];
+                  const isNumeric = /^\d+$/.test(v);
+                  const borderClass =
+                    unmapped ? "border-amber-500/30 bg-amber-500/5"
+                    : kind === "static" ? "border-rose-500/40 bg-rose-500/5"
+                    : "border-border bg-card/30";
                   return (
-                    <div key={v} className={`rounded-md border p-2 ${unmapped ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/30"}`}>
-                      <div className="flex items-center gap-2 text-sm">
+                    <div key={v} className={`rounded-md border p-2 ${borderClass}`}>
+                      <div className="flex items-center gap-2 text-sm flex-wrap">
                         <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{`{${v}}`}</span>
                         <span className="text-xs text-muted-foreground">→</span>
                         <Select value={isStatic ? "__static__" : current || "__none__"} onValueChange={(val) => {
@@ -1280,22 +1337,46 @@ export default function LaunchWizard() {
                             return next;
                           });
                         }}>
-                          <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick column or static" /></SelectTrigger>
+                          <SelectTrigger className="h-8 flex-1 min-w-[180px]"><SelectValue placeholder="Pick column or static" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">— unset —</SelectItem>
-                            {columns.map((c) => <SelectItem key={c} value={c}>column: {c}</SelectItem>)}
-                            <SelectItem value="__static__">static value (same for all)...</SelectItem>
+                            {columns.map((c) => <SelectItem key={c} value={c}>column: {c} (per-row)</SelectItem>)}
+                            <SelectItem value="__static__">static value (same for everyone)...</SelectItem>
                           </SelectContent>
                         </Select>
+                        {kind === "per_row" && (
+                          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600 bg-emerald-500/5">per-row</Badge>
+                        )}
+                        {kind === "static" && (
+                          <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-600 bg-rose-500/5">same for everyone</Badge>
+                        )}
                         {isStatic && (
                           <Input
-                            className="h-8 flex-1"
+                            className="h-8 flex-1 min-w-[180px]"
                             placeholder={`Same text for all (e.g. "Bella")`}
                             value={current.slice("__static:".length)}
                             onChange={(e) => setMapping((prev) => ({ ...prev, [v]: `__static:${e.target.value}` }))}
                           />
                         )}
                       </div>
+                      {/* No-column-matched warning for numeric vars */}
+                      {unmapped && isNumeric && (
+                        <div className="mt-1.5 text-[11px] rounded border border-amber-500/30 bg-background/50 px-2 py-1.5 space-y-1">
+                          <div className="text-amber-700 dark:text-amber-400">
+                            <b>{`{${v}}`}</b> has no per-row source. Each contact will receive the SAME text unless you map it to <code className="font-mono">{expectedKey}</code> from the audience.
+                          </div>
+                          {sampleHint && (
+                            <div className="text-muted-foreground">
+                              Template moderation sample (reference only): "<span className="text-foreground">{sampleHint.length > 90 ? sampleHint.slice(0, 87) + "..." : sampleHint}</span>"
+                              <button
+                                type="button"
+                                className="ml-2 underline text-rose-600"
+                                onClick={() => setMapping((prev) => ({ ...prev, [v]: `__static:${sampleHint}` }))}
+                              >Use sample for everyone (not recommended)</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {!unmapped && previewVal && (
                         <div className="mt-1 text-[11px] text-muted-foreground pl-1">
                           preview: <span className="font-medium text-foreground">"{previewVal.length > 80 ? previewVal.slice(0, 77) + "..." : previewVal}"</span>
@@ -1304,7 +1385,15 @@ export default function LaunchWizard() {
                     </div>
                   );
                 })}
-                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template for this workspace. Tip: numeric template variables ({"{1}"}, {"{2}"}...) usually need a static value or a column from your audience batch.</p>
+                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template. Per-row variables come from <code className="font-mono">audience_rows.derived_payload.var_N</code>; prepare them in the Data section before launch.</p>
+                {sameForEveryoneVars.length > 0 && (
+                  <div className="rounded-md border border-rose-500/30 bg-rose-500/5 text-rose-700 dark:text-rose-400 text-[11px] px-2 py-1.5 flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <div>
+                      <b>{sameForEveryoneVars.length} variable(s) will use the same text for every contact:</b> {sameForEveryoneVars.map((v) => `{${v}}`).join(", ")}. This defeats the purpose of placeholders. Re-prepare the audience with per-row values to fix.
+                    </div>
+                  </div>
+                )}
               </div>
             </Step>
           )}
@@ -1409,6 +1498,12 @@ export default function LaunchWizard() {
             <div className="text-xs text-amber-600 flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               {unmappedVars.length} variable(s) unmapped: {unmappedVars.map((v) => `{${v}}`).join(" ")}. Map in Step 6.
+            </div>
+          )}
+          {sameForEveryoneVars.length > 0 && (
+            <div className="text-xs text-rose-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {sameForEveryoneVars.length} variable(s) static (same for everyone): {sameForEveryoneVars.map((v) => `{${v}}`).join(" ")}.
             </div>
           )}
           <Button

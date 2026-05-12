@@ -1,101 +1,135 @@
-## 1. Inbox · numbers filter (Clients → Inbox)
+## Что я понял (важно)
 
-**Сейчас:** стена чипсов с `display_name`/`label` каждого номера ("Bala Bangle", "My Curvera"…). Пиздец визуально + утечка названий клиента.
+Я ошибся в прошлых правках. `variables_sample` из Gupshup — это **только эталонный пример** для прохождения модерации, один на весь шаблон. Использовать его как `__static:` в Launch — это ставить **одинаковый текст всем контактам** для `{{2}}` и `{{3}}`. Это **неправильно** — цель `{{2}}/{{3}}` именно в том, что у каждой строки своя уникальная подстановка (Variant 1: "retail channel expansion opportunities" / Variant 2: "business funding").
 
-**Меняем (`src/pages/CRM.tsx`, ~строки 484-508):**
-- Заменить ряд `<button>`-чипсов на одиночный dropdown в стиле существующего `select` "Recent" (sortMode) — тот же визуал, чтобы было консистентно.
-- Опции:
-  - `All numbers · N` (N = total conversations).
-  - Один пункт на номер: `+971501234567 · 42 chats` — только телефон в международном формате, без `display_name`/`label`.
-- Сортировка опций: по убыванию числа диалогов (самые активные сверху).
-- Если у воркспейса ≤ 1 номера — dropdown не показывается вообще.
-- Tooltip на dropdown: "Filter by sender number".
+## Как это работает в Salesforge (rev-engineered)
 
-**Параллельно:**
-- Удалить `friendlySenderLabel(n)` из этого места (оставить там, где он используется в шапке чата для оператора — проверим вызовы).
-- В правой шапке чата (`activeNumber.label`) — оставить как есть для оператора-админа; клиент видит только в этом списке.
+1. **Data → Ingestion preset** (`src/lib/prepPresets.ts`) задаёт `variables: [{ key: "var_1", … }, { key: "var_2", … }, …]`.
+2. При создании batch в `audience_batches.variable_schema` пишется массив `["var_1","var_2","var_3"]`.
+3. Codex по промпту (`buildPresetPrompt`) парсит сырые строки оператора и инсёртит в `audience_rows` объект `derived_payload: { var_1: "Mark", var_2: "Acme Realty", var_3: "Sales lead" }` — **по строке на контакт, у каждого свои значения**.
+4. Launch wizard (`audienceSource = "database"`):
+   - `columns = dbBatch.variable_schema` = `["var_1","var_2","var_3"]`.
+   - `variableNames = activeLogical.variables` = `["1","2","3"]` (для GO) или `["name"]` (Salesforge).
+   - Auto-map в `LaunchWizard.tsx:260` пробует `var_<v>` → находит `var_1`/`var_2`/`var_3` для numeric vars.
+   - При рендере (`LaunchWizard.tsx:546`) берёт `r.payload[src] ?? r.derived_payload[src]` — то есть **per-row уникальное значение**.
+5. Salesforge сработал, потому что batch был создан через preset, `derived_payload` имеет `var_1`, `var_2` и т.д. — мэтч идеальный.
 
-**Out of scope:** не трогаем чипсы Starred / My chats / Replied / Negative — они полезны.
+## Почему goflow сломан
 
----
+- Для goflow batch создавали либо без preset, либо CSV-аплоад (без колонок `var_2`/`var_3`), либо preset с одной переменной (`marketing_basic` имеет только `var_1`).
+- В Step 6 numeric `{2}`, `{3}` ничего не находят → fallback в `__static:<sample>` ставит **один и тот же** "retail channel expansion opportunities" всем 1000 контактам.
+- Никаких варнингов, что это означает «всем одинаковый текст» — оператор не знает, что данные нужно готовить иначе.
 
-## 2. Templates · потеря sample copy при синке
+## Что меняем
 
-**Корень проблемы (`supabase/functions/campaigns/index.ts`, `syncTemplates`, ~541):**
+### 1. Launch Wizard — убрать тихий static-fallback, заменить варнингом
 
-Сейчас сохраняем только `container.data` — это тело с `{{1}}{{2}}{{3}}`. Gupshup в `containerMeta` отдаёт также:
-- `example` (или `bodyExample`) — массив sample-значений для каждой переменной (`["John", "your D&B profile", "Our team noticed…"]`),
-- `header` / `footer`,
-- `exampleHeader`, `mediaUrl` для media-шаблонов,
-- `buttons[].example` для URL-кнопок.
+`src/pages/workspace/LaunchWizard.tsx` (Step 6, строки 244-276):
 
-Эти поля сейчас пишутся только в `raw` (jsonb) и нигде не читаются. Поэтому в Launch wizard для GO Greece/Malta utility шаблонов превью показывает `Hi {1}, Bella here regarding {2}…` без подстановки.
+- **Удалить** автоподстановку `__static:${sample[i]}` для numeric vars. Sample-копия больше не считается валидным дефолтом.
+- Вместо неё — для каждой нерасмапленной numeric переменной показать **жёлтый inline-warning** прямо в Step 6:
+  ```
+  {2} → no column matched in this audience.
+  Per-row data missing. Each contact will receive the SAME text.
+  Recommended: re-prepare the batch with a preset that defines var_2.
+  Sample copy from template (read-only): "retail channel expansion opportunities"
+  [ Use sample for everyone (not recommended) ]  [ Set static value ]
+  ```
+- Если оператор всё-таки жмёт «Use sample» — пишем static, но маркируем поле бейджем `Same for everyone` (красный outline).
+- В Step 8 (Launch summary) — отдельный блок «Per-row variables» со списком переменных и источником: `{1} ← derived_payload.var_1 (per-row)` или `{2} ← static "…" (same for everyone)`. Если хоть одна `static for everyone` — Launch button становится `secondary` + текст "I understand all contacts get the same text for {2}, {3}".
 
-**Что меняем:**
+### 2. Database source — варнинг на этапе выбора batch
 
-### 2a. Backend (`supabase/functions/campaigns/index.ts`, `syncTemplates`)
-- Распарсить `container.example` / `container.bodyExample` / `t.example` (формат варьируется: иногда string `"[John|your D&B profile|Our team…]"`, иногда массив, иногда `{ body_text: [["…","…"]] }`).
-- Нормализовать в массив строк и записать в новый jsonb-столбец `message_templates.variables_sample` (миграция).
-- Также в payload upsert добавить `header_text`, `footer_text` (jsonb или text — text достаточно).
-- Если у шаблона есть `variables.length > 0` но `variables_sample` пуст или короче — записать в `sync_warning` поле и вернуть в ответе кол-во "incomplete" шаблонов.
+В Step 5 (Audience), когда выбран DB batch и активный template имеет `variables.length > 0`:
+- Сравнить `template.variables` (после маппинга на `var_<n>`) с `dbBatch.variable_schema`.
+- Если не хватает — Alert: `This audience does not provide var_2, var_3. Either pick another batch or re-prepare with a preset that includes them. Step 6 will fall back to one-size-fits-all text.`
+- Кнопка `Open Data prep →` (deep-link на `/ws/<slug>/data`).
 
-### 2b. Migration
-```sql
-alter table public.message_templates
-  add column if not exists variables_sample jsonb default '[]'::jsonb,
-  add column if not exists header_text text,
-  add column if not exists footer_text text,
-  add column if not exists sync_warning text;
+### 3. CSV source — то же
+
+Если `audienceSource === "csv"` и `variableNames` содержат numeric, проверить, что CSV header содержит `var_2`/`var_3` (или эквивалент). Иначе — тот же Alert + ссылка на пример CSV (`phone,name,var_2,var_3`).
+
+### 4. Prep prompt — явно требовать numeric vars шаблона
+
+`src/lib/prepPresets.ts`:
+- Добавить новый preset `marketing_per_row_2` и `marketing_per_row_3` (1 имя + 1-2 per-row вариативных предложения), категория `marketing`. Это покрывает GO Greece/Malta и FB Marketing-стиль шаблонов.
+- В `buildPresetPrompt` добавить блок `TEMPLATE VARIABLE CONTRACT`:
+  ```
+  The WhatsApp template uses placeholders {{1}}, {{2}}, {{3}}.
+  Each must be filled per-row from the source data:
+    {{1}} ← derived_payload.var_1  (first name)
+    {{2}} ← derived_payload.var_2  (per-contact context, NEVER a constant)
+    {{3}} ← derived_payload.var_3  (per-contact context, NEVER a constant)
+  If two rows would receive the same var_2/var_3 value — that is a data quality bug. Flag it.
+  ```
+- В `WORKFLOW FOR CODEX` шаг 7: «Sanity check: for var_2 and above, count distinct values. If `distinct < 0.3 * total_valid` — print a warning, do not insert.»
+- В `DO NOT` добавить: `do NOT copy the template "Sample" text into every row — that defeats the per-row variable system`.
+
+`src/lib/prepProfiles.ts` (custom profiles): тот же `TEMPLATE VARIABLE CONTRACT` + sanity-check шаг.
+
+### 5. Sync templates — оставить `variables_sample` как **read-only reference**
+
+`supabase/functions/campaigns/index.ts` (`syncTemplates` и `extractSamplesByAlignment` уже добавили):
+- Ничего не ломаем. `variables_sample` продолжает писаться, но теперь его роль — справочник для оператора («так выглядел один из примеров при модерации»), а не источник для Launch.
+- В `TemplatesView` бейдж sample-copy переименовать из `Sample copy: ✓` в `Reference sample (moderation only)` — чтобы не путать.
+
+### 6. Документация в коде
+
+Шапка-комментарий в `LaunchWizard.tsx` Step 6 и в `prepPresets.ts`:
 ```
-
-### 2c. Launch Wizard (`src/pages/workspace/LaunchWizard.tsx`, Step 6)
-При построении автомаппинга:
-1. Если переменная имеет имя `1`/`2`/`3` (numeric) и есть `variables_sample[i-1]` — предложить `__static:<sample>` как дефолт + пометить бейджем `Auto-filled from template sample`.
-2. Юзер всё равно может переопределить на column.
-3. Если sample отсутствует — старый flow ("Action required").
-
-### 2d. TemplatesView (`src/components/workspace/TemplatesView.tsx`)
-- В строке шаблона показать индикатор `Sample copy: ✓ / ✗ Missing`.
-- При синке если backend вернул `incomplete > 0` — toast warning: `N templates have variables but no sample copy. Edit them in Gupshup → "Sample" tab → re-sync.`
-- В info-баннере вверху списка: короткая подсказка "Always fill the **Sample** field in Gupshup for every variable — required for previews and auto-mapping."
-
-### 2e. Документация в коде
-В `syncTemplates` коммент-чеклист сверху: какие поля вытягиваем, формат `example`, что делать если Gupshup поменяет схему.
-
----
+VARIABLE SOURCE PRIORITY (per recipient):
+  1) audience column matching var_<n> or variable name        → per-row
+  2) static value explicitly set by operator in Step 6        → same for all
+  3) (DEPRECATED) template Gupshup sample                     → never auto, only manual
+Anything below #1 means EVERY contact gets the same text — that is a data prep bug, not a feature.
+```
 
 ## Технические детали
 
 ```ts
-// campaigns/index.ts ~ inside syncTemplates, before upsert
-const exampleRaw = container.example ?? container.bodyExample ?? t.example ?? null;
-const variablesSample = parseGupshupExample(exampleRaw, vars.length);
-// parseGupshupExample handles:
-//  - array of strings
-//  - { body_text: [[...]] }
-//  - "[a|b|c]" pipe-string
-//  - "{{1}} = a, {{2}} = b" colon-string fallback
-const headerText = container.header || null;
-const footerText = container.footer || null;
-const incomplete = vars.length > 0 && variablesSample.length < vars.length;
+// LaunchWizard.tsx — replace lines 250-276
+useEffect(() => {
+  if (!variableNames.length) return;
+  setMapping((prev) => {
+    const next = { ...prev };
+    let changed = false;
+    variableNames.forEach((v, i) => {
+      if (next[v]) return;
+      const lower = v.toLowerCase();
+      const stripped = lower.replace(/^var_/, "");
+      const tryCols = [lower, `var_${stripped}`, stripped, `var_${i + 1}`];
+      for (const candidate of tryCols) {
+        const found = columns.find((c) => c.toLowerCase() === candidate);
+        if (found) { next[v] = found; changed = true; break; }
+      }
+      // NO sample fallback here. Numeric vars without a column = explicit operator action.
+    });
+    return changed ? next : prev;
+  });
+}, [variableNames, columns]);
+
+// New: per-variable warning state
+const variableSourceKind = (v: string): "per_row" | "static" | "missing" => {
+  const m = mapping[v];
+  if (!m) return "missing";
+  if (m.startsWith("__static:")) return m.length > "__static:".length ? "static" : "missing";
+  return "per_row";
+};
+const sameForEveryoneCount = variableNames.filter((v) => variableSourceKind(v) === "static").length;
 ```
 
 ```ts
-// LaunchWizard Step 6 mapping init
-const sample = template.variables_sample ?? [];
-variableNames.forEach((v, idx) => {
-  if (mapping[v]) return;
-  const colMatch = audienceColumns.find(c => c.toLowerCase() === v.toLowerCase());
-  if (colMatch) { mapping[v] = colMatch; return; }
-  if (sample[idx]) { mapping[v] = `__static:${sample[idx]}`; autoFilledFromSample.add(v); }
+// Audience batch schema check (Step 5)
+const requiredVarKeys = variableNames.map((v, i) => {
+  const lower = v.toLowerCase();
+  return /^\d+$/.test(v) ? `var_${v}` : (lower.startsWith("var_") ? lower : `var_${lower}`);
 });
+const missingFromSchema = requiredVarKeys.filter((k) => !columns.some((c) => c.toLowerCase() === k));
 ```
-
----
 
 ## Out of scope
 
-- Не меняем UI Pipeline / wizard Steps 1-5/7/8.
-- Не трогаем dispatcher.
-- Не редактируем шаблоны в Gupshup автоматически — только подсказываем юзеру что заполнить.
-- Не делаем отдельную страницу "Templates health" — индикатора в существующем списке достаточно.
+- Не трогаем dispatcher / send-whatsapp.
+- Не редактируем Gupshup `Sample` через API.
+- Не меняем структуру `audience_rows` / `audience_batches` — только UI + промпты.
+- Не делаем автогенерацию variant-копий через Lovable AI (это отдельная задача).

@@ -74,7 +74,7 @@ export default function TemplatesView({ workspaceId }: { workspaceId: string }) 
       toast.success(`Synced ${res.upserted}/${res.fetched} templates from Gupshup`);
       if (res.incomplete && res.incomplete > 0) {
         toast.warning(
-          `${res.incomplete} template${res.incomplete === 1 ? "" : "s"} missing sample copy. Open Gupshup → template → fill the "Sample" field for every {{1}}, {{2}}... then re-sync. Without samples, previews show {1}, {2} placeholders.`,
+          `${res.incomplete} template${res.incomplete === 1 ? "" : "s"} missing moderation reference samples (the "Sample" field in Gupshup). This is for reference only - it does NOT replace per-row data. Per-row variables must come from the audience batch (derived_payload.var_N).`,
           { duration: 10000 },
         );
       }
