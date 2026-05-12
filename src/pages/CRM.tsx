@@ -698,7 +698,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
               </div>
             ) : (
               <>
-                <div className="h-16 shrink-0 px-4 sm:px-6 border-b border-border flex items-center justify-between gap-3 bg-card/40">
+                <div className="min-h-16 shrink-0 px-4 sm:px-6 py-2 border-b border-border flex items-center justify-between gap-3 bg-card/40 flex-wrap">
                   <div className="flex items-center gap-3 min-w-0">
                     <button
                       onClick={() => setActiveId(null)}
@@ -742,7 +742,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                     {workspaceId && (
                       <div className="hidden md:block w-44">
                         <AssigneeSelect
@@ -781,7 +781,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                           }}
                         >
                           <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Pipeline..." />
+                            <SelectValue placeholder="Pipeline..." className="truncate" />
                           </SelectTrigger>
                           <SelectContent>
                             {pipelines.map((p) => (
@@ -797,12 +797,12 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       </div>
                     )}
                     {activeNumber && (
-                      <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5" title="Sending number">
-                        <Phone className="w-3 h-3" />
+                      <div className="hidden md:flex max-w-[220px] text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5 min-w-0" title={`${activeNumber.label || ""} +${activeNumber.phone_number}`}>
+                        <Phone className="w-3 h-3 shrink-0" />
                         {activeNumber.label?.trim() && (
-                          <span className="font-medium">{activeNumber.label}</span>
+                          <span className="font-medium truncate">{activeNumber.label}</span>
                         )}
-                        <span className="font-mono opacity-80">+{activeNumber.phone_number}</span>
+                        <span className="font-mono opacity-80 truncate">+{activeNumber.phone_number}</span>
                       </div>
                     )}
                     <Button
