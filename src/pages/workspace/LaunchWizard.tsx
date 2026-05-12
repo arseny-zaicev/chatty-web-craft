@@ -28,6 +28,8 @@ import {
 import { NAME_FALLBACK_PHRASES } from "@/lib/prepPresets";
 import { fetchPipelines, pipelinesKey, createPipeline } from "@/lib/pipelines";
 import PipelineConfigSheet from "@/components/workspace/PipelineConfigSheet";
+import { Switch } from "@/components/ui/switch";
+import { Zap } from "lucide-react";
 import { Settings as SettingsIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
