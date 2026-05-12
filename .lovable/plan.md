@@ -1,66 +1,97 @@
 ## Контекст
 
-Файл `May_2026_Miltos_George_Data_1.xlsx` для клиента **GO** содержит 3 листа:
-- `Greece Valid` — Medspa, ~1000 номеров, формат `30…`
-- `Malta Valid` — Real Estate, ~1000 номеров, формат `356…`
-- `Numbers Only` — сводка
+Три проблемы в `src/pages/workspace/LaunchWizard.tsx`:
 
-Хорошая новость: модель данных это уже поддерживает.
-- `audience_batches` имеет поле `country` и `campaign_type`
-- `audience_rows` хранит `phone` + `payload` (jsonb) — туда влезут `business_name`, `city`, `category`, `website`, `segment`
-- `LaunchWizard` уже группирует WhatsApp-номера в пулы по стране (`groupNumbersByCountry`) и даёт выбрать `poolCountry`
+1. **Математика Per day игнорирует cap 200/номер в Send now**, и в Pick days показывает «идеальное» распределение (351), а не cap (400).
+2. **Шаблоны утилити имеют переменные `{1} {2} {3}`** (см. скрин — "Missing: 1, 2, 3"). Они не подгружаются автоматически, потому что у GO Greece/Malta аудитории столбцы — `business_name, city, category, segment`, а не `1/2/3`. У Salesforge сработало случайно (имена переменных совпадали со столбцами). Нужно сделать маппинг очевидным и быстрым.
+3. **Pipeline-автоматизации** настраиваются отдельно — встроить как опциональный Step 4.
 
-То есть отдельная "страновая" таблица не нужна. Достаточно правильно загрузить базу и пометить страну.
+---
 
-## Идея (рекомендую)
+## Изменения
 
-**Two batches, one workspace.** Создаём workspace `GO` (если ещё нет) и заливаем как **две отдельные audience-batch**:
+### 1. Математика Per day и Send now cap
 
-1. `2026-05 · GO · Greece · Medspa` → `country = "GR"`, `campaign_type = marketing`, 1000 строк (только листы Greece Valid)
-2. `2026-05 · GO · Malta · Real Estate` → `country = "MT"`, `campaign_type = marketing`, 1000 строк (только Malta Valid)
+Файл: `src/pages/workspace/LaunchWizard.tsx`
 
-В Launch Wizard оператор выбирает:
-- **Batch** (Greece или Malta) — это сам список получателей
-- **Sender pool** (страна номеров: GR или MT) — фильтрует WhatsApp-номера workspace по префиксу
+**Pick days (уже работает корректно по логике, нужна ясность UI):**
+- Per day = `min(idealPerDay, dailyCap)` где `dailyCap = numbers × perNumberQuota`. При 8 датах × 2808 → 351/день, потому что выбрано 8 дат. Это нормально — мы равномерно распределяем по выбранным датам.
+- Если хочешь жарить по 400/день — выбери 7 дат вместо 8 (пользователь сам управляет). Добавим подсказку: «Выбрано 8 дней → 351/день. Уменьши до X дней чтобы выйти на cap 400/день».
 
-Так Греция всегда уйдёт с греческих номеров, Мальта — с мальтийских, без шанса перепутать.
+**Send now (главный баг):**
+- Сейчас при Send now `Per day = recipients.length` (2808), cap 200/номер игнорируется в UI и в backend (отправляется все одной кучей).
+- Фикс: применить тот же `dayPlan` к Send now → Per day = `min(recipients.length, numbers × 200)` = 400. Остальные 2408 уезжают на следующие дни автоматически (campaign-day-rollover уже умеет это).
+- В строке Review «Per day / Per number / Days needed / ETA» использовать `dayPlan.effectivePerDay` для обоих режимов.
+- Подсказка под расписанием для Send now: «Стартует сейчас. Cap 200/номер/день = 400/день. Сегодня уйдёт 400, остальные 2408 авторазвернутся на следующие дни».
 
-### Почему не один batch с фильтром по `country`
-- Лишняя UI-работа (новый фильтр в LaunchWizard, сплит расхода аудиторий, отчётность)
-- Сегмент и copy у Греции (Medspa) и Мальты (Real Estate) разные → шаблоны и copy_profile должны быть разные → это и так логически 2 кампании
-- Раздельные batch'и дают раздельные счётчики `usage_status` ("сколько Греции уже отправили")
+### 2. Variable mapping — очевидный и быстрый (для случая с {1}{2}{3})
 
-## Что я сделаю
+Файл: `src/pages/workspace/LaunchWizard.tsx`, Step 5.
 
-1. **Подготовка данных (скрипт, не код в проекте)**
-   - Прочитать xlsx, отфильтровать только валидные строки (`normalized_phone` не пустой, длина >= 8)
-   - Нормализовать телефон (только цифры, без `+`)
-   - Сложить в `payload` jsonb: `{ business_name, city, category, subcategory, segment, website_or_domain, address, last_online, gender, age }`
-   - Дедуп по `phone` внутри каждой страны
+**Проблема:** если автомаппинг не нашёл столбец с именем переменной, юзер видит «Missing: 1, 2, 3» в превью, но Step 5 спрятан внизу и неочевиден. У Salesforge всё работало потому что переменная называлась `name` и в CSV был столбец `name`.
 
-2. **Загрузка в БД через `supabase--insert`**
-   - Найти/создать workspace `GO` (если уже есть — использовать его id; уточню у вас)
-   - Вставить 2 строки в `audience_batches`:
-     - country `GR`, campaign_type `marketing`, copy_profile `Medspa`, variable_schema выведенная из payload (business_name, city, category…)
-     - country `MT`, campaign_type `marketing`, copy_profile `Real Estate`
-   - Bulk insert в `audience_rows` (по 500 за раз) с `validation_status = valid`, `usage_status = unused`
+**Что меняем:**
+- Step 5 («Variable mapping») всплывает выше — сразу после Step 4 (Audience), и подсвечивается янтарным бейджем `Action required`, если есть неразмеченные переменные.
+- В заголовке шага показывать `{N} of {M} variables mapped`.
+- Каждая строка показывает превью значения из первого контакта рядом со селектом (чтобы было видно, что подставится).
+- Добавляем кнопку «Apply same value to all» рядом со static value (массовая заливка одного текста для всех).
+- В превью (Step 7) если есть Missing — сверху красный бэннер «Map variables in Step 5 before launch» со скроллом к Step 5.
+- Launch button блокируется, пока есть unmapped variables (сейчас не блокируется).
 
-3. **Проверка в UI**
-   - Открыть `/ws/go/data` — увидите 2 batch'а с бейджами `GR` / `MT`
-   - В Launch Wizard выбираете нужный batch + соответствующий пул номеров
+**Документируем для будущего**: в `src/pages/workspace/LaunchWizard.tsx` коммент: имена переменных в шаблоне (`{1}`, `{2}`, …) должны либо матчить колонку в audience payload, либо быть смаплены руками в Step 5 как static.
 
-## Что нужно от вас (1 минута, перед запуском)
+### 3. Step 4: Pipeline automations (опционально)
 
-1. Workspace **GO** уже создан? Если да — какой `slug` (`/ws/<slug>`)? Если нет — создать с `slug = go`?
-2. У `GO` уже залиты WhatsApp-номера для **Греции** и **Мальты** в `whatsapp_numbers`? Без них Launch Wizard не покажет пулы (но базу можно залить заранее).
-3. Есть утверждённые шаблоны (`message_templates`) под Medspa/Real Estate, или это пока только аудитория?
+Файл: `src/pages/workspace/LaunchWizard.tsx` + переиспользовать `src/components/workspace/StageAutomationsDialog.tsx` или его внутренности.
 
-Как только подтвердите — я делаю миграцию данных и кидаю 2 готовых batch'а в `/ws/go/data`.
+**Новый Step 4 (collapsible, по умолчанию свёрнут):**
+- Заголовок: `Pipeline automations · optional`.
+- Если свёрнут — применяются дефолты выбранного pipeline.
+- Если открыт — показываем 3 простых тогла:
+  - **Auto-reply rules** (использовать stage automations из `pipeline_stage_automations`).
+  - **Auto-move on reply** (recipient → стадия "Replied").
+  - **Slack ping on reply** (использовать `pipeline.slack_channel_id`).
+- Кнопка «Edit full pipeline config» открывает существующий `PipelineConfigSheet` поверх wizard.
+- Перенумеровать последующие шаги (Audience → 5, Variable mapping → 6, Naming → 7, Preview → 8).
+
+### 4. Не трогаем
+
+- Backend dispatcher (`supabase/functions/campaigns`, `campaign-day-rollover`) — он уже уважает `daily_cap` и rollover, изменения только в UI/предсказании.
+- `perNumberQuota` cap=200 уже стоит (предыдущий фикс).
+- Существующие шаблоны/копии в БД не трогаем.
+
+---
 
 ## Технические детали
 
-- Источник: `/tmp/data.xlsx` (уже скопирован из user-uploads)
-- Скрипт парсинга: python + openpyxl, итерация по `Greece Valid` и `Malta Valid`, сборка SQL `INSERT … VALUES (…), (…), …` батчами
-- Ничего в схеме менять не надо — `country` text, `payload` jsonb уже есть
-- RLS: `audience_batches` требует `is_workspace_manager(workspace_id, auth.uid())` на insert → буду вставлять через `supabase--insert` (service role, обходит RLS), `user_id` поставлю на владельца workspace
-- Безопасность исторических данных payouts/finance не задета — только новый контент в audience_*
+```text
+Send now math fix (lines ~1273-1287, ~1274):
+- Row "Per day" value:
+    scheduleMode === "scheduled" ? dayPlan.effectivePerDay : recipients.length
+  →
+    dayPlan.effectivePerDay   // (works for both modes; dayPlan уже считает min(ideal, cap))
+
+- В useMemo dayPlan для scheduleMode === "now":
+    daysSelected = Math.max(1, Math.ceil(total / dailyCap))
+  чтобы Per day = min(total, dailyCap), а Days needed = correct.
+```
+
+```text
+Step 5 highlight:
+- В заголовке Step показываем badge: "Action required" если
+  variableNames.some(v => !mapping[v])
+- Launch button: disabled={resolution.missing.length > 0 || unmappedVars.length > 0}
+```
+
+```text
+Step 4 Pipeline automations:
+- Состояние: const [automationsOpen, setAutomationsOpen] = useState(false)
+- При submit: passед поверх дефолтов pipeline на сервер через body.automations_override = { ... }
+  (либо просто открываем сайдшит для редактирования pipeline без передачи overrides — MVP)
+```
+
+## Out of scope
+
+- Backend cap enforcement в Send now (дispatcher уже уважает recipient.scheduled_at; UI исправит то, что отдаёт).
+- Изменение шаблонов в Gupshup или ре-синк копии.
+- Переименование переменных в шаблонах с `{1}` на `{name}` — это надо делать в Gupshup.
