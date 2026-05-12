@@ -1,0 +1,24 @@
+# ISKRA
+
+> Dubai-based WhatsApp Outreach agency. We build predictable pipelines of qualified replies and booked calls using dedicated infrastructure, proven copy, and full-funnel tracking. WhatsApp Outreach is our core service; AI Agent is a secondary offering.
+
+## Pages
+
+- [Home](https://iskra.ae/): Overview of ISKRA's WhatsApp Outreach service, results, and process.
+- [WhatsApp Outreach](https://iskra.ae/whatsapp-outreach): Core service - cold WhatsApp campaigns, Database Reactivation, and lead generation for B2B and high-ticket B2C in Dubai and the UAE.
+- [AI Agent](https://iskra.ae/ai-agent): Secondary service - AI-powered conversation handling layered on top of WhatsApp Outreach.
+- [Case Studies](https://iskra.ae/case-studies): Real client results across medspa, real estate, coaching, and other verticals.
+- [About](https://iskra.ae/about): Team, founder, and how the agency operates.
+- [Contact](https://iskra.ae/contact): Book a discovery call or reach the team.
+
+## What we do
+
+- WhatsApp cold outreach with dedicated sender infrastructure
+- Database Reactivation campaigns to existing CRM contacts
+- Pipedrive CRM integration as the primary CRM
+- AI Agent layer for handling inbound replies at scale
+- Custom pricing tied to performance, not seats
+
+## Location
+
+Dubai, UAE (GST / UTC+4). Serving clients globally with a focus on the UAE and GCC.
