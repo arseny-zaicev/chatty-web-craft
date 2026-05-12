@@ -334,7 +334,7 @@ export default function FleetAnalytics() {
                   </TableRow>
                 ))}
                 {data!.clients.length === 0 && (
-                  <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-6">No clients with numbers yet.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-xs text-muted-foreground py-6">No clients with numbers yet.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
