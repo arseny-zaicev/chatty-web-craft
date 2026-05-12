@@ -13,6 +13,12 @@ const SellerLeadsApply = () => {
           content="Apply for exclusive seller leads in Dubai. Fill out our qualification form to start receiving motivated seller contacts." 
         />
         <link rel="canonical" href="https://iskra.ae/seller-leads/apply" />
+        <meta property="og:title" content="Get Seller Leads | ISKRA" />
+        <meta property="og:description" content="Apply for exclusive seller leads in Dubai - qualification form for motivated seller contacts." />
+        <meta property="og:url" content="https://iskra.ae/seller-leads/apply" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Get Seller Leads | ISKRA" />
+        <meta name="twitter:description" content="Apply for exclusive seller leads in Dubai - qualification form for motivated seller contacts." />
       </Helmet>
       
       <main className="min-h-screen bg-foreground">
