@@ -90,7 +90,38 @@ async function fetchGupshupTemplates(appId: string, configuredToken: string) {
   throw new Error(errors.join(" | "));
 }
 
-async function resolveGupshupSendToken(appId: string | null | undefined, configuredToken: string) {
+// Normalize Gupshup template "example" payload into a flat string[] aligned
+// with the {{1}}{{2}}... order. Handles array, pipe-string, WhatsApp Cloud
+// shape ({ body_text: [[...]] }), and JSON-encoded variants.
+function parseGupshupExample(raw: any, varCount: number): string[] {
+  if (raw == null) return [];
+  let v: any = raw;
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try { v = JSON.parse(trimmed); } catch { /* fall through */ }
+    }
+    if (typeof v === "string") {
+      // pipe-separated like "[John|funding|Score…]" or "John|funding|Score"
+      const stripped = v.replace(/^\[|\]$/g, "");
+      const parts = stripped.split("|").map((s) => s.trim()).filter(Boolean);
+      return parts.slice(0, Math.max(varCount, parts.length));
+    }
+  }
+  if (Array.isArray(v)) {
+    if (v.length && Array.isArray(v[0])) v = v[0];
+    return v.map((x: any) => String(x ?? "")).filter((s) => s.length);
+  }
+  if (typeof v === "object") {
+    if (Array.isArray(v.body_text)) {
+      const inner = Array.isArray(v.body_text[0]) ? v.body_text[0] : v.body_text;
+      return inner.map((x: any) => String(x ?? "")).filter((s: string) => s.length);
+    }
+    if (Array.isArray(v.body)) return v.body.map((x: any) => String(x ?? ""));
+  }
+  return [];
+}
   if (!appId) return configuredToken;
   const appToken = await getGupshupAppToken(appId, configuredToken);
   return appToken.token || configuredToken;
