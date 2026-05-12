@@ -337,6 +337,15 @@ async function handleInbound(payload: Record<string, unknown>) {
           .update({ stage_id: resolvedStageId, pipeline_id: conversationPipelineId })
           .eq("conversation_id", conversationId);
         movedToStageId = resolvedStageId;
+        // If the resolved stage is a lost stage (e.g. Block / Not interested),
+        // clear unread on the conversation so it stops pestering the operator.
+        const resolved = await loadStage(resolvedStageId);
+        if (resolved?.stage_type === "lost") {
+          await supabase
+            .from("conversations")
+            .update({ unread_count: 0 })
+            .eq("id", conversationId);
+        }
       }
     }
   }

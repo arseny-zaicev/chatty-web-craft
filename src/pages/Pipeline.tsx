@@ -55,6 +55,7 @@ import StageAutomationsDialog from "@/components/workspace/StageAutomationsDialo
 import { fetchWorkspaceMembers, workspaceMembersKey, memberDisplayName } from "@/lib/workspaceMembers";
 import { createDeal, updateDeal, deleteDeal as deleteDealApi, moveDeal } from "@/lib/deals";
 import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipelines";
+import { markConversationRead } from "@/lib/inbox";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
@@ -91,6 +92,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Deal | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // 'all' | 'me' | 'unassigned' | userId
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
 
@@ -191,10 +193,14 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (assigneeFilter === "me") return !!meId && aid === meId;
     return aid === assigneeFilter;
   };
+  const dealUnread = (d: Deal): number => {
+    const c = d.conversation_id ? convById.get(d.conversation_id) : null;
+    return c?.unread_count ?? 0;
+  };
   const visibleDeals = useMemo(
-    () => deals.filter(dealMatchesAssignee),
+    () => deals.filter((d) => dealMatchesAssignee(d) && (!unreadOnly || dealUnread(d) > 0)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deals, assigneeFilter, meId, convById],
+    [deals, assigneeFilter, meId, convById, unreadOnly],
   );
 
   const dealsByStage = useMemo(() => {
@@ -269,8 +275,15 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         prev.map((d) => (d.id === dealId ? { ...d, stage_id: prevStageId } : d)),
       );
     } else {
-      const stageName = stages.find((s) => s.id === targetStageId)?.name;
-      if (stageName) toast.success(`Moved to ${stageName}`);
+      const stage = stages.find((s) => s.id === targetStageId);
+      if (stage?.name) toast.success(`Moved to ${stage.name}`);
+      // Auto mark-read when moving to a lost stage (e.g. Block / Not interested),
+      // so unread chats don't keep haunting the Inbox.
+      if (stage?.stage_type === "lost" && deal.conversation_id) {
+        const cid = deal.conversation_id;
+        setConversations((prev) => prev.map((c) => (c.id === cid ? { ...c, unread_count: 0 } : c)));
+        void markConversationRead(cid).catch(() => {});
+      }
     }
   };
 
@@ -314,6 +327,12 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         stage_id: editing.stage_id,
       });
       toast.success("Saved");
+      const targetStage = stages.find((s) => s.id === editing.stage_id);
+      if (targetStage?.stage_type === "lost" && editing.conversation_id) {
+        const cid = editing.conversation_id;
+        setConversations((prev) => prev.map((c) => (c.id === cid ? { ...c, unread_count: 0 } : c)));
+        void markConversationRead(cid).catch(() => {});
+      }
       setEditing(null);
       setActiveDealId(null);
     } catch (e: any) {
@@ -417,6 +436,22 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                 ))}
               </SelectContent>
             </Select>
+            {(() => {
+              const unreadCount = deals.reduce((s, d) => s + (dealUnread(d) > 0 ? 1 : 0), 0);
+              return (
+                <button
+                  onClick={() => setUnreadOnly((v) => !v)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition flex items-center gap-1 ${
+                    unreadOnly
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                  title="Show only deals with unread messages"
+                >
+                  Unread{unreadCount > 0 && ` · ${unreadCount}`}
+                </button>
+              );
+            })()}
             <Button size="sm" variant="outline" onClick={() => setShowAutomations(true)}>
               Automations
             </Button>
@@ -876,6 +911,14 @@ const DealCard = ({
       <div className="flex items-start justify-between gap-2">
         <div className="font-medium leading-snug truncate flex-1">{deal.title}</div>
         <div className="flex items-center gap-1 shrink-0">
+          {(conversation?.unread_count ?? 0) > 0 && (
+            <div
+              className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold flex items-center justify-center"
+              title={`${conversation!.unread_count} unread`}
+            >
+              {conversation!.unread_count}
+            </div>
+          )}
           {initials && (
             <div
               className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center"
