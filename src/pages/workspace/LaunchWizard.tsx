@@ -445,6 +445,12 @@ export default function LaunchWizard() {
   };
   const eta = useMemo(() => {
     const numbers = Math.max(1, activeNumbers.length);
+    if (isMarketing) {
+      const dailyCap = numbers * Math.max(1, perNumberQuota);
+      const daysNeeded = Math.max(1, Math.ceil(recipients.length / dailyCap));
+      if (!recipients.length) return "-";
+      return scheduleMode === "scheduled" ? `${daysNeeded} day(s) · launches at ${windowStart}` : `Launches at ${windowStart}`;
+    }
     if (scheduleMode === "scheduled") {
       const dailyCap = numbers * Math.max(1, perNumberQuota);
       const daysNeeded = Math.max(1, Math.ceil(recipients.length / dailyCap));
@@ -459,7 +465,7 @@ export default function LaunchWizard() {
     const maxSec = Math.round(perNumber * delayMax);
     if (!perNumber) return "-";
     return `${fmtDur(avgSec)} avg · up to ${fmtDur(maxSec)}`;
-  }, [recipients.length, activeNumbers.length, delayMin, delayMax, scheduleMode, perNumberQuota, windowStart, windowEnd]);
+  }, [recipients.length, activeNumbers.length, delayMin, delayMax, scheduleMode, perNumberQuota, windowStart, windowEnd, isMarketing]);
 
   // ----- Recipient region clock & realistic pacing -----
   const recipientTz = useMemo(() => COUNTRY_TZ[poolCountry?.toUpperCase() ?? ""] ?? null, [poolCountry]);
