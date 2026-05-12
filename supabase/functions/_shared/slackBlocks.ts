@@ -114,20 +114,28 @@ export function buildCampaignGroupBlocks(args: {
     ? `${m.emoji}  Campaign ${m.verb}`
     : `${m.emoji}  ${tag}  ·  Campaign ${m.verb} · ${numbersWord}`;
 
+  const tzi = tzInfo(payload.recipient_country);
+  const todayCount = Number(payload.today_recipients_count || 0);
+  const firstAt = (payload.first_scheduled_at as string | null) || (payload.scheduled_start_at as string | null);
+
   const fields: { type: string; text: string }[] = [
     { type: "mrkdwn", text: `*Campaign*\n${baseName}` },
-    { type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` },
   ];
   if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` });
     const delivered = totals.sent - totals.failed;
     fields.push({ type: "mrkdwn", text: `*Sent*\n${fmtNumber(totals.sent)} (${fmtPct(totals.sent, totals.total)})` });
     fields.push({ type: "mrkdwn", text: `*Delivered*\n${fmtNumber(delivered)} · ${fmtNumber(totals.failed)} failed` });
   } else if (event === "campaign_scheduled" || event === "campaign_launched" || event === "campaign_resumed") {
-    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} UAE` });
-    fields.push({ type: "mrkdwn", text: `*First send*\n${fmtDate(payload.scheduled_start_at as string)}` });
+    fields.push({ type: "mrkdwn", text: `*Today*\n${fmtTodayOrStartDate(todayCount, firstAt, tzi.tz)}` });
+    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} ${tzi.label}` });
+    fields.push({ type: "mrkdwn", text: `*${event === "campaign_scheduled" ? "First send" : "Started"}*\n${fmtDate(firstAt, tzi.tz)} ${tzi.label}` });
   } else if (event === "campaign_paused") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` });
     fields.push({ type: "mrkdwn", text: `*Progress*\n${fmtNumber(totals.sent)} / ${fmtNumber(totals.total)} sent` });
     fields.push({ type: "mrkdwn", text: `*Failed*\n${fmtNumber(totals.failed)}` });
+  } else {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` });
   }
 
   const blocks: unknown[] = [
