@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Megaphone, Rocket, Loader2, ChevronRight, ChevronDown, RefreshCw, Pause, Play, X, SkipForward, RotateCw } from "lucide-react";
@@ -84,22 +84,48 @@ const fetchCampaignMeta = async (numberIds: string[], templateIds: string[]) => 
   return { numbers, templates };
 };
 
-function todaySummary(group: CampaignGroup): string {
-  const tz = tzInfo(group.recipientCountry).tz;
-  const tzLabel = tzInfo(group.recipientCountry).label;
-  if (group.today > 0 && group.firstScheduledAt) {
-    const todayKey = todayKeyInTz(tz);
-    const firstKey = dateKeyInTz(group.firstScheduledAt, tz);
-    if (firstKey === todayKey) {
-      return `${group.today.toLocaleString()} today @ ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+function dateRangeLabel(group: CampaignGroup): { range: string; days: number } | null {
+  const dates = group.scheduledDates;
+  if (!dates || dates.length === 0) {
+    if (group.firstScheduledAt) {
+      const tz = tzInfo(group.recipientCountry).tz;
+      return { range: shortDateInTz(group.firstScheduledAt, tz), days: 1 };
     }
-    return `${group.today.toLocaleString()} today`;
+    return null;
   }
-  if (group.firstScheduledAt) {
-    return `Starts ${shortDateInTz(group.firstScheduledAt, tz)} @ ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+  const tz = tzInfo(group.recipientCountry).tz;
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const fmt = (d: string) => shortDateInTz(`${d}T12:00:00Z`, "UTC");
+  const range = first === last ? fmt(first) : `${fmt(first)} - ${fmt(last)}`;
+  return { range, days: dates.length };
+}
+
+function headerSubtitle(group: CampaignGroup): string {
+  const parts: string[] = [`Total ${group.total.toLocaleString()}`];
+  const dr = dateRangeLabel(group);
+  if (dr) {
+    parts.push(`${dr.days} ${dr.days === 1 ? "day" : "days"}`);
+    parts.push(dr.range);
   }
-  if (group.scheduledDates.length > 0) return `Starts ${group.scheduledDates[0]}`;
-  return "Not scheduled yet";
+  if (group.today > 0) {
+    const tz = tzInfo(group.recipientCountry).tz;
+    if (group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) === todayKeyInTz(tz)) {
+      parts.push(`today ${group.today.toLocaleString()} @ ${timeInTz(group.firstScheduledAt, tz)}`);
+    } else {
+      parts.push(`today ${group.today.toLocaleString()}`);
+    }
+  }
+  return parts.join(" · ");
+}
+
+function ProgressBar({ value, total, className = "" }: { value: number; total: number; className?: string }) {
+  const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+  return (
+    <div className={`h-1.5 rounded-full bg-muted overflow-hidden ${className}`}>
+      <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+    </div>
+  );
 }
 
 export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId: string; slug: string }) {
@@ -112,6 +138,17 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const canManage = isManagerLike(role);
   const canLaunch = isAdmin(role);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const o = searchParams.get("open");
+    if (o) {
+      setOpenKey(o);
+      const next = new URLSearchParams(searchParams);
+      next.delete("open");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const numberIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.whatsapp_number_id).filter(Boolean))) as string[], [campaigns]);
   const templateIds = useMemo(() => Array.from(new Set(campaigns.map((c: any) => c.template_id).filter(Boolean))) as string[], [campaigns]);
@@ -170,14 +207,23 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate text-sm">{g.displayName}</div>
                     <div className="text-xs text-muted-foreground truncate">
-                      {[canManage ? template?.name : null, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
+                      {headerSubtitle(g)}
+                    </div>
+                    {canManage && (
+                      <div className="text-[11px] text-muted-foreground/80 truncate mt-0.5">
+                        {[template?.name, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                    <div className="md:hidden mt-2 flex items-center gap-2">
+                      <ProgressBar value={g.sent} total={g.total} className="flex-1" />
+                      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="hidden md:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                    <Stat label="Sent" value={`${g.sent.toLocaleString()}/${g.total.toLocaleString()}`} />
-                    <Stat label="Today" value={todaySummary(g)} />
-                    {g.failed > 0 && <Stat label="Failed" value={g.failed} tone="bad" />}
+                  <div className="hidden md:flex items-center gap-3 shrink-0 w-[180px]">
+                    <ProgressBar value={g.sent} total={g.total} className="flex-1" />
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-[80px] text-right">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
                   </div>
+                  {g.failed > 0 && <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{g.failed} failed</span>}
                   <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>
                 {open && (
@@ -336,22 +382,17 @@ function CampaignDetail({
           </Button>
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
         <Stat label="Total" value={totals.total.toLocaleString()} />
         <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
         <Stat label="Pending" value={totals.pending.toLocaleString()} />
         <Stat label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "bad" : undefined} />
-        <Stat
-          label="Today"
-          value={totals.today > 0 ? totals.today.toLocaleString() : "—"}
-          subtitle={(() => {
-            if (totals.today > 0 && group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) === todayKey) {
-              return `starts ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
-            }
-            if (group.firstScheduledAt) return `next: ${shortDateInTz(group.firstScheduledAt, tz)} ${timeInTz(group.firstScheduledAt, tz)}`;
-            return "not scheduled";
-          })()}
-        />
+      </div>
+      <div className="flex items-center gap-2 mb-3">
+        <ProgressBar value={totals.sent} total={totals.total} className="flex-1" />
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {totals.total > 0 ? Math.round((totals.sent / totals.total) * 100) : 0}%
+        </span>
       </div>
 
       {/* Per-day breakdown */}
