@@ -1211,6 +1211,16 @@ async function setCampaignStatus(admin: any, requesterId: string, body: any, kin
     const { error } = await admin.from("campaigns").update({ status }).in("id", list);
     if (error) return json({ error: error.message }, 500);
   }
+  // On cancel: release audience rows reserved/marked-used for these campaigns back into the pool.
+  if (kind === "cancel") {
+    const cancelled = updates["cancelled"] ?? [];
+    if (cancelled.length > 0) {
+      await admin
+        .from("audience_rows")
+        .update({ usage_status: "unused", reserved_at: null, used_at: null, used_in_campaign_id: null })
+        .in("used_in_campaign_id", cancelled);
+    }
+  }
   return json({ ok: true, action: kind, campaigns: uniq.length });
 }
 
