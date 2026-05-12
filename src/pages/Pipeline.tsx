@@ -327,6 +327,12 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         stage_id: editing.stage_id,
       });
       toast.success("Saved");
+      const targetStage = stages.find((s) => s.id === editing.stage_id);
+      if (targetStage?.stage_type === "lost" && editing.conversation_id) {
+        const cid = editing.conversation_id;
+        setConversations((prev) => prev.map((c) => (c.id === cid ? { ...c, unread_count: 0 } : c)));
+        void markConversationRead(cid).catch(() => {});
+      }
       setEditing(null);
       setActiveDealId(null);
     } catch (e: any) {
