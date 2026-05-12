@@ -91,6 +91,8 @@ export default function WorkspaceOverview() {
 
       <LatestReportCard workspaceId={workspace.id} slug={slug} />
 
+      {activeGroup && <ActiveCampaignCard group={activeGroup} slug={slug} /> }
+
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Recent launches */}
         <Card className="lg:col-span-2">
