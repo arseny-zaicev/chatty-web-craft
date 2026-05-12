@@ -2915,6 +2915,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      campaign_recipient_counts: {
+        Args: { p_campaign_ids: string[] }
+        Returns: {
+          campaign_id: string
+          failed_count: number
+          pending_count: number
+          sent_count: number
+        }[]
+      }
       can_access_pipeline: {
         Args: { _pipeline_id: string; _user_id: string; _workspace_id: string }
         Returns: boolean
@@ -3088,6 +3097,10 @@ export type Database = {
         }[]
       }
       reap_finished_campaigns: {
+        Args: { p_idle_minutes?: number }
+        Returns: number
+      }
+      reap_stuck_sending_recipients: {
         Args: { p_idle_minutes?: number }
         Returns: number
       }
