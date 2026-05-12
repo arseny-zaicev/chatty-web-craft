@@ -88,7 +88,19 @@ export default function LaunchWizard() {
 
   const numbers = data?.numbers ?? [];
   const templates = data?.templates ?? [];
-  const logicalTemplates = useMemo(() => groupLogicalTemplates(templates), [templates]);
+
+  const { data: templateGroups = [] } = useQuery({
+    queryKey: ["template-groups", workspace?.id ?? "all"],
+    queryFn: () => fetchTemplateGroups(workspace!.id),
+    enabled: Boolean(workspace),
+    staleTime: 60_000,
+  });
+  const [groupsDialogOpen, setGroupsDialogOpen] = useState(false);
+
+  const logicalTemplates = useMemo(
+    () => groupLogicalTemplates(templates, templateGroups),
+    [templates, templateGroups],
+  );
 
   // ----- State -----
   const [type, setType] = useState<CampaignType>("marketing");
