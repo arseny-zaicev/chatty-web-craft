@@ -1310,14 +1310,22 @@ export default function LaunchWizard() {
                 </div>
               )}
               <div className="space-y-2">
-                {variableNames.map((v) => {
+                {variableNames.map((v, idx) => {
                   const current = mapping[v] ?? "";
                   const isStatic = current.startsWith("__static:");
                   const previewVal = variablePreviewValue(v);
                   const unmapped = unmappedVars.includes(v);
+                  const kind = variableSourceKind(v);
+                  const expectedKey = expectedAudienceKeys[idx];
+                  const sampleHint = activeLogical?.variablesSample?.[idx];
+                  const isNumeric = /^\d+$/.test(v);
+                  const borderClass =
+                    unmapped ? "border-amber-500/30 bg-amber-500/5"
+                    : kind === "static" ? "border-rose-500/40 bg-rose-500/5"
+                    : "border-border bg-card/30";
                   return (
-                    <div key={v} className={`rounded-md border p-2 ${unmapped ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/30"}`}>
-                      <div className="flex items-center gap-2 text-sm">
+                    <div key={v} className={`rounded-md border p-2 ${borderClass}`}>
+                      <div className="flex items-center gap-2 text-sm flex-wrap">
                         <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{`{${v}}`}</span>
                         <span className="text-xs text-muted-foreground">→</span>
                         <Select value={isStatic ? "__static__" : current || "__none__"} onValueChange={(val) => {
@@ -1329,22 +1337,46 @@ export default function LaunchWizard() {
                             return next;
                           });
                         }}>
-                          <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick column or static" /></SelectTrigger>
+                          <SelectTrigger className="h-8 flex-1 min-w-[180px]"><SelectValue placeholder="Pick column or static" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">— unset —</SelectItem>
-                            {columns.map((c) => <SelectItem key={c} value={c}>column: {c}</SelectItem>)}
-                            <SelectItem value="__static__">static value (same for all)...</SelectItem>
+                            {columns.map((c) => <SelectItem key={c} value={c}>column: {c} (per-row)</SelectItem>)}
+                            <SelectItem value="__static__">static value (same for everyone)...</SelectItem>
                           </SelectContent>
                         </Select>
+                        {kind === "per_row" && (
+                          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600 bg-emerald-500/5">per-row</Badge>
+                        )}
+                        {kind === "static" && (
+                          <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-600 bg-rose-500/5">same for everyone</Badge>
+                        )}
                         {isStatic && (
                           <Input
-                            className="h-8 flex-1"
+                            className="h-8 flex-1 min-w-[180px]"
                             placeholder={`Same text for all (e.g. "Bella")`}
                             value={current.slice("__static:".length)}
                             onChange={(e) => setMapping((prev) => ({ ...prev, [v]: `__static:${e.target.value}` }))}
                           />
                         )}
                       </div>
+                      {/* No-column-matched warning for numeric vars */}
+                      {unmapped && isNumeric && (
+                        <div className="mt-1.5 text-[11px] rounded border border-amber-500/30 bg-background/50 px-2 py-1.5 space-y-1">
+                          <div className="text-amber-700 dark:text-amber-400">
+                            <b>{`{${v}}`}</b> has no per-row source. Each contact will receive the SAME text unless you map it to <code className="font-mono">{expectedKey}</code> from the audience.
+                          </div>
+                          {sampleHint && (
+                            <div className="text-muted-foreground">
+                              Template moderation sample (reference only): "<span className="text-foreground">{sampleHint.length > 90 ? sampleHint.slice(0, 87) + "..." : sampleHint}</span>"
+                              <button
+                                type="button"
+                                className="ml-2 underline text-rose-600"
+                                onClick={() => setMapping((prev) => ({ ...prev, [v]: `__static:${sampleHint}` }))}
+                              >Use sample for everyone (not recommended)</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {!unmapped && previewVal && (
                         <div className="mt-1 text-[11px] text-muted-foreground pl-1">
                           preview: <span className="font-medium text-foreground">"{previewVal.length > 80 ? previewVal.slice(0, 77) + "..." : previewVal}"</span>
@@ -1353,7 +1385,15 @@ export default function LaunchWizard() {
                     </div>
                   );
                 })}
-                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template for this workspace. Tip: numeric template variables ({"{1}"}, {"{2}"}...) usually need a static value or a column from your audience batch.</p>
+                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template. Per-row variables come from <code className="font-mono">audience_rows.derived_payload.var_N</code>; prepare them in the Data section before launch.</p>
+                {sameForEveryoneVars.length > 0 && (
+                  <div className="rounded-md border border-rose-500/30 bg-rose-500/5 text-rose-700 dark:text-rose-400 text-[11px] px-2 py-1.5 flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <div>
+                      <b>{sameForEveryoneVars.length} variable(s) will use the same text for every contact:</b> {sameForEveryoneVars.map((v) => `{${v}}`).join(", ")}. This defeats the purpose of placeholders. Re-prepare the audience with per-row values to fix.
+                    </div>
+                  </div>
+                )}
               </div>
             </Step>
           )}
