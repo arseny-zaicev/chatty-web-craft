@@ -188,6 +188,15 @@ const PHONE_TZ: Array<[string, string]> = [
   ["27", "Africa/Johannesburg"], ["234", "Africa/Lagos"], ["254", "Africa/Nairobi"], ["212", "Africa/Casablanca"],
 ];
 
+// ISO country code -> primary IANA TZ (mirrors campaign-day-rollover.COUNTRY_TZ)
+const COUNTRY_TZ: Record<string, string> = {
+  US: "America/New_York", CA: "America/Toronto", GB: "Europe/London", UK: "Europe/London",
+  AE: "Asia/Dubai", SA: "Asia/Riyadh", IN: "Asia/Kolkata", DE: "Europe/Berlin",
+  FR: "Europe/Paris", IT: "Europe/Rome", ES: "Europe/Madrid", NL: "Europe/Amsterdam",
+  BR: "America/Sao_Paulo", MX: "America/Mexico_City", AU: "Australia/Sydney",
+  JP: "Asia/Tokyo", SG: "Asia/Singapore", HK: "Asia/Hong_Kong",
+};
+
 function tzFromPhone(phone: string): string {
   const d = String(phone || "").replace(/[^\d]/g, "");
   if (!d) return "UTC";
