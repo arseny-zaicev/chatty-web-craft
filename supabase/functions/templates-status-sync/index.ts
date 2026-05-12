@@ -91,6 +91,7 @@ type NumberDiff = {
   number: NumberRow;
   changes: Change[];
   totals: { approved: number; rejected: number; paused: number; pending: number };
+  notifyIds: string[];
 };
 
 serve(async (req) => {
@@ -127,13 +128,20 @@ serve(async (req) => {
     const apiKey = n.provider_api_key || fallbackKey;
     if (!apiKey || !n.provider_app_id) continue;
 
-    // Snapshot current statuses
+    // Snapshot current statuses + last_notified_status for diff baseline
     const { data: existing } = await admin
       .from("message_templates")
-      .select("id, name, language, status")
+      .select("id, name, language, status, last_notified_status")
       .eq("whatsapp_number_id", n.id);
-    const beforeMap = new Map<string, string>();
-    for (const t of existing ?? []) beforeMap.set(`${t.name}::${t.language}`, t.status);
+    const baselineMap = new Map<string, { id: string; baseline: string; current: string }>();
+    for (const t of existing ?? []) {
+      // Diff against last_notified_status (fallback to status for legacy rows).
+      baselineMap.set(`${t.name}::${t.language}`, {
+        id: t.id,
+        baseline: (t as any).last_notified_status ?? t.status,
+        current: t.status,
+      });
+    }
 
     // Fetch from Gupshup
     let remote: any[];
@@ -147,7 +155,8 @@ serve(async (req) => {
 
     const changes: Change[] = [];
     const totals = { approved: 0, rejected: 0, paused: 0, pending: 0 };
-    const updates: Array<{ id: string; status: string }> = [];
+    const statusUpdates: Array<{ id: string; status: string }> = [];
+    const notifyIds: string[] = []; // rows whose last_notified_status we'll bump after Slack succeeds
 
     for (const t of remote) {
       const name = String(t.elementName || t.name || "").trim().slice(0, 120);
@@ -156,17 +165,21 @@ serve(async (req) => {
       const status = normalizeStatus(t.status);
       totals[status]++;
       const key = `${name}::${language}`;
-      const prev = beforeMap.get(key);
-      if (prev !== undefined && prev !== status) {
-        changes.push({ name, from: prev, to: status });
-        const row = (existing ?? []).find((r) => r.name === name && r.language === language);
-        if (row) updates.push({ id: row.id, status });
+      const base = baselineMap.get(key);
+      if (!base) continue;
+      // Always sync DB status if remote drifted
+      if (base.current !== status) {
+        statusUpdates.push({ id: base.id, status });
+      }
+      // Only flag as a notifiable change if it differs from last notified baseline
+      if (base.baseline !== status) {
+        changes.push({ name, from: base.baseline, to: status });
+        notifyIds.push(base.id);
       }
     }
 
-    if (!dryRun && updates.length > 0) {
-      // Batch update statuses (small N, sequential is fine)
-      for (const u of updates) {
+    if (!dryRun && statusUpdates.length > 0) {
+      for (const u of statusUpdates) {
         await admin
           .from("message_templates")
           .update({ status: u.status, synced_at: new Date().toISOString() })
@@ -178,7 +191,7 @@ serve(async (req) => {
       totalChanges += changes.length;
       const wsId = n.workspace_id ?? "unassigned";
       const arr = perWorkspace.get(wsId) ?? [];
-      arr.push({ number: n, changes, totals });
+      arr.push({ number: n, changes, totals, notifyIds });
       perWorkspace.set(wsId, arr);
     }
   }
