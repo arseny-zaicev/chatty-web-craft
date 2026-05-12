@@ -19,11 +19,50 @@ function fmtPct(part: number, total: number): string {
   return `${Math.round((part / total) * 100)}%`;
 }
 
-function fmtDate(iso: string | null | undefined): string {
+function fmtDate(iso: string | null | undefined, tz = "Asia/Dubai"): string {
   if (!iso) return "-";
   try {
-    return new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Dubai", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("en-GB", { timeZone: tz, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   } catch { return iso; }
+}
+
+// ISO country code -> primary IANA TZ + short label for Slack copy
+const COUNTRY_TZ_LABEL: Record<string, { tz: string; label: string }> = {
+  US: { tz: "America/New_York", label: "New York" }, CA: { tz: "America/Toronto", label: "Toronto" },
+  GB: { tz: "Europe/London", label: "London" }, UK: { tz: "Europe/London", label: "London" },
+  AE: { tz: "Asia/Dubai", label: "UAE" }, SA: { tz: "Asia/Riyadh", label: "Riyadh" },
+  IN: { tz: "Asia/Kolkata", label: "India" }, DE: { tz: "Europe/Berlin", label: "Berlin" },
+  FR: { tz: "Europe/Paris", label: "Paris" }, IT: { tz: "Europe/Rome", label: "Rome" },
+  ES: { tz: "Europe/Madrid", label: "Madrid" }, NL: { tz: "Europe/Amsterdam", label: "Amsterdam" },
+  BR: { tz: "America/Sao_Paulo", label: "Brazil" }, MX: { tz: "America/Mexico_City", label: "Mexico" },
+  AU: { tz: "Australia/Sydney", label: "Sydney" }, JP: { tz: "Asia/Tokyo", label: "Tokyo" },
+  SG: { tz: "Asia/Singapore", label: "Singapore" }, HK: { tz: "Asia/Hong_Kong", label: "Hong Kong" },
+};
+
+function tzInfo(country: unknown): { tz: string; label: string } {
+  const code = String(country || "").toUpperCase();
+  return COUNTRY_TZ_LABEL[code] || { tz: "Asia/Dubai", label: "UAE" };
+}
+
+function fmtDuration(seconds: number | null | undefined): string {
+  const s = Number(seconds || 0);
+  if (!isFinite(s) || s <= 0) return "—";
+  if (s < 60) return `${Math.round(s)}s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s - m * 60);
+  if (m < 60) return rem ? `${m}m ${rem}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
+}
+
+function fmtTodayOrStartDate(todayCount: number, firstScheduledAt: string | null | undefined, tz: string): string {
+  if (todayCount > 0) return `${fmtNumber(todayCount)} msgs`;
+  if (!firstScheduledAt) return "—";
+  try {
+    const d = new Date(firstScheduledAt).toLocaleString("en-GB", { timeZone: tz, day: "2-digit", month: "short" });
+    return `Starts ${d}`;
+  } catch { return "—"; }
 }
 
 function workspaceUrl(slug: string | null): string {
