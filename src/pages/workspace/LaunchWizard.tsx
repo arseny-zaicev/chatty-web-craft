@@ -1106,7 +1106,11 @@ export default function LaunchWizard() {
               )}
 
               <div className="text-[11px] text-muted-foreground space-y-1">
-                {scheduleMode === "now" ? (() => {
+                {isMarketing ? (
+                  <div>
+                    {scheduleMode === "scheduled" ? `${scheduledDates.length || 0} day(s) × ` : "Starts "}{windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. Sends as Marketing Blast with no manual delay controls.
+                  </div>
+                ) : scheduleMode === "now" ? (() => {
                   const perNumber = pacing?.perNumber || 1;
                   const avgSec = perNumber * (delayMin + delayMax) / 2;
                   const maxSec = perNumber * delayMax;
@@ -1138,7 +1142,7 @@ export default function LaunchWizard() {
                     Nothing scheduled for today. First batch (<b>{dayPlan.effectivePerDay.toLocaleString()}</b> msgs) starts <b>{todayInfo.firstDate}</b> at <b>{windowStart}</b> {respectTz ? "in recipient's local time" : "in your time zone"}.
                   </div>
                 )}
-                {feasibility && feasibility.totalQueued > 0 && (
+                {!isMarketing && feasibility && feasibility.totalQueued > 0 && (
                   <div className={`mt-1 px-2 py-1.5 rounded-md border text-[11px] ${feasibility.overflow > 0 ? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"}`}>
                     <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd} ({recipientNow} now in {poolCountry}){scheduleMode === "scheduled" ? <> · today's share of <b>{dayPlan.total.toLocaleString()}</b> total across {dayPlan.daysNeeded} day(s)</> : null}.
                     {feasibility.overflow > 0
