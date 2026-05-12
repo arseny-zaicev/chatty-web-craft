@@ -6,7 +6,7 @@ import type { WhatsAppNumber } from "./crmData";
 
 export type Template = Pick<
   Tables<"message_templates">,
-  "id" | "name" | "language" | "status" | "category" | "body" | "whatsapp_number_id" | "workspace_id" | "variables" | "buttons" | "provider_template_id" | "synced_at"
+  "id" | "name" | "language" | "status" | "category" | "body" | "whatsapp_number_id" | "workspace_id" | "variables" | "buttons" | "provider_template_id" | "synced_at" | "variables_sample" | "header_text" | "footer_text" | "sync_warning"
 >;
 
 export type Recipient = {
@@ -24,6 +24,9 @@ export type LogicalTemplate = {
   category: "marketing" | "utility" | "authentication";
   variables: string[]; // unioned vars across variants
   body: string | null; // sample body (first variant)
+  // Sample copy for each variable index (aligned with `variables`).
+  // Pulled from Gupshup template "Sample" field at sync time.
+  variablesSample: string[];
   variants: Template[]; // approved/paused variants across numbers
   variantByNumber: Map<string, Template>;
 };
@@ -39,7 +42,7 @@ export async function fetchLaunchEssentials(workspaceId?: string) {
     .not("status", "in", "(restricted,banned,inactive)");
   let templatesQuery = supabase
     .from("message_templates")
-    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, buttons, provider_template_id, synced_at")
+    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, buttons, provider_template_id, synced_at, variables_sample, header_text, footer_text, sync_warning")
     .in("status", ["approved", "paused"])
     .limit(500);
 
@@ -105,6 +108,7 @@ export function groupLogicalTemplates(templates: Template[]): LogicalTemplate[] 
         category: (t.category as any) ?? "marketing",
         variables: [],
         body: t.body ?? null,
+        variablesSample: [],
         variants: [],
         variantByNumber: new Map(),
       };
@@ -115,6 +119,9 @@ export function groupLogicalTemplates(templates: Template[]): LogicalTemplate[] 
     const vars = Array.isArray(t.variables) ? (t.variables as string[]) : [];
     for (const v of vars) if (!entry.variables.includes(v)) entry.variables.push(v);
     if (!entry.body && t.body) entry.body = t.body;
+    // Use the longest sample copy across variants (newest variant typically wins).
+    const sample = Array.isArray(t.variables_sample) ? (t.variables_sample as any[]).map((x) => String(x ?? "")) : [];
+    if (sample.length > entry.variablesSample.length) entry.variablesSample = sample;
   }
   return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
 }

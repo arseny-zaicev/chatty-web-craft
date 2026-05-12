@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase, friendlySenderLabel } from "@/lib/crmData";
+import { Conversation, WhatsAppNumber, crmKeys, fetchCrmBase } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -395,6 +395,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     () => conversations.filter((c) => repliedSet.has(c.id)).length,
     [conversations, repliedSet],
   );
+  // Conversation counts per sender number — feeds the "Numbers" dropdown.
+  // Numbers are presented as anonymised phone strings (no internal labels).
+  const numberCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of conversations) m.set(c.whatsapp_number_id, (m.get(c.whatsapp_number_id) ?? 0) + 1);
+    return m;
+  }, [conversations]);
+  const sortedNumbers = useMemo(
+    () => [...numbers].sort((a, b) => (numberCounts.get(b.id) ?? 0) - (numberCounts.get(a.id) ?? 0)),
+    [numbers, numberCounts],
+  );
 
   const filtered = sorted.filter((c) => {
     const isNegative = stageTypeByConv.get(c.id) === "lost";
@@ -481,31 +492,23 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                 />
               </div>
 
-              <div className="flex flex-wrap gap-1">
-                <button
-                  onClick={() => setNumberFilter("all")}
-                  className={`text-xs px-2 py-1 rounded-full border transition ${
-                    numberFilter === "all"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-                >
-                  All numbers
-                </button>
-                {numbers.map((n) => (
-                  <button
-                    key={n.id}
-                    onClick={() => setNumberFilter(n.id)}
-                    className={`text-xs px-2 py-1 rounded-full border transition ${
-                      numberFilter === n.id
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border text-muted-foreground hover:border-primary/40"
-                    }`}
-                    title={`+${n.phone_number}`}
+              <div className="flex flex-wrap gap-1 items-center">
+                {sortedNumbers.length > 1 && (
+                  <select
+                    value={numberFilter}
+                    onChange={(e) => setNumberFilter(e.target.value)}
+                    className="text-xs px-2 py-1 rounded-full border bg-transparent transition max-w-[180px] truncate border-border text-muted-foreground hover:border-primary/40 focus:outline-none focus:border-primary/60"
+                    title="Filter by sender number"
+                    style={numberFilter !== "all" ? { borderColor: "hsl(var(--primary))", color: "hsl(var(--primary))" } : undefined}
                   >
-                    {friendlySenderLabel(n)}
-                  </button>
-                ))}
+                    <option value="all">All numbers · {conversations.length}</option>
+                    {sortedNumbers.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        +{n.phone_number} · {numberCounts.get(n.id) ?? 0} chats
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   onClick={() => setStarredOnly((v) => !v)}
                   className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${

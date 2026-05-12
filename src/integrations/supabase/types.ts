@@ -1306,6 +1306,8 @@ export type Database = {
           category: Database["public"]["Enums"]["template_category"]
           created_at: string
           external_id: string | null
+          footer_text: string | null
+          header_text: string | null
           id: string
           language: string
           name: string
@@ -1314,10 +1316,12 @@ export type Database = {
           quality: string | null
           raw: Json | null
           status: string
+          sync_warning: string | null
           synced_at: string | null
           updated_at: string
           user_id: string
           variables: Json
+          variables_sample: Json
           whatsapp_number_id: string
           workspace_id: string
         }
@@ -1327,6 +1331,8 @@ export type Database = {
           category?: Database["public"]["Enums"]["template_category"]
           created_at?: string
           external_id?: string | null
+          footer_text?: string | null
+          header_text?: string | null
           id?: string
           language?: string
           name: string
@@ -1335,10 +1341,12 @@ export type Database = {
           quality?: string | null
           raw?: Json | null
           status?: string
+          sync_warning?: string | null
           synced_at?: string | null
           updated_at?: string
           user_id: string
           variables?: Json
+          variables_sample?: Json
           whatsapp_number_id: string
           workspace_id: string
         }
@@ -1348,6 +1356,8 @@ export type Database = {
           category?: Database["public"]["Enums"]["template_category"]
           created_at?: string
           external_id?: string | null
+          footer_text?: string | null
+          header_text?: string | null
           id?: string
           language?: string
           name?: string
@@ -1356,10 +1366,12 @@ export type Database = {
           quality?: string | null
           raw?: Json | null
           status?: string
+          sync_warning?: string | null
           synced_at?: string | null
           updated_at?: string
           user_id?: string
           variables?: Json
+          variables_sample?: Json
           whatsapp_number_id?: string
           workspace_id?: string
         }
