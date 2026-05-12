@@ -1045,6 +1045,9 @@ async function processQueue(admin: any) {
     return m ? `#${m[1]}` : msg.slice(0, 40).replace(/\s+/g, " ");
   };
 
+  // Pacing guard map: per (campaign_id|number_id) last send time in this tick.
+  const lastSentMs = new Map<string, number>();
+
   await Promise.all(Array.from(shards.values()).map(async (recipients) => {
     for (const recipient of recipients) {
       const cState = getCanary(recipient.campaign_id);
