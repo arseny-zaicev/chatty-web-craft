@@ -17,6 +17,7 @@ import { formatDistanceToNow } from "date-fns";
 
 import { toast } from "sonner";
 import { geoFromPhone } from "@/lib/launchData";
+import FleetTemplatesHealth from "@/components/admin/FleetTemplatesHealth";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
@@ -533,6 +534,8 @@ export default function FleetRegistry() {
             </span>
           </div>
         )}
+
+        <FleetTemplatesHealth />
 
         <div className="flex flex-wrap gap-2 items-center">
           <ViewTab active={view === "all"} onClick={() => setView("all")} icon={<Layers className="w-3.5 h-3.5" />}>All numbers</ViewTab>
