@@ -107,6 +107,7 @@ export default function LaunchWizard() {
   // ----- State -----
   const [type, setType] = useState<CampaignType>("marketing");
   const preset = TYPE_PRESETS[type];
+  const isMarketing = type === "marketing";
 
   const { data: pipelines = [] } = useQuery({
     queryKey: pipelinesKey(workspace?.id),
@@ -1027,12 +1028,12 @@ export default function LaunchWizard() {
                   onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
               </Field>
             </div>
-            {type === "marketing" && scheduleMode === "now" && (
+            {isMarketing && (
               <div className="text-[11px] text-muted-foreground mt-1">
-                Marketing Blast sends instantly without gaps. To spread sends across multiple days, switch to <b>Pick days</b>.
+                Marketing Blast uses selected days and launch times only - delay and scheduler stay locked.
               </div>
             )}
-            {scheduleMode === "scheduled" && (
+            {!isMarketing && scheduleMode === "scheduled" && (
               <div className="text-[11px] text-muted-foreground mt-1">
                 Min/Max delay is ignored when a window is set - gaps are computed from the window length below.
               </div>
@@ -1074,8 +1075,8 @@ export default function LaunchWizard() {
                 <Field label="Window from"><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
                 <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
                 <Field label="Scheduler">
-                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
-                    disabled={type === "marketing" && scheduleMode === "now"}>
+                  <Select value={isMarketing ? "poisson" : schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
+                    disabled={isMarketing}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="poisson">Poisson (organic, jittered)</SelectItem>
