@@ -193,10 +193,14 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (assigneeFilter === "me") return !!meId && aid === meId;
     return aid === assigneeFilter;
   };
+  const dealUnread = (d: Deal): number => {
+    const c = d.conversation_id ? convById.get(d.conversation_id) : null;
+    return c?.unread_count ?? 0;
+  };
   const visibleDeals = useMemo(
-    () => deals.filter(dealMatchesAssignee),
+    () => deals.filter((d) => dealMatchesAssignee(d) && (!unreadOnly || dealUnread(d) > 0)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deals, assigneeFilter, meId, convById],
+    [deals, assigneeFilter, meId, convById, unreadOnly],
   );
 
   const dealsByStage = useMemo(() => {
