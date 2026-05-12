@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { renderTemplateBody } from "../_shared/template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +14,10 @@ const supabase = createClient(
 
 function normalizePhone(p: string): string {
   return (p || "").toString().replace(/[^\d]/g, "");
+}
+
+function compactStrings(values: unknown[]): string[] {
+  return [...new Set(values.map((v) => String(v ?? "").trim()).filter(Boolean))];
 }
 
 async function handleInbound(payload: Record<string, unknown>) {
