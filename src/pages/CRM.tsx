@@ -810,12 +810,13 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       </div>
                     )}
                     {activeNumber && (
-                      <div className="hidden md:flex max-w-[220px] text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5 min-w-0" title={`${activeNumber.label || ""} +${activeNumber.phone_number}`}>
+                      <div
+                        className="hidden md:flex max-w-[180px] text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5 min-w-0"
+                        title={`Sent from ${activeNumber.label ? `${activeNumber.label} ` : ""}+${activeNumber.phone_number}`}
+                      >
                         <Phone className="w-3 h-3 shrink-0" />
-                        {activeNumber.label?.trim() && (
-                          <span className="font-medium truncate">{activeNumber.label}</span>
-                        )}
-                        <span className="font-mono opacity-80 truncate">+{activeNumber.phone_number}</span>
+                        <span className="opacity-70 shrink-0">Sent from</span>
+                        <span className="font-mono truncate">+{activeNumber.phone_number}</span>
                       </div>
                     )}
                     <Button
@@ -823,7 +824,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       variant="ghost"
                       onClick={() => togglePin(active)}
                       title={active.pinned_at ? "Unpin" : "Pin"}
-                      className="h-8 w-8"
+                      className="h-8 w-8 shrink-0"
                     >
                       <Pin
                         className={`w-4 h-4 ${
@@ -836,7 +837,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       variant="ghost"
                       onClick={() => toggleStar(active)}
                       title={active.is_starred ? "Unstar" : "Star"}
-                      className="h-8 w-8"
+                      className="h-8 w-8 shrink-0"
                     >
                       <Star
                         className={`w-4 h-4 ${
@@ -845,16 +846,15 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       />
                     </Button>
                     <Button
-                      size="sm"
+                      size="icon"
                       variant="ghost"
                       onClick={() =>
                         active.unread_count > 0 ? markRead(active) : markUnread(active)
                       }
                       title={active.unread_count > 0 ? "Mark as read" : "Mark as unread"}
-                      className="h-8 text-xs"
+                      className="h-8 w-8 shrink-0"
                     >
-                      <CheckCheck className="w-4 h-4 mr-1" />
-                      {active.unread_count > 0 ? "Mark read" : "Mark unread"}
+                      <CheckCheck className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -878,7 +878,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       return (
                         <div key={m.id} className={`flex ${isOut ? "justify-end" : "justify-start"}`}>
                           <div
-                            className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                            className={`max-w-[60%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
                               isOut
                                 ? "bg-primary text-primary-foreground rounded-br-sm"
                                 : "bg-card border border-border rounded-bl-sm"
