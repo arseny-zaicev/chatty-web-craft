@@ -96,9 +96,62 @@ const stripVersion = (n: string) =>
     .replace(/_\d+$/i, "")
     .replace(/_+/g, "_");
 
-export function groupLogicalTemplates(templates: Template[]): LogicalTemplate[] {
+export type TemplateGroup = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  category: "marketing" | "utility";
+  template_names: string[];
+};
+
+export async function fetchTemplateGroups(workspaceId: string): Promise<TemplateGroup[]> {
+  const { data, error } = await supabase
+    .from("template_groups")
+    .select("id, workspace_id, name, category, template_names")
+    .eq("workspace_id", workspaceId)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as TemplateGroup[];
+}
+
+const normalizeName = (n: string) => n.toLowerCase().trim().replace(/[\s-]+/g, "_").replace(/_+/g, "_");
+
+export function groupLogicalTemplates(templates: Template[], savedGroups: TemplateGroup[] = []): LogicalTemplate[] {
   const map = new Map<string, LogicalTemplate>();
+  // Mark template ids that are claimed by a saved group, so auto-grouping skips them.
+  const claimed = new Set<string>();
+
+  // 1. Saved groups take priority — match by normalized name against group.template_names
+  for (const g of savedGroups) {
+    const wanted = new Set(g.template_names.map(normalizeName));
+    const variants = templates.filter((t) => wanted.has(normalizeName(t.name)));
+    if (variants.length === 0) continue;
+    const entry: LogicalTemplate = {
+      key: `group:${g.id}`,
+      label: g.name,
+      category: g.category as any,
+      variables: [],
+      body: null,
+      variablesSample: [],
+      variants: [],
+      variantByNumber: new Map(),
+    };
+    for (const t of variants) {
+      claimed.add(t.id);
+      entry.variants.push(t);
+      if (t.whatsapp_number_id) entry.variantByNumber.set(t.whatsapp_number_id, t);
+      const vars = Array.isArray(t.variables) ? (t.variables as string[]) : [];
+      for (const v of vars) if (!entry.variables.includes(v)) entry.variables.push(v);
+      if (!entry.body && t.body) entry.body = t.body;
+      const sample = Array.isArray(t.variables_sample) ? (t.variables_sample as any[]).map((x) => String(x ?? "")) : [];
+      if (sample.length > entry.variablesSample.length) entry.variablesSample = sample;
+    }
+    map.set(entry.key, entry);
+  }
+
+  // 2. Auto-group remaining templates by stripped-version name
   for (const t of templates) {
+    if (claimed.has(t.id)) continue;
     const key = stripVersion(t.name);
     let entry = map.get(key);
     if (!entry) {
@@ -119,7 +172,6 @@ export function groupLogicalTemplates(templates: Template[]): LogicalTemplate[] 
     const vars = Array.isArray(t.variables) ? (t.variables as string[]) : [];
     for (const v of vars) if (!entry.variables.includes(v)) entry.variables.push(v);
     if (!entry.body && t.body) entry.body = t.body;
-    // Use the longest sample copy across variants (newest variant typically wins).
     const sample = Array.isArray(t.variables_sample) ? (t.variables_sample as any[]).map((x) => String(x ?? "")) : [];
     if (sample.length > entry.variablesSample.length) entry.variablesSample = sample;
   }
