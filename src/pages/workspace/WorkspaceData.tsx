@@ -270,10 +270,17 @@ function PresetsSection({
 
   const submitBatch = async () => {
     if (!creating || !batchName.trim()) { toast.error("Batch name required"); return; }
+    if (!staticOk) { toast.error("Fill in every same-for-everyone variable below"); return; }
     setBusy(true);
     try {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not authenticated");
+      // Persist staticValues so Launch QA can verify each row matches.
+      // Stored in notes field as a header line (no schema change needed).
+      const staticHeader = Object.keys(staticValues).length > 0
+        ? `__static_values__=${JSON.stringify(staticValues)}\n`
+        : "";
+      const finalNotes = `${staticHeader}${batchNotes.trim()}`.trim() || null;
       const { data, error } = await (supabase.from("audience_batches") as any).insert({
         workspace_id: workspaceId,
         user_id: u.user.id,
@@ -281,7 +288,7 @@ function PresetsSection({
         country: batchCountry.trim() || null,
         campaign_type: creating.campaignType,
         copy_profile: creating.id,
-        notes: batchNotes.trim() || null,
+        notes: finalNotes,
         variable_schema: creating.variables.map((v) => v.key),
         source_filename: null,
         prep_profile_id: null,
