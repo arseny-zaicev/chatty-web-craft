@@ -241,15 +241,16 @@ export default function LaunchWizard() {
   const columns = audienceSource === "database" ? (dbBatch?.variable_schema ?? []) : csvColumns;
   const variableNames = activeLogical?.variables ?? [];
 
-  // Auto-map variables to columns. Fills dropdowns automatically; user can still override.
-  // Priority for each variable v (at position i):
-  //   1) exact lowercase match (e.g. "first_name" -> "First_Name")
-  //   2) match against "var_<v>" or strip "var_" prefix and match
-  //   3) if v is numeric, use column "var_<v>" if present
-  //   4) positional fallback: "var_<i+1>" if present
+  // VARIABLE SOURCE PRIORITY (per recipient):
+  //   1) audience column matching var_<n> or variable name        -> per-row (correct)
+  //   2) static value explicitly set by operator in Step 6        -> SAME for everyone
+  //   3) template Gupshup sample (variables_sample)               -> never auto-applied
+  //                                                                  (operator must opt-in)
+  // Anything below #1 means EVERY contact gets the same text -> data prep bug, not a feature.
+  // For Salesforge-style per-row variables prepare the audience batch with var_1..var_N
+  // columns in derived_payload (see prepPresets.ts / prepProfiles.ts).
   useEffect(() => {
     if (!variableNames.length) return;
-    const sample = activeLogical?.variablesSample ?? [];
     setMapping((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -258,22 +259,44 @@ export default function LaunchWizard() {
         const lower = v.toLowerCase();
         const stripped = lower.replace(/^var_/, "");
         const tryCols = [lower, `var_${stripped}`, stripped, `var_${i + 1}`];
-        let matched = false;
         for (const candidate of tryCols) {
           const found = columns.find((c) => c.toLowerCase() === candidate);
-          if (found) { next[v] = found; changed = true; matched = true; break; }
+          if (found) { next[v] = found; changed = true; break; }
         }
-        // Fallback: pre-fill from Gupshup template "Sample" copy when no column matches.
-        // Numeric variables ({1},{2},{3}) usually have no matching column and must
-        // come from the template's sample copy unless the operator overrides.
-        if (!matched && sample[i]) {
-          next[v] = `__static:${sample[i]}`;
-          changed = true;
-        }
+        // NO sample fallback. Numeric vars without a column = explicit operator action.
       });
       return changed ? next : prev;
     });
-  }, [variableNames, columns, activeLogical?.variablesSample]);
+  }, [variableNames, columns]);
+
+  // Classify each variable by data source: per-row column, same-for-all static, or unset.
+  const variableSourceKind = (v: string): "per_row" | "static" | "missing" => {
+    const m = mapping[v];
+    if (!m) return "missing";
+    if (m.startsWith("__static:")) return m.length > "__static:".length ? "static" : "missing";
+    return "per_row";
+  };
+  const sameForEveryoneVars = useMemo(
+    () => variableNames.filter((v) => variableSourceKind(v) === "static"),
+    [variableNames, mapping],
+  );
+
+  // Compute the var_N keys this template needs from the audience batch.
+  const expectedAudienceKeys = useMemo(() => {
+    return variableNames.map((v) => {
+      const lower = v.toLowerCase();
+      if (/^\d+$/.test(v)) return `var_${v}`;
+      return lower.startsWith("var_") ? lower : `var_${lower}`;
+    });
+  }, [variableNames]);
+
+  // For database/csv source: which expected keys are missing from the audience schema?
+  const missingAudienceKeys = useMemo(() => {
+    if (!variableNames.length) return [];
+    if (audienceSource !== "database" && audienceSource !== "upload" && audienceSource !== "paste") return [];
+    const lowerCols = columns.map((c) => c.toLowerCase());
+    return expectedAudienceKeys.filter((k) => !lowerCols.includes(k.toLowerCase()) && !lowerCols.includes(k.replace(/^var_/, "")));
+  }, [expectedAudienceKeys, columns, audienceSource, variableNames.length]);
 
   const mappedRecipients = useMemo(
     () => applyMapping(recipients, mapping, variableNames),
