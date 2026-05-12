@@ -382,22 +382,17 @@ function CampaignDetail({
           </Button>
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
         <Stat label="Total" value={totals.total.toLocaleString()} />
         <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
         <Stat label="Pending" value={totals.pending.toLocaleString()} />
         <Stat label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "bad" : undefined} />
-        <Stat
-          label="Today"
-          value={totals.today > 0 ? totals.today.toLocaleString() : "—"}
-          subtitle={(() => {
-            if (totals.today > 0 && group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) === todayKey) {
-              return `starts ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
-            }
-            if (group.firstScheduledAt) return `next: ${shortDateInTz(group.firstScheduledAt, tz)} ${timeInTz(group.firstScheduledAt, tz)}`;
-            return "not scheduled";
-          })()}
-        />
+      </div>
+      <div className="flex items-center gap-2 mb-3">
+        <ProgressBar value={totals.sent} total={totals.total} className="flex-1" />
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {totals.total > 0 ? Math.round((totals.sent / totals.total) * 100) : 0}%
+        </span>
       </div>
 
       {/* Per-day breakdown */}
