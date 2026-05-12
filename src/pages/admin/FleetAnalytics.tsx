@@ -99,6 +99,7 @@ const fetchAnalytics = async (period: Period) => {
   const numberRows = (numbers ?? []).map((n) => {
     const stats = perNumber.get(n.id) ?? newStats();
     const cap = isActiveStatus(n.status) ? DAILY_CAP_PER_NUMBER * periodDays : 0;
+    const rs = replyByNumber.get(n.id) ?? { sent_convos: 0, replied_convos: 0 };
     return {
       id: n.id,
       phone_number: n.phone_number,
@@ -108,6 +109,8 @@ const fetchAnalytics = async (period: Period) => {
       workspace_id: n.workspace_id,
       workspace_name: n.workspace_id ? (wsMap.get(n.workspace_id)?.name ?? "—") : "Unassigned",
       cap,
+      sent_convos: rs.sent_convos,
+      replied_convos: rs.replied_convos,
       ...stats,
     };
   });
