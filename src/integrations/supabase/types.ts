@@ -2524,6 +2524,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_fleet_reply_stats: {
+        Args: { _since: string }
+        Returns: {
+          replied_convos: number
+          sent_convos: number
+          whatsapp_number_id: string
+          workspace_id: string
+        }[]
+      }
       get_workspace_member_display: {
         Args: { _workspace_id: string }
         Returns: {

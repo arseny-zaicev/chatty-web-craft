@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, ArrowLeft, BarChart3, AlertTriangle, Send, CheckCircle2, Eye, MessageCircle, DollarSign, Gauge } from "lucide-react";
+import { Loader2, ArrowLeft, BarChart3, AlertTriangle, Send, CheckCircle2, Eye, MessageCircle, DollarSign, Gauge, Reply } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -54,7 +54,7 @@ const fetchAnalytics = async (period: Period) => {
   const periodDays = parseInt(period);
   const sinceIso = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }] =
+  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }, { data: replyStats, error: rErr }] =
     await Promise.all([
       supabase.from("whatsapp_message_events")
         .select("whatsapp_number_id, event_type, error_code, error_message, received_at, campaign_recipient_id")
@@ -66,9 +66,17 @@ const fetchAnalytics = async (period: Period) => {
       supabase.from("campaigns").select("id, name, status, total_recipients, sent_count, failed_count, created_at, workspace_id")
         .gte("created_at", sinceIso)
         .order("created_at", { ascending: false }),
+      supabase.rpc("get_fleet_reply_stats", { _since: sinceIso }),
     ]);
 
   if (eErr) throw eErr;
+  if (rErr) console.warn("reply stats error", rErr);
+
+  // Reply stats per number
+  const replyByNumber = new Map<string, { sent_convos: number; replied_convos: number }>();
+  for (const r of (replyStats ?? []) as Array<{ whatsapp_number_id: string; sent_convos: number; replied_convos: number }>) {
+    replyByNumber.set(r.whatsapp_number_id, { sent_convos: r.sent_convos, replied_convos: r.replied_convos });
+  }
 
   const wsMap = new Map((workspaces ?? []).map((w) => [w.id, { name: w.name, rate: Number(w.delivered_rate_usd ?? 0) }]));
   const numberToWs = new Map((numbers ?? []).map((n) => [n.id, n.workspace_id]));
@@ -91,6 +99,7 @@ const fetchAnalytics = async (period: Period) => {
   const numberRows = (numbers ?? []).map((n) => {
     const stats = perNumber.get(n.id) ?? newStats();
     const cap = isActiveStatus(n.status) ? DAILY_CAP_PER_NUMBER * periodDays : 0;
+    const rs = replyByNumber.get(n.id) ?? { sent_convos: 0, replied_convos: 0 };
     return {
       id: n.id,
       phone_number: n.phone_number,
@@ -100,19 +109,21 @@ const fetchAnalytics = async (period: Period) => {
       workspace_id: n.workspace_id,
       workspace_name: n.workspace_id ? (wsMap.get(n.workspace_id)?.name ?? "—") : "Unassigned",
       cap,
+      sent_convos: rs.sent_convos,
+      replied_convos: rs.replied_convos,
       ...stats,
     };
   });
 
   // Per-client aggregation
-  type ClientAgg = { workspace_id: string; name: string; rate: number; numbers: number; activeNumbers: number; cap: number; sent: number; delivered: number; failed: number };
+  type ClientAgg = { workspace_id: string; name: string; rate: number; numbers: number; activeNumbers: number; cap: number; sent: number; delivered: number; failed: number; sent_convos: number; replied_convos: number };
   const perClient = new Map<string, ClientAgg>();
   for (const n of numberRows) {
     if (!n.workspace_id) continue;
     let agg = perClient.get(n.workspace_id);
     if (!agg) {
       const ws = wsMap.get(n.workspace_id);
-      agg = { workspace_id: n.workspace_id, name: ws?.name ?? "—", rate: ws?.rate ?? 0, numbers: 0, activeNumbers: 0, cap: 0, sent: 0, delivered: 0, failed: 0 };
+      agg = { workspace_id: n.workspace_id, name: ws?.name ?? "—", rate: ws?.rate ?? 0, numbers: 0, activeNumbers: 0, cap: 0, sent: 0, delivered: 0, failed: 0, sent_convos: 0, replied_convos: 0 };
       perClient.set(n.workspace_id, agg);
     }
     agg.numbers += 1;
@@ -121,6 +132,8 @@ const fetchAnalytics = async (period: Period) => {
     agg.sent += n.sent;
     agg.delivered += n.delivered;
     agg.failed += n.failed;
+    agg.sent_convos += n.sent_convos;
+    agg.replied_convos += n.replied_convos;
   }
   const clientRows = Array.from(perClient.values()).sort((a, b) => (b.delivered * b.rate) - (a.delivered * a.rate));
 
@@ -138,6 +151,13 @@ const fetchAnalytics = async (period: Period) => {
     }
     else if (e.event_type === "read") totRead += 1;
     else if (e.event_type === "failed" || e.event_type === "error") totFailed += 1;
+  }
+
+  // Total reply stats (real conversations-based)
+  let totSentConvos = 0, totRepliedConvos = 0;
+  for (const r of (replyStats ?? []) as Array<{ sent_convos: number; replied_convos: number }>) {
+    totSentConvos += r.sent_convos;
+    totRepliedConvos += r.replied_convos;
   }
 
   const totalCap = numberRows.reduce((s, n) => s + n.cap, 0);
@@ -173,7 +193,7 @@ const fetchAnalytics = async (period: Period) => {
   }));
 
   return {
-    totals: { sent: totSent, delivered: totDelivered, read: totRead, failed: totFailed, activeNumbers, capacity: totalCap, revenue: totRevenue },
+    totals: { sent: totSent, delivered: totDelivered, read: totRead, failed: totFailed, activeNumbers, capacity: totalCap, revenue: totRevenue, sent_convos: totSentConvos, replied_convos: totRepliedConvos },
     numbers: numberRows.sort((a, b) => b.sent - a.sent),
     clients: clientRows,
     topErrors,
@@ -245,12 +265,13 @@ export default function FleetAnalytics() {
 
       <main className="container mx-auto px-4 py-6 space-y-6">
         {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <KpiCard icon={<Gauge className="w-4 h-4 text-muted-foreground" />} label="Capacity" value={t.capacity.toLocaleString()} sub={`${t.activeNumbers} active × ${DAILY_CAP_PER_NUMBER} × ${period === "1" ? "1d" : period + "d"}`} />
           <KpiCard icon={<Send className="w-4 h-4" />} label="Sent" value={t.sent.toLocaleString()} sub={`${pct(t.sent, t.capacity)}% of capacity`} />
           <KpiCard icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} label="Delivered" value={t.delivered.toLocaleString()} sub={`${pct(t.delivered, t.sent)}% of sent`} />
           <KpiCard icon={<AlertTriangle className="w-4 h-4 text-red-600" />} label="Failed" value={t.failed.toLocaleString()} sub={`${pct(t.failed, t.sent + t.failed)}% fail rate`} />
           <KpiCard icon={<Eye className="w-4 h-4 text-sky-600" />} label="Read" value={t.read.toLocaleString()} sub={`${pct(t.read, t.delivered)}% of delivered`} />
+          <KpiCard icon={<Reply className="w-4 h-4 text-violet-600" />} label="Reply rate" value={t.sent_convos > 0 ? `${pct(t.replied_convos, t.sent_convos)}%` : "—"} sub={`${t.replied_convos.toLocaleString()} of ${t.sent_convos.toLocaleString()} chats`} />
           <KpiCard icon={<DollarSign className="w-4 h-4 text-amber-600" />} label="Revenue" value={fmtMoney(t.revenue)} sub={`delivered × client rate (${periodLabel})`} />
         </div>
 
@@ -290,6 +311,7 @@ export default function FleetAnalytics() {
                   <TableHead className="text-right">Delivered</TableHead>
                   <TableHead className="text-right">Failed</TableHead>
                   <TableHead className="text-right">Deliv%</TableHead>
+                  <TableHead className="text-right">Reply%</TableHead>
                   <TableHead className="text-right">Rate</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
                 </TableRow>
@@ -304,12 +326,15 @@ export default function FleetAnalytics() {
                     <TableCell className="text-xs text-right tabular-nums font-medium text-emerald-700">{c.delivered.toLocaleString()}</TableCell>
                     <TableCell className={`text-xs text-right tabular-nums ${c.failed > 0 ? "text-red-600" : ""}`}>{c.failed.toLocaleString()}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{c.sent > 0 ? `${pct(c.delivered, c.sent)}%` : "—"}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums font-medium text-violet-700" title={`${c.replied_convos}/${c.sent_convos} chats`}>
+                      {c.sent_convos > 0 ? `${pct(c.replied_convos, c.sent_convos)}%` : "—"}
+                    </TableCell>
                     <TableCell className="text-xs text-right tabular-nums text-muted-foreground">{c.rate > 0 ? fmtMoney(c.rate) : "—"}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums font-semibold">{fmtMoney(c.delivered * c.rate)}</TableCell>
                   </TableRow>
                 ))}
                 {data!.clients.length === 0 && (
-                  <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-6">No clients with numbers yet.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-xs text-muted-foreground py-6">No clients with numbers yet.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -352,6 +377,7 @@ export default function FleetAnalytics() {
                     <TableHead className="text-right">Used%</TableHead>
                     <TableHead className="text-right">Deliv</TableHead>
                     <TableHead className="text-right">Fail%</TableHead>
+                    <TableHead className="text-right">Reply%</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -367,13 +393,16 @@ export default function FleetAnalytics() {
                       <TableCell className={`text-xs text-right tabular-nums ${pct(n.failed, n.sent + n.failed) > 5 ? "text-red-600 font-medium" : ""}`}>
                         {(n.sent + n.failed) > 0 ? `${pct(n.failed, n.sent + n.failed)}%` : "—"}
                       </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-medium text-violet-700" title={`${n.replied_convos}/${n.sent_convos} chats`}>
+                        {n.sent_convos > 0 ? `${pct(n.replied_convos, n.sent_convos)}%` : "—"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-[10px]">{n.status}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
                   {data!.numbers.length === 0 && (
-                    <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-6">No data yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-6">No data yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
