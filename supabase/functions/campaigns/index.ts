@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildTemplateParams,
+  renderTemplateBody as sharedRenderTemplateBody,
+  validateTemplateForLaunch,
+} from "../_shared/template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -794,13 +799,8 @@ async function sendTemplate(_admin: any, recipient: any) {
   const destination = String(recipient.contact_phone || "").replace(/[^\d]/g, "");
   const srcName = number.display_name ?? null;
 
-  const variableNames = Array.isArray(template.variables) ? template.variables : [];
-  const params = variableNames.map((key: string, idx: number) => {
-    const raw = String(recipient.variables?.[key] ?? "").trim();
-    // WhatsApp rejects empty params (#131008). First variable (recipient name) → "there"; others → " ".
-    if (raw) return raw;
-    return idx === 0 ? "there" : " ";
-  });
+  // Single source of truth - see supabase/functions/_shared/template.ts
+  const params = buildTemplateParams(template, recipient.variables);
   const templateId = template.provider_template_id || template.name;
 
   // First attempt: stored key directly (same as inbox)
@@ -824,20 +824,8 @@ async function sendTemplate(_admin: any, recipient: any) {
   return payload;
 }
 
-function renderTemplateBody(body: string | null | undefined, variableNames: string[], values: Record<string, unknown> | undefined | null): string {
-  if (!body) return "";
-  let out = String(body);
-  // Positional {{1}}, {{2}}, ... mapped to variableNames order
-  variableNames.forEach((name, idx) => {
-    const raw = String((values ?? {})[name] ?? "").trim();
-    // Fallback: first variable (typically the recipient name) → "there".
-    const v = raw || (idx === 0 ? "there" : "");
-    out = out.replaceAll(`{{${idx + 1}}}`, v);
-    out = out.replaceAll(`{${name}}`, v);
-    out = out.replaceAll(`{{${name}}}`, v);
-  });
-  return out;
-}
+// Single source of truth - see supabase/functions/_shared/template.ts
+const renderTemplateBody = sharedRenderTemplateBody;
 
 async function ensureCampaignConversation(admin: any, recipient: any): Promise<string | null> {
   const number = recipient.campaigns?.whatsapp_numbers;
