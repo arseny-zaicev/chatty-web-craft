@@ -1343,6 +1343,14 @@ export default function LaunchWizard() {
               <p className="text-sm text-muted-foreground">Add recipients to preview the rendered message.</p>
             ) : (
               <div className="space-y-2">
+                {unmappedVars.length > 0 && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <b>Map variables before launch.</b> {unmappedVars.length} variable(s) unmapped: {unmappedVars.map((v) => `{${v}}`).join(" ")}. Scroll up to Step 6 (Variable mapping) and pick a column or set a static value.
+                    </div>
+                  </div>
+                )}
                 {previewSamples.map((s, i) => (
                   <div key={i} className="rounded-md border border-border bg-card/30 p-3">
                     <div className="flex items-center justify-between mb-1.5">
