@@ -502,6 +502,41 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const { error: recipientsError } = await admin.from("campaign_recipients").insert(rows);
   if (recipientsError) return json({ error: recipientsError.message }, 500);
 
+  // ------- Compute today_count + first_scheduled_at in recipient TZ -------
+  const recipientTz = recipientCountry ? (COUNTRY_TZ[recipientCountry] ?? "UTC") : "UTC";
+  const firstScheduledAtIso = rows.length > 0 ? rows[0].scheduled_at : new Date().toISOString();
+  const todayKey = (() => {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: recipientTz }).format(new Date()); }
+    catch { return new Date().toISOString().slice(0, 10); }
+  })();
+  let todayCount = 0;
+  for (const r of rows) {
+    let key: string;
+    try { key = new Intl.DateTimeFormat("en-CA", { timeZone: recipientTz }).format(new Date(r.scheduled_at)); }
+    catch { key = String(r.scheduled_at).slice(0, 10); }
+    if (key === todayKey) todayCount++;
+  }
+
+  // Decide initial visible status:
+  //   - first send is within ~2 minutes -> running (worker will pick up immediately)
+  //   - else -> scheduled (worker will promote to running ~60s before first send)
+  const firstMs = new Date(firstScheduledAtIso).getTime();
+  const initialStatus = firstMs <= Date.now() + 120_000 ? "running" : "scheduled";
+
+  // Promote draft -> scheduled/running. This single UPDATE fires the Slack
+  // trigger with today_recipients_count, first_scheduled_at, recipient_country
+  // already populated.
+  const { error: promoteErr } = await admin
+    .from("campaigns")
+    .update({
+      status: initialStatus,
+      scheduled_start_at: firstScheduledAtIso,
+      first_scheduled_at: firstScheduledAtIso,
+      today_recipients_count: todayCount,
+    })
+    .eq("id", campaign.id);
+  if (promoteErr) return json({ error: promoteErr.message }, 500);
+
   let immediate: any = null;
   if (scheduledDates.length === 0 && minDelay === 0 && maxDelay === 0) {
     await admin.from("campaign_recipients")
@@ -516,7 +551,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   }
 
   // Slack notification handled by DB trigger on campaigns.status change.
-  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate });
+  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate, initial_status: initialStatus });
 }
 
 async function upsertTemplate(admin: any, requesterId: string, body: any) {
