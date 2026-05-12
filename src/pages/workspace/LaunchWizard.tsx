@@ -1112,7 +1112,7 @@ export default function LaunchWizard() {
 
               {/* Recipient region clock */}
               {recipientTz && recipientNow && (
-                <div className={`text-[11px] flex items-center gap-2 px-2 py-1.5 rounded-md border ${inWindow ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500"}`}>
+                <div className={`text-[11px] flex items-center gap-2 px-2 py-1.5 rounded-md border ${isMarketing ? "border-border/60 bg-muted/20 text-muted-foreground" : inWindow ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500"}`}>
                   <span className="font-mono font-semibold">{recipientNow}</span>
                   <span className="opacity-70">in {poolCountry} ({recipientTz.split("/")[1].replace("_", " ")})</span>
                   <span className="ml-auto">{isMarketing ? `launches at ${windowStart}` : (inWindow ? `✓ inside ${windowStart}-${windowEnd}` : `outside ${windowStart}-${windowEnd}`)}</span>
