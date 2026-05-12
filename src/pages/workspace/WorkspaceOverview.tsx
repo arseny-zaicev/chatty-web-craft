@@ -35,6 +35,17 @@ export default function WorkspaceOverview() {
     enabled: Boolean(workspace),
     staleTime: 30_000,
   });
+  const { data: campaignRows = [] } = useQuery({
+    queryKey: ["campaigns", "summaries", workspace?.id ?? ""],
+    queryFn: () => fetchCampaignSummaries(workspace!.id),
+    enabled: Boolean(workspace),
+    staleTime: 30_000,
+  });
+  const activeGroup = useMemo(() => {
+    const groups = groupCampaigns(campaignRows as CampaignRow[]);
+    const active = groups.filter((g) => g.status === "running" || g.status === "scheduled" || g.status === "paused");
+    return active[0] ?? null;
+  }, [campaignRows]);
 
   if (!workspace) return <div className="p-6 text-sm text-muted-foreground">Pick a client.</div>;
   if (isLoading || !data) {
