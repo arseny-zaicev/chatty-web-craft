@@ -82,6 +82,33 @@ export const PREP_PRESETS: PrepPreset[] = [
     optionalSourceFields: ["city"],
     variables: [{ key: "var_1", description: "First name", example: "Layla" }],
   },
+  {
+    id: "marketing_per_row_2",
+    name: "Marketing Per-Row - 2 vars",
+    campaignType: "marketing",
+    blurb: "First name + 1 unique per-contact line. Required for 2-placeholder marketing templates.",
+    recommendedFor: "Marketing templates with {{1}} name + {{2}} per-contact context (industry, product, pain point).",
+    requiredSourceFields: ["phone", "first_name", "context"],
+    optionalSourceFields: ["company", "industry"],
+    variables: [
+      { key: "var_1", description: "First name", example: "Mark" },
+      { key: "var_2", description: "Per-contact context line (UNIQUE per row, NEVER constant)", example: "retail channel expansion opportunities" },
+    ],
+  },
+  {
+    id: "marketing_per_row_3",
+    name: "Marketing Per-Row - 3 vars",
+    campaignType: "marketing",
+    blurb: "First name + 2 unique per-contact lines. Required for 3-placeholder marketing templates (e.g. goflow, FB Marketing).",
+    recommendedFor: "Marketing templates with {{1}} name + {{2}} short context + {{3}} long pitch sentence.",
+    requiredSourceFields: ["phone", "first_name", "context", "pitch"],
+    optionalSourceFields: ["company", "industry"],
+    variables: [
+      { key: "var_1", description: "First name", example: "Mark" },
+      { key: "var_2", description: "Short per-contact context (UNIQUE per row)", example: "retail channel expansion opportunities" },
+      { key: "var_3", description: "Long per-contact pitch sentence (UNIQUE per row)", example: "We have a few exclusive partnership opportunities with Amazon, Walmart, Target, and Macy's, and I wanted to see if it may be worth exploring if your products are a fit." },
+    ],
+  },
 ];
 
 export const getPresetById = (id: string) => PREP_PRESETS.find((p) => p.id === id) ?? null;
