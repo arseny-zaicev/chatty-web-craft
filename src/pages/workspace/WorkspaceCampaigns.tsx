@@ -232,6 +232,31 @@ function CampaignDetail({
   const tzLabel = tzInfo(group.recipientCountry).label;
   const [showRecipients, setShowRecipients] = useState(false);
   const [showAllDays, setShowAllDays] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const callAction = async (
+    action: "pause" | "resume" | "cancel" | "redistribute",
+    extra?: Record<string, unknown>,
+  ) => {
+    setBusy(action);
+    try {
+      const { data, error } = await supabase.functions.invoke("campaigns", {
+        body: { action, campaign_ids: campaignIds, ...extra },
+      });
+      if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
+      const verbs: Record<string, string> = {
+        pause: "Paused", resume: "Resumed", cancel: "Cancelled", redistribute: "Re-balanced",
+      };
+      toast.success(`${verbs[action]} ${campaignIds.length > 1 ? `${campaignIds.length} campaigns` : "campaign"}`);
+      qc.invalidateQueries({ queryKey: ["campaigns", "summaries"] });
+      qc.invalidateQueries({ queryKey: ["campaign-recipients-lite", group.key] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const { data: liteRows, isLoading: liteLoading } = useQuery({
     queryKey: ["campaign-recipients-lite", group.key, campaignIds.join(",")],
@@ -271,6 +296,10 @@ function CampaignDetail({
     const n = numberById.get(c.whatsapp_number_id);
     return n ? (n.label ?? `+${n.phone_number}`) : "—";
   };
+
+  const isActive = group.status === "running" || group.status === "scheduled";
+  const isPaused = group.status === "paused";
+  const isTerminal = group.status === "completed" || group.status === "cancelled" || group.status === "failed";
 
   return (
     <div className="px-4 pb-4 pt-2 bg-background/40">
