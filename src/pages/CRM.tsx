@@ -887,11 +887,20 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                                 isOut ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}
                             >
-                              <span>
-                                {new Date(m.created_at).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                              <span title={new Date(m.created_at).toLocaleString()}>
+                                {(() => {
+                                  const d = new Date(m.created_at);
+                                  const now = new Date();
+                                  const sameDay = d.toDateString() === now.toDateString();
+                                  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+                                  const isYesterday = d.toDateString() === yest.toDateString();
+                                  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                                  if (sameDay) return time;
+                                  if (isYesterday) return `Yesterday, ${time}`;
+                                  const sameYear = d.getFullYear() === now.getFullYear();
+                                  const datePart = d.toLocaleDateString([], sameYear ? { day: "2-digit", month: "short" } : { day: "2-digit", month: "short", year: "numeric" });
+                                  return `${datePart}, ${time}`;
+                                })()}
                               </span>
                               {isOut && m.sent_by_user_id && (
                                 <span className="opacity-90">
