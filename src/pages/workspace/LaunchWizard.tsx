@@ -498,11 +498,11 @@ export default function LaunchWizard() {
       ? Math.max(1, scheduledDates.length || 1)
       : Math.max(1, Math.ceil(total / dailyCap)); // "now" mode: derive days from cap
     const idealPerDay = Math.ceil(total / daysSelected);
-    // Marketing Blast: send dailyCap each day, last day = remainder. No smoothing.
-    // Utility: smooth across selected days, but never exceed dailyCap.
-    const effectivePerDay = isMarketing ? Math.min(total, dailyCap) : Math.min(idealPerDay, dailyCap);
+    // Always run at full cap (numbers × per-number quota); last day = remainder.
+    // No smoothing - if user set 200/number, we send 200/number/day, period.
+    const effectivePerDay = Math.min(total, dailyCap);
     const daysNeeded = Math.max(1, Math.ceil(total / dailyCap));
-    const lastDay = isMarketing ? (total - dailyCap * (daysNeeded - 1)) : effectivePerDay;
+    const lastDay = total - dailyCap * (daysNeeded - 1);
     const capExceeded = scheduleMode === "scheduled" && idealPerDay > dailyCap;
     const overflowToday = Math.max(0, total - effectivePerDay);
     return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, lastDay, capExceeded, overflowToday };
