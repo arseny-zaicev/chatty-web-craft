@@ -329,8 +329,16 @@ function PresetsSection({
               {p.isRecommended && <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30" variant="outline">Recommended</Badge>}
             </div>
             <div className="text-[11px] text-muted-foreground mt-1">{p.blurb}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">
-              vars: {p.variables.map((v) => v.key).join(", ")} · required: {p.requiredSourceFields.join(", ")}
+            <div className="text-[11px] text-muted-foreground mt-1 space-y-0.5">
+              {p.variables.map((v) => (
+                <div key={v.key}>
+                  <span className="font-mono">{v.key}</span>{" "}
+                  {v.kind === "per_row"
+                    ? <span className="text-emerald-600">[per row]</span>
+                    : <span className="text-rose-600">[same for everyone]</span>}{" "}
+                  <span className="opacity-70">- {v.description}</span>
+                </div>
+              ))}
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>
