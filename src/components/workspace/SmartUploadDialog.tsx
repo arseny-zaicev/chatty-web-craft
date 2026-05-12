@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import {
   audienceKeys, parseAudienceFile, detectPhoneColumn, uploadBatch, type ParsedAudience,
 } from "@/lib/audienceData";
-import { prepProfileKeys, listPrepProfiles, type PrepProfile } from "@/lib/prepProfiles";
+import { fetchLaunchEssentials, type Template } from "@/lib/launchData";
 
 type AnalyzeResult = {
   column_mapping: Record<string, string>;
@@ -40,14 +40,29 @@ export function SmartUploadDialog({
   onUploaded: () => void;
 }) {
   const qc = useQueryClient();
-  const profilesQ = useQuery({
-    queryKey: prepProfileKeys.list(workspaceId),
-    queryFn: () => listPrepProfiles(workspaceId),
+
+  const tplQ = useQuery({
+    queryKey: ["smart-upload-templates", workspaceId],
+    queryFn: () => fetchLaunchEssentials(workspaceId),
     enabled: open,
   });
 
+  // Group templates by name (logical template across number variants)
+  const templateOptions = useMemo(() => {
+    const all = (tplQ.data?.templates ?? []) as Template[];
+    const map = new Map<string, { name: string; category: string; ids: string[]; vars: string[]; body: string | null }>();
+    for (const t of all) {
+      const key = t.name;
+      const e = map.get(key) ?? { name: t.name, category: t.category ?? "marketing", ids: [], vars: (t.variables as string[] | null) ?? [], body: t.body };
+      e.ids.push(t.id);
+      map.set(key, e);
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [tplQ.data]);
+
   const [step, setStep] = useState<Step>("input");
-  const [profileId, setProfileId] = useState<string>("");
+  const [campaignType, setCampaignType] = useState<"marketing" | "utility">("marketing");
+  const [templateName, setTemplateName] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedAudience | null>(null);
   const [pastedCopy, setPastedCopy] = useState("");
@@ -58,16 +73,15 @@ export function SmartUploadDialog({
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
   const [phoneColumn, setPhoneColumn] = useState<string>("");
-  // Editable mapping (sourceColumn -> profile field)
   const [mapping, setMapping] = useState<Record<string, string>>({});
 
-  const profile: PrepProfile | null = useMemo(() => {
-    return (profilesQ.data ?? []).find((p) => p.id === profileId) ?? null;
-  }, [profilesQ.data, profileId]);
+  const selectedTpl = templateOptions.find((t) => t.name === templateName) ?? null;
+  const expectedFields = selectedTpl?.vars ?? [];
 
   const reset = () => {
     setStep("input");
-    setProfileId("");
+    setCampaignType("marketing");
+    setTemplateName("");
     setFile(null);
     setParsed(null);
     setPastedCopy("");
@@ -107,11 +121,13 @@ export function SmartUploadDialog({
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           workspace_id: workspaceId,
-          prep_profile_id: profileId || null,
           parsed_rows: parsed.rows.slice(0, 150),
           all_headers: parsed.headers,
           user_hint: hint.trim() || null,
           pasted_copy: pastedCopy.trim() || null,
+          preferred_template_name: templateName || null,
+          preferred_template_vars: expectedFields,
+          campaign_type: campaignType,
         }),
       });
       const json = await resp.json();
@@ -122,10 +138,8 @@ export function SmartUploadDialog({
       const r = json as AnalyzeResult;
       setResult(r);
       setName(r.suggested_name);
-      // Detect dominant country from distribution
       const top = Object.entries(r.country_distribution ?? {}).sort((a, b) => b[1] - a[1])[0];
       if (top && top[0] !== "??") setCountry(top[0]);
-      // Seed mapping (only entries where source column exists)
       const seeded: Record<string, string> = {};
       for (const [src, dest] of Object.entries(r.column_mapping ?? {})) {
         if (parsed.headers.includes(src) && dest) seeded[src] = dest;
@@ -140,8 +154,8 @@ export function SmartUploadDialog({
   };
 
   const confirm = async () => {
-    if (!parsed || !phoneColumn || !name.trim() || !profile) {
-      toast.error("Pick a prep profile, phone column and a name");
+    if (!parsed || !phoneColumn || !name.trim()) {
+      toast.error("Pick phone column and a name");
       return;
     }
     setConfirming(true);
@@ -153,13 +167,13 @@ export function SmartUploadDialog({
         userId: u.user.id,
         name: name.trim(),
         country: country.trim() || null,
-        campaignType: profile.campaign_type,
-        copyProfile: result?.matched_template_name ?? profile.template_label ?? null,
-        notes: buildNotes(result, hint),
+        campaignType,
+        copyProfile: result?.matched_template_name ?? templateName ?? null,
+        notes: buildNotes(result, hint, templateName),
         parsed,
         phoneColumn,
         sourceFilename: file?.name ?? null,
-        prepProfile: profile,
+        prepProfile: null,
         columnMapping: mapping,
       });
       toast.success(`Saved ${r.summary.valid} valid · ${r.summary.invalid} invalid · ${r.summary.duplicates} dupes`);
@@ -175,11 +189,10 @@ export function SmartUploadDialog({
     }
   };
 
-  // ---- input step
   const sourceColumns = parsed ? parsed.headers.filter((h) => h !== phoneColumn) : [];
-  const expectedFields = profile
-    ? Array.from(new Set([...profile.required_fields, ...profile.optional_fields]))
-    : [];
+  // Mapping options: known template vars + a few generic canonical fields
+  const genericFields = ["first_name", "last_name", "city", "company", "email"];
+  const mappingTargets = Array.from(new Set([...expectedFields, ...genericFields]));
 
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
@@ -189,28 +202,46 @@ export function SmartUploadDialog({
             <Sparkles className="w-4 h-4 text-primary" /> Smart upload (AI)
           </DialogTitle>
           <DialogDescription>
-            Drop a file, optionally paste the message copy, AI proposes a mapping. You always confirm before anything is saved.
+            Pick the template variant, paste the copy, drop the file. AI proposes the mapping. You always confirm before anything is saved.
           </DialogDescription>
         </DialogHeader>
 
         {step === "input" && (
           <div className="space-y-4">
-            <div>
-              <label className="text-xs text-muted-foreground">Prep profile *</label>
-              <Select value={profileId} onValueChange={setProfileId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={(profilesQ.data?.length ?? 0) === 0 ? "Create a profile first in Prep Profiles" : "Pick a prep profile"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(profilesQ.data ?? []).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name} ({p.campaign_type})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {profile?.template_label && (
-                <p className="text-[11px] text-muted-foreground mt-1">Template: <code>{profile.template_label}</code></p>
-              )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Type *</label>
+                <Select value={campaignType} onValueChange={(v) => setCampaignType(v as "marketing" | "utility")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="marketing">Marketing</SelectItem>
+                    <SelectItem value="utility">Utility</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Template (optional)</label>
+                <Select value={templateName || "__none"} onValueChange={(v) => setTemplateName(v === "__none" ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pick template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— none / let AI decide —</SelectItem>
+                    {templateOptions
+                      .filter((t) => !campaignType || t.category?.toLowerCase() === campaignType)
+                      .map((t) => (
+                        <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {selectedTpl && expectedFields.length > 0 && (
+              <div className="text-[11px] text-muted-foreground">
+                Variables: {expectedFields.map((v) => <code key={v} className="mr-1">{v}</code>)}
+              </div>
+            )}
 
             <div>
               <label className="text-xs text-muted-foreground">File (CSV / XLSX / TSV)</label>
@@ -233,27 +264,28 @@ export function SmartUploadDialog({
                 rows={3}
                 value={pastedCopy}
                 onChange={(e) => setPastedCopy(e.target.value)}
-                placeholder="Paste the WhatsApp message body — AI will try to match it to one of your approved templates."
+                placeholder="Paste the WhatsApp copy. AI will use it to confirm the template match and figure out which columns fill {{1}}, {{2}}…"
               />
             </div>
 
             <div>
-              <label className="text-xs text-muted-foreground">Extra hint (optional)</label>
-              <Input
+              <label className="text-xs text-muted-foreground">Instructions for AI (optional)</label>
+              <Textarea
+                rows={3}
                 value={hint}
                 onChange={(e) => setHint(e.target.value)}
-                placeholder="e.g. only AE numbers, dedupe vs last week"
+                placeholder={`e.g.\n- only AE numbers, drop the rest\n- "Имя" -> first_name, capitalize\n- city = Dubai for everyone`}
               />
             </div>
 
             <div className="rounded-md bg-muted/30 border border-border p-2 text-[11px] text-muted-foreground">
               <Wand2 className="w-3 h-3 inline mr-1" />
-              AI gets the first 30 rows + headers + your hint. Phones, dedup and validation happen locally.
+              AI gets the first 30 rows + headers + your instructions. Phones, dedup and validation happen locally.
             </div>
           </div>
         )}
 
-        {step === "preview" && result && parsed && profile && (
+        {step === "preview" && result && parsed && (
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm space-y-1">
               <div className="flex items-center gap-1.5 font-medium">
@@ -300,7 +332,7 @@ export function SmartUploadDialog({
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Type</label>
-                <div className="h-9 flex items-center"><Badge variant="outline" className="text-[10px]">{profile.campaign_type}</Badge></div>
+                <div className="h-9 flex items-center"><Badge variant="outline" className="text-[10px]">{campaignType}</Badge></div>
               </div>
             </div>
 
@@ -322,15 +354,18 @@ export function SmartUploadDialog({
                         <SelectTrigger className="col-span-6 h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__same">(keep as &quot;{src}&quot;)</SelectItem>
-                          {expectedFields.map((f) => {
-                            const required = profile.required_fields.includes(f);
-                            return <SelectItem key={f} value={f}>{f}{required ? " *" : ""}</SelectItem>;
+                          {mappingTargets.map((f) => {
+                            const fromTpl = expectedFields.includes(f);
+                            return <SelectItem key={f} value={f}>{f}{fromTpl ? " ★" : ""}</SelectItem>;
                           })}
                         </SelectContent>
                       </Select>
                     </div>
                   ))}
                 </div>
+                {expectedFields.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground">★ = variable expected by selected template</p>
+                )}
               </div>
             )}
           </div>
@@ -340,7 +375,7 @@ export function SmartUploadDialog({
           {step === "input" && (
             <>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={analyze} disabled={analyzing || !parsed || !profileId}>
+              <Button onClick={analyze} disabled={analyzing || !parsed}>
                 {analyzing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
                 Analyze with AI
               </Button>
@@ -361,10 +396,11 @@ export function SmartUploadDialog({
   );
 }
 
-function buildNotes(result: AnalyzeResult | null, hint: string): string | null {
+function buildNotes(result: AnalyzeResult | null, hint: string, templateName: string): string | null {
   const parts: string[] = [];
+  if (templateName) parts.push(`template: ${templateName}`);
   if (hint.trim()) parts.push(`hint: ${hint.trim()}`);
-  if (result?.matched_template_name) {
+  if (result?.matched_template_name && result.matched_template_name !== templateName) {
     parts.push(`ai-template: ${result.matched_template_name} (${Math.round(result.matched_template_confidence * 100)}%)`);
   }
   if (result && Object.keys(result.static_values).length > 0) {
