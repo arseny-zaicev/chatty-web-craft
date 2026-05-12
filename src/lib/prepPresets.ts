@@ -213,10 +213,14 @@ WORKFLOW FOR CODEX
   4. Produce the JSON array.
   5. Insert the rows into public.audience_rows for the workspace_id and batch_id above.
   6. Print the expected counts so the operator can refresh the Data page and launch.
+  7. SANITY CHECK before insert: for var_2 and above, count distinct values.
+     If distinct < 0.3 * total_valid -- print a warning and STOP. Do not insert.
+     The operator must provide more varied per-row data.
 
 DO NOT
   - ask the operator to map columns manually
   - invent values that are not present in the input
   - include rows that fail validation
-  - re-use phones already marked "used" in this workspace`;
+  - re-use phones already marked "used" in this workspace
+  - copy the template "Sample" text into every row -- that defeats the per-row variable system`;
 }
