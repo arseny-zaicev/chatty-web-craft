@@ -900,7 +900,16 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                                 isOut ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}
                             >
-                              <span title={new Date(m.created_at).toLocaleString()}>
+                              <span
+                                title={(() => {
+                                  const d = new Date(m.created_at);
+                                  const youLocal = d.toLocaleString();
+                                  const contact = formatLocalTimeForPhone(active.contact_phone, d);
+                                  return contact
+                                    ? `Your time: ${youLocal}\nContact local: ${contact.time} (${contact.tz}, ${contact.offset})`
+                                    : youLocal;
+                                })()}
+                              >
                                 {(() => {
                                   const d = new Date(m.created_at);
                                   const now = new Date();
