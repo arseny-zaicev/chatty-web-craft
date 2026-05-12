@@ -74,6 +74,12 @@ const SellerLeads = () => {
         />
         <meta name="keywords" content="Dubai seller leads, property leads Dubai, real estate leads UAE, off-market sellers Dubai, property owner database, motivated sellers Dubai" />
         <link rel="canonical" href="https://iskra.ae/seller-leads" />
+        <meta property="og:title" content="Dubai Seller Leads | ISKRA - Property Owner Database 220K+" />
+        <meta property="og:description" content="Access Dubai's largest property owner database with 220K+ contacts. WhatsApp-verified, 85% accuracy. 150 AED per lead." />
+        <meta property="og:url" content="https://iskra.ae/seller-leads" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Dubai Seller Leads | ISKRA" />
+        <meta name="twitter:description" content="Dubai property owner database with 220K+ WhatsApp-verified contacts. 150 AED per lead." />
         
         {/* Product Schema for Seller Leads */}
         <script type="application/ld+json">
