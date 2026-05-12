@@ -36,7 +36,8 @@ type Section =
   | "forms.submissions"
   | "forms.analytics"
   | "site.analytics"
-  | "internal.roadmap";
+  | "internal.roadmap"
+  | "internal.assistant";
 
 type NavGroup = {
   id: string;
