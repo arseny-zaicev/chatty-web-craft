@@ -1039,8 +1039,63 @@ export default function LaunchWizard() {
           </Step>
 
 
-          {/* Step 4: Audience */}
-          <Step n={4} icon={Users} title="Audience">
+          {/* Step 4: Pipeline & automations (optional) */}
+          {(() => {
+            const activePipeline = pipelines.find((p) => p.id === pipelineId) ?? null;
+            return (
+              <Step
+                n={4}
+                icon={SettingsIcon}
+                title="Pipeline & automations"
+                right={
+                  <Badge variant="outline" className="text-[10px]">optional</Badge>
+                }
+              >
+                <Field label="Pipeline (board where replies will land)">
+                  <div className="flex gap-2">
+                    <Select value={pipelineId} onValueChange={setPipelineId}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Pick a pipeline" /></SelectTrigger>
+                      <SelectContent>
+                        {pipelines.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                              {p.name}{p.is_default && <span className="text-[10px] text-muted-foreground">(default)</span>}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => setShowCreatePipeline(true)}>
+                      <Plus className="w-3.5 h-3.5 mr-1" />New
+                    </Button>
+                  </div>
+                </Field>
+                {activePipeline && (
+                  <div className="mt-2 rounded-md border border-border bg-card/30 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted-foreground">Current pipeline defaults</div>
+                      <Button variant="outline" size="sm" onClick={() => setPipelineConfigOpen(true)}>
+                        <SettingsIcon className="w-3.5 h-3.5 mr-1" />Edit pipeline config
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                      <div className="flex justify-between"><span className="text-muted-foreground">Auto-outreach</span><span className="font-medium">{activePipeline.auto_outreach_enabled ? "on" : "off"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Slack channel</span><span className="font-medium truncate ml-2">{activePipeline.slack_channel_id ? "linked" : "—"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Daily cap</span><span className="font-medium">{activePipeline.daily_cap ?? "—"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Window</span><span className="font-medium">{(activePipeline.sending_window?.start ?? "09:00")}-{(activePipeline.sending_window?.end ?? "18:00")}</span></div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                      Replies on this campaign auto-create cards on this pipeline. Stage automations &amp; Slack pings live in the pipeline config above.
+                    </p>
+                  </div>
+                )}
+              </Step>
+            );
+          })()}
+
+          {/* Step 5: Audience */}
+          <Step n={5} icon={Users} title="Audience">
             <Tabs value={audienceSource} onValueChange={(v) => setAudienceSource(v as any)}>
               <TabsList className="grid grid-cols-5 w-full">
                 <TabsTrigger value="paste"><FileText className="w-3.5 h-3.5 mr-1" />Paste</TabsTrigger>
