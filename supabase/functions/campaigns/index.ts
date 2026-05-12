@@ -122,6 +122,8 @@ function parseGupshupExample(raw: any, varCount: number): string[] {
   }
   return [];
 }
+
+async function resolveGupshupSendToken(appId: string | null | undefined, configuredToken: string) {
   if (!appId) return configuredToken;
   const appToken = await getGupshupAppToken(appId, configuredToken);
   return appToken.token || configuredToken;
