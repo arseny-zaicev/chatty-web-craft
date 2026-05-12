@@ -1541,10 +1541,21 @@ export default function LaunchWizard() {
               {sameForEveryoneVars.length} variable(s) static (same for everyone): {sameForEveryoneVars.map((v) => `{${v}}`).join(" ")}.
             </div>
           )}
+          {staticQaIssues.length > 0 && (
+            <div className="text-xs text-rose-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <div>
+                <b>Audience data quality:</b>
+                <ul className="list-disc pl-4 mt-0.5">
+                  {staticQaIssues.map((i) => <li key={i.key}><span className="font-mono">{i.key}</span>: {i.reason}</li>)}
+                </ul>
+              </div>
+            </div>
+          )}
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0 || staticQaIssues.length > 0}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
