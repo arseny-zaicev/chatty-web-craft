@@ -116,14 +116,14 @@ const fetchAnalytics = async (period: Period) => {
   });
 
   // Per-client aggregation
-  type ClientAgg = { workspace_id: string; name: string; rate: number; numbers: number; activeNumbers: number; cap: number; sent: number; delivered: number; failed: number };
+  type ClientAgg = { workspace_id: string; name: string; rate: number; numbers: number; activeNumbers: number; cap: number; sent: number; delivered: number; failed: number; sent_convos: number; replied_convos: number };
   const perClient = new Map<string, ClientAgg>();
   for (const n of numberRows) {
     if (!n.workspace_id) continue;
     let agg = perClient.get(n.workspace_id);
     if (!agg) {
       const ws = wsMap.get(n.workspace_id);
-      agg = { workspace_id: n.workspace_id, name: ws?.name ?? "—", rate: ws?.rate ?? 0, numbers: 0, activeNumbers: 0, cap: 0, sent: 0, delivered: 0, failed: 0 };
+      agg = { workspace_id: n.workspace_id, name: ws?.name ?? "—", rate: ws?.rate ?? 0, numbers: 0, activeNumbers: 0, cap: 0, sent: 0, delivered: 0, failed: 0, sent_convos: 0, replied_convos: 0 };
       perClient.set(n.workspace_id, agg);
     }
     agg.numbers += 1;
@@ -132,6 +132,8 @@ const fetchAnalytics = async (period: Period) => {
     agg.sent += n.sent;
     agg.delivered += n.delivered;
     agg.failed += n.failed;
+    agg.sent_convos += n.sent_convos;
+    agg.replied_convos += n.replied_convos;
   }
   const clientRows = Array.from(perClient.values()).sort((a, b) => (b.delivered * b.rate) - (a.delivered * a.rate));
 
@@ -149,6 +151,13 @@ const fetchAnalytics = async (period: Period) => {
     }
     else if (e.event_type === "read") totRead += 1;
     else if (e.event_type === "failed" || e.event_type === "error") totFailed += 1;
+  }
+
+  // Total reply stats (real conversations-based)
+  let totSentConvos = 0, totRepliedConvos = 0;
+  for (const r of (replyStats ?? []) as Array<{ sent_convos: number; replied_convos: number }>) {
+    totSentConvos += r.sent_convos;
+    totRepliedConvos += r.replied_convos;
   }
 
   const totalCap = numberRows.reduce((s, n) => s + n.cap, 0);
@@ -184,7 +193,7 @@ const fetchAnalytics = async (period: Period) => {
   }));
 
   return {
-    totals: { sent: totSent, delivered: totDelivered, read: totRead, failed: totFailed, activeNumbers, capacity: totalCap, revenue: totRevenue },
+    totals: { sent: totSent, delivered: totDelivered, read: totRead, failed: totFailed, activeNumbers, capacity: totalCap, revenue: totRevenue, sent_convos: totSentConvos, replied_convos: totRepliedConvos },
     numbers: numberRows.sort((a, b) => b.sent - a.sent),
     clients: clientRows,
     topErrors,
