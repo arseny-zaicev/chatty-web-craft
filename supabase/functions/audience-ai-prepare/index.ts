@@ -8,15 +8,20 @@ const corsHeaders = {
 
 type Body = {
   workspace_id: string;
-  prep_profile_id?: string | null;
   /** Sample rows (frontend should send the first ~150 rows max) */
   parsed_rows: Array<Record<string, string>>;
   /** All headers from the source file */
   all_headers: string[];
-  /** Free-form hint from operator: "only AE", "skip dupes from last week" */
+  /** Free-form instructions from operator: "only AE", "Имя -> first_name", etc. */
   user_hint?: string | null;
-  /** Pasted message copy to match against existing approved templates */
+  /** Pasted message copy */
   pasted_copy?: string | null;
+  /** Operator already picked a template by name (optional). */
+  preferred_template_name?: string | null;
+  /** Variables expected by the chosen template (helps mapping). */
+  preferred_template_vars?: string[] | null;
+  /** marketing | utility */
+  campaign_type?: "marketing" | "utility" | null;
 };
 
 type AiResult = {
