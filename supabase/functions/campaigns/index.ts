@@ -1418,7 +1418,117 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
 }
 
 
-serve(async (req) => {
+// ===== Retry failed recipients with the campaign's own pacing rules =====
+// Body: { campaign_id }. Resets all `failed` recipients to `scheduled`,
+// rebuilds scheduled_at per (whatsapp_number_id) honoring delay_min_seconds /
+// delay_max_seconds and the schedule window. Re-opens the campaign.
+//
+// This exists so re-queuing failures never has to be done with hand-written
+// SQL again (Nov 2025: ad-hoc retry blasted at 10x intended pace).
+async function retryFailedRecipients(admin: any, requesterId: string, body: any) {
+  const campaignId = String(body.campaign_id || "");
+  if (!uuidRegex.test(campaignId)) return json({ error: "campaign_id required" }, 400);
+
+  const { data: campaign } = await admin
+    .from("campaigns")
+    .select("id, user_id, workspace_id, status, delay_min_seconds, delay_max_seconds, schedule_window_start, schedule_window_end, recipient_country, respect_recipient_tz")
+    .eq("id", campaignId)
+    .maybeSingle();
+  if (!campaign) return json({ error: "Not found" }, 404);
+  if (!(await canAccessUser(admin, requesterId, campaign.user_id))) return json({ error: "Forbidden" }, 403);
+
+  const minDelay = Math.max(60, campaign.delay_min_seconds || 60);
+  const maxDelay = Math.max(minDelay, campaign.delay_max_seconds || 120);
+  const winStart = String(campaign.schedule_window_start || "09:00:00").slice(0, 5);
+  const winEnd = String(campaign.schedule_window_end || "18:00:00").slice(0, 5);
+  const respectTz = campaign.respect_recipient_tz !== false;
+  const recipientTz = campaign.recipient_country
+    ? (COUNTRY_TZ[String(campaign.recipient_country).toUpperCase()] ?? "UTC")
+    : "UTC";
+
+  const failed: any[] = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await admin
+      .from("campaign_recipients")
+      .select("id, contact_phone, whatsapp_number_id")
+      .eq("campaign_id", campaignId)
+      .eq("status", "failed")
+      .range(from, from + PAGE - 1);
+    if (error) return json({ error: error.message }, 500);
+    const rows = data ?? [];
+    failed.push(...rows);
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+  if (failed.length === 0) return json({ ok: true, retried: 0 });
+
+  const byNumber = new Map<string, any[]>();
+  for (const r of failed) {
+    const k = r.whatsapp_number_id || "__none__";
+    if (!byNumber.has(k)) byNumber.set(k, []);
+    byNumber.get(k)!.push(r);
+  }
+
+  const todayKeyTz = (tz: string) => {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()); }
+    catch { return new Date().toISOString().slice(0, 10); }
+  };
+  const nextDateStr = (d: string) => {
+    const [y, m, day] = d.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, (m || 1) - 1, day || 1));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return dt.toISOString().slice(0, 10);
+  };
+
+  const updates: Array<{ id: string; iso: string }> = [];
+  for (const list of byNumber.values()) {
+    const tz = respectTz && list[0]?.contact_phone ? tzFromPhone(list[0].contact_phone) : recipientTz;
+    let date = todayKeyTz(tz);
+    let cursor = Math.max(Date.now() + 5_000, dateAtTzToUTC(date, winStart, tz).getTime());
+    let endOfDay = dateAtTzToUTC(date, winEnd, tz).getTime();
+    if (cursor >= endOfDay) {
+      date = nextDateStr(date);
+      cursor = dateAtTzToUTC(date, winStart, tz).getTime();
+      endOfDay = dateAtTzToUTC(date, winEnd, tz).getTime();
+    }
+    for (const r of list) {
+      if (cursor >= endOfDay) {
+        date = nextDateStr(date);
+        cursor = dateAtTzToUTC(date, winStart, tz).getTime();
+        endOfDay = dateAtTzToUTC(date, winEnd, tz).getTime();
+      }
+      updates.push({ id: r.id, iso: new Date(cursor).toISOString() });
+      cursor += randomDelay(minDelay, maxDelay) * 1000;
+    }
+  }
+
+  for (let i = 0; i < updates.length; i += 200) {
+    const chunk = updates.slice(i, i + 200);
+    await Promise.all(chunk.map((u) =>
+      admin.from("campaign_recipients").update({
+        status: "scheduled",
+        scheduled_at: u.iso,
+        error_message: null,
+        provider_message_id: null,
+      }).eq("id", u.id)
+    ));
+  }
+
+  const firstIso = updates.length > 0 ? updates[0].iso : new Date().toISOString();
+  const initialStatus = new Date(firstIso).getTime() <= Date.now() + 120_000 ? "running" : "scheduled";
+  await admin.from("campaigns").update({
+    status: initialStatus,
+    failed_count: 0,
+    first_scheduled_at: firstIso,
+    scheduled_start_at: firstIso,
+  }).eq("id", campaignId);
+
+  return json({ ok: true, retried: updates.length, first_scheduled_at: firstIso, status: initialStatus });
+}
+
+
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
