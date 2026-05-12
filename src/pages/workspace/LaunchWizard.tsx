@@ -498,12 +498,15 @@ export default function LaunchWizard() {
       ? Math.max(1, scheduledDates.length || 1)
       : Math.max(1, Math.ceil(total / dailyCap)); // "now" mode: derive days from cap
     const idealPerDay = Math.ceil(total / daysSelected);
-    const effectivePerDay = Math.min(idealPerDay, dailyCap);
+    // Marketing Blast: send dailyCap each day, last day = remainder. No smoothing.
+    // Utility: smooth across selected days, but never exceed dailyCap.
+    const effectivePerDay = isMarketing ? Math.min(total, dailyCap) : Math.min(idealPerDay, dailyCap);
     const daysNeeded = Math.max(1, Math.ceil(total / dailyCap));
+    const lastDay = isMarketing ? (total - dailyCap * (daysNeeded - 1)) : effectivePerDay;
     const capExceeded = scheduleMode === "scheduled" && idealPerDay > dailyCap;
     const overflowToday = Math.max(0, total - effectivePerDay);
-    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded, overflowToday };
-  }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length]);
+    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, lastDay, capExceeded, overflowToday };
+  }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length, isMarketing]);
 
   // Realistic per-message gap when window mode is active (based on today's effective load)
   const pacing = useMemo(() => {
