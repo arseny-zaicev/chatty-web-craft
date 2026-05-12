@@ -1608,6 +1608,15 @@ export default function LaunchWizard() {
         open={pipelineConfigOpen}
         onClose={() => setPipelineConfigOpen(false)}
       />
+
+      {workspace && (
+        <TemplateGroupsDialog
+          open={groupsDialogOpen}
+          onOpenChange={setGroupsDialogOpen}
+          workspaceId={workspace.id}
+          templates={templates}
+        />
+      )}
     </div>
   );
 }
