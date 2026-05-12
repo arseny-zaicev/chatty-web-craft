@@ -8,6 +8,13 @@ const Terms = () => {
       <Helmet>
         <title>Terms of Service | ISKRA</title>
         <meta name="description" content="Terms of Service for ISKRA - Understand the terms and conditions that govern your use of our services." />
+        <link rel="canonical" href="https://iskra.ae/terms" />
+        <meta property="og:title" content="Terms of Service | ISKRA" />
+        <meta property="og:description" content="Terms and conditions that govern your use of ISKRA's services." />
+        <meta property="og:url" content="https://iskra.ae/terms" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Terms of Service | ISKRA" />
+        <meta name="twitter:description" content="Terms and conditions that govern your use of ISKRA's services." />
       </Helmet>
       
       <main className="min-h-screen">
