@@ -86,9 +86,9 @@ const AdminMfaSetup = lazyWithRetry(() => import("./pages/admin/AdminMfaSetup"))
 const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"));
 const OpsLive = lazyWithRetry(() => import("./pages/admin/OpsLive"));
 const OpsAssistant = lazyWithRetry(() => import("./pages/admin/OpsAssistant"));
-const FinancePartners = lazyWithRetry(() => import("./pages/admin/FinancePartners"));
-const FinancePartnerDetail = lazyWithRetry(() => import("./pages/admin/FinancePartnerDetail"));
 const FinanceRunDetail = lazyWithRetry(() => import("./pages/admin/FinanceRunDetail"));
+const Partners = lazyWithRetry(() => import("./pages/admin/Partners"));
+const PartnerDetail = lazyWithRetry(() => import("./pages/admin/PartnerDetail"));
 const BusinessManagers = lazyWithRetry(() => import("./pages/admin/BusinessManagers"));
 const BusinessManagerDetail = lazyWithRetry(() => import("./pages/admin/BusinessManagerDetail"));
 const Apply = lazyWithRetry(() => import("./pages/Apply"));
@@ -181,8 +181,10 @@ const App = () => (
               <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
               <Route path="/admin/ops-live" element={<OpsLive />} />
               <Route path="/admin/assistant" element={<OpsAssistant />} />
-              <Route path="/admin/finance/partners" element={<FinancePartners />} />
-              <Route path="/admin/finance/partners/:id" element={<FinancePartnerDetail />} />
+              <Route path="/admin/partners" element={<Partners />} />
+              <Route path="/admin/partners/:id" element={<PartnerDetail />} />
+              <Route path="/admin/finance/partners" element={<Navigate to="/admin/partners" replace />} />
+              <Route path="/admin/finance/partners/:id" element={<RedirectPartnerDetail />} />
               <Route path="/admin/finance/runs/:id" element={<FinanceRunDetail />} />
               <Route path="/tv/:token" element={<OpsLive />} />
               <Route path="/apply" element={<Apply />} />
