@@ -55,6 +55,7 @@ import StageAutomationsDialog from "@/components/workspace/StageAutomationsDialo
 import { fetchWorkspaceMembers, workspaceMembersKey, memberDisplayName } from "@/lib/workspaceMembers";
 import { createDeal, updateDeal, deleteDeal as deleteDealApi, moveDeal } from "@/lib/deals";
 import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipelines";
+import { markConversationRead } from "@/lib/inbox";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
