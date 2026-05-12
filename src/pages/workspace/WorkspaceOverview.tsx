@@ -184,3 +184,53 @@ const Row = ({ icon: Icon, label, value }: { icon: any; label: string; value: st
     <div className="text-right truncate">{value}</div>
   </div>
 );
+
+function ActiveCampaignCard({ group, slug }: { group: ReturnType<typeof groupCampaigns>[number]; slug: string }) {
+  const tz = tzInfo(group.recipientCountry).tz;
+  const tzLabel = tzInfo(group.recipientCountry).label;
+  const dates = group.scheduledDates;
+  const fmt = (d: string) => shortDateInTz(`${d}T12:00:00Z`, "UTC");
+  const range = dates.length
+    ? (dates[0] === dates[dates.length - 1] ? fmt(dates[0]) : `${fmt(dates[0])} - ${fmt(dates[dates.length - 1])}`)
+    : (group.firstScheduledAt ? shortDateInTz(group.firstScheduledAt, tz) : null);
+  const pct = group.total > 0 ? Math.min(100, Math.round((group.sent / group.total) * 100)) : 0;
+  const todayLabel = (() => {
+    if (group.today <= 0) return null;
+    if (group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) === todayKeyInTz(tz)) {
+      return `Today ${group.today.toLocaleString()} @ ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+    }
+    return `Today ${group.today.toLocaleString()}`;
+  })();
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Megaphone className="w-4 h-4 text-primary" />
+          Active campaign
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="font-medium truncate">{group.displayName}</div>
+            <div className="text-xs text-muted-foreground truncate">
+              {[`Total ${group.total.toLocaleString()}`, dates.length ? `${dates.length} ${dates.length === 1 ? "day" : "days"}` : null, range, todayLabel].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+          <Badge variant="outline" className="capitalize text-xs shrink-0">{group.status}</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-xs text-muted-foreground tabular-nums shrink-0">{group.sent.toLocaleString()}/{group.total.toLocaleString()} · {pct}%</span>
+        </div>
+        <div>
+          <Button asChild size="sm" variant="ghost" className="px-0">
+            <Link to={`/ws/${slug}/campaigns?open=${encodeURIComponent(group.key)}`}>Open campaign →</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
