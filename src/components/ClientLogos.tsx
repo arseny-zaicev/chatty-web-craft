@@ -98,7 +98,7 @@ export const ClientLogos = () => (
             >
               <img
                 src={client.logo}
-                alt={`${client.name} logo`}
+                alt={`${client.name} - ISKRA client brand`}
                 loading="eager"
                 decoding="async"
                 fetchPriority={i < 8 ? "high" : "auto"}

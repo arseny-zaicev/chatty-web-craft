@@ -77,7 +77,7 @@ const WhatsAppMockup = memo(() => (
         <path d="M12 4C7.58 4 4 7.58 4 12c0 1.42.38 2.75 1.04 3.9L4 20l4.22-1.01A7.94 7.94 0 0 0 12 20c4.42 0 8-3.58 8-8s-3.58-8-8-8zm3.9 11.1c-.17.47-1 .9-1.37.96-.37.06-.84.08-1.35-.09-.31-.1-.7-.23-1.2-.46-2.1-.93-3.47-3.05-3.57-3.19-.1-.14-.83-1.1-.83-2.1 0-.99.52-1.48.71-1.68.19-.2.41-.25.55-.25h.4c.13 0 .3-.05.47.36.17.41.58 1.4.63 1.5.05.1.08.22.01.35-.07.13-.1.21-.2.33-.1.11-.21.25-.3.33-.1.09-.2.19-.09.38.11.19.5.83 1.08 1.35.74.67 1.37.88 1.56.98.19.1.3.08.41-.05.11-.13.47-.55.6-.74.13-.19.26-.16.44-.1.18.06 1.17.55 1.37.65.2.1.33.15.38.23.05.08.05.47-.12.94z" fill="white" />
       </svg>
       <div style={{ width: "40px", height: "40px", borderRadius: "50%", overflow: "hidden", flexShrink: 0, border: "2px solid hsl(34 22% 86%)" }}>
-        <img src={mariaAvatar} alt="Maria" width={40} height={40} style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="eager" decoding="sync" />
+        <img src={mariaAvatar} alt="Maria - ISKRA Outreach Team" width={40} height={40} style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="eager" decoding="sync" />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "hsl(28 30% 14%)", lineHeight: 1.2 }}>Maria</div>

@@ -8,6 +8,13 @@ const Privacy = () => {
       <Helmet>
         <title>Privacy Policy | ISKRA</title>
         <meta name="description" content="Privacy Policy for ISKRA - Learn how we collect, use, and protect your personal information." />
+        <link rel="canonical" href="https://iskra.ae/privacy" />
+        <meta property="og:title" content="Privacy Policy | ISKRA" />
+        <meta property="og:description" content="How ISKRA collects, uses, and protects your personal information." />
+        <meta property="og:url" content="https://iskra.ae/privacy" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Privacy Policy | ISKRA" />
+        <meta name="twitter:description" content="How ISKRA collects, uses, and protects your personal information." />
       </Helmet>
       
       <main className="min-h-screen">

@@ -76,6 +76,7 @@ export const ROICalculator = () => {
                   min={30}
                   max={95}
                   value={showUpRate}
+                  aria-label="Show-up rate percentage"
                   onChange={(e) => setShowUpRate(Number(e.target.value))}
                   className={sliderClass}
                 />
@@ -91,6 +92,7 @@ export const ROICalculator = () => {
                   min={5}
                   max={80}
                   value={closeRate}
+                  aria-label="Close rate percentage"
                   onChange={(e) => setCloseRate(Number(e.target.value))}
                   className={sliderClass}
                 />
@@ -107,6 +109,7 @@ export const ROICalculator = () => {
                   max={50000}
                   step={500}
                   value={dealSize}
+                  aria-label="Average deal size in euros"
                   onChange={(e) => setDealSize(Number(e.target.value))}
                   className={sliderClass}
                 />

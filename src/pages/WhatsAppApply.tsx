@@ -12,6 +12,13 @@ const WhatsAppApply = () => {
           name="description" 
           content="Get a customized WhatsApp outreach plan. High-volume messaging with 98% delivery rate." 
         />
+        <link rel="canonical" href="https://iskra.ae/whatsapp/apply" />
+        <meta property="og:title" content="WhatsApp Outreach Application | ISKRA" />
+        <meta property="og:description" content="Get a customized WhatsApp outreach plan. High-volume messaging with 98% delivery rate." />
+        <meta property="og:url" content="https://iskra.ae/whatsapp/apply" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="WhatsApp Outreach Application | ISKRA" />
+        <meta name="twitter:description" content="Get a customized WhatsApp outreach plan. High-volume messaging with 98% delivery rate." />
       </Helmet>
       
       <main className="min-h-screen bg-foreground">
