@@ -1018,15 +1018,20 @@ export default function LaunchWizard() {
               <Field label="Quota / number (max 200)"><Input type="number" min={1} max={200} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Math.min(200, Number(e.target.value)))} /></Field>
               <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
                 <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
-                  disabled={scheduleMode === "scheduled"}
+                  disabled={scheduleMode === "scheduled" || type === "marketing"}
                   onChange={(e) => setDelayMin(Math.max(type === "utility" ? UTILITY_MIN_DELAY : 0, Number(e.target.value)))} />
               </Field>
               <Field label="Max delay (s)">
                 <Input type="number" min={delayMin} value={delayMax}
-                  disabled={scheduleMode === "scheduled"}
+                  disabled={scheduleMode === "scheduled" || type === "marketing"}
                   onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
               </Field>
             </div>
+            {type === "marketing" && scheduleMode === "now" && (
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Marketing Blast sends instantly without gaps. To spread sends across multiple days, switch to <b>Pick days</b>.
+              </div>
+            )}
             {scheduleMode === "scheduled" && (
               <div className="text-[11px] text-muted-foreground mt-1">
                 Min/Max delay is ignored when a window is set - gaps are computed from the window length below.
@@ -1069,7 +1074,8 @@ export default function LaunchWizard() {
                 <Field label="Window from"><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
                 <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
                 <Field label="Scheduler">
-                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}>
+                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
+                    disabled={type === "marketing" && scheduleMode === "now"}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="poisson">Poisson (organic, jittered)</SelectItem>
@@ -1078,7 +1084,8 @@ export default function LaunchWizard() {
                   </Select>
                 </Field>
                 <Field label="Time zone basis">
-                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
+                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}
+                    disabled={type === "marketing" && scheduleMode === "now"}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Recipient local (per phone prefix)</SelectItem>
