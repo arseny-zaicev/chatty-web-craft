@@ -2941,6 +2941,23 @@ export type Database = {
         Returns: string
       }
       ensure_pipeline_stage: { Args: { _user_id: string }; Returns: string }
+      fleet_number_summaries: {
+        Args: never
+        Returns: {
+          active_campaigns: Json
+          errors_since_unban: number
+          last_campaign_at: string
+          last_campaign_name: string
+          number_id: string
+          outbound_messages: number
+          recipients_failed: number
+          recipients_pending: number
+          recipients_sent: number
+          templates_approved: number
+          templates_total: number
+          webhook_errors: number
+        }[]
+      }
       generate_payout_run: {
         Args: { _from: string; _partner_id: string; _to: string }
         Returns: string
