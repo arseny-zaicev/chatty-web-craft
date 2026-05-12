@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { useOutletContext, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon, Wand2, ShieldCheck, ShieldAlert, RefreshCw, ClipboardCopy,
+  Database, Upload, Loader2, Trash2, Eye, FileText, AlertTriangle, CheckCircle2, XCircle, Copy as CopyIcon, Wand2, ShieldCheck, ShieldAlert, RefreshCw, ClipboardCopy, Sparkles,
 } from "lucide-react";
+import { SmartUploadDialog } from "@/components/workspace/SmartUploadDialog";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ export default function WorkspaceData() {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const qc = useQueryClient();
   const [openUpload, setOpenUpload] = useState(false);
+  const [openSmart, setOpenSmart] = useState(false);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
 
   const batchesQ = useQuery({
@@ -98,8 +100,11 @@ export default function WorkspaceData() {
             <Button asChild variant="outline">
               <Link to={`/ws/${workspace.slug}/data/profiles`}><Wand2 className="w-4 h-4 mr-1" />Prep Profiles</Link>
             </Button>
-            <Button onClick={() => setOpenUpload(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Upload audience (fallback)
+            <Button variant="outline" onClick={() => setOpenUpload(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Manual upload
+            </Button>
+            <Button onClick={() => setOpenSmart(true)}>
+              <Sparkles className="w-4 h-4 mr-1" /> Smart upload (AI)
             </Button>
           </div>
         </div>
@@ -169,6 +174,16 @@ export default function WorkspaceData() {
       <UploadDialog
         open={openUpload}
         onOpenChange={setOpenUpload}
+        workspaceId={workspace.id}
+        onUploaded={() => {
+          qc.invalidateQueries({ queryKey: audienceKeys.batches(workspace.id) });
+          qc.invalidateQueries({ queryKey: audienceKeys.stats(workspace.id) });
+        }}
+      />
+
+      <SmartUploadDialog
+        open={openSmart}
+        onOpenChange={setOpenSmart}
         workspaceId={workspace.id}
         onUploaded={() => {
           qc.invalidateQueries({ queryKey: audienceKeys.batches(workspace.id) });
