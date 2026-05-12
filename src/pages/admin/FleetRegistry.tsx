@@ -17,6 +17,7 @@ import { formatDistanceToNow } from "date-fns";
 
 import { toast } from "sonner";
 import { geoFromPhone } from "@/lib/launchData";
+import FleetTemplatesHealth from "@/components/admin/FleetTemplatesHealth";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
