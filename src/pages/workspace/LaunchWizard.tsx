@@ -1170,45 +1170,74 @@ export default function LaunchWizard() {
             </div>
           </Step>
 
-          {/* Step 5: Variable mapping */}
+          {/* Step 6: Variable mapping */}
           {variableNames.length > 0 && (
-            <Step n={5} icon={FileText} title="Variable mapping">
+            <Step
+              n={6}
+              icon={FileText}
+              title="Variable mapping"
+              right={
+                unmappedVars.length > 0 ? (
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/5">
+                    <AlertTriangle className="w-3 h-3 mr-1" />Action required · {variableNames.length - unmappedVars.length}/{variableNames.length} mapped
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">
+                    {variableNames.length}/{variableNames.length} mapped
+                  </Badge>
+                )
+              }
+            >
+              {unmappedVars.length > 0 && (
+                <div className="text-[11px] rounded-md border border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500 px-2 py-1.5">
+                  Each variable below must point to a column from your audience (where each contact has its own value) <b>or</b> use a static value (same text for everyone). Variables in this template: <b>{variableNames.map((v) => `{${v}}`).join(" ")}</b>.
+                </div>
+              )}
               <div className="space-y-2">
                 {variableNames.map((v) => {
                   const current = mapping[v] ?? "";
                   const isStatic = current.startsWith("__static:");
+                  const previewVal = variablePreviewValue(v);
+                  const unmapped = unmappedVars.includes(v);
                   return (
-                    <div key={v} className="flex items-center gap-2 text-sm">
-                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{`{${v}}`}</span>
-                      <span className="text-xs text-muted-foreground">→</span>
-                      <Select value={isStatic ? "__static__" : current || "__none__"} onValueChange={(val) => {
-                        setMapping((prev) => {
-                          const next = { ...prev };
-                          if (val === "__none__") delete next[v];
-                          else if (val === "__static__") next[v] = "__static:";
-                          else next[v] = val;
-                          return next;
-                        });
-                      }}>
-                        <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick column" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">— unset —</SelectItem>
-                          {columns.map((c) => <SelectItem key={c} value={c}>column: {c}</SelectItem>)}
-                          <SelectItem value="__static__">static value...</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {isStatic && (
-                        <Input
-                          className="h-8 flex-1"
-                          placeholder="Static value"
-                          value={current.slice("__static:".length)}
-                          onChange={(e) => setMapping((prev) => ({ ...prev, [v]: `__static:${e.target.value}` }))}
-                        />
+                    <div key={v} className={`rounded-md border p-2 ${unmapped ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/30"}`}>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{`{${v}}`}</span>
+                        <span className="text-xs text-muted-foreground">→</span>
+                        <Select value={isStatic ? "__static__" : current || "__none__"} onValueChange={(val) => {
+                          setMapping((prev) => {
+                            const next = { ...prev };
+                            if (val === "__none__") delete next[v];
+                            else if (val === "__static__") next[v] = "__static:";
+                            else next[v] = val;
+                            return next;
+                          });
+                        }}>
+                          <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick column or static" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— unset —</SelectItem>
+                            {columns.map((c) => <SelectItem key={c} value={c}>column: {c}</SelectItem>)}
+                            <SelectItem value="__static__">static value (same for all)...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {isStatic && (
+                          <Input
+                            className="h-8 flex-1"
+                            placeholder={`Same text for all (e.g. "Bella")`}
+                            value={current.slice("__static:".length)}
+                            onChange={(e) => setMapping((prev) => ({ ...prev, [v]: `__static:${e.target.value}` }))}
+                          />
+                        )}
+                      </div>
+                      {!unmapped && previewVal && (
+                        <div className="mt-1 text-[11px] text-muted-foreground pl-1">
+                          preview: <span className="font-medium text-foreground">"{previewVal.length > 80 ? previewVal.slice(0, 77) + "..." : previewVal}"</span>
+                        </div>
                       )}
                     </div>
                   );
                 })}
-                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template for this workspace.</p>
+                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template for this workspace. Tip: numeric template variables ({"{1}"}, {"{2}"}...) usually need a static value or a column from your audience batch.</p>
               </div>
             </Step>
           )}
