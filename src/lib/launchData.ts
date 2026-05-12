@@ -39,7 +39,7 @@ export async function fetchLaunchEssentials(workspaceId?: string) {
     .not("status", "in", "(restricted,banned,inactive)");
   let templatesQuery = supabase
     .from("message_templates")
-    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, buttons, provider_template_id, synced_at")
+    .select("id, name, language, status, category, body, whatsapp_number_id, workspace_id, variables, buttons, provider_template_id, synced_at, variables_sample, header_text, footer_text, sync_warning")
     .in("status", ["approved", "paused"])
     .limit(500);
 
