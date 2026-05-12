@@ -1059,6 +1059,22 @@ async function processQueue(admin: any) {
       }
       if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
 
+      // Pacing guard: enforce delay_min_seconds gap from the previous send
+      // for this (campaign, number). Skip the recipient until next tick if
+      // the required wait exceeds remaining budget.
+      const minGapMs = Math.max(60, recipient.campaigns?.delay_min_seconds || 60) * 1000;
+      const numKey = `${recipient.campaign_id}|${recipient.whatsapp_number_id ?? ""}`;
+      const lastMs = lastSentMs.get(numKey);
+      if (lastMs) {
+        const since = Date.now() - lastMs;
+        if (since < minGapMs) {
+          const extra = minGapMs - since;
+          const budgetLeft = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
+          if (extra > budgetLeft) break; // try next tick
+          await new Promise((r) => setTimeout(r, extra));
+        }
+      }
+
       const { data: locked } = await admin
         .from("campaign_recipients")
         .update({ status: "sending" })
@@ -1067,6 +1083,8 @@ async function processQueue(admin: any) {
         .select("id")
         .maybeSingle();
       if (!locked) continue;
+      lastSentMs.set(numKey, Date.now());
+
 
       try {
         const gsBody = await sendTemplate(admin, recipient);
