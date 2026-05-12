@@ -1074,7 +1074,8 @@ export default function LaunchWizard() {
                 <Field label="Window from"><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
                 <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
                 <Field label="Scheduler">
-                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}>
+                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
+                    disabled={type === "marketing" && scheduleMode === "now"}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="poisson">Poisson (organic, jittered)</SelectItem>
@@ -1083,7 +1084,8 @@ export default function LaunchWizard() {
                   </Select>
                 </Field>
                 <Field label="Time zone basis">
-                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
+                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}
+                    disabled={type === "marketing" && scheduleMode === "now"}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Recipient local (per phone prefix)</SelectItem>
