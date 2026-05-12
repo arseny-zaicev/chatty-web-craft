@@ -107,6 +107,7 @@ export default function LaunchWizard() {
   // ----- State -----
   const [type, setType] = useState<CampaignType>("marketing");
   const preset = TYPE_PRESETS[type];
+  const isMarketing = type === "marketing";
 
   const { data: pipelines = [] } = useQuery({
     queryKey: pipelinesKey(workspace?.id),
@@ -444,6 +445,12 @@ export default function LaunchWizard() {
   };
   const eta = useMemo(() => {
     const numbers = Math.max(1, activeNumbers.length);
+    if (isMarketing) {
+      const dailyCap = numbers * Math.max(1, perNumberQuota);
+      const daysNeeded = Math.max(1, Math.ceil(recipients.length / dailyCap));
+      if (!recipients.length) return "-";
+      return scheduleMode === "scheduled" ? `${daysNeeded} day(s) · launches at ${windowStart}` : `Launches at ${windowStart}`;
+    }
     if (scheduleMode === "scheduled") {
       const dailyCap = numbers * Math.max(1, perNumberQuota);
       const daysNeeded = Math.max(1, Math.ceil(recipients.length / dailyCap));
@@ -458,7 +465,7 @@ export default function LaunchWizard() {
     const maxSec = Math.round(perNumber * delayMax);
     if (!perNumber) return "-";
     return `${fmtDur(avgSec)} avg · up to ${fmtDur(maxSec)}`;
-  }, [recipients.length, activeNumbers.length, delayMin, delayMax, scheduleMode, perNumberQuota, windowStart, windowEnd]);
+  }, [recipients.length, activeNumbers.length, delayMin, delayMax, scheduleMode, perNumberQuota, windowStart, windowEnd, isMarketing]);
 
   // ----- Recipient region clock & realistic pacing -----
   const recipientTz = useMemo(() => COUNTRY_TZ[poolCountry?.toUpperCase() ?? ""] ?? null, [poolCountry]);
@@ -695,10 +702,10 @@ export default function LaunchWizard() {
             action: "launch",
             name: campaignName,
             numbers: targets.map((t) => ({ number_id: t.numberId, template_id: t.template.id })),
-            delay_min_seconds: delayMin,
-            delay_max_seconds: delayMax,
+              delay_min_seconds: isMarketing ? 0 : delayMin,
+              delay_max_seconds: isMarketing ? 0 : delayMax,
             recipients: workingRecipients,
-            scheduler_kind: schedulerKind,
+              scheduler_kind: isMarketing ? "poisson" : schedulerKind,
             scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
             window_start: windowStart,
             window_end: windowEnd,
@@ -1014,25 +1021,29 @@ export default function LaunchWizard() {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2 mt-3">
+            <div className={isMarketing ? "grid sm:grid-cols-2 gap-2 mt-3" : "grid grid-cols-3 gap-2 mt-3"}>
               <Field label="Quota / number (max 200)"><Input type="number" min={1} max={200} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Math.min(200, Number(e.target.value)))} /></Field>
-              <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
-                <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
-                  disabled={scheduleMode === "scheduled" || type === "marketing"}
-                  onChange={(e) => setDelayMin(Math.max(type === "utility" ? UTILITY_MIN_DELAY : 0, Number(e.target.value)))} />
-              </Field>
-              <Field label="Max delay (s)">
-                <Input type="number" min={delayMin} value={delayMax}
-                  disabled={scheduleMode === "scheduled" || type === "marketing"}
-                  onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
-              </Field>
+              {!isMarketing && (
+                <>
+                  <Field label="Min delay (s) · ≥60">
+                    <Input type="number" min={UTILITY_MIN_DELAY} value={delayMin}
+                      disabled={scheduleMode === "scheduled"}
+                      onChange={(e) => setDelayMin(Math.max(UTILITY_MIN_DELAY, Number(e.target.value)))} />
+                  </Field>
+                  <Field label="Max delay (s)">
+                    <Input type="number" min={delayMin} value={delayMax}
+                      disabled={scheduleMode === "scheduled"}
+                      onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
+                  </Field>
+                </>
+              )}
             </div>
-            {type === "marketing" && scheduleMode === "now" && (
+            {isMarketing && (
               <div className="text-[11px] text-muted-foreground mt-1">
-                Marketing Blast sends instantly without gaps. To spread sends across multiple days, switch to <b>Pick days</b>.
+                Marketing Blast uses selected days and launch times only - delay and scheduler stay locked.
               </div>
             )}
-            {scheduleMode === "scheduled" && (
+            {!isMarketing && scheduleMode === "scheduled" && (
               <div className="text-[11px] text-muted-foreground mt-1">
                 Min/Max delay is ignored when a window is set - gaps are computed from the window length below.
               </div>
@@ -1071,11 +1082,11 @@ export default function LaunchWizard() {
               )}
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Field label="Window from"><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
-                <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+                <Field label={isMarketing ? "Launch from" : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
+                <Field label={isMarketing ? "Launch until" : "Window to"}><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
                 <Field label="Scheduler">
-                  <Select value={schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
-                    disabled={type === "marketing" && scheduleMode === "now"}>
+                  <Select value={isMarketing ? "poisson" : schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
+                    disabled={isMarketing}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="poisson">Poisson (organic, jittered)</SelectItem>
@@ -1084,8 +1095,7 @@ export default function LaunchWizard() {
                   </Select>
                 </Field>
                 <Field label="Time zone basis">
-                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}
-                    disabled={type === "marketing" && scheduleMode === "now"}>
+                  <Select value={respectTz ? "yes" : "no"} onValueChange={(v) => setRespectTz(v === "yes")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Recipient local (per phone prefix)</SelectItem>
@@ -1105,7 +1115,11 @@ export default function LaunchWizard() {
               )}
 
               <div className="text-[11px] text-muted-foreground space-y-1">
-                {scheduleMode === "now" ? (() => {
+                {isMarketing ? (
+                  <div>
+                    {scheduleMode === "scheduled" ? `${scheduledDates.length || 0} day(s) × ` : "Starts "}{windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. Sends as Marketing Blast with no manual delay controls.
+                  </div>
+                ) : scheduleMode === "now" ? (() => {
                   const perNumber = pacing?.perNumber || 1;
                   const avgSec = perNumber * (delayMin + delayMax) / 2;
                   const maxSec = perNumber * delayMax;
@@ -1137,7 +1151,7 @@ export default function LaunchWizard() {
                     Nothing scheduled for today. First batch (<b>{dayPlan.effectivePerDay.toLocaleString()}</b> msgs) starts <b>{todayInfo.firstDate}</b> at <b>{windowStart}</b> {respectTz ? "in recipient's local time" : "in your time zone"}.
                   </div>
                 )}
-                {feasibility && feasibility.totalQueued > 0 && (
+                {!isMarketing && feasibility && feasibility.totalQueued > 0 && (
                   <div className={`mt-1 px-2 py-1.5 rounded-md border text-[11px] ${feasibility.overflow > 0 ? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"}`}>
                     <b>Today fits ≈ {feasibility.fitsToday.toLocaleString()} of {feasibility.totalQueued.toLocaleString()}</b> msgs before {windowEnd} ({recipientNow} now in {poolCountry}){scheduleMode === "scheduled" ? <> · today's share of <b>{dayPlan.total.toLocaleString()}</b> total across {dayPlan.daysNeeded} day(s)</> : null}.
                     {feasibility.overflow > 0
