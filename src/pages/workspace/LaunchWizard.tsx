@@ -1122,7 +1122,9 @@ export default function LaunchWizard() {
               <div className="text-[11px] text-muted-foreground space-y-1">
                 {isMarketing ? (
                   <div>
-                    {scheduleMode === "scheduled" ? `${scheduledDates.length || 0} day(s) × ` : "Starts "}{windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. Sends as Marketing Blast with no manual delay controls.
+                    {scheduleMode === "now"
+                      ? <>Launches at <b>{windowStart}</b> {respectTz ? "in each recipient's local time" : "in your time zone"}. Sends up to <b>{dayPlan.dailyCap.toLocaleString()}/day</b>{dayPlan.daysNeeded > 1 ? <> across <b>{dayPlan.daysNeeded} day(s)</b> (last day {dayPlan.lastDay.toLocaleString()})</> : null}. No manual delay controls.</>
+                      : <>{scheduledDates.length || 0} day(s) × <b>{windowStart}-{windowEnd}</b> window {respectTz ? "in each recipient's local time" : "in your time zone"} · up to <b>{dayPlan.dailyCap.toLocaleString()}/day</b>.</>}
                   </div>
                 ) : scheduleMode === "now" ? (() => {
                   const perNumber = pacing?.perNumber || 1;
