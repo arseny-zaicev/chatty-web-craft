@@ -946,24 +946,37 @@ export default function LaunchWizard() {
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Country pool</span>
-                  <Select value={poolCountry} onValueChange={setPoolCountry}>
-                    <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {pools.map((p) => (
-                        <SelectItem key={p.country} value={p.country}>
-                          {p.country} · {p.numbers.length} number{p.numbers.length === 1 ? "" : "s"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {pools.length > 1 ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">Country</span>
+                      <Select value={poolCountry} onValueChange={setPoolCountry}>
+                        <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {pools.map((p) => (
+                            <SelectItem key={p.country} value={p.country}>
+                              {p.country === "--" ? "Unknown country" : p.country} · {p.numbers.length} number{p.numbers.length === 1 ? "" : "s"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {poolNumbers.length} number{poolNumbers.length === 1 ? "" : "s"} in this workspace
+                    </span>
+                  )}
                   <Badge variant="outline" className="text-[11px]">
                     {readyInPool.length} ready of {poolNumbers.length}
                   </Badge>
                   <Badge variant="outline" className="text-[11px] border-primary/30 text-primary">
-                    {type === "utility" ? "Utility · distribute across pool" : "Marketing · single sender"}
+                    {type === "utility" ? "Utility · uses all ready numbers" : "Marketing · pick one sender"}
                   </Badge>
                 </div>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {type === "marketing"
+                    ? "Pick one number below to send from. Marketing campaigns always use a single sender."
+                    : "All ready numbers below will share the load evenly."}
+                </p>
 
                 <div className="grid sm:grid-cols-2 gap-2 mt-3">
                   {poolNumbers.map((n) => {
