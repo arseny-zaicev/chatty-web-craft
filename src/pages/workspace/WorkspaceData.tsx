@@ -25,7 +25,7 @@ import {
   buildPrepPrompt, buildFallbackPrompt,
   type PrepProfile,
 } from "@/lib/prepProfiles";
-import { PREP_PRESETS, buildPresetPrompt, type PrepPreset } from "@/lib/prepPresets";
+import { PREP_PRESETS, buildPresetPrompt, type PrepPreset, type StaticValues, NAME_FALLBACK_PHRASES, VARIABLE_KIND_EXPLAINER } from "@/lib/prepPresets";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 export default function WorkspaceData() {
