@@ -238,6 +238,60 @@ export type Database = {
           },
         ]
       }
+      bm_partner_assignments: {
+        Row: {
+          business_manager_id: string
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          notes: string | null
+          partner_id: string
+          rate_usd: number
+          role: string
+        }
+        Insert: {
+          business_manager_id: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          notes?: string | null
+          partner_id: string
+          rate_usd: number
+          role: string
+        }
+        Update: {
+          business_manager_id?: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          notes?: string | null
+          partner_id?: string
+          rate_usd?: number
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bm_partner_assignments_business_manager_id_fkey"
+            columns: ["business_manager_id"]
+            isOneToOne: false
+            referencedRelation: "business_managers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bm_partner_assignments_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       business_manager_warmup_events: {
         Row: {
           business_manager_id: string
@@ -278,6 +332,7 @@ export type Database = {
       }
       business_managers: {
         Row: {
+          ads_running: boolean
           created_at: string
           created_by: string
           current_day_sent: number
@@ -286,18 +341,21 @@ export type Database = {
           health_score: number
           id: string
           last_warmup_action_at: string | null
+          meta_bm_id: string | null
           name: string
           notes: string | null
           owner_email: string | null
           provider: string
           status: string
           updated_at: string
+          warmup_completed_at: string | null
           warmup_stage: string | null
           warmup_started_at: string | null
           warmup_target_date: string | null
           workspace_id: string
         }
         Insert: {
+          ads_running?: boolean
           created_at?: string
           created_by: string
           current_day_sent?: number
@@ -306,18 +364,21 @@ export type Database = {
           health_score?: number
           id?: string
           last_warmup_action_at?: string | null
+          meta_bm_id?: string | null
           name: string
           notes?: string | null
           owner_email?: string | null
           provider?: string
           status?: string
           updated_at?: string
+          warmup_completed_at?: string | null
           warmup_stage?: string | null
           warmup_started_at?: string | null
           warmup_target_date?: string | null
           workspace_id: string
         }
         Update: {
+          ads_running?: boolean
           created_at?: string
           created_by?: string
           current_day_sent?: number
@@ -326,12 +387,14 @@ export type Database = {
           health_score?: number
           id?: string
           last_warmup_action_at?: string | null
+          meta_bm_id?: string | null
           name?: string
           notes?: string | null
           owner_email?: string | null
           provider?: string
           status?: string
           updated_at?: string
+          warmup_completed_at?: string | null
           warmup_stage?: string | null
           warmup_started_at?: string | null
           warmup_target_date?: string | null
@@ -1544,6 +1607,9 @@ export type Database = {
       }
       partners: {
         Row: {
+          auto_post_slack: boolean
+          cadence: string
+          cadence_anchor: number | null
           contact_email: string | null
           contact_phone: string | null
           created_at: string
@@ -1551,13 +1617,19 @@ export type Database = {
           currency: string
           default_payout_rate_usd: number
           id: string
+          kind: string
+          last_run_period_to: string | null
           name: string
           notes: string | null
           payment_notes: string | null
           status: string
+          timezone: string
           updated_at: string
         }
         Insert: {
+          auto_post_slack?: boolean
+          cadence?: string
+          cadence_anchor?: number | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -1565,13 +1637,19 @@ export type Database = {
           currency?: string
           default_payout_rate_usd?: number
           id?: string
+          kind?: string
+          last_run_period_to?: string | null
           name: string
           notes?: string | null
           payment_notes?: string | null
           status?: string
+          timezone?: string
           updated_at?: string
         }
         Update: {
+          auto_post_slack?: boolean
+          cadence?: string
+          cadence_anchor?: number | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -1579,10 +1657,13 @@ export type Database = {
           currency?: string
           default_payout_rate_usd?: number
           id?: string
+          kind?: string
+          last_run_period_to?: string | null
           name?: string
           notes?: string | null
           payment_notes?: string | null
           status?: string
+          timezone?: string
           updated_at?: string
         }
         Relationships: []
@@ -1602,6 +1683,7 @@ export type Database = {
           partner_rate_usd: number
           payout_run_id: string
           payout_usd: number
+          role: string | null
           sent: number
           whatsapp_number_id: string | null
           workspace_id: string | null
@@ -1620,6 +1702,7 @@ export type Database = {
           partner_rate_usd?: number
           payout_run_id: string
           payout_usd?: number
+          role?: string | null
           sent?: number
           whatsapp_number_id?: string | null
           workspace_id?: string | null
@@ -1638,6 +1721,7 @@ export type Database = {
           partner_rate_usd?: number
           payout_run_id?: string
           payout_usd?: number
+          role?: string | null
           sent?: number
           whatsapp_number_id?: string | null
           workspace_id?: string | null
@@ -1697,6 +1781,8 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          auto_generated: boolean
+          cadence: string | null
           csv_storage_path: string | null
           generated_at: string
           generated_by: string | null
@@ -1711,6 +1797,9 @@ export type Database = {
           pdf_storage_path: string | null
           period_from: string
           period_to: string
+          role: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
           source_data_hash: string | null
           source_event_count: number
           status: string
@@ -1723,6 +1812,8 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          auto_generated?: boolean
+          cadence?: string | null
           csv_storage_path?: string | null
           generated_at?: string
           generated_by?: string | null
@@ -1737,6 +1828,9 @@ export type Database = {
           pdf_storage_path?: string | null
           period_from: string
           period_to: string
+          role?: string | null
+          slack_channel_id?: string | null
+          slack_message_ts?: string | null
           source_data_hash?: string | null
           source_event_count?: number
           status?: string
@@ -1749,6 +1843,8 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          auto_generated?: boolean
+          cadence?: string | null
           csv_storage_path?: string | null
           generated_at?: string
           generated_by?: string | null
@@ -1763,6 +1859,9 @@ export type Database = {
           pdf_storage_path?: string | null
           period_from?: string
           period_to?: string
+          role?: string | null
+          slack_channel_id?: string | null
+          slack_message_ts?: string | null
           source_data_hash?: string | null
           source_event_count?: number
           status?: string
@@ -2885,6 +2984,8 @@ export type Database = {
         Returns: {
           approved_at: string | null
           approved_by: string | null
+          auto_generated: boolean
+          cadence: string | null
           csv_storage_path: string | null
           generated_at: string
           generated_by: string | null
@@ -2899,6 +3000,9 @@ export type Database = {
           pdf_storage_path: string | null
           period_from: string
           period_to: string
+          role: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
           source_data_hash: string | null
           source_event_count: number
           status: string
@@ -2914,6 +3018,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      bm_assignment_rate_at: {
+        Args: { _at: string; _bm: string; _partner: string; _role: string }
+        Returns: number
       }
       campaign_recipient_counts: {
         Args: { p_campaign_ids: string[] }
@@ -2960,6 +3068,17 @@ export type Database = {
       }
       generate_payout_run: {
         Args: { _from: string; _partner_id: string; _to: string }
+        Returns: string
+      }
+      generate_payout_run_role: {
+        Args: {
+          _auto?: boolean
+          _cadence?: string
+          _from: string
+          _partner_id: string
+          _role: string
+          _to: string
+        }
         Returns: string
       }
       get_campaign_report: {
@@ -3049,6 +3168,8 @@ export type Database = {
         Returns: {
           approved_at: string | null
           approved_by: string | null
+          auto_generated: boolean
+          cadence: string | null
           csv_storage_path: string | null
           generated_at: string
           generated_by: string | null
@@ -3063,6 +3184,9 @@ export type Database = {
           pdf_storage_path: string | null
           period_from: string
           period_to: string
+          role: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
           source_data_hash: string | null
           source_event_count: number
           status: string
@@ -3126,6 +3250,8 @@ export type Database = {
         Returns: {
           approved_at: string | null
           approved_by: string | null
+          auto_generated: boolean
+          cadence: string | null
           csv_storage_path: string | null
           generated_at: string
           generated_by: string | null
@@ -3140,6 +3266,49 @@ export type Database = {
           pdf_storage_path: string | null
           period_from: string
           period_to: string
+          role: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
+          source_data_hash: string | null
+          source_event_count: number
+          status: string
+          total_billed_usd: number
+          total_payout_usd: number
+          totals_delivered: number
+          totals_failed: number
+          totals_sent: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payout_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      recompute_payout_run_role: {
+        Args: { _run_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          auto_generated: boolean
+          cadence: string | null
+          csv_storage_path: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          margin_usd: number
+          notes: string | null
+          paid_amount_usd: number | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_reference: string | null
+          partner_id: string
+          pdf_storage_path: string | null
+          period_from: string
+          period_to: string
+          role: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
           source_data_hash: string | null
           source_event_count: number
           status: string
@@ -3198,6 +3367,8 @@ export type Database = {
         Returns: {
           approved_at: string | null
           approved_by: string | null
+          auto_generated: boolean
+          cadence: string | null
           csv_storage_path: string | null
           generated_at: string
           generated_by: string | null
@@ -3212,6 +3383,9 @@ export type Database = {
           pdf_storage_path: string | null
           period_from: string
           period_to: string
+          role: string | null
+          slack_channel_id: string | null
+          slack_message_ts: string | null
           source_data_hash: string | null
           source_event_count: number
           status: string
