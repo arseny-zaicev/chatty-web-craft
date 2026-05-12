@@ -100,104 +100,49 @@ const SECTION_FILTER_OPTIONS: Array<[string, string]> = [
 const EMPTY_ROWS: Row[] = [];
 const EMPTY_WORKSPACES: WS[] = [];
 
-const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
-  const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: templates }, { data: lastEvents }, { data: recipients }, { data: campaignsData }, { data: convs }, { data: outMsgs }] =
-    await Promise.all([
-      supabase.from("whatsapp_numbers").select("*"),
-      supabase.from("workspaces").select("id, name, slug").eq("is_active", true).order("name"),
-      supabase.from("message_templates").select("whatsapp_number_id, status"),
-      supabase.from("whatsapp_message_events")
-        .select("whatsapp_number_id, event_type, error_message, received_at")
-        .order("received_at", { ascending: false }).limit(20000),
-      supabase.from("campaign_recipients").select("whatsapp_number_id, status, sent_at"),
-      supabase.from("campaigns").select("id, name, status, workspace_id, whatsapp_number_id, scheduled_start_at, created_at"),
-      supabase.from("conversations").select("id, whatsapp_number_id"),
-      supabase.from("messages").select("conversation_id, direction"),
-    ]);
-  if (nErr) throw nErr; if (wErr) throw wErr;
+type FleetSummaryRow = {
+  number_id: string;
+  templates_total: number;
+  templates_approved: number;
+  recipients_sent: number;
+  recipients_failed: number;
+  recipients_pending: number;
+  outbound_messages: number;
+  webhook_errors: number;
+  errors_since_unban: number;
+  last_campaign_at: string | null;
+  last_campaign_name: string | null;
+  active_campaigns: ActiveCampaign[] | null;
+};
 
-  const { data: usage } = await supabase.from("whatsapp_number_usage_summary").select("*");
+const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
+  // Server-side aggregate: one round-trip instead of pulling every message,
+  // conversation, recipient and event into the browser.
+  const [{ data: numbers, error: nErr }, { data: workspaces, error: wErr }, { data: usage }, { data: summaries, error: sErr }] = await Promise.all([
+    supabase.from("whatsapp_numbers").select("*"),
+    supabase.from("workspaces").select("id, name, slug").eq("is_active", true).order("name"),
+    supabase.from("whatsapp_number_usage_summary").select("*"),
+    supabase.rpc("fleet_number_summaries"),
+  ]);
+  if (nErr) throw nErr; if (wErr) throw wErr; if (sErr) throw sErr;
+
   const usageMap = new Map<string, { last_used_at: string | null; last_workspace_id: string | null }>();
   for (const u of (usage ?? []) as Array<{ number_id: string; last_used_at: string | null; last_workspace_id: string | null }>) {
     usageMap.set(u.number_id, { last_used_at: u.last_used_at, last_workspace_id: u.last_workspace_id });
   }
-  const activeByNumber = new Map<string, ActiveCampaign[]>();
-  for (const c of (campaignsData ?? []) as Array<{ id: string; name: string; status: string; workspace_id: string | null; whatsapp_number_id: string | null }>) {
-    if (!c.whatsapp_number_id) continue;
-    if (!["scheduled", "running", "paused"].includes(c.status)) continue;
-    const arr = activeByNumber.get(c.whatsapp_number_id) ?? [];
-    arr.push({ id: c.id, name: c.name, status: c.status, workspace_id: c.workspace_id });
-    activeByNumber.set(c.whatsapp_number_id, arr);
-  }
+
+  const summaryMap = new Map<string, FleetSummaryRow>();
+  for (const s of (summaries ?? []) as FleetSummaryRow[]) summaryMap.set(s.number_id, s);
 
   const wsMap = new Map((workspaces ?? []).map((w) => [w.id, w]));
-  const tpl = new Map<string, { total: number; approved: number }>();
-  for (const t of templates ?? []) {
-    if (!t.whatsapp_number_id) continue;
-    const cur = tpl.get(t.whatsapp_number_id) ?? { total: 0, approved: 0 };
-    cur.total += 1;
-    if (t.status === "approved") cur.approved += 1;
-    tpl.set(t.whatsapp_number_id, cur);
-  }
-
-  // outbound messages per number (via conversation)
-  const convToNum = new Map<string, string>();
-  for (const c of (convs ?? []) as Array<{ id: string; whatsapp_number_id: string | null }>) {
-    if (c.whatsapp_number_id) convToNum.set(c.id, c.whatsapp_number_id);
-  }
-  const totalSent = new Map<string, number>();
-  const totalErrors = new Map<string, number>();
-  for (const m of (outMsgs ?? []) as Array<{ conversation_id: string; direction: string }>) {
-    if (m.direction !== "outbound") continue;
-    const nid = convToNum.get(m.conversation_id);
-    if (!nid) continue;
-    totalSent.set(nid, (totalSent.get(nid) ?? 0) + 1);
-  }
-  // campaign recipients sent/failed/pending per number
-  const pendingByNumber = new Map<string, number>();
-  for (const r of (recipients ?? []) as Array<{ whatsapp_number_id: string | null; status: string }>) {
-    if (!r.whatsapp_number_id) continue;
-    if (r.status === "sent" || r.status === "delivered" || r.status === "read") {
-      totalSent.set(r.whatsapp_number_id, (totalSent.get(r.whatsapp_number_id) ?? 0) + 1);
-    } else if (r.status === "failed") {
-      totalErrors.set(r.whatsapp_number_id, (totalErrors.get(r.whatsapp_number_id) ?? 0) + 1);
-    } else if (r.status === "pending" || r.status === "scheduled" || r.status === "sending") {
-      pendingByNumber.set(r.whatsapp_number_id, (pendingByNumber.get(r.whatsapp_number_id) ?? 0) + 1);
-    }
-  }
-  // webhook failed events
-  for (const e of lastEvents ?? []) {
-    if (!e.whatsapp_number_id) continue;
-    if (e.event_type === "failed" || e.event_type === "error") {
-      totalErrors.set(e.whatsapp_number_id, (totalErrors.get(e.whatsapp_number_id) ?? 0) + 1);
-    }
-  }
-  // last campaign per number
-  const lastCampaignAt = new Map<string, string>();
-  const lastCampaignName = new Map<string, string>();
-  for (const c of (campaignsData ?? []) as Array<{ name: string; whatsapp_number_id: string | null; scheduled_start_at: string | null; created_at: string }>) {
-    if (!c.whatsapp_number_id) continue;
-    const ts = c.scheduled_start_at ?? c.created_at;
-    const cur = lastCampaignAt.get(c.whatsapp_number_id);
-    if (!cur || ts > cur) {
-      lastCampaignAt.set(c.whatsapp_number_id, ts);
-      lastCampaignName.set(c.whatsapp_number_id, c.name);
-    }
-  }
-
 
   const rows: Row[] = (numbers ?? []).map((n: Record<string, unknown>) => {
     const ws = n.workspace_id ? wsMap.get(n.workspace_id as string) : null;
-    const t = tpl.get(n.id as string) ?? { total: 0, approved: 0 };
-    const unrestrictedAt = (n.unrestricted_at as string) ?? null;
-    let errorsSinceUnban = 0;
-    if (unrestrictedAt) {
-      for (const e of lastEvents ?? []) {
-        if (e.whatsapp_number_id !== n.id) continue;
-        if (e.received_at < unrestrictedAt) break; // ordered desc
-        if (e.event_type === "failed" || e.event_type === "error") errorsSinceUnban += 1;
-      }
-    }
+    const s = summaryMap.get(n.id as string);
+    const active = (s?.active_campaigns ?? []) as ActiveCampaign[];
+    const pending = Number(s?.recipients_pending ?? 0);
+    const totalSent = Number(s?.outbound_messages ?? 0) + Number(s?.recipients_sent ?? 0);
+    const totalErrors = Number(s?.recipients_failed ?? 0) + Number(s?.webhook_errors ?? 0);
     return {
       id: n.id as string,
       phone_number: n.phone_number as string,
@@ -221,20 +166,20 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       workspace_id: (n.workspace_id as string) ?? null,
       workspace_name: ws?.name ?? "Unassigned",
       workspace_slug: ws?.slug ?? "",
-      templates_total: t.total,
-      templates_approved: t.approved,
-      last_campaign_at: lastCampaignAt.get(n.id as string) ?? null,
-      last_campaign_name: lastCampaignName.get(n.id as string) ?? null,
-      total_sent: totalSent.get(n.id as string) ?? 0,
-      total_errors: totalErrors.get(n.id as string) ?? 0,
-      errors_since_unban: errorsSinceUnban,
+      templates_total: Number(s?.templates_total ?? 0),
+      templates_approved: Number(s?.templates_approved ?? 0),
+      last_campaign_at: s?.last_campaign_at ?? null,
+      last_campaign_name: s?.last_campaign_name ?? null,
+      total_sent: totalSent,
+      total_errors: totalErrors,
+      errors_since_unban: Number(s?.errors_since_unban ?? 0),
       restricted_at: (n.restricted_at as string) ?? null,
-      unrestricted_at: unrestrictedAt,
+      unrestricted_at: (n.unrestricted_at as string) ?? null,
       display_name_status: ((n.display_name_status as DnStatus) ?? "pending"),
       display_name_checked_at: (n.display_name_checked_at as string) ?? null,
-      active_campaigns: activeByNumber.get(n.id as string) ?? [],
-      pending_recipients: pendingByNumber.get(n.id as string) ?? 0,
-      is_sending_now: (activeByNumber.get(n.id as string) ?? []).some((c) => c.status === "running") && (pendingByNumber.get(n.id as string) ?? 0) > 0,
+      active_campaigns: active,
+      pending_recipients: pending,
+      is_sending_now: active.some((c) => c.status === "running") && pending > 0,
       last_used_at: usageMap.get(n.id as string)?.last_used_at ?? null,
       last_used_workspace_id: usageMap.get(n.id as string)?.last_workspace_id ?? null,
       quality_rating: (n.quality_rating as string) ?? null,
