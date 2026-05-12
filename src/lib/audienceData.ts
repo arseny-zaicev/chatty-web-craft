@@ -20,6 +20,14 @@ export type AudienceBatch = {
   derived_variables_preview: Array<Record<string, string>>;
 };
 
+/** Parse the `__static_values__=<json>` line we stash in audience_batches.notes. */
+export function parseStaticValues(notes: string | null | undefined): Record<string, string> {
+  if (!notes) return {};
+  const m = notes.match(/^__static_values__=(\{[^\n]*\})/);
+  if (!m) return {};
+  try { return JSON.parse(m[1]) as Record<string, string>; } catch { return {}; }
+}
+
 export type AudienceBatchStats = {
   batch_id: string;
   total: number;

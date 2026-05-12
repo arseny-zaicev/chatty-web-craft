@@ -1,135 +1,123 @@
-## Что я понял (важно)
+Спасибо за уточнение. Переделываю план с учетом:
+- fallback фразы (`there`, `your team`, `your space`) допустимы ТОЛЬКО для `var_1` (имя), когда у конкретной строки нет имени.
+- `var_2` и `var_3` в нашей модели - campaign-static. Они одинаковые для всей кампании и приходят из copy в Materials, а не из колонок данных.
+- Текущая поломка goflow: оператор не передал в Codex значения для `{{2}}` и `{{3}}`, поэтому Codex применил name-fallbacks и к ним. Запись в БД формально валидна, но preview показывает мусор.
 
-Я ошибся в прошлых правках. `variables_sample` из Gupshup — это **только эталонный пример** для прохождения модерации, один на весь шаблон. Использовать его как `__static:` в Launch — это ставить **одинаковый текст всем контактам** для `{{2}}` и `{{3}}`. Это **неправильно** — цель `{{2}}/{{3}}` именно в том, что у каждой строки своя уникальная подстановка (Variant 1: "retail channel expansion opportunities" / Variant 2: "business funding").
+Что нашел в данных goflow batch `2026-05-11 | US | WA Groups + Hubspot`:
+- 2808 valid rows
+- `var_2`: 100% = `your team`
+- `var_3`: 1089 = `your space`, остальные = названия групп
+- Должно быть из Materials:
+  - `var_2 = retail channel expansion opportunities`
+  - `var_3 = We have a few exclusive incentives and partnership opportunities available with Amazon, Walmart, Target, Macy's, Nordstrom, Best Buy, Home Depot, and Lowe's, and I wanted to see if it may be worth exploring if your products are a fit.`
 
-## Как это работает в Salesforge (rev-engineered)
+План
 
-1. **Data → Ingestion preset** (`src/lib/prepPresets.ts`) задаёт `variables: [{ key: "var_1", … }, { key: "var_2", … }, …]`.
-2. При создании batch в `audience_batches.variable_schema` пишется массив `["var_1","var_2","var_3"]`.
-3. Codex по промпту (`buildPresetPrompt`) парсит сырые строки оператора и инсёртит в `audience_rows` объект `derived_payload: { var_1: "Mark", var_2: "Acme Realty", var_3: "Sales lead" }` — **по строке на контакт, у каждого свои значения**.
-4. Launch wizard (`audienceSource = "database"`):
-   - `columns = dbBatch.variable_schema` = `["var_1","var_2","var_3"]`.
-   - `variableNames = activeLogical.variables` = `["1","2","3"]` (для GO) или `["name"]` (Salesforge).
-   - Auto-map в `LaunchWizard.tsx:260` пробует `var_<v>` → находит `var_1`/`var_2`/`var_3` для numeric vars.
-   - При рендере (`LaunchWizard.tsx:546`) берёт `r.payload[src] ?? r.derived_payload[src]` — то есть **per-row уникальное значение**.
-5. Salesforge сработал, потому что batch был создан через preset, `derived_payload` имеет `var_1`, `var_2` и т.д. — мэтч идеальный.
+1) Concept fix in code: variable kinds
 
-## Почему goflow сломан
+   В `prepPresets.ts` каждый preset variable получает поле `kind`:
+   - `per_row` (var_1, source = `first_name`, fallback разрешен)
+   - `campaign_static` (var_2, var_3 - один и тот же текст для всех контактов кампании)
 
-- Для goflow batch создавали либо без preset, либо CSV-аплоад (без колонок `var_2`/`var_3`), либо preset с одной переменной (`marketing_basic` имеет только `var_1`).
-- В Step 6 numeric `{2}`, `{3}` ничего не находят → fallback в `__static:<sample>` ставит **один и тот же** "retail channel expansion opportunities" всем 1000 контактам.
-- Никаких варнингов, что это означает «всем одинаковый текст» — оператор не знает, что данные нужно готовить иначе.
+   У `campaign_static` появляется поле `value: string` (заполняется при создании batch'а в UI - оператор вставляет текст из Materials).
 
-## Что меняем
+2) UI: Create batch dialog (Data screen)
 
-### 1. Launch Wizard — убрать тихий static-fallback, заменить варнингом
+   Когда оператор кликает Create batch на goflow preset, он видит:
+   - Country, Audience, Batch name (как сейчас)
+   - Поля для каждой `campaign_static` переменной с лейблами:
+     - "{{2}} - same text for everyone (paste from Materials):"
+     - "{{3}} - same text for everyone (paste from Materials):"
+   - Inline пояснение:
+     "var_1 = per-row name (auto). var_2 / var_3 = same for everyone in this campaign. Paste exact copy from Materials below."
+   - Validation: длина > 5 символов, не равно `your team / your space / there`, не содержит `{` / `}` / `{{`.
 
-`src/pages/workspace/LaunchWizard.tsx` (Step 6, строки 244-276):
+3) Prompt builder: hard contract
 
-- **Удалить** автоподстановку `__static:${sample[i]}` для numeric vars. Sample-копия больше не считается валидным дефолтом.
-- Вместо неё — для каждой нерасмапленной numeric переменной показать **жёлтый inline-warning** прямо в Step 6:
-  ```
-  {2} → no column matched in this audience.
-  Per-row data missing. Each contact will receive the SAME text.
-  Recommended: re-prepare the batch with a preset that defines var_2.
-  Sample copy from template (read-only): "retail channel expansion opportunities"
-  [ Use sample for everyone (not recommended) ]  [ Set static value ]
-  ```
-- Если оператор всё-таки жмёт «Use sample» — пишем static, но маркируем поле бейджем `Same for everyone` (красный outline).
-- В Step 8 (Launch summary) — отдельный блок «Per-row variables» со списком переменных и источником: `{1} ← derived_payload.var_1 (per-row)` или `{2} ← static "…" (same for everyone)`. Если хоть одна `static for everyone` — Launch button становится `secondary` + текст "I understand all contacts get the same text for {2}, {3}".
+   `buildPresetPrompt` теперь печатает блок:
 
-### 2. Database source — варнинг на этапе выбора batch
+   ```
+   VARIABLE CONTRACT (READ TWICE)
+     var_1 (per_row): from `first_name`. If empty -> fallback "there". OK to repeat.
+     var_2 (campaign_static): EVERY row MUST have this exact value:
+       """
+       <pasted var_2>
+       """
+     var_3 (campaign_static): EVERY row MUST have this exact value:
+       """
+       <pasted var_3>
+       """
 
-В Step 5 (Audience), когда выбран DB batch и активный template имеет `variables.length > 0`:
-- Сравнить `template.variables` (после маппинга на `var_<n>`) с `dbBatch.variable_schema`.
-- Если не хватает — Alert: `This audience does not provide var_2, var_3. Either pick another batch or re-prepare with a preset that includes them. Step 6 will fall back to one-size-fits-all text.`
-- Кнопка `Open Data prep →` (deep-link на `/ws/<slug>/data`).
+   DO NOT
+     - apply name-fallbacks ("there", "your team", "your space", "your area", "your role", "your space") to var_2 / var_3
+     - paraphrase, shorten, translate, or "personalize" var_2 / var_3
+     - leave var_2 / var_3 empty
+     - copy template Gupshup "Sample" text
 
-### 3. CSV source — то же
+   SANITY CHECK BEFORE INSERT
+     - var_1 distinct count > 50% of rows OR all rows are anonymous (then fallback "there" allowed)
+     - var_2 == exact value above for 100% of rows
+     - var_3 == exact value above for 100% of rows
+     If any check fails -> STOP, print which rows failed, do not insert.
+   ```
 
-Если `audienceSource === "csv"` и `variableNames` содержат numeric, проверить, что CSV header содержит `var_2`/`var_3` (или эквивалент). Иначе — тот же Alert + ссылка на пример CSV (`phone,name,var_2,var_3`).
+   Старое правило "var_2/var_3 must be unique per row" удаляется. Это была моя ошибка - оно не отражает реальную модель.
 
-### 4. Prep prompt — явно требовать numeric vars шаблона
+4) UI: tooltip / explainer near every prompt
 
-`src/lib/prepPresets.ts`:
-- Добавить новый preset `marketing_per_row_2` и `marketing_per_row_3` (1 имя + 1-2 per-row вариативных предложения), категория `marketing`. Это покрывает GO Greece/Malta и FB Marketing-стиль шаблонов.
-- В `buildPresetPrompt` добавить блок `TEMPLATE VARIABLE CONTRACT`:
-  ```
-  The WhatsApp template uses placeholders {{1}}, {{2}}, {{3}}.
-  Each must be filled per-row from the source data:
-    {{1}} ← derived_payload.var_1  (first name)
-    {{2}} ← derived_payload.var_2  (per-contact context, NEVER a constant)
-    {{3}} ← derived_payload.var_3  (per-contact context, NEVER a constant)
-  If two rows would receive the same var_2/var_3 value — that is a data quality bug. Flag it.
-  ```
-- В `WORKFLOW FOR CODEX` шаг 7: «Sanity check: for var_2 and above, count distinct values. If `distinct < 0.3 * total_valid` — print a warning, do not insert.»
-- В `DO NOT` добавить: `do NOT copy the template "Sample" text into every row — that defeats the per-row variable system`.
+   Над каждым "Copy prompt" блоком (Data presets и Custom prep profiles) выводится короткая шпаргалка в свернутом блоке:
 
-`src/lib/prepProfiles.ts` (custom profiles): тот же `TEMPLATE VARIABLE CONTRACT` + sanity-check шаг.
+   ```
+   How variables work:
+   - var_1 = per recipient (name). Fallback "there" allowed.
+   - var_2, var_3 = same for everyone in this campaign. Paste exact text in the Create batch step.
+   - Never use "your team", "your space" for var_2 / var_3.
+   ```
 
-### 5. Sync templates — оставить `variables_sample` как **read-only reference**
+   Это снимает риск, что в следующий раз оператор отправит Codex prompt без значений.
 
-`supabase/functions/campaigns/index.ts` (`syncTemplates` и `extractSamplesByAlignment` уже добавили):
-- Ничего не ломаем. `variables_sample` продолжает писаться, но теперь его роль — справочник для оператора («так выглядел один из примеров при модерации»), а не источник для Launch.
-- В `TemplatesView` бейдж sample-copy переименовать из `Sample copy: ✓` в `Reference sample (moderation only)` — чтобы не путать.
+5) Launch Wizard: pre-launch QA на реальных строках
 
-### 6. Документация в коде
+   В Step 5 / Step 6 вычисляется per-batch QA по `audience_rows.derived_payload`:
+   - per_row variable: distinct ratio > 30% OR один константный fallback `there` (тогда warning, не блок)
+   - campaign_static variable:
+     - все строки должны иметь одно и то же значение
+     - значение не должно входить в banned list: `your team`, `your space`, `your area`, `your role`, `there`, пустая строка
+     - длина > 5 символов
+   - Если фейл - красный блок:
+     "var_2 looks broken: 2808 rows have value 'your team'. Expected campaign-static copy from Materials. Re-prepare the batch."
+   - Кнопка Launch блокируется при фейле campaign_static.
 
-Шапка-комментарий в `LaunchWizard.tsx` Step 6 и в `prepPresets.ts`:
-```
-VARIABLE SOURCE PRIORITY (per recipient):
-  1) audience column matching var_<n> or variable name        → per-row
-  2) static value explicitly set by operator in Step 6        → same for all
-  3) (DEPRECATED) template Gupshup sample                     → never auto, only manual
-Anything below #1 means EVERY contact gets the same text — that is a data prep bug, not a feature.
-```
+6) Step 8 Preview: source breakdown
 
-## Технические детали
+   Под каждым sample message добавляется:
 
-```ts
-// LaunchWizard.tsx — replace lines 250-276
-useEffect(() => {
-  if (!variableNames.length) return;
-  setMapping((prev) => {
-    const next = { ...prev };
-    let changed = false;
-    variableNames.forEach((v, i) => {
-      if (next[v]) return;
-      const lower = v.toLowerCase();
-      const stripped = lower.replace(/^var_/, "");
-      const tryCols = [lower, `var_${stripped}`, stripped, `var_${i + 1}`];
-      for (const candidate of tryCols) {
-        const found = columns.find((c) => c.toLowerCase() === candidate);
-        if (found) { next[v] = found; changed = true; break; }
-      }
-      // NO sample fallback here. Numeric vars without a column = explicit operator action.
-    });
-    return changed ? next : prev;
-  });
-}, [variableNames, columns]);
+   ```
+   {{1}} <- derived_payload.var_1 (per-row): "Ray Mondelle"
+   {{2}} <- derived_payload.var_2 (campaign-static): "retail channel expansion opportunities"
+   {{3}} <- derived_payload.var_3 (campaign-static): "We have a few exclusive..."
+   ```
 
-// New: per-variable warning state
-const variableSourceKind = (v: string): "per_row" | "static" | "missing" => {
-  const m = mapping[v];
-  if (!m) return "missing";
-  if (m.startsWith("__static:")) return m.length > "__static:".length ? "static" : "missing";
-  return "per_row";
-};
-const sameForEveryoneCount = variableNames.filter((v) => variableSourceKind(v) === "static").length;
-```
+   Если значение в banned list, оно подсвечивается красным.
 
-```ts
-// Audience batch schema check (Step 5)
-const requiredVarKeys = variableNames.map((v, i) => {
-  const lower = v.toLowerCase();
-  return /^\d+$/.test(v) ? `var_${v}` : (lower.startsWith("var_") ? lower : `var_${lower}`);
-});
-const missingFromSchema = requiredVarKeys.filter((k) => !columns.some((c) => c.toLowerCase() === k));
-```
+7) Backfill текущего goflow batch
 
-## Out of scope
+   Migration: для batch `2e0706f3-9933-49e2-8d44-a9529a71c6a0`, для всех `validation_status = 'valid'` AND `usage_status = 'unused'`, обновить `derived_payload`:
+   - `var_2` = `retail channel expansion opportunities`
+   - `var_3` = `We have a few exclusive incentives and partnership opportunities available with Amazon, Walmart, Target, Macy's, Nordstrom, Best Buy, Home Depot, and Lowe's, and I wanted to see if it may be worth exploring if your products are a fit.`
+   - `var_1` оставить.
 
-- Не трогаем dispatcher / send-whatsapp.
-- Не редактируем Gupshup `Sample` через API.
-- Не меняем структуру `audience_rows` / `audience_batches` — только UI + промпты.
-- Не делаем автогенерацию variant-копий через Lovable AI (это отдельная задача).
+   После этого preview будет показывать корректное сообщение.
+
+8) Что НЕ трогаю
+
+   - Код dispatcher / Gupshup отправки.
+   - `import-audience-from-personal` - отдельной задачей при необходимости (но добавлю в notes: сейчас функция не тянет `derived_payload`, так что pull из personal базы в любом случае ломает campaign-static модель и должен быть пересмотрен отдельно).
+   - Auto-variant generation, audience_batches схему.
+
+Результат
+
+- В UI рядом с каждым промптом будет короткое описание разницы var_1 vs var_2/var_3.
+- Codex получит жесткий contract с exact значениями для campaign-static переменных и явным запретом fallback.
+- Launch Wizard заблокирует запуск, если var_2/var_3 в БД сломаны.
+- Текущий goflow batch будет починен миграцией, и preview покажет правильное сообщение из Materials.

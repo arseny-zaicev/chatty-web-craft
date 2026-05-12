@@ -25,7 +25,7 @@ import {
   buildPrepPrompt, buildFallbackPrompt,
   type PrepProfile,
 } from "@/lib/prepProfiles";
-import { PREP_PRESETS, buildPresetPrompt, type PrepPreset } from "@/lib/prepPresets";
+import { PREP_PRESETS, buildPresetPrompt, type PrepPreset, type StaticValues, NAME_FALLBACK_PHRASES, VARIABLE_KIND_EXPLAINER } from "@/lib/prepPresets";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 export default function WorkspaceData() {
@@ -201,6 +201,7 @@ function PresetsSection({
   const [batchAudience, setBatchAudience] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
   const [batchNotes, setBatchNotes] = useState("");
+  const [staticValues, setStaticValues] = useState<StaticValues>({});
   const [busy, setBusy] = useState(false);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [pulling, setPulling] = useState(false);
@@ -229,7 +230,28 @@ function PresetsSection({
     setNameTouched(false);
     setBatchName(buildBatchName("", ""));
     setCreatedBatchId(null);
+    // Pre-fill campaign_static fields with empty strings so operator sees inputs.
+    const initial: StaticValues = {};
+    for (const v of p.variables) if (v.kind === "campaign_static") initial[v.key] = "";
+    setStaticValues(initial);
   };
+
+  // Validate every campaign_static field. Returns { ok, issues: { var_key: reason } }
+  const staticIssues = useMemo(() => {
+    if (!creating) return {} as Record<string, string>;
+    const out: Record<string, string> = {};
+    const banned = new Set(NAME_FALLBACK_PHRASES.map((s) => s.toLowerCase()));
+    for (const v of creating.variables) {
+      if (v.kind !== "campaign_static") continue;
+      const raw = (staticValues[v.key] ?? "").trim();
+      if (!raw) { out[v.key] = "Required - paste exact copy from Materials"; continue; }
+      if (raw.length < 5) { out[v.key] = "Too short - paste the full sentence"; continue; }
+      if (banned.has(raw.toLowerCase())) { out[v.key] = `"${raw}" is a name fallback, not campaign copy`; continue; }
+      if (/\{\{?[^}]+\}?\}/.test(raw)) { out[v.key] = "Looks like an unresolved {placeholder}"; continue; }
+    }
+    return out;
+  }, [creating, staticValues]);
+  const staticOk = Object.keys(staticIssues).length === 0;
 
   const onCountryChange = (val: string) => {
     setBatchCountry(val);
@@ -248,10 +270,17 @@ function PresetsSection({
 
   const submitBatch = async () => {
     if (!creating || !batchName.trim()) { toast.error("Batch name required"); return; }
+    if (!staticOk) { toast.error("Fill in every same-for-everyone variable below"); return; }
     setBusy(true);
     try {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not authenticated");
+      // Persist staticValues so Launch QA can verify each row matches.
+      // Stored in notes field as a header line (no schema change needed).
+      const staticHeader = Object.keys(staticValues).length > 0
+        ? `__static_values__=${JSON.stringify(staticValues)}\n`
+        : "";
+      const finalNotes = `${staticHeader}${batchNotes.trim()}`.trim() || null;
       const { data, error } = await (supabase.from("audience_batches") as any).insert({
         workspace_id: workspaceId,
         user_id: u.user.id,
@@ -259,7 +288,7 @@ function PresetsSection({
         country: batchCountry.trim() || null,
         campaign_type: creating.campaignType,
         copy_profile: creating.id,
-        notes: batchNotes.trim() || null,
+        notes: finalNotes,
         variable_schema: creating.variables.map((v) => v.key),
         source_filename: null,
         prep_profile_id: null,
@@ -286,9 +315,10 @@ function PresetsSection({
         <h2 className="font-medium text-sm">Ingestion presets</h2>
         <Badge variant="outline" className="text-[10px]">primary workflow</Badge>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">
+      <p className="text-xs text-muted-foreground mb-2">
         Pick a preset → create the empty batch → copy its prompt → run it in Codex with the raw data. Codex inserts validated rows into <code>public.audience_rows</code> under the batch_id, then refresh below and launch.
       </p>
+      <pre className="text-[11px] bg-muted/40 border border-border rounded-md p-2 mb-3 whitespace-pre-wrap font-mono text-muted-foreground">{VARIABLE_KIND_EXPLAINER}</pre>
 
       <div className="grid gap-2 sm:grid-cols-2">
         {PREP_PRESETS.map((p) => (
@@ -299,8 +329,16 @@ function PresetsSection({
               {p.isRecommended && <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30" variant="outline">Recommended</Badge>}
             </div>
             <div className="text-[11px] text-muted-foreground mt-1">{p.blurb}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">
-              vars: {p.variables.map((v) => v.key).join(", ")} · required: {p.requiredSourceFields.join(", ")}
+            <div className="text-[11px] text-muted-foreground mt-1 space-y-0.5">
+              {p.variables.map((v) => (
+                <div key={v.key}>
+                  <span className="font-mono">{v.key}</span>{" "}
+                  {v.kind === "per_row"
+                    ? <span className="text-emerald-600">[per row]</span>
+                    : <span className="text-rose-600">[same for everyone]</span>}{" "}
+                  <span className="opacity-70">- {v.description}</span>
+                </div>
+              ))}
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>
@@ -372,10 +410,52 @@ function PresetsSection({
                 </div>
               </div>
 
+              {/* Variable explainer + campaign_static inputs */}
+              <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                <div className="text-xs font-medium">Variables</div>
+                <pre className="text-[11px] bg-background/50 border border-border rounded-md p-2 whitespace-pre-wrap font-mono text-muted-foreground">{VARIABLE_KIND_EXPLAINER}</pre>
+                <div className="space-y-2">
+                  {creating.variables.map((v) => {
+                    if (v.kind === "per_row") {
+                      return (
+                        <div key={v.key} className="text-[11px] text-muted-foreground">
+                          <span className="font-mono text-foreground">{v.key}</span>{" "}
+                          <span className="text-emerald-600">[per row]</span>{" "}
+                          - {v.description} (auto from <code>{v.source}</code>{v.fallback ? `, fallback "${v.fallback}"` : ""})
+                        </div>
+                      );
+                    }
+                    const issue = staticIssues[v.key];
+                    return (
+                      <div key={v.key} className="space-y-1">
+                        <label className="text-[11px] flex items-center gap-2 flex-wrap">
+                          <span className="font-mono">{v.key}</span>
+                          <span className="text-rose-600">[same for everyone]</span>
+                          <span className="text-muted-foreground">- {v.description}</span>
+                        </label>
+                        <Textarea
+                          rows={3}
+                          placeholder={`Paste exact ${v.key} text from Materials, e.g.\n${v.example}`}
+                          value={staticValues[v.key] ?? ""}
+                          onChange={(e) => setStaticValues((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                          disabled={!!createdBatchId}
+                          className={issue ? "border-amber-500" : ""}
+                        />
+                        {issue && (
+                          <div className="text-[11px] text-amber-600 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> {issue}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {!createdBatchId && (
                 <DialogFooter>
                   <Button variant="ghost" onClick={() => setCreating(null)}>Cancel</Button>
-                  <Button onClick={submitBatch} disabled={busy || !batchName.trim()}>
+                  <Button onClick={submitBatch} disabled={busy || !batchName.trim() || !staticOk}>
                     {busy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Database className="w-4 h-4 mr-1" />}
                     Create batch
                   </Button>
@@ -391,7 +471,7 @@ function PresetsSection({
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Codex prompt (batch_id baked in)</div>
                     <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap font-mono max-h-[40vh] overflow-y-auto">
-{buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId })}
+{buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId, staticValues })}
                     </pre>
                   </div>
                   <DialogFooter>
@@ -433,7 +513,7 @@ function PresetsSection({
                         ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Pulling...</>
                         : <><Database className="w-3.5 h-3.5 mr-1" /> Pull from my Supabase</>}
                     </Button>
-                    <Button disabled={pulling} onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId }), `${creating.name} prompt`)}>
+                    <Button disabled={pulling} onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId, staticValues }), `${creating.name} prompt`)}>
                       <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
                     </Button>
                   </DialogFooter>

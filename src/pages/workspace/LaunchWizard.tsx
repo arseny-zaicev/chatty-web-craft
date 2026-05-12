@@ -21,9 +21,10 @@ import {
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
 import {
-  audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows,
+  audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows, parseStaticValues,
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
 } from "@/lib/audienceData";
+import { NAME_FALLBACK_PHRASES } from "@/lib/prepPresets";
 import { fetchPipelines, pipelinesKey, createPipeline } from "@/lib/pipelines";
 import PipelineConfigSheet from "@/components/workspace/PipelineConfigSheet";
 import { Settings as SettingsIcon } from "lucide-react";
@@ -553,6 +554,40 @@ export default function LaunchWizard() {
     enabled: Boolean(dbBatchId) && audienceSource === "database",
     staleTime: 30_000,
   });
+
+  // ----- Pre-launch QA for campaign_static variables -----
+  // Reads expected static values from batch.notes (__static_values__=...) and
+  // verifies every loaded sample row matches. If any row mismatches we flag and
+  // block Launch.
+  const expectedStaticValues = useMemo(
+    () => audienceSource === "database" ? parseStaticValues(dbBatch?.notes) : {},
+    [audienceSource, dbBatch?.notes],
+  );
+  const staticQaIssues = useMemo(() => {
+    if (audienceSource !== "database") return [] as Array<{ key: string; reason: string }>;
+    const rows = sampleDbRowsQ.data ?? [];
+    if (rows.length === 0) return [];
+    const banned = new Set(NAME_FALLBACK_PHRASES.map((s) => s.toLowerCase()));
+    const out: Array<{ key: string; reason: string }> = [];
+    for (const [key, expected] of Object.entries(expectedStaticValues)) {
+      const got = rows.map((r) => String(r.derived_payload?.[key] ?? ""));
+      const bad = got.find((g) => g.trim() !== expected.trim());
+      if (bad !== undefined) {
+        out.push({ key, reason: `Expected campaign-static "${expected.slice(0, 60)}${expected.length > 60 ? "..." : ""}", found "${bad.slice(0, 60)}${bad.length > 60 ? "..." : ""}" in audience rows. Re-prepare the batch.` });
+      }
+    }
+    // Even without expected values, flag obvious name-fallbacks landing in var_2/var_3.
+    if (Object.keys(expectedStaticValues).length === 0 && rows.length > 0) {
+      for (const k of Object.keys(rows[0].derived_payload ?? {})) {
+        if (k === "var_1") continue;
+        const vals = rows.map((r) => String(r.derived_payload?.[k] ?? "").trim().toLowerCase());
+        if (vals.every((v) => banned.has(v))) {
+          out.push({ key: k, reason: `Every sampled row has name-fallback text in ${k}. Re-prepare with campaign-static copy from Materials.` });
+        }
+      }
+    }
+    return out;
+  }, [audienceSource, expectedStaticValues, sampleDbRowsQ.data]);
 
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
@@ -1506,10 +1541,21 @@ export default function LaunchWizard() {
               {sameForEveryoneVars.length} variable(s) static (same for everyone): {sameForEveryoneVars.map((v) => `{${v}}`).join(" ")}.
             </div>
           )}
+          {staticQaIssues.length > 0 && (
+            <div className="text-xs text-rose-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <div>
+                <b>Audience data quality:</b>
+                <ul className="list-disc pl-4 mt-0.5">
+                  {staticQaIssues.map((i) => <li key={i.key}><span className="font-mono">{i.key}</span>: {i.reason}</li>)}
+                </ul>
+              </div>
+            </div>
+          )}
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0 || staticQaIssues.length > 0}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
