@@ -155,7 +155,7 @@ serve(async (req) => {
 
     const changes: Change[] = [];
     const totals = { approved: 0, rejected: 0, paused: 0, pending: 0 };
-    const statusUpdates: Array<{ id: string; status: string }> = [];
+    const rowUpdates: Array<{ id: string; status: string }> = [];
     const notifyIds: string[] = []; // rows whose last_notified_status we'll bump after Slack succeeds
 
     for (const t of remote) {
@@ -167,10 +167,9 @@ serve(async (req) => {
       const key = `${name}::${language}`;
       const base = baselineMap.get(key);
       if (!base) continue;
-      // Always sync DB status if remote drifted
-      if (base.current !== status) {
-        statusUpdates.push({ id: base.id, status });
-      }
+      // Always stamp synced_at for every template verified against Gupshup.
+      // If status drifted, update status in the same write.
+      rowUpdates.push({ id: base.id, status });
       // Only flag as a notifiable change if it differs from last notified baseline
       if (base.baseline !== status) {
         changes.push({ name, from: base.baseline, to: status });
@@ -178,11 +177,12 @@ serve(async (req) => {
       }
     }
 
-    if (!dryRun && statusUpdates.length > 0) {
-      for (const u of statusUpdates) {
+    if (!dryRun && rowUpdates.length > 0) {
+      const syncedAt = new Date().toISOString();
+      for (const u of rowUpdates) {
         await admin
           .from("message_templates")
-          .update({ status: u.status, synced_at: new Date().toISOString() })
+          .update({ status: u.status, synced_at: syncedAt })
           .eq("id", u.id);
       }
     }
