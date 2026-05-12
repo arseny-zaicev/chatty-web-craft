@@ -361,6 +361,42 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   if (cleanRecipients.length === 0) return json({ error: "No valid phone numbers" }, 400);
 
+  // Pre-flight: validate every template that will be used against its actual
+  // recipient slice. This is the guard that would have caught the Nov 2025
+  // 599/600 #131008 outage at launch instead of after the fact.
+  // Caller can pass `force: true` to bypass soft warnings (not hard errors).
+  const force = body.force === true;
+  const allWarnings: string[] = [];
+  try {
+    for (const n of rawNumbers) {
+      const tpl = templateRows.find((t: any) => t.id === n.template_id);
+      if (!tpl) continue;
+      // Recipients that will be routed to this template (round-robin slice).
+      const idx = rawNumbers.findIndex((x) => x.number_id === n.number_id);
+      const sliceForTpl = cleanRecipients.filter(
+        (_: any, i: number) => i % rawNumbers.length === idx,
+      );
+      const { warnings } = validateTemplateForLaunch(
+        { name: tpl.name, body: (tpl as any).body ?? null, variables: tpl.variables },
+        sliceForTpl,
+      );
+      allWarnings.push(...warnings);
+    }
+  } catch (err) {
+    return json({
+      error: err instanceof Error ? err.message : "Template validation failed",
+      code: "preflight_failed",
+    }, 400);
+  }
+  if (allWarnings.length > 0 && !force) {
+    return json({
+      error: "Launch needs confirmation",
+      code: "preflight_warnings",
+      warnings: allWarnings,
+    }, 409);
+  }
+
+
   const recipientCountry = ((number as any).country_code as string | null | undefined)?.toUpperCase() || null;
 
   const { data: campaign, error: campaignError } = await admin
