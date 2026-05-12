@@ -730,6 +730,18 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         >
                           Copy
                         </button>
+                        {(() => {
+                          const local = formatLocalTimeForPhone(active.contact_phone);
+                          if (!local) return null;
+                          return (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+                              title={`Contact local time · ${local.tz} (${local.offset})`}
+                            >
+                              🕒 {local.time} local
+                            </span>
+                          );
+                        })()}
                         {activeAssignee && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                             Assigned: {memberDisplayName(activeAssignee)}
