@@ -543,6 +543,26 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
     const vars = Array.from(new Set((bodyText || "").match(/\{\{\s*(\w+)\s*\}\}/g)?.map((m: string) => m.replace(/[{}\s]/g, "")) ?? []));
     const quality = (t.quality && String(t.quality) !== "UNKNOWN") ? String(t.quality).toLowerCase() : null;
 
+    // --- Sample copy extraction ---------------------------------------------
+    // Gupshup returns example values for {{1}}, {{2}}... in several shapes:
+    //   - container.example: "[John|funding|Score improved]" (pipe string)
+    //   - container.example: { body_text: [["John","funding","Score…"]] }
+    //   - container.bodyExample: ["John","funding","Score…"]
+    //   - t.example / t.exampleBody: same shapes
+    // We normalize to a flat string[] aligned with `vars` order.
+    // If the template has variables but no sample copy, we surface a warning
+    // so the operator goes back to Gupshup and fills the "Sample" field.
+    const variablesSample = parseGupshupExample(
+      container.example ?? container.bodyExample ?? t.example ?? t.exampleBody ?? null,
+      vars.length,
+    );
+    const headerText = typeof container.header === "string" ? container.header.slice(0, 1024) : null;
+    const footerText = typeof container.footer === "string" ? container.footer.slice(0, 1024) : null;
+    const incompleteSample = vars.length > 0 && variablesSample.length < vars.length;
+    const templateSyncWarning = incompleteSample
+      ? `Missing sample copy for ${vars.length - variablesSample.length} of ${vars.length} variables. Fill the "Sample" field in Gupshup and re-sync.`
+      : null;
+
     const { error: upsertError } = await admin
       .from("message_templates")
       .upsert(
