@@ -410,10 +410,52 @@ function PresetsSection({
                 </div>
               </div>
 
+              {/* Variable explainer + campaign_static inputs */}
+              <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                <div className="text-xs font-medium">Variables</div>
+                <pre className="text-[11px] bg-background/50 border border-border rounded-md p-2 whitespace-pre-wrap font-mono text-muted-foreground">{VARIABLE_KIND_EXPLAINER}</pre>
+                <div className="space-y-2">
+                  {creating.variables.map((v) => {
+                    if (v.kind === "per_row") {
+                      return (
+                        <div key={v.key} className="text-[11px] text-muted-foreground">
+                          <span className="font-mono text-foreground">{v.key}</span>{" "}
+                          <span className="text-emerald-600">[per row]</span>{" "}
+                          - {v.description} (auto from <code>{v.source}</code>{v.fallback ? `, fallback "${v.fallback}"` : ""})
+                        </div>
+                      );
+                    }
+                    const issue = staticIssues[v.key];
+                    return (
+                      <div key={v.key} className="space-y-1">
+                        <label className="text-[11px] flex items-center gap-2 flex-wrap">
+                          <span className="font-mono">{v.key}</span>
+                          <span className="text-rose-600">[same for everyone]</span>
+                          <span className="text-muted-foreground">- {v.description}</span>
+                        </label>
+                        <Textarea
+                          rows={3}
+                          placeholder={`Paste exact ${v.key} text from Materials, e.g.\n${v.example}`}
+                          value={staticValues[v.key] ?? ""}
+                          onChange={(e) => setStaticValues((prev) => ({ ...prev, [v.key]: e.target.value }))}
+                          disabled={!!createdBatchId}
+                          className={issue ? "border-amber-500" : ""}
+                        />
+                        {issue && (
+                          <div className="text-[11px] text-amber-600 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> {issue}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {!createdBatchId && (
                 <DialogFooter>
                   <Button variant="ghost" onClick={() => setCreating(null)}>Cancel</Button>
-                  <Button onClick={submitBatch} disabled={busy || !batchName.trim()}>
+                  <Button onClick={submitBatch} disabled={busy || !batchName.trim() || !staticOk}>
                     {busy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Database className="w-4 h-4 mr-1" />}
                     Create batch
                   </Button>
