@@ -824,7 +824,9 @@ function renderTemplateBody(body: string | null | undefined, variableNames: stri
   let out = String(body);
   // Positional {{1}}, {{2}}, ... mapped to variableNames order
   variableNames.forEach((name, idx) => {
-    const v = String((values ?? {})[name] ?? "");
+    const raw = String((values ?? {})[name] ?? "").trim();
+    // Fallback: first variable (typically the recipient name) → "there".
+    const v = raw || (idx === 0 ? "there" : "");
     out = out.replaceAll(`{{${idx + 1}}}`, v);
     out = out.replaceAll(`{${name}}`, v);
     out = out.replaceAll(`{{${name}}}`, v);

@@ -631,7 +631,8 @@ export default function LaunchWizard() {
           if (!raw) raw = String(r.derived_payload?.[`var_${v}`] ?? "");
           vals[v] = raw;
         }
-        const missing = variableNames.filter((v) => !String(vals[v] ?? "").trim());
+        // First variable falls back to "there" automatically, so don't flag it.
+        const missing = variableNames.filter((v, i) => i > 0 && !String(vals[v] ?? "").trim());
         return {
           phone: r.phone,
           body: renderTemplateBody(activeLogical.body, variableNames, vals),
@@ -641,7 +642,7 @@ export default function LaunchWizard() {
     }
     return mappedRecipients.slice(0, 3).map((r) => {
       const vals = r.variables ?? {};
-      const missing = variableNames.filter((v) => !String(vals[v] ?? "").trim());
+      const missing = variableNames.filter((v, i) => i > 0 && !String(vals[v] ?? "").trim());
       return {
         phone: r.phone,
         body: renderTemplateBody(activeLogical.body, variableNames, vals),
