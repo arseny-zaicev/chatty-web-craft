@@ -268,6 +268,29 @@ export default function LaunchWizard() {
     [recipients, mapping, variableNames],
   );
 
+  // Variables that have no mapping (or empty static) - blocks Launch.
+  const unmappedVars = useMemo(() => {
+    return variableNames.filter((v) => {
+      const m = mapping[v];
+      if (!m) return true;
+      if (m.startsWith("__static:")) return !m.slice("__static:".length).trim();
+      return false;
+    });
+  }, [variableNames, mapping]);
+
+  // Sample value preview for each variable (uses first available recipient/db row)
+  const variablePreviewValue = (v: string): string => {
+    const src = mapping[v];
+    if (src && src.startsWith("__static:")) return src.slice("__static:".length);
+    if (audienceSource === "database") {
+      const row = (sampleDbRowsQ?.data ?? [])[0];
+      if (!row || !src) return "";
+      return String((row.payload as any)?.[src] ?? (row.derived_payload as any)?.[src] ?? "");
+    }
+    const r = mappedRecipients[0];
+    return String(r?.variables?.[v] ?? "");
+  };
+
   // ----- Sender pools (numbers grouped by country) -----
   const pools = useMemo(() => groupNumbersByCountry(numbers), [numbers]);
 
