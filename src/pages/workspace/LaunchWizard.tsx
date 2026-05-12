@@ -1018,15 +1018,20 @@ export default function LaunchWizard() {
               <Field label="Quota / number (max 200)"><Input type="number" min={1} max={200} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Math.min(200, Number(e.target.value)))} /></Field>
               <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
                 <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
-                  disabled={scheduleMode === "scheduled"}
+                  disabled={scheduleMode === "scheduled" || type === "marketing"}
                   onChange={(e) => setDelayMin(Math.max(type === "utility" ? UTILITY_MIN_DELAY : 0, Number(e.target.value)))} />
               </Field>
               <Field label="Max delay (s)">
                 <Input type="number" min={delayMin} value={delayMax}
-                  disabled={scheduleMode === "scheduled"}
+                  disabled={scheduleMode === "scheduled" || type === "marketing"}
                   onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
               </Field>
             </div>
+            {type === "marketing" && scheduleMode === "now" && (
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Marketing Blast sends instantly without gaps. To spread sends across multiple days, switch to <b>Pick days</b>.
+              </div>
+            )}
             {scheduleMode === "scheduled" && (
               <div className="text-[11px] text-muted-foreground mt-1">
                 Min/Max delay is ignored when a window is set - gaps are computed from the window length below.
