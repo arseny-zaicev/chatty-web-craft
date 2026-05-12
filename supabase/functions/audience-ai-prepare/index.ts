@@ -95,29 +95,33 @@ Deno.serve(async (req) => {
 Your job: take a sample of an uploaded contact file and produce a deterministic plan to ingest it.
 
 You DO:
-  - propose a mapping from source column names to canonical fields (phone, first_name, etc.) and to prep-profile fields
+  - propose a mapping from source column names to canonical fields (first_name, last_name, city, etc.) and to template variables
+  - if the operator pre-selected a template, prefer matching its variables over generic fields
   - propose static_values for variables that should be the same for everyone
-  - try to match the operator's pasted copy to one of the approved templates by body similarity
+  - if the operator did NOT pre-select a template, try to match the pasted copy to one of the approved templates by body similarity
   - propose a short audience name (date | country | audience-label)
-  - flag warnings (missing columns, low variability, suspicious data)
+  - flag warnings (missing columns, low variability, suspicious data, instructions that conflict with the data)
+  - obey free-form operator instructions (e.g. "only AE", "Имя -> first_name, capitalize", "city = Dubai for all")
 
 You DO NOT:
   - invent column data
   - create new templates
   - guess values you cannot derive from the sample
-
-Phone normalisation, dedup, validation are handled deterministically by the app — do not include those rules in mapping.
+  - include phone in column_mapping (the app handles phone normalisation, dedup, validation deterministically)
 
 Always return a single tool call with the structured plan.`;
 
     const userPrompt = JSON.stringify(
       {
         workspace_country_distribution: distribution,
-        prep_profile: profileSummary,
+        campaign_type: body.campaign_type ?? null,
+        preferred_template: body.preferred_template_name
+          ? { name: body.preferred_template_name, variables: body.preferred_template_vars ?? [] }
+          : null,
         sample_headers: sampleHeaders,
         sample_rows: sample,
         sample_total_rows: body.parsed_rows.length,
-        operator_hint: body.user_hint ?? null,
+        operator_instructions: body.user_hint ?? null,
         pasted_copy: body.pasted_copy ?? null,
         approved_templates: templateCatalog,
         date_today: new Date().toISOString().slice(0, 10),
