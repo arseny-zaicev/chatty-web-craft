@@ -13,6 +13,12 @@ const Apply = () => {
           content="Apply to work with ISKRA. Fill out our qualification form to see if we're the right fit for your business." 
         />
         <link rel="canonical" href="https://iskra.ae/apply" />
+        <meta property="og:title" content="Apply | ISKRA" />
+        <meta property="og:description" content="Apply to work with ISKRA - qualification form to check if we're the right fit for your business." />
+        <meta property="og:url" content="https://iskra.ae/apply" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:title" content="Apply | ISKRA" />
+        <meta name="twitter:description" content="Apply to work with ISKRA - qualification form to check if we're the right fit for your business." />
       </Helmet>
       
       <main className="min-h-screen bg-foreground">
