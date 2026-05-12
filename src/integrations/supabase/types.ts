@@ -2140,6 +2140,39 @@ export type Database = {
         }
         Relationships: []
       }
+      template_groups: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          template_names: string[]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          template_names?: string[]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          template_names?: string[]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       tv_tokens: {
         Row: {
           created_at: string
