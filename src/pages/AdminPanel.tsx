@@ -30,7 +30,7 @@ const ADMIN_EMAIL = "arseny@iskra.ae";
 type Section =
   | "companies.portfolio"
   | "companies.fleet"
-  | "companies.bms"
+  | "companies.partners"
   | "companies.analytics"
   | "companies.webhook_health"
   | "forms.submissions"
@@ -52,7 +52,7 @@ const NAV: NavGroup[] = [
     items: [
       { id: "companies.portfolio", label: "Portfolio", icon: LayoutDashboard },
       { id: "companies.fleet", label: "Fleet · Numbers", icon: Phone, external: "/admin/fleet" },
-      { id: "companies.bms", label: "Business Managers", icon: Building2, external: "/admin/business-managers" },
+      { id: "companies.partners", label: "Partners", icon: Building2, external: "/admin/partners" },
       { id: "companies.analytics", label: "Fleet analytics", icon: BarChart3, external: "/admin/analytics" },
       { id: "companies.webhook_health", label: "Webhook health", icon: AlertTriangle },
     ],
@@ -75,7 +75,7 @@ const NAV: NavGroup[] = [
     items: [
       { id: "internal.roadmap", label: "Product roadmap", icon: MapIcon, external: "/admin/roadmap" },
       { id: "internal.assistant", label: "Ops Assistant", icon: Sparkles, external: "/admin/assistant" },
-      { id: "internal.finance" as any, label: "Partners", icon: DollarSign, external: "/admin/partners" },
+      
     ],
   },
 ];
