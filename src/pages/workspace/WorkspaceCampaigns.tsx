@@ -35,7 +35,7 @@ async function fetchRecipientsLite(campaignIds: string[]): Promise<RecipientLite
     while (true) {
       const { data, error } = await supabase
         .from("campaign_recipients")
-        .select("id, status, scheduled_at, sent_at")
+        .select("id, status, scheduled_at, sent_at, whatsapp_number_id")
         .eq("campaign_id", id)
         .range(from, from + PAGE - 1);
       if (error) throw error;
