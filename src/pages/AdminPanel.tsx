@@ -75,7 +75,7 @@ const NAV: NavGroup[] = [
     items: [
       { id: "internal.roadmap", label: "Product roadmap", icon: MapIcon, external: "/admin/roadmap" },
       { id: "internal.assistant", label: "Ops Assistant", icon: Sparkles, external: "/admin/assistant" },
-      { id: "internal.finance" as any, label: "Finance · Partners", icon: DollarSign, external: "/admin/finance/partners" },
+      { id: "internal.finance" as any, label: "Partners", icon: DollarSign, external: "/admin/partners" },
     ],
   },
 ];
