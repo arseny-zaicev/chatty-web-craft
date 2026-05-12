@@ -139,6 +139,14 @@ OPTIONAL SOURCE FIELDS
 OUTPUT VARIABLE STRUCTURE (one row per contact)
 ${variableSpec}
 
+TEMPLATE VARIABLE CONTRACT (CRITICAL)
+The WhatsApp template uses placeholders {{1}}, {{2}}, ... {{N}}.
+At launch time the wizard maps each placeholder to derived_payload.var_<N>:
+${preset.variables.map((v, i) => `  {{${i + 1}}} <- derived_payload.${v.key}  (${v.description})`).join("\n")}
+Every var_<N> beyond var_1 MUST be UNIQUE per row (per-contact context).
+If two rows would receive the same var_2 / var_3 value -- that is a data quality bug.
+NEVER copy the template's "Sample" text into every row -- that defeats the per-row variable system
+and means every contact receives identical filler text.
 VALIDATION RULES
   - phone: digits only (strip +, spaces, dashes); length 7-15; otherwise drop the row
   - first_name: trim; if empty, use the fallback "there" (do NOT drop the row)
