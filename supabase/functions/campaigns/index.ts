@@ -1453,6 +1453,7 @@ serve(async (req) => {
       return await setCampaignStatus(admin, auth.user.id, body, action);
     }
     if (action === "redistribute") return await redistributeCampaign(admin, auth.user.id, body);
+    if (action === "retry_failed") return await retryFailedRecipients(admin, auth.user.id, body);
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
