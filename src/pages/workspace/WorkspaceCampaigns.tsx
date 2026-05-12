@@ -74,7 +74,7 @@ const fetchCampaignMeta = async (numberIds: string[], templateIds: string[]) => 
   const numbers = new Map<string, { id: string; phone_number: string; label: string | null }>();
   const templates = new Map<string, { id: string; name: string }>();
   if (numberIds.length > 0) {
-    const { data } = await supabase.from("whatsapp_numbers").select("id, phone_number, label").in("id", numberIds);
+    const { data } = await supabase.from("whatsapp_numbers").select("id, phone_number, label, display_name").in("id", numberIds);
     (data ?? []).forEach((n: any) => numbers.set(n.id, n));
   }
   if (templateIds.length > 0) {
@@ -226,7 +226,7 @@ function CampaignDetail({
 }: {
   group: CampaignGroup;
   canManage: boolean;
-  numberById: Map<string, { id: string; phone_number: string; label: string | null }>;
+  numberById: Map<string, { id: string; phone_number: string; label: string | null; display_name: string | null }>;
 }) {
   const campaignIds = group.campaigns.map((c) => c.id);
   const tz = tzInfo(group.recipientCountry).tz;
