@@ -879,7 +879,7 @@ export default function LaunchWizard() {
             )}
 
             <div className="grid grid-cols-3 gap-2 mt-3">
-              <Field label="Quota / number"><Input type="number" min={1} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Number(e.target.value))} /></Field>
+              <Field label="Quota / number (max 200)"><Input type="number" min={1} max={200} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Math.min(200, Number(e.target.value)))} /></Field>
               <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
                 <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
                   disabled={scheduleMode === "scheduled"}
