@@ -546,6 +546,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   Replied{repliedCount > 0 && ` · ${repliedCount}`}
                 </button>
                 <button
+                  onClick={() => setUnreadOnly((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
+                    unreadOnly
+                      ? "bg-primary/15 text-primary border-primary/40"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                  title="Show only conversations with unread messages"
+                >
+                  Unread{(() => { const n = conversations.reduce((s, c) => s + ((c.unread_count ?? 0) > 0 ? 1 : 0), 0); return n > 0 ? ` · ${n}` : ""; })()}
+                </button>
+                <button
                   onClick={() => setShowNegative((v) => !v)}
                   className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
                     showNegative
