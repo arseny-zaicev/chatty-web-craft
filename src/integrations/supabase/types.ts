@@ -1319,6 +1319,7 @@ export type Database = {
           header_text: string | null
           id: string
           language: string
+          last_notified_status: string | null
           name: string
           namespace: string | null
           provider_template_id: string | null
@@ -1344,6 +1345,7 @@ export type Database = {
           header_text?: string | null
           id?: string
           language?: string
+          last_notified_status?: string | null
           name: string
           namespace?: string | null
           provider_template_id?: string | null
@@ -1369,6 +1371,7 @@ export type Database = {
           header_text?: string | null
           id?: string
           language?: string
+          last_notified_status?: string | null
           name?: string
           namespace?: string | null
           provider_template_id?: string | null
