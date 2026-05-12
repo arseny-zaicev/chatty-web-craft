@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Megaphone, Rocket, Loader2, ChevronRight, ChevronDown, RefreshCw } from "lucide-react";
+import { Megaphone, Rocket, Loader2, ChevronRight, ChevronDown, RefreshCw, Pause, Play, X, SkipForward, RotateCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCampaignSummaries } from "@/lib/launchData";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 import { groupCampaigns, type CampaignRow, type CampaignGroup } from "@/lib/campaigns";
 import { CampaignReportPanel } from "@/components/workspace/CampaignReportPanel";
 import { tzInfo, dateKeyInTz, todayKeyInTz, shortDateInTz, timeInTz } from "@/lib/timezones";
+import { toast } from "sonner";
 
 const statusTone: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-border",
@@ -231,6 +232,31 @@ function CampaignDetail({
   const tzLabel = tzInfo(group.recipientCountry).label;
   const [showRecipients, setShowRecipients] = useState(false);
   const [showAllDays, setShowAllDays] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const callAction = async (
+    action: "pause" | "resume" | "cancel" | "redistribute",
+    extra?: Record<string, unknown>,
+  ) => {
+    setBusy(action);
+    try {
+      const { data, error } = await supabase.functions.invoke("campaigns", {
+        body: { action, campaign_ids: campaignIds, ...extra },
+      });
+      if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error || "Failed");
+      const verbs: Record<string, string> = {
+        pause: "Paused", resume: "Resumed", cancel: "Cancelled", redistribute: "Re-balanced",
+      };
+      toast.success(`${verbs[action]} ${campaignIds.length > 1 ? `${campaignIds.length} campaigns` : "campaign"}`);
+      qc.invalidateQueries({ queryKey: ["campaigns", "summaries"] });
+      qc.invalidateQueries({ queryKey: ["campaign-recipients-lite", group.key] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const { data: liteRows, isLoading: liteLoading } = useQuery({
     queryKey: ["campaign-recipients-lite", group.key, campaignIds.join(",")],
@@ -271,8 +297,44 @@ function CampaignDetail({
     return n ? (n.label ?? `+${n.phone_number}`) : "—";
   };
 
+  const isActive = group.status === "running" || group.status === "scheduled";
+  const isPaused = group.status === "paused";
+  const isTerminal = group.status === "completed" || group.status === "cancelled" || group.status === "failed";
+
   return (
     <div className="px-4 pb-4 pt-2 bg-background/40">
+      {canManage && !isTerminal && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {isActive && (
+            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => callAction("pause")}>
+              {busy === "pause" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Pause className="w-3.5 h-3.5 mr-1.5" />}
+              Pause
+            </Button>
+          )}
+          {isPaused && (
+            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => callAction("resume")}>
+              {busy === "resume" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
+              Resume
+            </Button>
+          )}
+          <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => callAction("redistribute")}>
+            {busy === "redistribute" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5 mr-1.5" />}
+            Re-balance
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-red-600 hover:text-red-700"
+            disabled={busy !== null}
+            onClick={() => {
+              if (confirm("Cancel this campaign? Pending sends will stop.")) callAction("cancel");
+            }}
+          >
+            {busy === "cancel" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1.5" />}
+            Cancel
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
         <Stat label="Total" value={totals.total.toLocaleString()} />
         <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
@@ -317,11 +379,14 @@ function CampaignDetail({
                 <th className="px-3 py-1.5 font-medium text-right">Scheduled</th>
                 <th className="px-3 py-1.5 font-medium text-right">Sent</th>
                 <th className="px-3 py-1.5 font-medium text-right">Failed</th>
+                {canManage && !isTerminal && <th className="px-3 py-1.5 font-medium text-right w-20"></th>}
               </tr>
             </thead>
             <tbody>
               {visibleDays.map((d) => {
                 const isToday = d.date === todayKey;
+                const isFuture = d.date > todayKey;
+                const canSkip = canManage && !isTerminal && (isToday || isFuture) && d.scheduled > d.sent + d.failed;
                 return (
                   <tr key={d.date} className={`border-t border-border/60 ${isToday ? "bg-primary/5" : ""}`}>
                     <td className="px-3 py-1.5">
@@ -332,6 +397,22 @@ function CampaignDetail({
                     <td className="px-3 py-1.5 text-right tabular-nums">{d.scheduled.toLocaleString()}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">{d.sent.toLocaleString()}</td>
                     <td className={`px-3 py-1.5 text-right tabular-nums ${d.failed > 0 ? "text-red-600" : ""}`}>{d.failed.toLocaleString()}</td>
+                    {canManage && !isTerminal && (
+                      <td className="px-2 py-1 text-right">
+                        {canSkip && (
+                          <button
+                            className="text-[11px] text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+                            disabled={busy !== null}
+                            onClick={() => {
+                              if (confirm(`Skip ${d.date}? Pending sends move to the next available day.`))
+                                callAction("redistribute", { skip_dates: [d.date] });
+                            }}
+                          >
+                            <SkipForward className="w-3 h-3" />Skip
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

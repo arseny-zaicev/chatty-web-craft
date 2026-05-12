@@ -702,6 +702,7 @@ export default function LaunchWizard() {
             window_end: windowEnd,
             respect_recipient_tz: respectTz,
             pipeline_id: pipelineId || null,
+            per_number_quota: perNumberQuota,
           },
         });
         const failed = !!error || !!(res as any)?.error;

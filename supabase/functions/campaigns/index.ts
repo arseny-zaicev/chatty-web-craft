@@ -277,6 +277,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
+  // Per-number/day cap. Hard ceiling 200 (Meta tier), floor 1.
+  const perNumberQuota = Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota ?? 200))));
 
   // Multi-number support: accept either legacy single (whatsapp_number_id+template_id)
   // or new `numbers: [{number_id, template_id}, ...]`. ONE campaign row is created
@@ -377,6 +379,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       scheduled_dates: scheduledDates,
       pipeline_id: pipelineId,
       recipient_country: recipientCountry,
+      per_number_quota: perNumberQuota,
     })
     .select("id")
     .single();
@@ -397,6 +400,22 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
   const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
 
+  // Honor min 60s gap: cap effective per-day per number so window can fit it.
+  const minGapSec = Math.max(60, minDelay || 60);
+  const windowFitCap = Math.max(1, Math.floor(windowSeconds / minGapSec));
+  const effectiveQuota = Math.max(1, Math.min(perNumberQuota, windowFitCap));
+
+  const nextDateStr = (d: string) => {
+    const [y, m, day] = d.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, (m || 1) - 1, day || 1));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return dt.toISOString().slice(0, 10);
+  };
+  const todayKeyTz = (tz: string) => {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()); }
+    catch { return new Date().toISOString().slice(0, 10); }
+  };
+
   const rows: any[] = [];
 
   for (let bi = 0; bi < rawNumbers.length; bi++) {
@@ -413,94 +432,61 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       variables: { ...(base.variables || {}), __tpl_id: tplId },
     });
 
-    if (scheduledDates.length === 0) {
-      const nowMs = Date.now();
-      const startMs0 = nowMs + 5_000 + bucketShiftSec * 1000;
-      const perTz = new Map<string, CleanRecipient[]>();
-      for (const r of bucketRecipients) {
-        const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
-        if (!perTz.has(tz)) perTz.set(tz, []);
-        perTz.get(tz)!.push(r);
-      }
-      const dayKey = (ms: number, tz: string) => {
-        try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms)); }
-        catch { return new Date(ms).toISOString().slice(0, 10); }
-      };
-      for (const [tz, list] of perTz) {
-        let cursorMs = startMs0;
-        const ensureInsideWindow = () => {
-          const today = dayKey(cursorMs, tz);
-          const todayStart = dateAtTzToUTC(today, windowStart, tz).getTime();
-          const todayEnd = dateAtTzToUTC(today, windowEnd, tz).getTime();
-          if (cursorMs < todayStart) cursorMs = todayStart;
-          if (cursorMs >= todayEnd) {
-            const next = new Date(cursorMs + 24 * 3600_000);
-            const nextDate = dayKey(next.getTime(), tz);
-            cursorMs = dateAtTzToUTC(nextDate, windowStart, tz).getTime();
-          }
-        };
-        ensureInsideWindow();
-        for (const r of list) {
-          let gapSec: number;
-          if (schedulerKind === "poisson") {
-            gapSec = exponentialGap(1 / avgDelay);
-            gapSec = Math.max(minDelay, Math.min(Math.max(minDelay + 1, maxDelay * 3), gapSec));
-          } else {
-            gapSec = randomDelay(minDelay, maxDelay);
-          }
-          cursorMs += gapSec * 1000;
-          ensureInsideWindow();
-          rows.push(tagRow({
-            ...r,
-            user_id: ownerId,
-            workspace_id: wsId,
-            campaign_id: campaign.id,
-            status: "scheduled",
-            scheduled_at: new Date(cursorMs).toISOString(),
-          }));
-        }
-      }
-    } else {
-      const perDay = Math.ceil(bucketRecipients.length / scheduledDates.length);
-      for (let di = 0; di < scheduledDates.length; di++) {
-        const date = scheduledDates[di];
-        const slice = bucketRecipients.slice(di * perDay, (di + 1) * perDay);
+    // Group recipients by tz so each tz gets its own date/window calendar.
+    const perTz = new Map<string, CleanRecipient[]>();
+    for (const r of bucketRecipients) {
+      const tz = respectTz ? tzFromPhone(r.contact_phone) : (recipientCountry ? (COUNTRY_TZ[recipientCountry] ?? "UTC") : "UTC");
+      if (!perTz.has(tz)) perTz.set(tz, []);
+      perTz.get(tz)!.push(r);
+    }
+
+    for (const [tz, list] of perTz) {
+      // Build the date sequence for THIS tz: either explicit scheduledDates,
+      // or auto-starting from today; extend forward until everyone fits at
+      // <= effectiveQuota per day.
+      const baseDates = scheduledDates.length > 0
+        ? [...scheduledDates].sort()
+        : [todayKeyTz(tz)];
+      const dates = [...baseDates];
+      const need = Math.ceil(list.length / effectiveQuota);
+      while (dates.length < need) dates.push(nextDateStr(dates[dates.length - 1]));
+
+      let cursor = 0;
+      for (const date of dates) {
+        if (cursor >= list.length) break;
+        const slice = list.slice(cursor, cursor + effectiveQuota);
+        cursor += slice.length;
         if (slice.length === 0) continue;
-        const perTz = new Map<string, CleanRecipient[]>();
-        for (const r of slice) {
-          const tz = respectTz ? tzFromPhone(r.contact_phone) : "UTC";
-          if (!perTz.has(tz)) perTz.set(tz, []);
-          perTz.get(tz)!.push(r);
-        }
-        for (const [tz, list] of perTz) {
-          const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
-          const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
-          const span = Math.max(60_000, endUtc - startUtc);
-          if (schedulerKind === "poisson") {
-            const rate = list.length / (span / 1000);
-            let cursor = startUtc;
-            for (const r of list) {
-              cursor += exponentialGap(rate) * 1000;
-              if (cursor > endUtc) cursor = endUtc - Math.floor(Math.random() * 60_000);
-              rows.push(tagRow({
-                ...r,
-                user_id: ownerId, workspace_id: wsId,
-                campaign_id: campaign.id, status: "scheduled",
-                scheduled_at: new Date(cursor).toISOString(),
-              }));
-            }
-          } else {
-            const step = span / Math.max(1, list.length);
-            for (let i = 0; i < list.length; i++) {
-              const jitter = (Math.random() - 0.5) * step * 0.4;
-              const ts = startUtc + i * step + jitter;
-              rows.push(tagRow({
-                ...list[i],
-                user_id: ownerId, workspace_id: wsId,
-                campaign_id: campaign.id, status: "scheduled",
-                scheduled_at: new Date(Math.min(endUtc, Math.max(startUtc, ts))).toISOString(),
-              }));
-            }
+
+        const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
+        const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
+        // For "now" mode + today: don't schedule in the past — clamp to now+5s.
+        const earliest = Math.max(startUtc, Date.now() + 5_000);
+        const span = Math.max(60_000, endUtc - earliest);
+        if (schedulerKind === "poisson") {
+          const rate = slice.length / (span / 1000);
+          let c = earliest;
+          for (const r of slice) {
+            c += Math.max(minGapSec, exponentialGap(rate)) * 1000;
+            if (c > endUtc) c = endUtc - Math.floor(Math.random() * 60_000);
+            rows.push(tagRow({
+              ...r,
+              user_id: ownerId, workspace_id: wsId,
+              campaign_id: campaign.id, status: "scheduled",
+              scheduled_at: new Date(c).toISOString(),
+            }));
+          }
+        } else {
+          const step = Math.max(minGapSec * 1000, span / Math.max(1, slice.length));
+          for (let i = 0; i < slice.length; i++) {
+            const jitter = (Math.random() - 0.5) * step * 0.4;
+            const ts = earliest + i * step + jitter;
+            rows.push(tagRow({
+              ...slice[i],
+              user_id: ownerId, workspace_id: wsId,
+              campaign_id: campaign.id, status: "scheduled",
+              scheduled_at: new Date(Math.min(endUtc, Math.max(earliest, ts))).toISOString(),
+            }));
           }
         }
       }
@@ -1166,8 +1152,204 @@ async function blastCampaign(admin: any, requesterId: string, body: any) {
     p100_finish_ms: sortedEnd[sortedEnd.length - 1] ?? null,
   };
 
-  return json({ ok: true, summary, results: flat });
 }
+
+// ===== Campaign control: pause / resume / cancel =====
+async function setCampaignStatus(admin: any, requesterId: string, body: any, kind: "pause" | "resume" | "cancel") {
+  const ids: string[] = Array.isArray(body.campaign_ids) ? body.campaign_ids.filter((x: any) => uuidRegex.test(x)) : [];
+  if (body.campaign_id && uuidRegex.test(body.campaign_id)) ids.push(body.campaign_id);
+  const uniq = [...new Set(ids)];
+  if (uniq.length === 0) return json({ error: "campaign_id required" }, 400);
+
+  const { data: rows } = await admin.from("campaigns").select("id, user_id, status, first_scheduled_at").in("id", uniq);
+  if (!rows || rows.length === 0) return json({ error: "Not found" }, 404);
+  for (const r of rows) {
+    if (!(await canAccessUser(admin, requesterId, r.user_id))) return json({ error: "Forbidden" }, 403);
+  }
+
+  const updates: Record<string, string[]> = {};
+  for (const r of rows) {
+    let next: string;
+    if (kind === "pause") next = "paused";
+    else if (kind === "cancel") next = "cancelled";
+    else {
+      // resume: scheduled if first send is in future (>2m), else running
+      const firstMs = r.first_scheduled_at ? new Date(r.first_scheduled_at).getTime() : 0;
+      next = firstMs > Date.now() + 120_000 ? "scheduled" : "running";
+    }
+    (updates[next] ||= []).push(r.id);
+  }
+  for (const [status, list] of Object.entries(updates)) {
+    const { error } = await admin.from("campaigns").update({ status }).in("id", list);
+    if (error) return json({ error: error.message }, 500);
+  }
+  return json({ ok: true, action: kind, campaigns: uniq.length });
+}
+
+// ===== Redistribute: re-schedule pending recipients with current quota / window =====
+// Body: { campaign_ids: string[], skip_dates?: string[], extra_dates?: string[],
+//         per_number_quota?: number, window_start?: "HH:MM", window_end?: "HH:MM" }
+async function redistributeCampaign(admin: any, requesterId: string, body: any) {
+  const ids: string[] = Array.isArray(body.campaign_ids) ? body.campaign_ids.filter((x: any) => uuidRegex.test(x)) : [];
+  if (body.campaign_id && uuidRegex.test(body.campaign_id)) ids.push(body.campaign_id);
+  const uniq = [...new Set(ids)];
+  if (uniq.length === 0) return json({ error: "campaign_id required" }, 400);
+
+  const { data: campaigns } = await admin
+    .from("campaigns")
+    .select("id, user_id, workspace_id, whatsapp_number_id, schedule_window_start, schedule_window_end, scheduled_dates, per_number_quota, delay_min_seconds, delay_max_seconds, recipient_country, respect_recipient_tz, first_scheduled_at, status")
+    .in("id", uniq);
+  if (!campaigns || campaigns.length === 0) return json({ error: "Not found" }, 404);
+  for (const c of campaigns) {
+    if (!(await canAccessUser(admin, requesterId, c.user_id))) return json({ error: "Forbidden" }, 403);
+  }
+
+  const skipSet = new Set<string>(Array.isArray(body.skip_dates) ? body.skip_dates.filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : []);
+  const extraDates: string[] = Array.isArray(body.extra_dates) ? body.extra_dates.filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
+  const overrideQuota = body.per_number_quota != null
+    ? Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota))))
+    : null;
+  const overrideWindowStart = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : null;
+  const overrideWindowEnd = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : null;
+
+  const todayKeyTz = (tz: string) => {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date()); }
+    catch { return new Date().toISOString().slice(0, 10); }
+  };
+  const nextDateStr = (d: string) => {
+    const [y, m, day] = d.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, (m || 1) - 1, day || 1));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return dt.toISOString().slice(0, 10);
+  };
+
+  let totalUpdated = 0;
+  const newFirstByCampaign: Record<string, string> = {};
+  const newTodayByCampaign: Record<string, number> = {};
+
+  for (const c of campaigns) {
+    const quota = overrideQuota ?? Math.max(1, Math.min(200, c.per_number_quota || 200));
+    const winStart = overrideWindowStart ?? String(c.schedule_window_start || "09:00:00").slice(0, 5);
+    const winEnd = overrideWindowEnd ?? String(c.schedule_window_end || "18:00:00").slice(0, 5);
+    const minDelay = Math.max(60, c.delay_min_seconds || 60);
+    const wsMin = hhmmToMin(winStart);
+    const wsMax = hhmmToMin(winEnd);
+    const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
+    const windowFitCap = Math.max(1, Math.floor(windowSeconds / minDelay));
+    const effectiveQuota = Math.max(1, Math.min(quota, windowFitCap));
+    const recipientTz = c.recipient_country ? (COUNTRY_TZ[String(c.recipient_country).toUpperCase()] ?? "UTC") : "UTC";
+    const todayKeyMain = todayKeyTz(recipientTz);
+
+    // Load all PENDING recipients for this campaign (status=scheduled, no sent_at)
+    const pending: any[] = [];
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("campaign_recipients")
+        .select("id, contact_phone, scheduled_at")
+        .eq("campaign_id", c.id)
+        .eq("status", "scheduled")
+        .is("sent_at", null)
+        .order("scheduled_at", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) return json({ error: error.message }, 500);
+      const rows = data ?? [];
+      pending.push(...rows);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    if (pending.length === 0) continue;
+
+    // Group by tz
+    const respectTz = c.respect_recipient_tz !== false;
+    const perTz = new Map<string, any[]>();
+    for (const r of pending) {
+      const tz = respectTz ? tzFromPhone(r.contact_phone) : recipientTz;
+      if (!perTz.has(tz)) perTz.set(tz, []);
+      perTz.get(tz)!.push(r);
+    }
+
+    // Build base date list. Honor existing scheduled_dates (minus skipped, plus extra),
+    // ensure today is included if status is running/scheduled.
+    const baseDates = (() => {
+      const set = new Set<string>([
+        ...(Array.isArray(c.scheduled_dates) ? c.scheduled_dates as string[] : []),
+        ...extraDates,
+      ]);
+      const out = [...set].filter((d) => d >= todayKeyMain && !skipSet.has(d)).sort();
+      if (out.length === 0) out.push(todayKeyMain);
+      return out;
+    })();
+
+    const newScheduledAt = new Map<string, string>();
+    let firstIso: string | null = null;
+    let todayCount = 0;
+
+    for (const [tz, list] of perTz) {
+      const dates = [...baseDates];
+      const need = Math.ceil(list.length / effectiveQuota);
+      while (dates.length < need) dates.push(nextDateStr(dates[dates.length - 1]));
+
+      let cursor = 0;
+      for (const date of dates) {
+        if (cursor >= list.length) break;
+        const slice = list.slice(cursor, cursor + effectiveQuota);
+        cursor += slice.length;
+        if (slice.length === 0) continue;
+
+        const startUtc = dateAtTzToUTC(date, winStart, tz).getTime();
+        const endUtc = dateAtTzToUTC(date, winEnd, tz).getTime();
+        const earliest = Math.max(startUtc, Date.now() + 5_000);
+        const span = Math.max(60_000, endUtc - earliest);
+        const step = Math.max(minDelay * 1000, span / Math.max(1, slice.length));
+
+        for (let i = 0; i < slice.length; i++) {
+          const jitter = (Math.random() - 0.5) * step * 0.4;
+          const ts = Math.min(endUtc, Math.max(earliest, earliest + i * step + jitter));
+          const iso = new Date(ts).toISOString();
+          newScheduledAt.set(slice[i].id, iso);
+          if (!firstIso || iso < firstIso) firstIso = iso;
+          // Count today (recipient main tz)
+          let key: string;
+          try { key = new Intl.DateTimeFormat("en-CA", { timeZone: recipientTz }).format(new Date(ts)); }
+          catch { key = iso.slice(0, 10); }
+          if (key === todayKeyMain) todayCount++;
+        }
+      }
+    }
+
+    // Bulk update — chunk by 500 ids using upsert via individual updates
+    const entries = [...newScheduledAt.entries()];
+    for (let i = 0; i < entries.length; i += 500) {
+      const chunk = entries.slice(i, i + 500);
+      // Use update one-by-one in parallel for simplicity (modest sizes)
+      await Promise.all(chunk.map(([id, iso]) =>
+        admin.from("campaign_recipients").update({ scheduled_at: iso }).eq("id", id)
+      ));
+    }
+    totalUpdated += entries.length;
+    if (firstIso) newFirstByCampaign[c.id] = firstIso;
+    newTodayByCampaign[c.id] = todayCount;
+
+    // Patch campaign metadata
+    const patch: any = {
+      per_number_quota: effectiveQuota,
+      schedule_window_start: winStart + ":00",
+      schedule_window_end: winEnd + ":00",
+      scheduled_dates: baseDates,
+      today_recipients_count: todayCount,
+    };
+    if (firstIso) {
+      patch.first_scheduled_at = firstIso;
+      patch.scheduled_start_at = firstIso;
+    }
+    await admin.from("campaigns").update(patch).eq("id", c.id);
+  }
+
+  return json({ ok: true, updated: totalUpdated, campaigns: uniq.length, first_scheduled_at: newFirstByCampaign, today_recipients_count: newTodayByCampaign });
+}
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -1200,6 +1382,10 @@ serve(async (req) => {
     if (action === "upsert_template") return await upsertTemplate(admin, auth.user.id, body);
     if (action === "sync_templates") return await syncTemplates(admin, auth.user.id, body);
     if (action === "sync_templates_all") return await syncTemplatesAll(admin, auth.user.id, body);
+    if (action === "pause" || action === "resume" || action === "cancel") {
+      return await setCampaignStatus(admin, auth.user.id, body, action);
+    }
+    if (action === "redistribute") return await redistributeCampaign(admin, auth.user.id, body);
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
