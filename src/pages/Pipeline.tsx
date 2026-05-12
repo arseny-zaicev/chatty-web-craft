@@ -436,6 +436,22 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                 ))}
               </SelectContent>
             </Select>
+            {(() => {
+              const unreadCount = deals.reduce((s, d) => s + (dealUnread(d) > 0 ? 1 : 0), 0);
+              return (
+                <button
+                  onClick={() => setUnreadOnly((v) => !v)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition flex items-center gap-1 ${
+                    unreadOnly
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                  title="Show only deals with unread messages"
+                >
+                  Unread{unreadCount > 0 && ` · ${unreadCount}`}
+                </button>
+              );
+            })()}
             <Button size="sm" variant="outline" onClick={() => setShowAutomations(true)}>
               Automations
             </Button>
