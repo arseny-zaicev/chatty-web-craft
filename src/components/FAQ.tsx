@@ -117,6 +117,7 @@ export const FAQ = () => {
                 <input
                   type="text"
                   placeholder="Your name"
+                  aria-label="Your name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-iskra-emerald/40"
@@ -126,6 +127,7 @@ export const FAQ = () => {
                 <input
                   type="tel"
                   placeholder="Phone number"
+                  aria-label="Phone number"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-iskra-emerald/40"
