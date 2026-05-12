@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, ArrowLeft, BarChart3, AlertTriangle, Send, CheckCircle2, Eye, MessageCircle, DollarSign, Gauge } from "lucide-react";
+import { Loader2, ArrowLeft, BarChart3, AlertTriangle, Send, CheckCircle2, Eye, MessageCircle, DollarSign, Gauge, Reply } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -54,7 +54,7 @@ const fetchAnalytics = async (period: Period) => {
   const periodDays = parseInt(period);
   const sinceIso = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }] =
+  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }, { data: replyStats, error: rErr }] =
     await Promise.all([
       supabase.from("whatsapp_message_events")
         .select("whatsapp_number_id, event_type, error_code, error_message, received_at, campaign_recipient_id")
@@ -66,9 +66,17 @@ const fetchAnalytics = async (period: Period) => {
       supabase.from("campaigns").select("id, name, status, total_recipients, sent_count, failed_count, created_at, workspace_id")
         .gte("created_at", sinceIso)
         .order("created_at", { ascending: false }),
+      supabase.rpc("get_fleet_reply_stats", { _since: sinceIso }),
     ]);
 
   if (eErr) throw eErr;
+  if (rErr) console.warn("reply stats error", rErr);
+
+  // Reply stats per number
+  const replyByNumber = new Map<string, { sent_convos: number; replied_convos: number }>();
+  for (const r of (replyStats ?? []) as Array<{ whatsapp_number_id: string; sent_convos: number; replied_convos: number }>) {
+    replyByNumber.set(r.whatsapp_number_id, { sent_convos: r.sent_convos, replied_convos: r.replied_convos });
+  }
 
   const wsMap = new Map((workspaces ?? []).map((w) => [w.id, { name: w.name, rate: Number(w.delivered_rate_usd ?? 0) }]));
   const numberToWs = new Map((numbers ?? []).map((n) => [n.id, n.workspace_id]));
