@@ -642,7 +642,7 @@ export default function LaunchWizard() {
     }
     return mappedRecipients.slice(0, 3).map((r) => {
       const vals = r.variables ?? {};
-      const missing = variableNames.filter((v) => !String(vals[v] ?? "").trim());
+      const missing = variableNames.filter((v, i) => i > 0 && !String(vals[v] ?? "").trim());
       return {
         phone: r.phone,
         body: renderTemplateBody(activeLogical.body, variableNames, vals),
