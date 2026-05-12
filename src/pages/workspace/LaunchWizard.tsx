@@ -21,9 +21,10 @@ import {
   type Recipient, type LogicalTemplate, type CampaignType, type Template, type SavedAudience,
 } from "@/lib/launchData";
 import {
-  audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows,
+  audienceKeys, fetchBatches, fetchBatchStats, reserveRows, markRowsUsed, releaseRows, parseStaticValues,
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
 } from "@/lib/audienceData";
+import { NAME_FALLBACK_PHRASES } from "@/lib/prepPresets";
 import { fetchPipelines, pipelinesKey, createPipeline } from "@/lib/pipelines";
 import PipelineConfigSheet from "@/components/workspace/PipelineConfigSheet";
 import { Settings as SettingsIcon } from "lucide-react";
