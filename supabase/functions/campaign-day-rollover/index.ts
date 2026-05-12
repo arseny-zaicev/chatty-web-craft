@@ -108,15 +108,90 @@ Deno.serve(async (req) => {
       .lte("scheduled_at", endIso)
       .eq("status", "failed");
 
-    // Tomorrow batch size
-    const nextStart = `${nextDay}T00:00:00+00:00`;
-    const nextEnd = `${nextDay}T23:59:59+00:00`;
-    const { count: nextRecipients } = await admin
+    // Tomorrow batch size (only if there's a real next day)
+    let nextRecipientsCount = 0;
+    if (nextDay) {
+      const nextStart = `${nextDay}T00:00:00+00:00`;
+      const nextEnd = `${nextDay}T23:59:59+00:00`;
+      const { count: nextRecipients } = await admin
+        .from("campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", c.id)
+        .gte("scheduled_at", nextStart)
+        .lte("scheduled_at", nextEnd);
+      nextRecipientsCount = nextRecipients ?? 0;
+    }
+
+    // ---- Replies / positives / avg manager response (positive) ----
+    // Pull conversations created/updated for this campaign in the day window via
+    // campaign_recipients.conversation_id, then aggregate from messages + insights.
+    const { data: convRows } = await admin
       .from("campaign_recipients")
-      .select("id", { count: "exact", head: true })
+      .select("conversation_id")
       .eq("campaign_id", c.id)
-      .gte("scheduled_at", nextStart)
-      .lte("scheduled_at", nextEnd);
+      .not("conversation_id", "is", null);
+    const convIds: string[] = Array.from(new Set((convRows ?? []).map((r: any) => r.conversation_id).filter(Boolean)));
+
+    let repliesToday = 0;
+    let positiveToday = 0;
+    let avgRespSec = 0;
+
+    if (convIds.length > 0) {
+      // Replies = distinct conversations with inbound messages today
+      const { data: inbounds } = await admin
+        .from("messages")
+        .select("conversation_id, created_at")
+        .in("conversation_id", convIds)
+        .eq("direction", "inbound")
+        .gte("created_at", startIso)
+        .lte("created_at", endIso);
+      const replyConvIds = new Set<string>((inbounds ?? []).map((m: any) => m.conversation_id));
+      repliesToday = replyConvIds.size;
+
+      // Positive = insights tagged today as positive/interested/warm in those convs
+      const { data: positives } = await admin
+        .from("conversation_insights")
+        .select("conversation_id")
+        .in("conversation_id", convIds)
+        .in("reply_intent", ["positive", "interested", "warm"])
+        .gte("tagged_at", startIso)
+        .lte("tagged_at", endIso);
+      const positiveIds = new Set<string>((positives ?? []).map((p: any) => p.conversation_id));
+      positiveToday = positiveIds.size;
+
+      // Avg manager response on positive convs: time between first inbound and
+      // next outbound by a manager (sent_by_user_id IS NOT NULL).
+      if (positiveIds.size > 0) {
+        const ids = Array.from(positiveIds);
+        const { data: msgs } = await admin
+          .from("messages")
+          .select("conversation_id, direction, sent_by_user_id, created_at")
+          .in("conversation_id", ids)
+          .gte("created_at", startIso)
+          .order("created_at", { ascending: true });
+        const grouped = new Map<string, any[]>();
+        for (const m of msgs ?? []) {
+          const arr = grouped.get(m.conversation_id) ?? [];
+          arr.push(m);
+          grouped.set(m.conversation_id, arr);
+        }
+        const deltas: number[] = [];
+        for (const [, list] of grouped) {
+          const firstIn = list.find((m: any) => m.direction === "inbound");
+          if (!firstIn) continue;
+          const reply = list.find((m: any) =>
+            m.direction === "outbound" &&
+            m.sent_by_user_id &&
+            new Date(m.created_at).getTime() > new Date(firstIn.created_at).getTime()
+          );
+          if (!reply) continue;
+          deltas.push((new Date(reply.created_at).getTime() - new Date(firstIn.created_at).getTime()) / 1000);
+        }
+        if (deltas.length > 0) {
+          avgRespSec = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+        }
+      }
+    }
 
     // Enqueue Slack event
     const payload = {
@@ -130,9 +205,13 @@ Deno.serve(async (req) => {
       day: today,
       sent_today: sentToday ?? 0,
       failed_today: failedToday ?? 0,
-      next_day: nextDay,
+      replies_today: repliesToday,
+      positive_today: positiveToday,
+      avg_manager_response_seconds: Math.round(avgRespSec),
+      next_day: nextDay ?? null,
       next_day_start_local: c.schedule_window_start,
-      next_day_recipients: nextRecipients ?? 0,
+      next_day_recipients: nextRecipientsCount,
+      recipient_country: countryCode || null,
       recipient_tz: countryCode || tz || null,
     };
 
