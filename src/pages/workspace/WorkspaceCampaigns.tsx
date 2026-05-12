@@ -303,6 +303,38 @@ function CampaignDetail({
 
   return (
     <div className="px-4 pb-4 pt-2 bg-background/40">
+      {canManage && !isTerminal && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {isActive && (
+            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => callAction("pause")}>
+              {busy === "pause" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Pause className="w-3.5 h-3.5 mr-1.5" />}
+              Pause
+            </Button>
+          )}
+          {isPaused && (
+            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => callAction("resume")}>
+              {busy === "resume" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
+              Resume
+            </Button>
+          )}
+          <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => callAction("redistribute")}>
+            {busy === "redistribute" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5 mr-1.5" />}
+            Re-balance
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-red-600 hover:text-red-700"
+            disabled={busy !== null}
+            onClick={() => {
+              if (confirm("Cancel this campaign? Pending sends will stop.")) callAction("cancel");
+            }}
+          >
+            {busy === "cancel" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <X className="w-3.5 h-3.5 mr-1.5" />}
+            Cancel
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
         <Stat label="Total" value={totals.total.toLocaleString()} />
         <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
