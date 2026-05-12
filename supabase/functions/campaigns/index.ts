@@ -300,6 +300,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const scheduledDates: string[] = Array.isArray(body.scheduled_dates) ? body.scheduled_dates.filter((d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
   const windowStart: string = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : "09:00";
   const windowEnd: string = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : "18:00";
+  const isBlastLaunch = minDelay === 0 && maxDelay === 0;
   const respectTz: boolean = body.respect_recipient_tz !== false;
   const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
 
@@ -374,7 +375,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       total_recipients: cleanRecipients.length,
       scheduled_start_at: new Date().toISOString(),
       schedule_window_start: windowStart + ":00",
-      schedule_window_end: windowEnd + ":00",
+      schedule_window_end: (isBlastLaunch ? windowStart : windowEnd) + ":00",
       respect_recipient_tz: respectTz,
       scheduled_dates: scheduledDates,
       pipeline_id: pipelineId,
@@ -403,7 +404,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   // Honor min 60s gap: cap effective per-day per number so window can fit it.
   const minGapSec = Math.max(60, minDelay || 60);
   const windowFitCap = Math.max(1, Math.floor(windowSeconds / minGapSec));
-  const effectiveQuota = Math.max(1, Math.min(perNumberQuota, windowFitCap));
+  const effectiveQuota = isBlastLaunch ? Math.max(1, perNumberQuota) : Math.max(1, Math.min(perNumberQuota, windowFitCap));
 
   const nextDateStr = (d: string) => {
     const [y, m, day] = d.split("-").map(Number);
@@ -459,11 +460,20 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
         if (slice.length === 0) continue;
 
         const startUtc = dateAtTzToUTC(date, windowStart, tz).getTime() + bucketShiftSec * 1000;
-        const endUtc = dateAtTzToUTC(date, windowEnd, tz).getTime();
+        const endUtc = isBlastLaunch ? startUtc : dateAtTzToUTC(date, windowEnd, tz).getTime();
         // For "now" mode + today: don't schedule in the past — clamp to now+5s.
         const earliest = Math.max(startUtc, Date.now() + 5_000);
         const span = Math.max(60_000, endUtc - earliest);
-        if (schedulerKind === "poisson") {
+        if (isBlastLaunch) {
+          for (const r of slice) {
+            rows.push(tagRow({
+              ...r,
+              user_id: ownerId, workspace_id: wsId,
+              campaign_id: campaign.id, status: "scheduled",
+              scheduled_at: new Date(earliest).toISOString(),
+            }));
+          }
+        } else if (schedulerKind === "poisson") {
           const rate = slice.length / (span / 1000);
           let c = earliest;
           for (const r of slice) {
@@ -533,10 +543,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   if (promoteErr) return json({ error: promoteErr.message }, 500);
 
   let immediate: any = null;
-  if (scheduledDates.length === 0 && minDelay === 0 && maxDelay === 0) {
-    await admin.from("campaign_recipients")
-      .update({ scheduled_at: new Date(Date.now() - 1000).toISOString() })
-      .eq("campaign_id", campaign.id);
+  if (scheduledDates.length === 0 && isBlastLaunch && firstMs <= Date.now() + 55_000) {
     try {
       const res = await processQueue(admin);
       immediate = await res.json();

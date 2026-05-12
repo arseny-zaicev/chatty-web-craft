@@ -1084,10 +1084,10 @@ export default function LaunchWizard() {
                 </div>
               )}
 
-              <div className={`grid gap-2 ${isMarketing && scheduleMode === "now" ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
-                <Field label={isMarketing ? (scheduleMode === "now" ? "Launch at" : "Launch from") : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
-                {!(isMarketing && scheduleMode === "now") && (
-                  <Field label={isMarketing ? "Launch until" : "Window to"}><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+              <div className={`grid gap-2 ${isMarketing ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
+                <Field label={isMarketing ? "Launch at" : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
+                {!isMarketing && (
+                  <Field label="Window to"><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
                 )}
                 <Field label="Scheduler">
                   <Select value={isMarketing ? "poisson" : schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
@@ -1112,10 +1112,10 @@ export default function LaunchWizard() {
 
               {/* Recipient region clock */}
               {recipientTz && recipientNow && (
-                <div className={`text-[11px] flex items-center gap-2 px-2 py-1.5 rounded-md border ${inWindow ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500"}`}>
+                <div className={`text-[11px] flex items-center gap-2 px-2 py-1.5 rounded-md border ${isMarketing ? "border-border/60 bg-muted/20 text-muted-foreground" : inWindow ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500"}`}>
                   <span className="font-mono font-semibold">{recipientNow}</span>
                   <span className="opacity-70">in {poolCountry} ({recipientTz.split("/")[1].replace("_", " ")})</span>
-                  <span className="ml-auto">{inWindow ? `✓ inside ${windowStart}-${windowEnd}` : `outside ${windowStart}-${windowEnd}`}</span>
+                  <span className="ml-auto">{isMarketing ? `launches at ${windowStart}` : (inWindow ? `✓ inside ${windowStart}-${windowEnd}` : `outside ${windowStart}-${windowEnd}`)}</span>
                 </div>
               )}
 
@@ -1124,7 +1124,7 @@ export default function LaunchWizard() {
                   <div>
                     {scheduleMode === "now"
                       ? <>Launches at <b>{windowStart}</b> {respectTz ? "in each recipient's local time" : "in your time zone"}. Sends up to <b>{dayPlan.dailyCap.toLocaleString()}/day</b>{dayPlan.daysNeeded > 1 ? <> across <b>{dayPlan.daysNeeded} day(s)</b> (last day {dayPlan.lastDay.toLocaleString()})</> : null}. No manual delay controls.</>
-                      : <>{scheduledDates.length || 0} day(s) × <b>{windowStart}-{windowEnd}</b> window {respectTz ? "in each recipient's local time" : "in your time zone"} · up to <b>{dayPlan.dailyCap.toLocaleString()}/day</b>.</>}
+                      : <>{scheduledDates.length || 0} day(s) · launches at <b>{windowStart}</b> {respectTz ? "in each recipient's local time" : "in your time zone"} · up to <b>{dayPlan.dailyCap.toLocaleString()}/day</b>.</>}
                   </div>
                 ) : scheduleMode === "now" ? (() => {
                   const perNumber = pacing?.perNumber || 1;
