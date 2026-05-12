@@ -492,31 +492,23 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                 />
               </div>
 
-              <div className="flex flex-wrap gap-1">
-                <button
-                  onClick={() => setNumberFilter("all")}
-                  className={`text-xs px-2 py-1 rounded-full border transition ${
-                    numberFilter === "all"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-                >
-                  All numbers
-                </button>
-                {numbers.map((n) => (
-                  <button
-                    key={n.id}
-                    onClick={() => setNumberFilter(n.id)}
-                    className={`text-xs px-2 py-1 rounded-full border transition ${
-                      numberFilter === n.id
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border text-muted-foreground hover:border-primary/40"
-                    }`}
-                    title={`+${n.phone_number}`}
+              <div className="flex flex-wrap gap-1 items-center">
+                {sortedNumbers.length > 1 && (
+                  <select
+                    value={numberFilter}
+                    onChange={(e) => setNumberFilter(e.target.value)}
+                    className="text-xs px-2 py-1 rounded-full border bg-transparent transition max-w-[180px] truncate border-border text-muted-foreground hover:border-primary/40 focus:outline-none focus:border-primary/60"
+                    title="Filter by sender number"
+                    style={numberFilter !== "all" ? { borderColor: "hsl(var(--primary))", color: "hsl(var(--primary))" } : undefined}
                   >
-                    {friendlySenderLabel(n)}
-                  </button>
-                ))}
+                    <option value="all">All numbers · {conversations.length}</option>
+                    {sortedNumbers.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        +{n.phone_number} · {numberCounts.get(n.id) ?? 0} chats
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   onClick={() => setStarredOnly((v) => !v)}
                   className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
