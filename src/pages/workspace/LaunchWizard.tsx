@@ -1021,18 +1021,22 @@ export default function LaunchWizard() {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2 mt-3">
+            <div className={isMarketing ? "grid sm:grid-cols-2 gap-2 mt-3" : "grid grid-cols-3 gap-2 mt-3"}>
               <Field label="Quota / number (max 200)"><Input type="number" min={1} max={200} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Math.min(200, Number(e.target.value)))} /></Field>
-              <Field label={`Min delay (s)${type === "utility" ? " · ≥60" : ""}`}>
-                <Input type="number" min={type === "utility" ? UTILITY_MIN_DELAY : 0} value={delayMin}
-                  disabled={scheduleMode === "scheduled" || type === "marketing"}
-                  onChange={(e) => setDelayMin(Math.max(type === "utility" ? UTILITY_MIN_DELAY : 0, Number(e.target.value)))} />
-              </Field>
-              <Field label="Max delay (s)">
-                <Input type="number" min={delayMin} value={delayMax}
-                  disabled={scheduleMode === "scheduled" || type === "marketing"}
-                  onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
-              </Field>
+              {!isMarketing && (
+                <>
+                  <Field label="Min delay (s) · ≥60">
+                    <Input type="number" min={UTILITY_MIN_DELAY} value={delayMin}
+                      disabled={scheduleMode === "scheduled"}
+                      onChange={(e) => setDelayMin(Math.max(UTILITY_MIN_DELAY, Number(e.target.value)))} />
+                  </Field>
+                  <Field label="Max delay (s)">
+                    <Input type="number" min={delayMin} value={delayMax}
+                      disabled={scheduleMode === "scheduled"}
+                      onChange={(e) => setDelayMax(Math.max(delayMin, Number(e.target.value)))} />
+                  </Field>
+                </>
+              )}
             </div>
             {isMarketing && (
               <div className="text-[11px] text-muted-foreground mt-1">
