@@ -344,6 +344,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   if (cleanRecipients.length === 0) return json({ error: "No valid phone numbers" }, 400);
 
+  const recipientCountry = ((number as any).country_code as string | null | undefined)?.toUpperCase() || null;
+
   const { data: campaign, error: campaignError } = await admin
     .from("campaigns")
     .insert({
@@ -352,7 +354,10 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       whatsapp_number_id: number.id,
       template_id: template.id,
       name,
-      status: "running",
+      // Insert as draft so the Slack trigger doesn't fire before we know
+      // first_scheduled_at / today_recipients_count. We promote to
+      // scheduled or running below in a single UPDATE.
+      status: "draft",
       delay_min_seconds: minDelay,
       delay_max_seconds: maxDelay,
       total_recipients: cleanRecipients.length,
@@ -362,6 +367,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       respect_recipient_tz: respectTz,
       scheduled_dates: scheduledDates,
       pipeline_id: pipelineId,
+      recipient_country: recipientCountry,
     })
     .select("id")
     .single();
