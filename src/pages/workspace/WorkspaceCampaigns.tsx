@@ -379,11 +379,14 @@ function CampaignDetail({
                 <th className="px-3 py-1.5 font-medium text-right">Scheduled</th>
                 <th className="px-3 py-1.5 font-medium text-right">Sent</th>
                 <th className="px-3 py-1.5 font-medium text-right">Failed</th>
+                {canManage && !isTerminal && <th className="px-3 py-1.5 font-medium text-right w-20"></th>}
               </tr>
             </thead>
             <tbody>
               {visibleDays.map((d) => {
                 const isToday = d.date === todayKey;
+                const isFuture = d.date > todayKey;
+                const canSkip = canManage && !isTerminal && (isToday || isFuture) && d.scheduled > d.sent + d.failed;
                 return (
                   <tr key={d.date} className={`border-t border-border/60 ${isToday ? "bg-primary/5" : ""}`}>
                     <td className="px-3 py-1.5">
@@ -394,6 +397,22 @@ function CampaignDetail({
                     <td className="px-3 py-1.5 text-right tabular-nums">{d.scheduled.toLocaleString()}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">{d.sent.toLocaleString()}</td>
                     <td className={`px-3 py-1.5 text-right tabular-nums ${d.failed > 0 ? "text-red-600" : ""}`}>{d.failed.toLocaleString()}</td>
+                    {canManage && !isTerminal && (
+                      <td className="px-2 py-1 text-right">
+                        {canSkip && (
+                          <button
+                            className="text-[11px] text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+                            disabled={busy !== null}
+                            onClick={() => {
+                              if (confirm(`Skip ${d.date}? Pending sends move to the next available day.`))
+                                callAction("redistribute", { skip_dates: [d.date] });
+                            }}
+                          >
+                            <SkipForward className="w-3 h-3" />Skip
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
