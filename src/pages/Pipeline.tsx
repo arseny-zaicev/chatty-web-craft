@@ -92,6 +92,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Deal | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // 'all' | 'me' | 'unassigned' | userId
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
 
