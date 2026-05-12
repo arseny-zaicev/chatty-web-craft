@@ -103,6 +103,12 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
           <Field label="Rate per delivered message ($)">
             <Input type="number" step="0.001" min="0" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" />
           </Field>
+          <Field label="Internal code (optional)">
+            <Input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="e.g. GF, SF, ACME" />
+          </Field>
+          <Field label="Slack channel ID (optional)">
+            <Input value={slackChannelId} onChange={(e) => setSlackChannelId(e.target.value)} placeholder="C0123ABCDEF" />
+          </Field>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
