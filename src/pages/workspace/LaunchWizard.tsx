@@ -1192,7 +1192,7 @@ export default function LaunchWizard() {
                               .update({ auto_outreach_enabled: v })
                               .eq("id", activePipeline.id);
                             if (error) throw error;
-                            await queryClient.invalidateQueries({ queryKey: pipelinesKey(workspaceId) });
+                            await qc.invalidateQueries({ queryKey: pipelinesKey(workspace?.id) });
                             toast.success(v ? "Auto first-touch enabled" : "Auto first-touch disabled");
                           } catch (e) {
                             toast.error(e instanceof Error ? e.message : "Failed to update");
