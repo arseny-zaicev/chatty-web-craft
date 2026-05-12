@@ -201,6 +201,7 @@ function PresetsSection({
   const [batchAudience, setBatchAudience] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
   const [batchNotes, setBatchNotes] = useState("");
+  const [staticValues, setStaticValues] = useState<StaticValues>({});
   const [busy, setBusy] = useState(false);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [pulling, setPulling] = useState(false);
@@ -229,7 +230,28 @@ function PresetsSection({
     setNameTouched(false);
     setBatchName(buildBatchName("", ""));
     setCreatedBatchId(null);
+    // Pre-fill campaign_static fields with empty strings so operator sees inputs.
+    const initial: StaticValues = {};
+    for (const v of p.variables) if (v.kind === "campaign_static") initial[v.key] = "";
+    setStaticValues(initial);
   };
+
+  // Validate every campaign_static field. Returns { ok, issues: { var_key: reason } }
+  const staticIssues = useMemo(() => {
+    if (!creating) return {} as Record<string, string>;
+    const out: Record<string, string> = {};
+    const banned = new Set(NAME_FALLBACK_PHRASES.map((s) => s.toLowerCase()));
+    for (const v of creating.variables) {
+      if (v.kind !== "campaign_static") continue;
+      const raw = (staticValues[v.key] ?? "").trim();
+      if (!raw) { out[v.key] = "Required - paste exact copy from Materials"; continue; }
+      if (raw.length < 5) { out[v.key] = "Too short - paste the full sentence"; continue; }
+      if (banned.has(raw.toLowerCase())) { out[v.key] = `"${raw}" is a name fallback, not campaign copy`; continue; }
+      if (/\{\{?[^}]+\}?\}/.test(raw)) { out[v.key] = "Looks like an unresolved {placeholder}"; continue; }
+    }
+    return out;
+  }, [creating, staticValues]);
+  const staticOk = Object.keys(staticIssues).length === 0;
 
   const onCountryChange = (val: string) => {
     setBatchCountry(val);
