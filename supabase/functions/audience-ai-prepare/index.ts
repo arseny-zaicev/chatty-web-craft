@@ -66,25 +66,15 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Load prep profile
-    let profile: any = null;
-    if (body.prep_profile_id) {
-      const { data } = await admin
-        .from("audience_prep_profiles")
-        .select("*")
-        .eq("id", body.prep_profile_id)
-        .eq("workspace_id", body.workspace_id)
-        .maybeSingle();
-      profile = data;
-    }
-
-    // Load approved templates (lite)
-    const { data: templates } = await admin
+    // Load approved templates (lite). Filter by category when operator picked a type.
+    let tplQuery = admin
       .from("message_templates")
-      .select("id, name, language, category, body, status")
+      .select("id, name, language, category, body, status, variables")
       .eq("workspace_id", body.workspace_id)
       .in("status", ["approved", "paused"])
       .limit(200);
+    if (body.campaign_type) tplQuery = tplQuery.eq("category", body.campaign_type);
+    const { data: templates } = await tplQuery;
 
     // Build country distribution locally (cheaper than asking AI)
     const distribution = computeCountryDistribution(body.parsed_rows);
@@ -92,19 +82,6 @@ Deno.serve(async (req) => {
     // Trim sample for the LLM
     const sample = body.parsed_rows.slice(0, 30);
     const sampleHeaders = body.all_headers;
-
-    const profileSummary = profile
-      ? {
-          name: profile.name,
-          campaign_type: profile.campaign_type,
-          template_label: profile.template_label,
-          description: profile.description,
-          required_fields: profile.required_fields,
-          optional_fields: profile.optional_fields,
-          derived_variables: profile.derived_variables,
-          fallback_rules: profile.fallback_rules,
-        }
-      : null;
 
     const templateCatalog = (templates ?? []).map((t) => ({
       id: t.id as string,
