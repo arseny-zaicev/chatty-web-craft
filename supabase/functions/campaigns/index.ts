@@ -582,13 +582,20 @@ async function syncTemplates(admin: any, requesterId: string, body: any) {
           namespace: t.namespace ? String(t.namespace).slice(0, 120) : null,
           external_id: t.externalId ? String(t.externalId).slice(0, 120) : null,
           raw: t,
+          variables_sample: variablesSample,
+          header_text: headerText,
+          footer_text: footerText,
+          sync_warning: templateSyncWarning,
           synced_at: new Date().toISOString(),
         },
         { onConflict: "whatsapp_number_id,name,language" },
       );
-    if (!upsertError) upserted++;
+    if (!upsertError) {
+      upserted++;
+      if (incompleteSample) incompleteCount++;
+    }
   }
-  return json({ ok: true, fetched: templates.length, upserted, warning: syncWarning });
+  return json({ ok: true, fetched: templates.length, upserted, incomplete: incompleteCount, warning: syncWarning });
 }
 
 // Bulk sync: iterate every active number in the workspace (or for the requester if no workspace).
