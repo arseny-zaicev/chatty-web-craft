@@ -911,6 +911,14 @@ const DealCard = ({
       <div className="flex items-start justify-between gap-2">
         <div className="font-medium leading-snug truncate flex-1">{deal.title}</div>
         <div className="flex items-center gap-1 shrink-0">
+          {(conversation?.unread_count ?? 0) > 0 && (
+            <div
+              className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold flex items-center justify-center"
+              title={`${conversation!.unread_count} unread`}
+            >
+              {conversation!.unread_count}
+            </div>
+          )}
           {initials && (
             <div
               className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center"
