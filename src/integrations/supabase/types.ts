@@ -1433,6 +1433,331 @@ export type Database = {
           },
         ]
       }
+      number_ownership: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          partner_id: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          partner_id: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          partner_id?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "number_ownership_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_rates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          partner_id: string
+          rate_usd: number
+          scope: string
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          partner_id: string
+          rate_usd: number
+          scope: string
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          partner_id?: string
+          rate_usd?: number
+          scope?: string
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_rates_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partners: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          default_payout_rate_usd: number
+          id: string
+          name: string
+          notes: string | null
+          payment_notes: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          default_payout_rate_usd?: number
+          id?: string
+          name: string
+          notes?: string | null
+          payment_notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          default_payout_rate_usd?: number
+          id?: string
+          name?: string
+          notes?: string | null
+          payment_notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payout_line_items: {
+        Row: {
+          billed_usd: number
+          client_rate_usd: number
+          created_at: string
+          day: string
+          delivered: number
+          failed: number
+          id: string
+          is_adjustment: boolean
+          margin_usd: number
+          notes: string | null
+          partner_rate_usd: number
+          payout_run_id: string
+          payout_usd: number
+          sent: number
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          billed_usd?: number
+          client_rate_usd?: number
+          created_at?: string
+          day: string
+          delivered?: number
+          failed?: number
+          id?: string
+          is_adjustment?: boolean
+          margin_usd?: number
+          notes?: string | null
+          partner_rate_usd?: number
+          payout_run_id: string
+          payout_usd?: number
+          sent?: number
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          billed_usd?: number
+          client_rate_usd?: number
+          created_at?: string
+          day?: string
+          delivered?: number
+          failed?: number
+          id?: string
+          is_adjustment?: boolean
+          margin_usd?: number
+          notes?: string | null
+          partner_rate_usd?: number
+          payout_run_id?: string
+          payout_usd?: number
+          sent?: number
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_line_items_payout_run_id_fkey"
+            columns: ["payout_run_id"]
+            isOneToOne: false
+            referencedRelation: "payout_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_run_audit: {
+        Row: {
+          action: string
+          actor: string | null
+          after: Json | null
+          at: string
+          before: Json | null
+          id: string
+          note: string | null
+          payout_run_id: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          id?: string
+          note?: string | null
+          payout_run_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          after?: Json | null
+          at?: string
+          before?: Json | null
+          id?: string
+          note?: string | null
+          payout_run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_run_audit_payout_run_id_fkey"
+            columns: ["payout_run_id"]
+            isOneToOne: false
+            referencedRelation: "payout_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_runs: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          csv_storage_path: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          margin_usd: number
+          notes: string | null
+          paid_amount_usd: number | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_reference: string | null
+          partner_id: string
+          pdf_storage_path: string | null
+          period_from: string
+          period_to: string
+          source_data_hash: string | null
+          source_event_count: number
+          status: string
+          total_billed_usd: number
+          total_payout_usd: number
+          totals_delivered: number
+          totals_failed: number
+          totals_sent: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          csv_storage_path?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          margin_usd?: number
+          notes?: string | null
+          paid_amount_usd?: number | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_reference?: string | null
+          partner_id: string
+          pdf_storage_path?: string | null
+          period_from: string
+          period_to: string
+          source_data_hash?: string | null
+          source_event_count?: number
+          status?: string
+          total_billed_usd?: number
+          total_payout_usd?: number
+          totals_delivered?: number
+          totals_failed?: number
+          totals_sent?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          csv_storage_path?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          margin_usd?: number
+          notes?: string | null
+          paid_amount_usd?: number | null
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_reference?: string | null
+          partner_id?: string
+          pdf_storage_path?: string | null
+          period_from?: string
+          period_to?: string
+          source_data_hash?: string | null
+          source_event_count?: number
+          status?: string
+          total_billed_usd?: number
+          total_payout_usd?: number
+          totals_delivered?: number
+          totals_failed?: number
+          totals_sent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_runs_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_stages: {
         Row: {
           color: string
@@ -2087,6 +2412,36 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_billing_rates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          rate_usd: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          rate_usd: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          rate_usd?: number
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_files: {
         Row: {
           created_at: string
@@ -2468,6 +2823,41 @@ export type Database = {
       }
     }
     Functions: {
+      approve_payout_run: {
+        Args: { _run_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          csv_storage_path: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          margin_usd: number
+          notes: string | null
+          paid_amount_usd: number | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_reference: string | null
+          partner_id: string
+          pdf_storage_path: string | null
+          period_from: string
+          period_to: string
+          source_data_hash: string | null
+          source_event_count: number
+          status: string
+          total_billed_usd: number
+          total_payout_usd: number
+          totals_delivered: number
+          totals_failed: number
+          totals_sent: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payout_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_access_pipeline: {
         Args: { _pipeline_id: string; _user_id: string; _workspace_id: string }
         Returns: boolean
@@ -2485,6 +2875,10 @@ export type Database = {
         Returns: string
       }
       ensure_pipeline_stage: { Args: { _user_id: string }; Returns: string }
+      generate_payout_run: {
+        Args: { _from: string; _partner_id: string; _to: string }
+        Returns: string
+      }
       get_campaign_report: {
         Args: { p_campaign_id: string }
         Returns: {
@@ -2567,6 +2961,41 @@ export type Database = {
         Returns: number
       }
       mark_membership_joined: { Args: never; Returns: number }
+      mark_payout_run_paid: {
+        Args: { _amount_usd: number; _reference: string; _run_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          csv_storage_path: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          margin_usd: number
+          notes: string | null
+          paid_amount_usd: number | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_reference: string | null
+          partner_id: string
+          pdf_storage_path: string | null
+          period_from: string
+          period_to: string
+          source_data_hash: string | null
+          source_event_count: number
+          status: string
+          total_billed_usd: number
+          total_payout_usd: number
+          totals_delivered: number
+          totals_failed: number
+          totals_sent: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payout_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       member_pipeline_scope: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: string[]
@@ -2577,6 +3006,19 @@ export type Database = {
           message_id: number
           payload: Json
           source_queue: string
+        }
+        Returns: number
+      }
+      number_owner_at: {
+        Args: { _at: string; _whatsapp_number_id: string }
+        Returns: string
+      }
+      partner_rate_at: {
+        Args: {
+          _at: string
+          _partner_id: string
+          _whatsapp_number_id: string
+          _workspace_id: string
         }
         Returns: number
       }
@@ -2591,6 +3033,41 @@ export type Database = {
       reap_finished_campaigns: {
         Args: { p_idle_minutes?: number }
         Returns: number
+      }
+      recompute_payout_run: {
+        Args: { _run_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          csv_storage_path: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          margin_usd: number
+          notes: string | null
+          paid_amount_usd: number | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_reference: string | null
+          partner_id: string
+          pdf_storage_path: string | null
+          period_from: string
+          period_to: string
+          source_data_hash: string | null
+          source_event_count: number
+          status: string
+          total_billed_usd: number
+          total_payout_usd: number
+          totals_delivered: number
+          totals_failed: number
+          totals_sent: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payout_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       record_heartbeat: { Args: never; Returns: undefined }
       release_audience_rows: { Args: { _row_ids: string[] }; Returns: number }
@@ -2616,6 +3093,57 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      verify_payout_run: {
+        Args: { _run_id: string }
+        Returns: {
+          drift: boolean
+          live_delivered: number
+          live_hash: string
+          live_payout: number
+          stored_delivered: number
+          stored_hash: string
+          stored_payout: number
+        }[]
+      }
+      void_payout_run: {
+        Args: { _reason: string; _run_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          csv_storage_path: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          margin_usd: number
+          notes: string | null
+          paid_amount_usd: number | null
+          paid_at: string | null
+          paid_by: string | null
+          paid_reference: string | null
+          partner_id: string
+          pdf_storage_path: string | null
+          period_from: string
+          period_to: string
+          source_data_hash: string | null
+          source_event_count: number
+          status: string
+          total_billed_usd: number
+          total_payout_usd: number
+          totals_delivered: number
+          totals_failed: number
+          totals_sent: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payout_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      workspace_billing_rate_at: {
+        Args: { _at: string; _workspace_id: string }
+        Returns: number
       }
     }
     Enums: {
