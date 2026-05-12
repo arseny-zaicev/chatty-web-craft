@@ -25,6 +25,8 @@ import {
   type AudienceBatch, type AudienceBatchStats, type AudienceRow,
 } from "@/lib/audienceData";
 import { fetchPipelines, pipelinesKey, createPipeline } from "@/lib/pipelines";
+import PipelineConfigSheet from "@/components/workspace/PipelineConfigSheet";
+import { Settings as SettingsIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
@@ -106,6 +108,7 @@ export default function LaunchWizard() {
   const [newPipelineName, setNewPipelineName] = useState("");
   const [newPipelineColor, setNewPipelineColor] = useState("#6366f1");
   const [creatingPipeline, setCreatingPipeline] = useState(false);
+  const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
   const handleCreatePipeline = async () => {
     if (!workspace || !newPipelineName.trim()) return;
     setCreatingPipeline(true);
@@ -268,6 +271,29 @@ export default function LaunchWizard() {
     [recipients, mapping, variableNames],
   );
 
+  // Variables that have no mapping (or empty static) - blocks Launch.
+  const unmappedVars = useMemo(() => {
+    return variableNames.filter((v) => {
+      const m = mapping[v];
+      if (!m) return true;
+      if (m.startsWith("__static:")) return !m.slice("__static:".length).trim();
+      return false;
+    });
+  }, [variableNames, mapping]);
+
+  // Sample value preview for each variable (uses first available recipient/db row)
+  const variablePreviewValue = (v: string): string => {
+    const src = mapping[v];
+    if (src && src.startsWith("__static:")) return src.slice("__static:".length);
+    if (audienceSource === "database") {
+      const row = (sampleDbRowsQ?.data ?? [])[0];
+      if (!row || !src) return "";
+      return String((row.payload as any)?.[src] ?? (row.derived_payload as any)?.[src] ?? "");
+    }
+    const r = mappedRecipients[0];
+    return String(r?.variables?.[v] ?? "");
+  };
+
   // ----- Sender pools (numbers grouped by country) -----
   const pools = useMemo(() => groupNumbersByCountry(numbers), [numbers]);
 
@@ -406,16 +432,22 @@ export default function LaunchWizard() {
   }, [recipientNow, windowStart, windowEnd]);
 
   // Per-day capacity model honors per_number_quota cap.
+  // For "Send now" we still apply the daily cap (numbers × perNumberQuota); the
+  // overflow auto-rolls forward day-by-day via campaign-day-rollover. This matches
+  // backend behaviour and prevents the UI from claiming we'll send 2k+ in one day.
   const dayPlan = useMemo(() => {
     const numbers = Math.max(1, activeNumbers.length);
     const total = recipients.length;
     const dailyCap = Math.max(1, numbers * Math.max(1, perNumberQuota));
-    const daysSelected = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
+    const daysSelected = scheduleMode === "scheduled"
+      ? Math.max(1, scheduledDates.length || 1)
+      : Math.max(1, Math.ceil(total / dailyCap)); // "now" mode: derive days from cap
     const idealPerDay = Math.ceil(total / daysSelected);
     const effectivePerDay = Math.min(idealPerDay, dailyCap);
     const daysNeeded = Math.max(1, Math.ceil(total / dailyCap));
-    const capExceeded = idealPerDay > dailyCap;
-    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded };
+    const capExceeded = scheduleMode === "scheduled" && idealPerDay > dailyCap;
+    const overflowToday = Math.max(0, total - effectivePerDay);
+    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded, overflowToday };
   }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length]);
 
   // Realistic per-message gap when window mode is active (based on today's effective load)
@@ -969,7 +1001,10 @@ export default function LaunchWizard() {
                   return (
                     <div>
                       Starts immediately. {schedulerKind === "poisson" ? "Poisson (organic, jittered)" : "Uniform fixed"} gaps of <b>{delayMin}-{delayMax}s</b> between sends per number.
-                      Per number: <b>{perNumber} msgs</b> → ≈ <b>{fmtDur(Math.round(avgSec))} avg</b>, up to <b>{fmtDur(Math.round(maxSec))} max</b>. So yes - 50/number at 60-120s comfortably fits within an hour or two; numbers send in parallel so total wall-clock = same as one number.
+                      Cap <b>{perNumberQuota}/number/day</b> on <b>{dayPlan.numbers} number(s)</b> = max <b>{dayPlan.dailyCap.toLocaleString()}/day</b>. Today: <b>{dayPlan.effectivePerDay.toLocaleString()} msgs</b> ({perNumber}/number) → ≈ <b>{fmtDur(Math.round(avgSec))} avg</b>, up to <b>{fmtDur(Math.round(maxSec))} max</b>.
+                      {dayPlan.overflowToday > 0 && (
+                        <> Remaining <b>{dayPlan.overflowToday.toLocaleString()}</b> auto-rolls forward across <b>{dayPlan.daysNeeded} day(s)</b> total.</>
+                      )}
                     </div>
                   );
                 })() : pacing && pacing.perNumber > 1 ? (
@@ -1005,8 +1040,63 @@ export default function LaunchWizard() {
           </Step>
 
 
-          {/* Step 4: Audience */}
-          <Step n={4} icon={Users} title="Audience">
+          {/* Step 4: Pipeline & automations (optional) */}
+          {(() => {
+            const activePipeline = pipelines.find((p) => p.id === pipelineId) ?? null;
+            return (
+              <Step
+                n={4}
+                icon={SettingsIcon}
+                title="Pipeline & automations"
+                right={
+                  <Badge variant="outline" className="text-[10px]">optional</Badge>
+                }
+              >
+                <Field label="Pipeline (board where replies will land)">
+                  <div className="flex gap-2">
+                    <Select value={pipelineId} onValueChange={setPipelineId}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Pick a pipeline" /></SelectTrigger>
+                      <SelectContent>
+                        {pipelines.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                              {p.name}{p.is_default && <span className="text-[10px] text-muted-foreground">(default)</span>}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => setShowCreatePipeline(true)}>
+                      <Plus className="w-3.5 h-3.5 mr-1" />New
+                    </Button>
+                  </div>
+                </Field>
+                {activePipeline && (
+                  <div className="mt-2 rounded-md border border-border bg-card/30 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted-foreground">Current pipeline defaults</div>
+                      <Button variant="outline" size="sm" onClick={() => setPipelineConfigOpen(true)}>
+                        <SettingsIcon className="w-3.5 h-3.5 mr-1" />Edit pipeline config
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                      <div className="flex justify-between"><span className="text-muted-foreground">Auto-outreach</span><span className="font-medium">{activePipeline.auto_outreach_enabled ? "on" : "off"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Slack channel</span><span className="font-medium truncate ml-2">{activePipeline.slack_channel_id ? "linked" : "—"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Daily cap</span><span className="font-medium">{activePipeline.daily_cap ?? "—"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Window</span><span className="font-medium">{(activePipeline.sending_window?.start ?? "09:00")}-{(activePipeline.sending_window?.end ?? "18:00")}</span></div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                      Replies on this campaign auto-create cards on this pipeline. Stage automations &amp; Slack pings live in the pipeline config above.
+                    </p>
+                  </div>
+                )}
+              </Step>
+            );
+          })()}
+
+          {/* Step 5: Audience */}
+          <Step n={5} icon={Users} title="Audience">
             <Tabs value={audienceSource} onValueChange={(v) => setAudienceSource(v as any)}>
               <TabsList className="grid grid-cols-5 w-full">
                 <TabsTrigger value="paste"><FileText className="w-3.5 h-3.5 mr-1" />Paste</TabsTrigger>
@@ -1138,72 +1228,81 @@ export default function LaunchWizard() {
             </div>
           </Step>
 
-          {/* Step 5: Variable mapping */}
+          {/* Step 6: Variable mapping */}
           {variableNames.length > 0 && (
-            <Step n={5} icon={FileText} title="Variable mapping">
+            <Step
+              n={6}
+              icon={FileText}
+              title="Variable mapping"
+              right={
+                unmappedVars.length > 0 ? (
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/5">
+                    <AlertTriangle className="w-3 h-3 mr-1" />Action required · {variableNames.length - unmappedVars.length}/{variableNames.length} mapped
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">
+                    {variableNames.length}/{variableNames.length} mapped
+                  </Badge>
+                )
+              }
+            >
+              {unmappedVars.length > 0 && (
+                <div className="text-[11px] rounded-md border border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-500 px-2 py-1.5">
+                  Each variable below must point to a column from your audience (where each contact has its own value) <b>or</b> use a static value (same text for everyone). Variables in this template: <b>{variableNames.map((v) => `{${v}}`).join(" ")}</b>.
+                </div>
+              )}
               <div className="space-y-2">
                 {variableNames.map((v) => {
                   const current = mapping[v] ?? "";
                   const isStatic = current.startsWith("__static:");
+                  const previewVal = variablePreviewValue(v);
+                  const unmapped = unmappedVars.includes(v);
                   return (
-                    <div key={v} className="flex items-center gap-2 text-sm">
-                      <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{`{${v}}`}</span>
-                      <span className="text-xs text-muted-foreground">→</span>
-                      <Select value={isStatic ? "__static__" : current || "__none__"} onValueChange={(val) => {
-                        setMapping((prev) => {
-                          const next = { ...prev };
-                          if (val === "__none__") delete next[v];
-                          else if (val === "__static__") next[v] = "__static:";
-                          else next[v] = val;
-                          return next;
-                        });
-                      }}>
-                        <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick column" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">— unset —</SelectItem>
-                          {columns.map((c) => <SelectItem key={c} value={c}>column: {c}</SelectItem>)}
-                          <SelectItem value="__static__">static value...</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {isStatic && (
-                        <Input
-                          className="h-8 flex-1"
-                          placeholder="Static value"
-                          value={current.slice("__static:".length)}
-                          onChange={(e) => setMapping((prev) => ({ ...prev, [v]: `__static:${e.target.value}` }))}
-                        />
+                    <div key={v} className={`rounded-md border p-2 ${unmapped ? "border-amber-500/30 bg-amber-500/5" : "border-border bg-card/30"}`}>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{`{${v}}`}</span>
+                        <span className="text-xs text-muted-foreground">→</span>
+                        <Select value={isStatic ? "__static__" : current || "__none__"} onValueChange={(val) => {
+                          setMapping((prev) => {
+                            const next = { ...prev };
+                            if (val === "__none__") delete next[v];
+                            else if (val === "__static__") next[v] = "__static:";
+                            else next[v] = val;
+                            return next;
+                          });
+                        }}>
+                          <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="Pick column or static" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— unset —</SelectItem>
+                            {columns.map((c) => <SelectItem key={c} value={c}>column: {c}</SelectItem>)}
+                            <SelectItem value="__static__">static value (same for all)...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {isStatic && (
+                          <Input
+                            className="h-8 flex-1"
+                            placeholder={`Same text for all (e.g. "Bella")`}
+                            value={current.slice("__static:".length)}
+                            onChange={(e) => setMapping((prev) => ({ ...prev, [v]: `__static:${e.target.value}` }))}
+                          />
+                        )}
+                      </div>
+                      {!unmapped && previewVal && (
+                        <div className="mt-1 text-[11px] text-muted-foreground pl-1">
+                          preview: <span className="font-medium text-foreground">"{previewVal.length > 80 ? previewVal.slice(0, 77) + "..." : previewVal}"</span>
+                        </div>
                       )}
                     </div>
                   );
                 })}
-                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template for this workspace.</p>
+                <p className="text-xs text-muted-foreground">Mapping is auto-saved per template for this workspace. Tip: numeric template variables ({"{1}"}, {"{2}"}...) usually need a static value or a column from your audience batch.</p>
               </div>
             </Step>
           )}
 
-          {/* Step 6: Naming */}
-          <Step n={6} icon={Bookmark} title="Campaign name">
-            <Field label="Pipeline (board where replies will land)">
-              <div className="flex gap-2">
-                <Select value={pipelineId} onValueChange={setPipelineId}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Pick a pipeline" /></SelectTrigger>
-                  <SelectContent>
-                    {pipelines.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                          {p.name}{p.is_default && <span className="text-[10px] text-muted-foreground">(default)</span>}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="sm" onClick={() => setShowCreatePipeline(true)}>
-                  <Plus className="w-3.5 h-3.5 mr-1" />New
-                </Button>
-              </div>
-            </Field>
-            <div className="grid sm:grid-cols-2 gap-2 mt-2">
+          {/* Step 7: Naming */}
+          <Step n={7} icon={Bookmark} title="Campaign name">
+            <div className="grid sm:grid-cols-2 gap-2">
               <Field label="Audience">
                 <Input value={audience} onChange={(e) => { setAudience(e.target.value); setAudienceDirty(true); }} placeholder="GTM Professionals" />
               </Field>
@@ -1236,14 +1335,22 @@ export default function LaunchWizard() {
             </div>
           </Step>
 
-          {/* Step 7: Preview */}
-          <Step n={7} icon={Eye} title="Rendered preview">
+          {/* Step 8: Preview */}
+          <Step n={8} icon={Eye} title="Rendered preview">
             {!activeLogical?.body ? (
               <p className="text-sm text-muted-foreground">No template body to preview.</p>
             ) : previewSamples.length === 0 ? (
               <p className="text-sm text-muted-foreground">Add recipients to preview the rendered message.</p>
             ) : (
               <div className="space-y-2">
+                {unmappedVars.length > 0 && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <b>Map variables before launch.</b> {unmappedVars.length} variable(s) unmapped: {unmappedVars.map((v) => `{${v}}`).join(" ")}. Scroll up to Step 6 (Variable mapping) and pick a column or set a static value.
+                    </div>
+                  </div>
+                )}
                 {previewSamples.map((s, i) => (
                   <div key={i} className="rounded-md border border-border bg-card/30 p-3">
                     <div className="flex items-center justify-between mb-1.5">
@@ -1271,18 +1378,16 @@ export default function LaunchWizard() {
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
-          <Row label="Per day" value={scheduleMode === "scheduled" ? dayPlan.effectivePerDay.toLocaleString() : recipients.length.toLocaleString()} />
-          <Row label="Per number / day" value={activeNumbers.length ? Math.ceil((scheduleMode === "scheduled" ? dayPlan.effectivePerDay : recipients.length) / activeNumbers.length) : "-"} />
-          {scheduleMode === "scheduled" && (
-            <Row
-              label="Days needed"
-              value={
-                <span className={dayPlan.daysNeeded > dayPlan.daysSelected ? "text-amber-600 font-medium" : undefined}>
-                  {dayPlan.daysNeeded}{dayPlan.daysNeeded > dayPlan.daysSelected ? ` (you picked ${dayPlan.daysSelected})` : ""}
-                </span>
-              }
-            />
-          )}
+          <Row label="Per day" value={dayPlan.effectivePerDay.toLocaleString()} />
+          <Row label="Per number / day" value={activeNumbers.length ? Math.ceil(dayPlan.effectivePerDay / activeNumbers.length) : "-"} />
+          <Row
+            label="Days needed"
+            value={
+              <span className={scheduleMode === "scheduled" && dayPlan.daysNeeded > dayPlan.daysSelected ? "text-amber-600 font-medium" : undefined}>
+                {dayPlan.daysNeeded}{scheduleMode === "scheduled" && dayPlan.daysNeeded > dayPlan.daysSelected ? ` (you picked ${dayPlan.daysSelected})` : ""}
+              </span>
+            }
+          />
           <Row label="Speed" value={delayMin === 0 && delayMax === 0 ? "Blast" : `${delayMin}-${delayMax}s`} />
           <Row label="ETA" value={eta} />
           {resolution.missing.length > 0 && (
@@ -1291,10 +1396,16 @@ export default function LaunchWizard() {
               {resolution.missing.length} number(s) missing template variant.
             </div>
           )}
+          {unmappedVars.length > 0 && (
+            <div className="text-xs text-amber-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {unmappedVars.length} variable(s) unmapped: {unmappedVars.map((v) => `{${v}}`).join(" ")}. Map in Step 6.
+            </div>
+          )}
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
@@ -1323,6 +1434,12 @@ export default function LaunchWizard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PipelineConfigSheet
+        pipeline={pipelines.find((p) => p.id === pipelineId) ?? null}
+        open={pipelineConfigOpen}
+        onClose={() => setPipelineConfigOpen(false)}
+      />
     </div>
   );
 }
