@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Megaphone, Rocket, Loader2, ChevronRight, ChevronDown, RefreshCw, Pause, Play, X, SkipForward, RotateCw } from "lucide-react";
