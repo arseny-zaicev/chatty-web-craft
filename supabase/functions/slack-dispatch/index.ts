@@ -297,13 +297,21 @@ Deno.serve(async (req) => {
           payload: p,
         });
         const routing = String(p.routing || "numbers");
+        const gErrors: string[] = [];
+        let gOk = false;
+        const post = async (ch: string) => {
+          try { await postSlack(ch, msg); gOk = true; }
+          catch (e) { gErrors.push(`${ch}: ${e instanceof Error ? e.message : String(e)}`); }
+        };
         if (routing === "finance") {
           const financeChan = OPS_FINANCE || OPS_NUMBERS;
-          if (financeChan) await postSlack(financeChan, msg);
+          if (financeChan) await post(financeChan);
         } else {
-          if (OPS_NUMBERS) await postSlack(OPS_NUMBERS, msg);
-          if (workspaceChannel) await postSlack(workspaceChannel, msg);
+          if (OPS_NUMBERS) await post(OPS_NUMBERS);
+          if (workspaceChannel) await post(workspaceChannel);
         }
+        if (!gOk && gErrors.length) throw new Error(gErrors.join(" | "));
+        if (gErrors.length) console.warn("gupshup alert partial", ev.id, gErrors.join(" | "));
       } else {
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
