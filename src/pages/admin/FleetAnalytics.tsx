@@ -377,6 +377,7 @@ export default function FleetAnalytics() {
                     <TableHead className="text-right">Used%</TableHead>
                     <TableHead className="text-right">Deliv</TableHead>
                     <TableHead className="text-right">Fail%</TableHead>
+                    <TableHead className="text-right">Reply%</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -392,13 +393,16 @@ export default function FleetAnalytics() {
                       <TableCell className={`text-xs text-right tabular-nums ${pct(n.failed, n.sent + n.failed) > 5 ? "text-red-600 font-medium" : ""}`}>
                         {(n.sent + n.failed) > 0 ? `${pct(n.failed, n.sent + n.failed)}%` : "—"}
                       </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-medium text-violet-700" title={`${n.replied_convos}/${n.sent_convos} chats`}>
+                        {n.sent_convos > 0 ? `${pct(n.replied_convos, n.sent_convos)}%` : "—"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-[10px]">{n.status}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
                   {data!.numbers.length === 0 && (
-                    <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-6">No data yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-6">No data yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
