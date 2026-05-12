@@ -39,7 +39,7 @@ export const Testimonials = () => {
                   <div className="flex items-center gap-3">
                     <img
                       src={kristapsPhoto}
-                      alt="Kristaps"
+                      alt="Kristaps - Founder, Key Digital"
                       className="w-12 h-12 rounded-full object-cover object-top border-2 border-iskra-emerald/30"
                     />
                     <div>
@@ -78,7 +78,7 @@ export const Testimonials = () => {
                   <div className="flex items-center gap-3">
                     <img
                       src={kristapsPhoto}
-                      alt="Kristaps"
+                      alt="Kristaps - Founder, Key Digital"
                       className="w-12 h-12 rounded-full object-cover object-top border-2 border-iskra-emerald/30"
                     />
                     <div>
