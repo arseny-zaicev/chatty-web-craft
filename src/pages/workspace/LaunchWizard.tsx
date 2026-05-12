@@ -498,12 +498,15 @@ export default function LaunchWizard() {
       ? Math.max(1, scheduledDates.length || 1)
       : Math.max(1, Math.ceil(total / dailyCap)); // "now" mode: derive days from cap
     const idealPerDay = Math.ceil(total / daysSelected);
-    const effectivePerDay = Math.min(idealPerDay, dailyCap);
+    // Marketing Blast: send dailyCap each day, last day = remainder. No smoothing.
+    // Utility: smooth across selected days, but never exceed dailyCap.
+    const effectivePerDay = isMarketing ? Math.min(total, dailyCap) : Math.min(idealPerDay, dailyCap);
     const daysNeeded = Math.max(1, Math.ceil(total / dailyCap));
+    const lastDay = isMarketing ? (total - dailyCap * (daysNeeded - 1)) : effectivePerDay;
     const capExceeded = scheduleMode === "scheduled" && idealPerDay > dailyCap;
     const overflowToday = Math.max(0, total - effectivePerDay);
-    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, capExceeded, overflowToday };
-  }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length]);
+    return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, lastDay, capExceeded, overflowToday };
+  }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length, isMarketing]);
 
   // Realistic per-message gap when window mode is active (based on today's effective load)
   const pacing = useMemo(() => {
@@ -1081,9 +1084,11 @@ export default function LaunchWizard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Field label={isMarketing ? "Launch from" : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
-                <Field label={isMarketing ? "Launch until" : "Window to"}><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+              <div className={`grid gap-2 ${isMarketing && scheduleMode === "now" ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
+                <Field label={isMarketing ? (scheduleMode === "now" ? "Launch at" : "Launch from") : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
+                {!(isMarketing && scheduleMode === "now") && (
+                  <Field label={isMarketing ? "Launch until" : "Window to"}><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+                )}
                 <Field label="Scheduler">
                   <Select value={isMarketing ? "poisson" : schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
                     disabled={isMarketing}>
@@ -1117,7 +1122,9 @@ export default function LaunchWizard() {
               <div className="text-[11px] text-muted-foreground space-y-1">
                 {isMarketing ? (
                   <div>
-                    {scheduleMode === "scheduled" ? `${scheduledDates.length || 0} day(s) × ` : "Starts "}{windowStart}-{windowEnd} {respectTz ? "in each recipient's local time" : "in your time zone"}. Sends as Marketing Blast with no manual delay controls.
+                    {scheduleMode === "now"
+                      ? <>Launches at <b>{windowStart}</b> {respectTz ? "in each recipient's local time" : "in your time zone"}. Sends up to <b>{dayPlan.dailyCap.toLocaleString()}/day</b>{dayPlan.daysNeeded > 1 ? <> across <b>{dayPlan.daysNeeded} day(s)</b> (last day {dayPlan.lastDay.toLocaleString()})</> : null}. No manual delay controls.</>
+                      : <>{scheduledDates.length || 0} day(s) × <b>{windowStart}-{windowEnd}</b> window {respectTz ? "in each recipient's local time" : "in your time zone"} · up to <b>{dayPlan.dailyCap.toLocaleString()}/day</b>.</>}
                   </div>
                 ) : scheduleMode === "now" ? (() => {
                   const perNumber = pacing?.perNumber || 1;
@@ -1595,7 +1602,14 @@ export default function LaunchWizard() {
           <div className="font-display text-lg flex items-center gap-2"><Clock className="w-4 h-4 text-primary" />Review</div>
           <Row label="Type" value={preset.label} />
           <Row label="Workspace" value={workspace?.name ?? "-"} />
-          <Row label="Pool" value={poolCountry ? `${poolCountry} · ${readyInPool.length}/${poolNumbers.length} ready` : "-"} />
+          <Row
+            label={isMarketing ? "Sender" : "Pool"}
+            value={
+              isMarketing
+                ? (activeNumbers[0] ? friendlySenderLabel(activeNumbers[0]) : "Pick one sender")
+                : (poolCountry ? `${poolCountry} · ${readyInPool.length}/${poolNumbers.length} ready` : "-")
+            }
+          />
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
