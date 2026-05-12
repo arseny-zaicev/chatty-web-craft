@@ -19,11 +19,50 @@ function fmtPct(part: number, total: number): string {
   return `${Math.round((part / total) * 100)}%`;
 }
 
-function fmtDate(iso: string | null | undefined): string {
+function fmtDate(iso: string | null | undefined, tz = "Asia/Dubai"): string {
   if (!iso) return "-";
   try {
-    return new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Dubai", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("en-GB", { timeZone: tz, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   } catch { return iso; }
+}
+
+// ISO country code -> primary IANA TZ + short label for Slack copy
+const COUNTRY_TZ_LABEL: Record<string, { tz: string; label: string }> = {
+  US: { tz: "America/New_York", label: "New York" }, CA: { tz: "America/Toronto", label: "Toronto" },
+  GB: { tz: "Europe/London", label: "London" }, UK: { tz: "Europe/London", label: "London" },
+  AE: { tz: "Asia/Dubai", label: "UAE" }, SA: { tz: "Asia/Riyadh", label: "Riyadh" },
+  IN: { tz: "Asia/Kolkata", label: "India" }, DE: { tz: "Europe/Berlin", label: "Berlin" },
+  FR: { tz: "Europe/Paris", label: "Paris" }, IT: { tz: "Europe/Rome", label: "Rome" },
+  ES: { tz: "Europe/Madrid", label: "Madrid" }, NL: { tz: "Europe/Amsterdam", label: "Amsterdam" },
+  BR: { tz: "America/Sao_Paulo", label: "Brazil" }, MX: { tz: "America/Mexico_City", label: "Mexico" },
+  AU: { tz: "Australia/Sydney", label: "Sydney" }, JP: { tz: "Asia/Tokyo", label: "Tokyo" },
+  SG: { tz: "Asia/Singapore", label: "Singapore" }, HK: { tz: "Asia/Hong_Kong", label: "Hong Kong" },
+};
+
+function tzInfo(country: unknown): { tz: string; label: string } {
+  const code = String(country || "").toUpperCase();
+  return COUNTRY_TZ_LABEL[code] || { tz: "Asia/Dubai", label: "UAE" };
+}
+
+function fmtDuration(seconds: number | null | undefined): string {
+  const s = Number(seconds || 0);
+  if (!isFinite(s) || s <= 0) return "—";
+  if (s < 60) return `${Math.round(s)}s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s - m * 60);
+  if (m < 60) return rem ? `${m}m ${rem}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
+}
+
+function fmtTodayOrStartDate(todayCount: number, firstScheduledAt: string | null | undefined, tz: string): string {
+  if (todayCount > 0) return `${fmtNumber(todayCount)} msgs`;
+  if (!firstScheduledAt) return "—";
+  try {
+    const d = new Date(firstScheduledAt).toLocaleString("en-GB", { timeZone: tz, day: "2-digit", month: "short" });
+    return `Starts ${d}`;
+  } catch { return "—"; }
 }
 
 function workspaceUrl(slug: string | null): string {
@@ -75,20 +114,28 @@ export function buildCampaignGroupBlocks(args: {
     ? `${m.emoji}  Campaign ${m.verb}`
     : `${m.emoji}  ${tag}  ·  Campaign ${m.verb} · ${numbersWord}`;
 
+  const tzi = tzInfo(payload.recipient_country);
+  const todayCount = Number(payload.today_recipients_count || 0);
+  const firstAt = (payload.first_scheduled_at as string | null) || (payload.scheduled_start_at as string | null);
+
   const fields: { type: string; text: string }[] = [
     { type: "mrkdwn", text: `*Campaign*\n${baseName}` },
-    { type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` },
   ];
   if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` });
     const delivered = totals.sent - totals.failed;
     fields.push({ type: "mrkdwn", text: `*Sent*\n${fmtNumber(totals.sent)} (${fmtPct(totals.sent, totals.total)})` });
     fields.push({ type: "mrkdwn", text: `*Delivered*\n${fmtNumber(delivered)} · ${fmtNumber(totals.failed)} failed` });
   } else if (event === "campaign_scheduled" || event === "campaign_launched" || event === "campaign_resumed") {
-    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} UAE` });
-    fields.push({ type: "mrkdwn", text: `*First send*\n${fmtDate(payload.scheduled_start_at as string)}` });
+    fields.push({ type: "mrkdwn", text: `*Today*\n${fmtTodayOrStartDate(todayCount, firstAt, tzi.tz)}` });
+    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} ${tzi.label}` });
+    fields.push({ type: "mrkdwn", text: `*${event === "campaign_scheduled" ? "First send" : "Started"}*\n${fmtDate(firstAt, tzi.tz)} ${tzi.label}` });
   } else if (event === "campaign_paused") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` });
     fields.push({ type: "mrkdwn", text: `*Progress*\n${fmtNumber(totals.sent)} / ${fmtNumber(totals.total)} sent` });
     fields.push({ type: "mrkdwn", text: `*Failed*\n${fmtNumber(totals.failed)}` });
+  } else {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` });
   }
 
   const blocks: unknown[] = [
@@ -149,29 +196,46 @@ export function buildCampaignLifecycleBlocks(args: {
   const headline = `${m.emoji}  ${tag}  ·  Campaign ${m.verb}`;
   const fields: { type: string; text: string }[] = [];
 
+  const tzi = tzInfo(payload.recipient_country || payload.recipient_tz);
+  const todayCount = Number(payload.today_recipients_count || 0);
+  const firstAt = (payload.first_scheduled_at as string | null) || (payload.scheduled_start_at as string | null);
+
   fields.push({ type: "mrkdwn", text: `*Campaign*\n${name}` });
-  fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
 
   if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
     const delivered = sent - failed;
     fields.push({ type: "mrkdwn", text: `*Sent*\n${fmtNumber(sent)} (${fmtPct(sent, total)})` });
     fields.push({ type: "mrkdwn", text: `*Delivered*\n${fmtNumber(delivered)} · ${fmtNumber(failed)} failed` });
   } else if (event === "campaign_scheduled" || event === "campaign_launched" || event === "campaign_resumed") {
-    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} UAE` });
-    fields.push({ type: "mrkdwn", text: `*First send*\n${fmtDate(payload.scheduled_start_at as string)}` });
+    fields.push({ type: "mrkdwn", text: `*Today*\n${fmtTodayOrStartDate(todayCount, firstAt, tzi.tz)}` });
+    fields.push({ type: "mrkdwn", text: `*Window*\n${payload.window_start || "09:00"} - ${payload.window_end || "18:00"} ${tzi.label}` });
+    fields.push({ type: "mrkdwn", text: `*${event === "campaign_scheduled" ? "First send" : "Started"}*\n${fmtDate(firstAt, tzi.tz)} ${tzi.label}` });
   } else if (event === "campaign_paused") {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
     fields.push({ type: "mrkdwn", text: `*Progress*\n${fmtNumber(sent)} / ${fmtNumber(total)} sent` });
     fields.push({ type: "mrkdwn", text: `*Failed*\n${fmtNumber(failed)}` });
   } else if (event === "campaign_day_completed") {
     const sentToday = Number(payload.sent_today || 0);
     const failedToday = Number(payload.failed_today || 0);
-    const nextDay = String(payload.next_day || "");
+    const repliesToday = Number(payload.replies_today || 0);
+    const positiveToday = Number(payload.positive_today || 0);
+    const avgRespSec = Number(payload.avg_manager_response_seconds || 0);
+    const nextDay = payload.next_day ? String(payload.next_day) : null;
     const nextStart = String(payload.next_day_start_local || payload.window_start || "09:00");
     const nextRecipients = Number(payload.next_day_recipients || 0);
-    const tz = payload.recipient_tz ? ` ${payload.recipient_tz}` : "";
-    fields[1] = { type: "mrkdwn", text: `*Today*\n${fmtNumber(sentToday)} sent · ${fmtNumber(failedToday)} failed` };
-    fields.push({ type: "mrkdwn", text: `*Next batch*\n${fmtNumber(nextRecipients)} msgs` });
-    fields.push({ type: "mrkdwn", text: `*Starts*\n${nextDay} at ${nextStart}${tz}` });
+
+    fields.push({ type: "mrkdwn", text: `*Sent today*\n${fmtNumber(sentToday)}${failedToday ? ` · ${fmtNumber(failedToday)} failed` : ""}` });
+    fields.push({ type: "mrkdwn", text: `*Replies*\n${fmtNumber(repliesToday)} (${fmtPct(repliesToday, sentToday)} reply rate)` });
+    fields.push({ type: "mrkdwn", text: `*Positive*\n${fmtNumber(positiveToday)}${repliesToday ? ` (${fmtPct(positiveToday, repliesToday)} of replies)` : ""}` });
+    fields.push({ type: "mrkdwn", text: `*Avg response (positive)*\n${fmtDuration(avgRespSec)}` });
+    if (nextDay) {
+      fields.push({ type: "mrkdwn", text: `*Next batch*\n${fmtNumber(nextRecipients)} msgs · ${nextDay} at ${nextStart} ${tzi.label}` });
+    } else {
+      fields.push({ type: "mrkdwn", text: `*Next batch*\nnot scheduled yet` });
+    }
+  } else {
+    fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
   }
 
   if (numberPhone) {

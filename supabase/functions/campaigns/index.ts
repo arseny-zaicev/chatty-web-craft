@@ -188,6 +188,15 @@ const PHONE_TZ: Array<[string, string]> = [
   ["27", "Africa/Johannesburg"], ["234", "Africa/Lagos"], ["254", "Africa/Nairobi"], ["212", "Africa/Casablanca"],
 ];
 
+// ISO country code -> primary IANA TZ (mirrors campaign-day-rollover.COUNTRY_TZ)
+const COUNTRY_TZ: Record<string, string> = {
+  US: "America/New_York", CA: "America/Toronto", GB: "Europe/London", UK: "Europe/London",
+  AE: "Asia/Dubai", SA: "Asia/Riyadh", IN: "Asia/Kolkata", DE: "Europe/Berlin",
+  FR: "Europe/Paris", IT: "Europe/Rome", ES: "Europe/Madrid", NL: "Europe/Amsterdam",
+  BR: "America/Sao_Paulo", MX: "America/Mexico_City", AU: "Australia/Sydney",
+  JP: "Asia/Tokyo", SG: "Asia/Singapore", HK: "Asia/Hong_Kong",
+};
+
 function tzFromPhone(phone: string): string {
   const d = String(phone || "").replace(/[^\d]/g, "");
   if (!d) return "UTC";
@@ -302,7 +311,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const numberIds = [...new Set(rawNumbers.map((n) => n.number_id))];
   const { data: numberRows } = await admin
     .from("whatsapp_numbers")
-    .select("id, user_id, workspace_id, phone_number, provider_app_id")
+    .select("id, user_id, workspace_id, phone_number, provider_app_id, country_code")
     .in("id", numberIds);
   if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "WhatsApp number not found" }, 404);
   const ownerId = numberRows[0].user_id;
@@ -344,6 +353,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   if (cleanRecipients.length === 0) return json({ error: "No valid phone numbers" }, 400);
 
+  const recipientCountry = ((number as any).country_code as string | null | undefined)?.toUpperCase() || null;
+
   const { data: campaign, error: campaignError } = await admin
     .from("campaigns")
     .insert({
@@ -352,7 +363,10 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       whatsapp_number_id: number.id,
       template_id: template.id,
       name,
-      status: "running",
+      // Insert as draft so the Slack trigger doesn't fire before we know
+      // first_scheduled_at / today_recipients_count. We promote to
+      // scheduled or running below in a single UPDATE.
+      status: "draft",
       delay_min_seconds: minDelay,
       delay_max_seconds: maxDelay,
       total_recipients: cleanRecipients.length,
@@ -362,6 +376,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       respect_recipient_tz: respectTz,
       scheduled_dates: scheduledDates,
       pipeline_id: pipelineId,
+      recipient_country: recipientCountry,
     })
     .select("id")
     .single();
@@ -496,6 +511,41 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const { error: recipientsError } = await admin.from("campaign_recipients").insert(rows);
   if (recipientsError) return json({ error: recipientsError.message }, 500);
 
+  // ------- Compute today_count + first_scheduled_at in recipient TZ -------
+  const recipientTz = recipientCountry ? (COUNTRY_TZ[recipientCountry] ?? "UTC") : "UTC";
+  const firstScheduledAtIso = rows.length > 0 ? rows[0].scheduled_at : new Date().toISOString();
+  const todayKey = (() => {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: recipientTz }).format(new Date()); }
+    catch { return new Date().toISOString().slice(0, 10); }
+  })();
+  let todayCount = 0;
+  for (const r of rows) {
+    let key: string;
+    try { key = new Intl.DateTimeFormat("en-CA", { timeZone: recipientTz }).format(new Date(r.scheduled_at)); }
+    catch { key = String(r.scheduled_at).slice(0, 10); }
+    if (key === todayKey) todayCount++;
+  }
+
+  // Decide initial visible status:
+  //   - first send is within ~2 minutes -> running (worker will pick up immediately)
+  //   - else -> scheduled (worker will promote to running ~60s before first send)
+  const firstMs = new Date(firstScheduledAtIso).getTime();
+  const initialStatus = firstMs <= Date.now() + 120_000 ? "running" : "scheduled";
+
+  // Promote draft -> scheduled/running. This single UPDATE fires the Slack
+  // trigger with today_recipients_count, first_scheduled_at, recipient_country
+  // already populated.
+  const { error: promoteErr } = await admin
+    .from("campaigns")
+    .update({
+      status: initialStatus,
+      scheduled_start_at: firstScheduledAtIso,
+      first_scheduled_at: firstScheduledAtIso,
+      today_recipients_count: todayCount,
+    })
+    .eq("id", campaign.id);
+  if (promoteErr) return json({ error: promoteErr.message }, 500);
+
   let immediate: any = null;
   if (scheduledDates.length === 0 && minDelay === 0 && maxDelay === 0) {
     await admin.from("campaign_recipients")
@@ -510,7 +560,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   }
 
   // Slack notification handled by DB trigger on campaigns.status change.
-  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate });
+  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate, initial_status: initialStatus });
 }
 
 async function upsertTemplate(admin: any, requesterId: string, body: any) {
@@ -834,6 +884,20 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
 }
 
 async function processQueue(admin: any) {
+  // Promote scheduled campaigns whose first send is imminent to running.
+  // The campaigns_status_change trigger then enqueues a `campaign_launched`
+  // Slack event with today_recipients_count + recipient_country.
+  try {
+    await admin
+      .from("campaigns")
+      .update({ status: "running" })
+      .eq("status", "scheduled")
+      .lte("first_scheduled_at", new Date(Date.now() + 60_000).toISOString());
+  } catch (err) {
+    console.error("promote scheduled->running failed", err);
+  }
+
+
   // Scale the per-tick batch with the number of active ready numbers so utility
   // throughput is not bottlenecked by a fixed ceiling when multiple numbers are live.
   // Floor 50 (single-number safe), 20 recipients per active number, hard cap 500.
