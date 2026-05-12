@@ -6,7 +6,7 @@ import type { WhatsAppNumber } from "./crmData";
 
 export type Template = Pick<
   Tables<"message_templates">,
-  "id" | "name" | "language" | "status" | "category" | "body" | "whatsapp_number_id" | "workspace_id" | "variables" | "buttons" | "provider_template_id" | "synced_at"
+  "id" | "name" | "language" | "status" | "category" | "body" | "whatsapp_number_id" | "workspace_id" | "variables" | "buttons" | "provider_template_id" | "synced_at" | "variables_sample" | "header_text" | "footer_text" | "sync_warning"
 >;
 
 export type Recipient = {
