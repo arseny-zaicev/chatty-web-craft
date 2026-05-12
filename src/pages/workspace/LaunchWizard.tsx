@@ -842,8 +842,11 @@ export default function LaunchWizard() {
                     {visibleLogical.map((t) => (
                       <SelectItem key={t.key} value={t.key}>
                         <span className="inline-flex items-center gap-2">
+                          {t.key.startsWith("group:") && <Layers className="w-3 h-3 text-primary" />}
                           <span>{t.label}</span>
-                          <span className="text-xs text-muted-foreground">({t.variants.length} variant{t.variants.length === 1 ? "" : "s"})</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({t.variants.length} variant{t.variants.length === 1 ? "" : "s"}{t.key.startsWith("group:") ? " · group" : ""})
+                          </span>
                         </span>
                       </SelectItem>
                     ))}
