@@ -513,7 +513,7 @@ function PresetsSection({
                         ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Pulling...</>
                         : <><Database className="w-3.5 h-3.5 mr-1" /> Pull from my Supabase</>}
                     </Button>
-                    <Button disabled={pulling} onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId }), `${creating.name} prompt`)}>
+                    <Button disabled={pulling} onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId, staticValues }), `${creating.name} prompt`)}>
                       <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
                     </Button>
                   </DialogFooter>
