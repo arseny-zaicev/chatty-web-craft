@@ -1500,6 +1500,12 @@ export default function LaunchWizard() {
               {unmappedVars.length} variable(s) unmapped: {unmappedVars.map((v) => `{${v}}`).join(" ")}. Map in Step 6.
             </div>
           )}
+          {sameForEveryoneVars.length > 0 && (
+            <div className="text-xs text-rose-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {sameForEveryoneVars.length} variable(s) static (same for everyone): {sameForEveryoneVars.map((v) => `{${v}}`).join(" ")}.
+            </div>
+          )}
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
