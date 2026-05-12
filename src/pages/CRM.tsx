@@ -797,12 +797,12 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                       </div>
                     )}
                     {activeNumber && (
-                      <div className="hidden md:flex text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5" title="Sending number">
-                        <Phone className="w-3 h-3" />
+                      <div className="hidden md:flex max-w-[220px] text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 items-center gap-1.5 min-w-0" title={`${activeNumber.label || ""} +${activeNumber.phone_number}`}>
+                        <Phone className="w-3 h-3 shrink-0" />
                         {activeNumber.label?.trim() && (
-                          <span className="font-medium">{activeNumber.label}</span>
+                          <span className="font-medium truncate">{activeNumber.label}</span>
                         )}
-                        <span className="font-mono opacity-80">+{activeNumber.phone_number}</span>
+                        <span className="font-mono opacity-80 truncate">+{activeNumber.phone_number}</span>
                       </div>
                     )}
                     <Button
