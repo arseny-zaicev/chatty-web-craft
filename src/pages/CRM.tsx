@@ -23,6 +23,7 @@ import {
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { formatLocalTimeForPhone } from "@/lib/phoneTimezone";
 import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
 
@@ -729,6 +730,18 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                         >
                           Copy
                         </button>
+                        {(() => {
+                          const local = formatLocalTimeForPhone(active.contact_phone);
+                          if (!local) return null;
+                          return (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+                              title={`Contact local time · ${local.tz} (${local.offset})`}
+                            >
+                              🕒 {local.time} local
+                            </span>
+                          );
+                        })()}
                         {activeAssignee && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                             Assigned: {memberDisplayName(activeAssignee)}
@@ -887,7 +900,16 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                                 isOut ? "text-primary-foreground/70" : "text-muted-foreground"
                               }`}
                             >
-                              <span title={new Date(m.created_at).toLocaleString()}>
+                              <span
+                                title={(() => {
+                                  const d = new Date(m.created_at);
+                                  const youLocal = d.toLocaleString();
+                                  const contact = formatLocalTimeForPhone(active.contact_phone, d);
+                                  return contact
+                                    ? `Your time: ${youLocal}\nContact local: ${contact.time} (${contact.tz}, ${contact.offset})`
+                                    : youLocal;
+                                })()}
+                              >
                                 {(() => {
                                   const d = new Date(m.created_at);
                                   const now = new Date();
