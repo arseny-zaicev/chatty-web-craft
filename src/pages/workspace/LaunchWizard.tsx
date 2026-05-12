@@ -28,6 +28,7 @@ import {
 import { NAME_FALLBACK_PHRASES } from "@/lib/prepPresets";
 import { fetchPipelines, pipelinesKey, createPipeline } from "@/lib/pipelines";
 import PipelineConfigSheet from "@/components/workspace/PipelineConfigSheet";
+import { Switch } from "@/components/ui/switch";
 import { Settings as SettingsIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
@@ -1163,21 +1164,51 @@ export default function LaunchWizard() {
                   </div>
                 </Field>
                 {activePipeline && (
-                  <div className="mt-2 rounded-md border border-border bg-card/30 p-2.5 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-muted-foreground">Current pipeline defaults</div>
-                      <Button variant="outline" size="sm" onClick={() => setPipelineConfigOpen(true)}>
-                        <SettingsIcon className="w-3.5 h-3.5 mr-1" />Edit pipeline config
+                  <div className="mt-2 rounded-md border border-border bg-card/30 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-3.5 h-3.5 text-primary" />
+                        <span className="text-sm font-medium">Automations on this pipeline</span>
+                      </div>
+                      <Button variant="default" size="sm" onClick={() => setPipelineConfigOpen(true)}>
+                        <SettingsIcon className="w-3.5 h-3.5 mr-1.5" />Edit automations & Slack
                       </Button>
                     </div>
+
+                    {/* Quick inline Auto-outreach toggle so user doesn't have to open the sheet for the most common change */}
+                    <div className="flex items-center justify-between gap-3 rounded border border-border/60 bg-background/40 px-2.5 py-2">
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium">Auto first-touch on new leads</div>
+                        <div className="text-[10px] text-muted-foreground">Automatically send the first WhatsApp message when a lead lands here.</div>
+                      </div>
+                      <Switch
+                        checked={!!activePipeline.auto_outreach_enabled}
+                        onCheckedChange={async (v) => {
+                          const prev = activePipeline.auto_outreach_enabled;
+                          // optimistic update via react-query cache could go here; do a direct DB update + refetch
+                          try {
+                            const { error } = await supabase
+                              .from("pipelines")
+                              .update({ auto_outreach_enabled: v })
+                              .eq("id", activePipeline.id);
+                            if (error) throw error;
+                            await qc.invalidateQueries({ queryKey: pipelinesKey(workspace?.id) });
+                            toast.success(v ? "Auto first-touch enabled" : "Auto first-touch disabled");
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Failed to update");
+                          }
+                        }}
+                      />
+                    </div>
+
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Auto-outreach</span><span className="font-medium">{activePipeline.auto_outreach_enabled ? "on" : "off"}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Slack channel</span><span className="font-medium truncate ml-2">{activePipeline.slack_channel_id ? "linked" : "—"}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Slack channel</span><span className="font-medium truncate ml-2">{activePipeline.slack_channel_id ? "linked" : "not set"}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">Daily cap</span><span className="font-medium">{activePipeline.daily_cap ?? "—"}</span></div>
                       <div className="flex justify-between"><span className="text-muted-foreground">Window</span><span className="font-medium">{(activePipeline.sending_window?.start ?? "09:00")}-{(activePipeline.sending_window?.end ?? "18:00")}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Stage automations</span><span className="font-medium">in config →</span></div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground pt-1">
-                      Replies on this campaign auto-create cards on this pipeline. Stage automations &amp; Slack pings live in the pipeline config above.
+                    <p className="text-[10px] text-muted-foreground">
+                      Replies on this campaign auto-create cards on this pipeline. Stage rules, reminders, and Slack pings live in the config above - opens right here.
                     </p>
                   </div>
                 )}
