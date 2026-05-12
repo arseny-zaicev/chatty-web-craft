@@ -23,7 +23,7 @@ const statusTone: Record<string, string> = {
   failed: "bg-red-500/15 text-red-600 border-red-500/30",
 };
 
-type RecipientLite = { id: string; status: string; scheduled_at: string | null; sent_at: string | null; campaign_id: string };
+type RecipientLite = { id: string; status: string; scheduled_at: string | null; sent_at: string | null; campaign_id: string; whatsapp_number_id: string | null };
 type RecipientFull = { id: string; status: string; sent_at: string | null; error_message: string | null; contact_phone: string; campaign_id: string };
 
 // Page through every recipient (no 500 cap) — only the small projection we need for stats.
