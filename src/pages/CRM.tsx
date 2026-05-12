@@ -60,6 +60,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
   const [starredOnly, setStarredOnly] = useState(false);
   const [showNegative, setShowNegative] = useState(false);
   const [repliedOnly, setRepliedOnly] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [sortMode, setSortMode] = useState<"recent" | "unread" | "oldest" | "replied">("recent");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
@@ -419,6 +420,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (starredOnly && !c.is_starred) return false;
     if (myOnly && meId && c.assigned_user_id !== meId) return false;
     if (repliedOnly && !repliedSet.has(c.id)) return false;
+    if (unreadOnly && (c.unread_count ?? 0) <= 0) return false;
     if (pipelineFilter === "unassigned") {
       if (c.pipeline_id) return false;
     } else if (pipelineFilter !== "all") {
@@ -542,6 +544,17 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                   title="Show only conversations where the contact replied"
                 >
                   Replied{repliedCount > 0 && ` · ${repliedCount}`}
+                </button>
+                <button
+                  onClick={() => setUnreadOnly((v) => !v)}
+                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
+                    unreadOnly
+                      ? "bg-primary/15 text-primary border-primary/40"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                  title="Show only conversations with unread messages"
+                >
+                  Unread{(() => { const n = conversations.reduce((s, c) => s + ((c.unread_count ?? 0) > 0 ? 1 : 0), 0); return n > 0 ? ` · ${n}` : ""; })()}
                 </button>
                 <button
                   onClick={() => setShowNegative((v) => !v)}
