@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Loader2, LogOut, Plus, Sparkles, Building2, Rocket, Inbox, Megaphone, FileText,
   Activity, ArrowRight, MessageSquare, Send, Calendar, AlertTriangle, CheckCircle2, BarChart3,
-  Phone, LayoutDashboard, Clock, Globe, Users, Map as MapIcon, Wrench,
+  Phone, LayoutDashboard, Clock, Globe, Users, Map as MapIcon, Wrench, DollarSign,
 } from "lucide-react";
 import { IskraLoader } from "@/components/IskraLoader";
 import { User } from "@supabase/supabase-js";
