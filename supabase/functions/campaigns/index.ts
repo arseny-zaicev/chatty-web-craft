@@ -1013,18 +1013,6 @@ async function processQueue(admin: any) {
     }
   }
 
-  // Shard by sender number so each WhatsApp number processes its queue
-  // independently and in parallel. Within a shard we still sleep up to the
-  // recipient's scheduled_at to preserve jitter, but across shards N numbers
-  // send concurrently - this is what unblocks the system at full rollout.
-  const shards = new Map<string, any[]>();
-  for (const r of due ?? []) {
-    const key = String(r.campaigns?.whatsapp_number_id || r.id);
-    const arr = shards.get(key) ?? [];
-    arr.push(r);
-    shards.set(key, arr);
-  }
-
   let sent = 0;
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
@@ -1045,11 +1033,11 @@ async function processQueue(admin: any) {
     return m ? `#${m[1]}` : msg.slice(0, 40).replace(/\s+/g, " ");
   };
 
-  // Pacing guard map: per (campaign_id|number_id) last send time in this tick.
+  // Hard pacing: one campaign send per 60+ seconds globally, not per sender number.
+  // Utility campaigns must never multiply throughput by number count.
   const lastSentMs = new Map<string, number>();
 
-  await Promise.all(Array.from(shards.values()).map(async (recipients) => {
-    for (const recipient of recipients) {
+  for (const recipient of due ?? []) {
       const cState = getCanary(recipient.campaign_id);
       if (cState.aborted) continue;
 
@@ -1066,8 +1054,18 @@ async function processQueue(admin: any) {
       // for this (campaign, number). Skip the recipient until next tick if
       // the required wait exceeds remaining budget.
       const minGapMs = Math.max(60, recipient.campaigns?.delay_min_seconds || 60) * 1000;
-      const numKey = `${recipient.campaign_id}|${recipient.whatsapp_number_id ?? ""}`;
-      const lastMs = lastSentMs.get(numKey);
+      let lastMs = lastSentMs.get(recipient.campaign_id) ?? 0;
+      if (!lastMs) {
+        const { data: lastRecipient } = await admin
+          .from("campaign_recipients")
+          .select("sent_at")
+          .eq("campaign_id", recipient.campaign_id)
+          .not("sent_at", "is", null)
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        lastMs = lastRecipient?.sent_at ? new Date(lastRecipient.sent_at).getTime() : 0;
+      }
       if (lastMs) {
         const since = Date.now() - lastMs;
         if (since < minGapMs) {
@@ -1086,7 +1084,7 @@ async function processQueue(admin: any) {
         .select("id")
         .maybeSingle();
       if (!locked) continue;
-      lastSentMs.set(numKey, Date.now());
+      lastSentMs.set(recipient.campaign_id, Date.now());
 
 
       try {
@@ -1162,8 +1160,7 @@ async function processQueue(admin: any) {
           }
         }
       }
-    }
-  }));
+  }
 
 
   const campaignIds = [...new Set((due ?? []).map((r: any) => r.campaign_id))];
