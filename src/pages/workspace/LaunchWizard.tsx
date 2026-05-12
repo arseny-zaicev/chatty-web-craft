@@ -1280,18 +1280,16 @@ export default function LaunchWizard() {
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
-          <Row label="Per day" value={scheduleMode === "scheduled" ? dayPlan.effectivePerDay.toLocaleString() : recipients.length.toLocaleString()} />
-          <Row label="Per number / day" value={activeNumbers.length ? Math.ceil((scheduleMode === "scheduled" ? dayPlan.effectivePerDay : recipients.length) / activeNumbers.length) : "-"} />
-          {scheduleMode === "scheduled" && (
-            <Row
-              label="Days needed"
-              value={
-                <span className={dayPlan.daysNeeded > dayPlan.daysSelected ? "text-amber-600 font-medium" : undefined}>
-                  {dayPlan.daysNeeded}{dayPlan.daysNeeded > dayPlan.daysSelected ? ` (you picked ${dayPlan.daysSelected})` : ""}
-                </span>
-              }
-            />
-          )}
+          <Row label="Per day" value={dayPlan.effectivePerDay.toLocaleString()} />
+          <Row label="Per number / day" value={activeNumbers.length ? Math.ceil(dayPlan.effectivePerDay / activeNumbers.length) : "-"} />
+          <Row
+            label="Days needed"
+            value={
+              <span className={scheduleMode === "scheduled" && dayPlan.daysNeeded > dayPlan.daysSelected ? "text-amber-600 font-medium" : undefined}>
+                {dayPlan.daysNeeded}{scheduleMode === "scheduled" && dayPlan.daysNeeded > dayPlan.daysSelected ? ` (you picked ${dayPlan.daysSelected})` : ""}
+              </span>
+            }
+          />
           <Row label="Speed" value={delayMin === 0 && delayMax === 0 ? "Blast" : `${delayMin}-${delayMax}s`} />
           <Row label="ETA" value={eta} />
           {resolution.missing.length > 0 && (
@@ -1300,10 +1298,16 @@ export default function LaunchWizard() {
               {resolution.missing.length} number(s) missing template variant.
             </div>
           )}
+          {unmappedVars.length > 0 && (
+            <div className="text-xs text-amber-600 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {unmappedVars.length} variable(s) unmapped: {unmappedVars.map((v) => `{${v}}`).join(" ")}. Map in Step 6.
+            </div>
+          )}
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
