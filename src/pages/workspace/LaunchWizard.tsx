@@ -1084,9 +1084,11 @@ export default function LaunchWizard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Field label={isMarketing ? "Launch from" : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
-                <Field label={isMarketing ? "Launch until" : "Window to"}><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+              <div className={`grid gap-2 ${isMarketing && scheduleMode === "now" ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
+                <Field label={isMarketing ? (scheduleMode === "now" ? "Launch at" : "Launch from") : "Window from"}><Input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} /></Field>
+                {!(isMarketing && scheduleMode === "now") && (
+                  <Field label={isMarketing ? "Launch until" : "Window to"}><Input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} /></Field>
+                )}
                 <Field label="Scheduler">
                   <Select value={isMarketing ? "poisson" : schedulerKind} onValueChange={(v) => setSchedulerKind(v as any)}
                     disabled={isMarketing}>
