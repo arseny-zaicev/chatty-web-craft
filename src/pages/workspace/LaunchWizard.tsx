@@ -975,7 +975,10 @@ export default function LaunchWizard() {
                   return (
                     <div>
                       Starts immediately. {schedulerKind === "poisson" ? "Poisson (organic, jittered)" : "Uniform fixed"} gaps of <b>{delayMin}-{delayMax}s</b> between sends per number.
-                      Per number: <b>{perNumber} msgs</b> → ≈ <b>{fmtDur(Math.round(avgSec))} avg</b>, up to <b>{fmtDur(Math.round(maxSec))} max</b>. So yes - 50/number at 60-120s comfortably fits within an hour or two; numbers send in parallel so total wall-clock = same as one number.
+                      Cap <b>{perNumberQuota}/number/day</b> on <b>{dayPlan.numbers} number(s)</b> = max <b>{dayPlan.dailyCap.toLocaleString()}/day</b>. Today: <b>{dayPlan.effectivePerDay.toLocaleString()} msgs</b> ({perNumber}/number) → ≈ <b>{fmtDur(Math.round(avgSec))} avg</b>, up to <b>{fmtDur(Math.round(maxSec))} max</b>.
+                      {dayPlan.overflowToday > 0 && (
+                        <> Remaining <b>{dayPlan.overflowToday.toLocaleString()}</b> auto-rolls forward across <b>{dayPlan.daysNeeded} day(s)</b> total.</>
+                      )}
                     </div>
                   );
                 })() : pacing && pacing.perNumber > 1 ? (
