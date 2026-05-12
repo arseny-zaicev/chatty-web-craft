@@ -20,8 +20,10 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
   const [website, setWebsite] = useState("");
   const [logo, setLogo] = useState("");
   const [rate, setRate] = useState("0");
+  const [internalCode, setInternalCode] = useState("");
+  const [slackChannelId, setSlackChannelId] = useState("");
 
-  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); setWebsite(""); setLogo(""); setRate("0"); };
+  const reset = () => { setName(""); setSlug(""); setColor("#10b981"); setWebsite(""); setLogo(""); setRate("0"); setInternalCode(""); setSlackChannelId(""); };
 
   const normalizeUrl = (s: string) => {
     const v = s.trim();
