@@ -84,22 +84,48 @@ const fetchCampaignMeta = async (numberIds: string[], templateIds: string[]) => 
   return { numbers, templates };
 };
 
-function todaySummary(group: CampaignGroup): string {
-  const tz = tzInfo(group.recipientCountry).tz;
-  const tzLabel = tzInfo(group.recipientCountry).label;
-  if (group.today > 0 && group.firstScheduledAt) {
-    const todayKey = todayKeyInTz(tz);
-    const firstKey = dateKeyInTz(group.firstScheduledAt, tz);
-    if (firstKey === todayKey) {
-      return `${group.today.toLocaleString()} today @ ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+function dateRangeLabel(group: CampaignGroup): { range: string; days: number } | null {
+  const dates = group.scheduledDates;
+  if (!dates || dates.length === 0) {
+    if (group.firstScheduledAt) {
+      const tz = tzInfo(group.recipientCountry).tz;
+      return { range: shortDateInTz(group.firstScheduledAt, tz), days: 1 };
     }
-    return `${group.today.toLocaleString()} today`;
+    return null;
   }
-  if (group.firstScheduledAt) {
-    return `Starts ${shortDateInTz(group.firstScheduledAt, tz)} @ ${timeInTz(group.firstScheduledAt, tz)} ${tzLabel}`;
+  const tz = tzInfo(group.recipientCountry).tz;
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const fmt = (d: string) => shortDateInTz(`${d}T12:00:00Z`, "UTC");
+  const range = first === last ? fmt(first) : `${fmt(first)} - ${fmt(last)}`;
+  return { range, days: dates.length };
+}
+
+function headerSubtitle(group: CampaignGroup): string {
+  const parts: string[] = [`Total ${group.total.toLocaleString()}`];
+  const dr = dateRangeLabel(group);
+  if (dr) {
+    parts.push(`${dr.days} ${dr.days === 1 ? "day" : "days"}`);
+    parts.push(dr.range);
   }
-  if (group.scheduledDates.length > 0) return `Starts ${group.scheduledDates[0]}`;
-  return "Not scheduled yet";
+  if (group.today > 0) {
+    const tz = tzInfo(group.recipientCountry).tz;
+    if (group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) === todayKeyInTz(tz)) {
+      parts.push(`today ${group.today.toLocaleString()} @ ${timeInTz(group.firstScheduledAt, tz)}`);
+    } else {
+      parts.push(`today ${group.today.toLocaleString()}`);
+    }
+  }
+  return parts.join(" · ");
+}
+
+function ProgressBar({ value, total, className = "" }: { value: number; total: number; className?: string }) {
+  const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+  return (
+    <div className={`h-1.5 rounded-full bg-muted overflow-hidden ${className}`}>
+      <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+    </div>
+  );
 }
 
 export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId: string; slug: string }) {
