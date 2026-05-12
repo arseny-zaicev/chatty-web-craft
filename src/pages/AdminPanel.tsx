@@ -73,6 +73,7 @@ const NAV: NavGroup[] = [
     id: "internal", label: "Internal", icon: Wrench,
     items: [
       { id: "internal.roadmap", label: "Product roadmap", icon: MapIcon, external: "/admin/roadmap" },
+      { id: "internal.assistant", label: "Ops Assistant", icon: Sparkles, external: "/admin/assistant" },
     ],
   },
 ];
