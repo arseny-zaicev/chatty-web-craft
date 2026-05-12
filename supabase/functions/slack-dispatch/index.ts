@@ -194,14 +194,33 @@ Deno.serve(async (req) => {
           parts, payload: evPayload,
         });
 
-        if (OPS_CAMPAIGNS) await postSlack(OPS_CAMPAIGNS, opsMsg);
-        if (workspaceChannel) await postSlack(workspaceChannel, clientMsg);
+        const postErrors: string[] = [];
+        let anyOk = false;
+        if (OPS_CAMPAIGNS) {
+          try { await postSlack(OPS_CAMPAIGNS, opsMsg); anyOk = true; }
+          catch (e) { postErrors.push(`ops: ${e instanceof Error ? e.message : String(e)}`); }
+        }
+        if (workspaceChannel) {
+          try { await postSlack(workspaceChannel, clientMsg); anyOk = true; }
+          catch (e) { postErrors.push(`client(${workspaceChannel}): ${e instanceof Error ? e.message : String(e)}`); }
+        }
+
+        // If at least one channel accepted, treat as delivered. Otherwise let the
+        // outer catch retry (throw). This prevents re-posting to ops when the
+        // client channel is misconfigured (channel_not_found, etc).
+        if (!anyOk && postErrors.length) {
+          throw new Error(postErrors.join(" | "));
+        }
 
         // Mark all sibling events as sent (dedupe)
         const sentAt = new Date().toISOString();
         const ids = groupEvents.map((g: any) => g.id);
         await supabase.from("slack_event_queue")
-          .update({ status: "sent", processed_at: sentAt })
+          .update({
+            status: "sent",
+            processed_at: sentAt,
+            error: postErrors.length ? postErrors.join(" | ").slice(0, 1000) : null,
+          })
           .in("id", ids);
         processed += ids.length;
         continue;
@@ -209,7 +228,14 @@ Deno.serve(async (req) => {
         const msg = buildNumberAlertBlocks({ event: ev.event_type, ws, payload: ev.payload as any });
         if (OPS_NUMBERS) targets.add(OPS_NUMBERS);
         if (workspaceChannel) targets.add(workspaceChannel);
-        for (const ch of targets) await postSlack(ch, msg);
+        const numErrors: string[] = [];
+        let numOk = false;
+        for (const ch of targets) {
+          try { await postSlack(ch, msg); numOk = true; }
+          catch (e) { numErrors.push(`${ch}: ${e instanceof Error ? e.message : String(e)}`); }
+        }
+        if (!numOk && numErrors.length) throw new Error(numErrors.join(" | "));
+        if (numErrors.length) console.warn("number alert partial", ev.id, numErrors.join(" | "));
       } else if (ev.event_type === "positive_lead") {
         const p = ev.payload as any;
         const pipelineChannel = (p?.slack_channel_id as string) || workspaceChannel;
@@ -271,13 +297,21 @@ Deno.serve(async (req) => {
           payload: p,
         });
         const routing = String(p.routing || "numbers");
+        const gErrors: string[] = [];
+        let gOk = false;
+        const post = async (ch: string) => {
+          try { await postSlack(ch, msg); gOk = true; }
+          catch (e) { gErrors.push(`${ch}: ${e instanceof Error ? e.message : String(e)}`); }
+        };
         if (routing === "finance") {
           const financeChan = OPS_FINANCE || OPS_NUMBERS;
-          if (financeChan) await postSlack(financeChan, msg);
+          if (financeChan) await post(financeChan);
         } else {
-          if (OPS_NUMBERS) await postSlack(OPS_NUMBERS, msg);
-          if (workspaceChannel) await postSlack(workspaceChannel, msg);
+          if (OPS_NUMBERS) await post(OPS_NUMBERS);
+          if (workspaceChannel) await post(workspaceChannel);
         }
+        if (!gOk && gErrors.length) throw new Error(gErrors.join(" | "));
+        if (gErrors.length) console.warn("gupshup alert partial", ev.id, gErrors.join(" | "));
       } else {
         await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
         continue;
