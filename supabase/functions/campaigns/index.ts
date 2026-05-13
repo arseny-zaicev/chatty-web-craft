@@ -1185,8 +1185,8 @@ async function processQueue(admin: any) {
     console.warn(`[number_auto_restricted] number=${numId} code=${code} failures_5min=${total} sample="${sampleMsg.slice(0, 200)}"`);
   };
 
-  // Hard pacing: utility templates throttled to >=60s gap (WhatsApp policy / cost).
-  // Marketing templates use the campaign's configured delay_min_seconds (floor 1s).
+  // Hard pacing per WhatsApp number: utility templates throttled to >=60s;
+  // marketing blasts run at the configured floor of 1 message/sec per number.
   const lastSentMs = new Map<string, number>();
 
   for (const recipient of due ?? []) {
@@ -1257,18 +1257,19 @@ async function processQueue(admin: any) {
       }
 
 
-      // Pacing guard: enforce delay_min_seconds gap from the previous send for this campaign.
+      // Pacing guard: enforce the gap from the previous send on this WhatsApp number.
       const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
       const isUtility = tplCategory === "utility" || tplCategory === "authentication";
       const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
       const floor = isUtility ? 60 : 1;
       const minGapMs = Math.max(floor, configuredMin) * 1000;
-      let lastMs = lastSentMs.get(recipient.campaign_id) ?? 0;
+      const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
+      let lastMs = lastSentMs.get(pacingKey) ?? 0;
       if (!lastMs) {
         const { data: lastRecipient } = await admin
           .from("campaign_recipients")
           .select("sent_at")
-          .eq("campaign_id", recipient.campaign_id)
+          .eq("whatsapp_number_id", pacingKey)
           .not("sent_at", "is", null)
           .order("sent_at", { ascending: false })
           .limit(1)
@@ -1293,7 +1294,7 @@ async function processQueue(admin: any) {
         .select("id")
         .maybeSingle();
       if (!locked) continue;
-      lastSentMs.set(recipient.campaign_id, Date.now());
+      lastSentMs.set(pacingKey, Date.now());
 
 
       try {
