@@ -752,7 +752,20 @@ export default function LaunchWizard() {
 
       try {
         let { data: res, error } = await invokeLaunch(false);
-        // Pre-flight soft warnings (409): confirm + retry with force.
+        // supabase-js treats non-2xx (like our 409 preflight) as an error and leaves data null.
+        // Recover the JSON body from error.context so we can show warnings + retry with force.
+        if (error && (error as any).context && typeof (error as any).context.json === "function") {
+          try {
+            const body = await (error as any).context.json();
+            if (body && body.code === "preflight_warnings") {
+              res = body;
+              error = null as any;
+            } else if (body && (body.error || body.message)) {
+              // Surface the real server message instead of the generic "non-2xx" text.
+              (error as any).message = body.error || body.message;
+            }
+          } catch { /* body wasn't JSON */ }
+        }
         const code = (res as any)?.code;
         const warnings = (res as any)?.warnings as string[] | undefined;
         if (code === "preflight_warnings" && Array.isArray(warnings) && warnings.length > 0) {
@@ -763,6 +776,14 @@ export default function LaunchWizard() {
             for (const t of targets) results.push({ ok: false, numberId: t.numberId, error: "Cancelled by user", rowIds: allRowIds });
           } else {
             ({ data: res, error } = await invokeLaunch(true));
+            if (error && (error as any).context && typeof (error as any).context.json === "function") {
+              try {
+                const body = await (error as any).context.json();
+                if (body && (body.error || body.message)) {
+                  (error as any).message = body.error || body.message;
+                }
+              } catch { /* ignore */ }
+            }
           }
         }
         const failed = !!error || !!(res as any)?.error;
