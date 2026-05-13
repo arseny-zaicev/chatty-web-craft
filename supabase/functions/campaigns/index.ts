@@ -456,25 +456,39 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     .single();
   if (campaignError || !campaign) return json({ error: campaignError?.message || "Failed to create campaign" }, 500);
 
-  // ------- Distribute recipients across numbers (round-robin) -------
+  // ------- Distribute recipients across numbers (capacity-aware round-robin) -------
+  // Each number's bucket is capped at perNumberCaps[number] × daysCount so we
+  // never assign more than that number can physically deliver.
   type CleanRecipient = (typeof cleanRecipients)[number];
   const assignments = new Map<string, { template_id: string; list: CleanRecipient[] }>();
   rawNumbers.forEach((n) => assignments.set(n.number_id, { template_id: n.template_id, list: [] }));
-  cleanRecipients.forEach((r, idx) => {
-    const target = rawNumbers[idx % rawNumbers.length];
-    assignments.get(target.number_id)!.list.push(r);
-  });
+  const bucketLimit = new Map<string, number>();
+  for (const n of rawNumbers) {
+    bucketLimit.set(n.number_id, (perNumberCaps.get(n.number_id) ?? perNumberQuota) * daysCount);
+  }
+  let rrCursor = 0;
+  for (const r of cleanRecipients) {
+    let placed = false;
+    for (let attempt = 0; attempt < rawNumbers.length; attempt++) {
+      const target = rawNumbers[(rrCursor + attempt) % rawNumbers.length];
+      const bucket = assignments.get(target.number_id)!;
+      if (bucket.list.length < (bucketLimit.get(target.number_id) ?? 0)) {
+        bucket.list.push(r);
+        rrCursor = (rrCursor + attempt + 1) % rawNumbers.length;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) break; // all buckets full — should not happen given capacity truncation
+  }
 
   // ------- Compute scheduled_at per recipient (per-number bucket) -------
   const wsMin = hhmmToMin(windowStart);
   const wsMax = hhmmToMin(windowEnd);
   const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
   const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
-
-  // Honor min 60s gap: cap effective per-day per number so window can fit it.
   const minGapSec = Math.max(60, minDelay || 60);
-  const windowFitCap = Math.max(1, Math.floor(windowSeconds / minGapSec));
-  const effectiveQuota = isBlastLaunch ? Math.max(1, perNumberQuota) : Math.max(1, Math.min(perNumberQuota, windowFitCap));
+
 
   const nextDateStr = (d: string) => {
     const [y, m, day] = d.split("-").map(Number);
