@@ -138,6 +138,13 @@ export default function PartnerDetail() {
     enabled: !!id,
   });
 
+  const { data: partnerMetrics } = useQuery({
+    queryKey: ["admin", "partner", id, "metrics"],
+    enabled: !!id,
+    queryFn: () => fetchPartnerMetrics([id!]),
+  });
+  const pm = id ? partnerMetrics?.get(id) : undefined;
+
   if (partnerLoading || !partner) return <div className="p-6"><Loader2 className="animate-spin w-5 h-5" /></div>;
 
   // ---- Aggregations across linked BMs / numbers ----
