@@ -3088,6 +3088,11 @@ export type Database = {
       }
     }
     Functions: {
+      _conversation_is_lost: {
+        Args: { _conversation_id: string }
+        Returns: boolean
+      }
+      _is_negative_reply_text: { Args: { _text: string }; Returns: boolean }
       admin_reconcile_daily: {
         Args: {
           _from: string
