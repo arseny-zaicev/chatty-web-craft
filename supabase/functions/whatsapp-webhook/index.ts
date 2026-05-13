@@ -20,6 +20,31 @@ function compactStrings(values: unknown[]): string[] {
   return [...new Set(values.map((v) => String(v ?? "").trim()).filter(Boolean))];
 }
 
+function expectedPrefixesForCountry(country: string | null | undefined): string[] {
+  const c = String(country ?? "").trim().toLowerCase();
+  if (!c) return [];
+  if (["uk", "gb", "great britain", "united kingdom", "england", "scotland", "wales"].includes(c)) return ["44"];
+  if (["india", "in"].includes(c)) return ["91"];
+  if (["us", "usa", "united states", "united states of america"].includes(c)) return ["1"];
+  if (["greece", "gr"].includes(c)) return ["30"];
+  if (["malta", "mt"].includes(c)) return ["356"];
+  return [];
+}
+
+async function phoneMatchesRecentPipelineCountry(pipelineId: string | null, phone: string): Promise<boolean> {
+  if (!pipelineId) return true;
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("recipient_country")
+    .eq("pipeline_id", pipelineId)
+    .not("recipient_country", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const prefixes = expectedPrefixesForCountry((campaign as any)?.recipient_country);
+  return prefixes.length === 0 || prefixes.some((prefix) => phone.startsWith(prefix));
+}
+
 async function handleInbound(payload: Record<string, unknown>) {
   console.log("Inbound payload:", JSON.stringify(payload));
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
@@ -304,6 +329,17 @@ async function handleInbound(payload: Record<string, unknown>) {
     .maybeSingle();
   const conversationPipelineId = recipientPipelineId ?? convPipeline?.pipeline_id ?? null;
 
+  // If a sender number gets reused/reassigned, old replies from another country can
+  // arrive without a matching campaign_recipient and otherwise fall into the current
+  // workspace default pipeline. Keep the chat in Inbox, but remove it from Pipeline
+  // and stop automations/Slack when it does not match the pipeline's recent country.
+  if (!recipient && !(await phoneMatchesRecentPipelineCountry(conversationPipelineId, source))) {
+    await supabase.from("conversations").update({ pipeline_id: null }).eq("id", conversationId);
+    await supabase.from("deals").delete().eq("conversation_id", conversationId);
+    console.warn("Quarantined cross-country unmatched inbound from pipeline", { conversationId, source, conversationPipelineId });
+    return;
+  }
+
   const { data: automations } = await supabase
     .from("stage_automations")
     .select("trigger, trigger_value, target_stage_id")
@@ -361,12 +397,19 @@ async function handleInbound(payload: Record<string, unknown>) {
   const urlCount = (loweredFull.match(/https?:\/\//g) || []).length;
   const isAutoReply =
     /\bthank you for (contacting|reaching out|your message|getting in touch)\b/.test(loweredFull) ||
+    /\bthanks for (messaging|your message|getting in touch)\b/.test(loweredFull) ||
     /\bout of (the )?office\b/.test(loweredFull) ||
+    /\boffice hours\b/.test(loweredFull) ||
     /\b(automatic|automated|auto[- ]?)reply\b/.test(loweredFull) ||
     /\bthis is an automated\b/.test(loweredFull) ||
     /\bwe (will|'ll) get back to you\b/.test(loweredFull) ||
     /\bbook online\b/.test(loweredFull) ||
+    /\b(booking link|book a table|book classes|book your|booking system|reservations?)\b/.test(loweredFull) ||
+    /\bplease leave (us )?a message\b/.test(loweredFull) ||
+    /\bemail us at\b/.test(loweredFull) ||
+    /\bour whatsapp is\b/.test(loweredFull) ||
     /\bcurrently (away|unavailable|closed)\b/.test(loweredFull) ||
+    ((urlCount >= 1 || /\bwww\./.test(loweredFull)) && (loweredFull.length || 0) > 160 && /\b(book|booking|contact|form|timetable|office|reservation|appointment)\b/.test(loweredFull)) ||
     (urlCount >= 2 && (loweredFull.length || 0) > 180);
 
   if (automations && automations.length > 0) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,15 +58,11 @@ import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipeline
 import { markConversationRead } from "@/lib/inbox";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import CRM from "./CRM";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const wsSlugMatch = location.pathname.match(/^\/ws\/([^/]+)/);
-  const wsSlug = wsSlugMatch?.[1];
-  const inboxPath = (conversationId: string) =>
-    wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
 
   const { data: pipelines = [] } = useQuery({
     queryKey: pipelinesKey(workspaceId),
@@ -94,6 +90,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // 'all' | 'me' | 'unassigned' | userId
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
+  const [chatConversationId, setChatConversationId] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
 
   const [showNew, setShowNew] = useState(false);
@@ -479,7 +476,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       deals={stageDeals}
                       total={totals}
                       onDealClick={(id) => setActiveDealId(id)}
-                      onOpenChat={(convId) => navigate(inboxPath(convId))}
+                      onOpenChat={(convId) => setChatConversationId(convId)}
                       conversationOf={(d) => (d.conversation_id ? convById.get(d.conversation_id) ?? null : null)}
                       assigneeOf={(d) => {
                         const c = d.conversation_id ? convById.get(d.conversation_id) : null;
@@ -653,7 +650,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(inboxPath(activeDeal.conversation_id!))}
+                      onClick={() => setChatConversationId(activeDeal.conversation_id!)}
                     >
                       <MessageSquare className="w-4 h-4 mr-1" /> Open chat
                     </Button>
@@ -713,6 +710,15 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         workspaceId={workspaceId}
         stages={stages}
       />
+
+      <Dialog open={!!chatConversationId} onOpenChange={(open) => !open && setChatConversationId(null)}>
+        <DialogContent className="max-w-5xl h-[86vh] p-0 overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Pipeline chat</DialogTitle>
+          </DialogHeader>
+          <CRM workspaceId={workspaceId} embedded standaloneChat initialConversationId={chatConversationId} />
+        </DialogContent>
+      </Dialog>
 
       {/* New deal dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
