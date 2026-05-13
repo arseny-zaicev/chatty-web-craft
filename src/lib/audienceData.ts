@@ -358,7 +358,7 @@ export async function reserveRows(batchId: string, quantity: number | null): Pro
     if (error) {
       // Roll back anything we already grabbed so it doesn't sit as orphan `reserved`.
       if (collected.length > 0) {
-        await supabase.rpc("release_audience_rows", { _row_ids: collected.map((r) => r.id) }).catch(() => {});
+        try { await supabase.rpc("release_audience_rows", { _row_ids: collected.map((r) => r.id) }); } catch { /* ignore */ }
       }
       throw error;
     }
