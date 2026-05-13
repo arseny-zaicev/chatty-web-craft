@@ -116,15 +116,28 @@ export async function fetchCrmBase(workspaceId?: string) {
   });
 
   // Set of conversation ids that have at least one inbound message (i.e. contact replied).
+  // Computed across the entire workspace (not just loaded conversations) so the Replied
+  // filter and counter are accurate even when older threads aren't in the initial batch.
   const repliedConversationIds = new Set<string>();
-  const convIds = (conversations ?? []).map((c: any) => c.id);
-  if (convIds.length > 0) {
+  if (workspaceId) {
     const { data: inbound } = await supabase
       .from("messages")
-      .select("conversation_id")
+      .select("conversation_id, conversations!inner(workspace_id)")
       .eq("direction", "inbound")
-      .in("conversation_id", convIds);
-    (inbound ?? []).forEach((m: any) => repliedConversationIds.add(m.conversation_id));
+      .eq("conversations.workspace_id", workspaceId)
+      .limit(20000);
+    (inbound ?? []).forEach((m: any) => m.conversation_id && repliedConversationIds.add(m.conversation_id));
+  } else {
+    const convIds = (conversations ?? []).map((c: any) => c.id);
+    if (convIds.length > 0) {
+      const { data: inbound } = await supabase
+        .from("messages")
+        .select("conversation_id")
+        .eq("direction", "inbound")
+        .in("conversation_id", convIds)
+        .limit(20000);
+      (inbound ?? []).forEach((m: any) => repliedConversationIds.add(m.conversation_id));
+    }
   }
 
   return {
