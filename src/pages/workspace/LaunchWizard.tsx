@@ -697,6 +697,11 @@ export default function LaunchWizard() {
           dbAllUnused && reserveCount >= dbAvailable ? null : reserveCount,
         );
         if (reserved.length === 0) throw new Error("Could not reserve any rows (already used?)");
+        if (reserved.length < reserveCount) {
+          toast.message(`Reserved ${reserved.length} of ${reserveCount} requested`, {
+            description: "The remaining rows are locked by another launch or were just used. Continuing with what we got.",
+          });
+        }
         reservedRowIds = reserved.map((r) => r.id);
         // Build mapped recipients from row.payload + derived_payload using current mapping
         const built: Recipient[] = reserved.map((r) => {
