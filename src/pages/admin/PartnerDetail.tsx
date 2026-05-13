@@ -8,11 +8,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { format, subDays } from "date-fns";
+import { format, subDays, startOfMonth } from "date-fns";
+
+const LIFECYCLE_STATUSES = ["ready", "warming_up", "verifying", "disabled"] as const;
+const VERIFICATION_STATUSES = ["unverified", "verifying", "verified"] as const;
+type Lifecycle = typeof LIFECYCLE_STATUSES[number];
+type Verification = typeof VERIFICATION_STATUSES[number];
+
+// Map legacy statuses to new lifecycle buckets for display.
+const lifecycleBucket = (s?: string | null): Lifecycle => {
+  const v = String(s ?? "").toLowerCase();
+  if (v === "ready" || v === "active") return "ready";
+  if (v === "warming_up" || v === "warming") return "warming_up";
+  if (v === "verifying") return "verifying";
+  if (v === "disabled" || v === "inactive" || v === "paused") return "disabled";
+  return "warming_up";
+};
+
+const lifecycleVariant = (l: Lifecycle): any =>
+  l === "ready" ? "default" : l === "disabled" ? "destructive" : "secondary";
+
+const verificationVariant = (v: string): any =>
+  v === "verified" ? "default" : v === "verifying" ? "secondary" : "outline";
 
 const fmtUsd = (n: number) =>
   `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -75,6 +97,26 @@ export default function PartnerDetail() {
     enabled: bmIds.length > 0,
   });
 
+  const numberIds = useMemo(() => (numbers || []).map((n: any) => n.id), [numbers]);
+
+  const { data: liveStats } = useQuery({
+    queryKey: ["admin", "partner-num-live", numberIds],
+    queryFn: async () => {
+      if (!numberIds.length) return [] as any[];
+      const { data, error } = await (supabase.rpc as any)("number_live_stats", { p_number_ids: numberIds });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: numberIds.length > 0,
+    refetchInterval: 30_000,
+  });
+
+  const liveByNum = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const r of liveStats ?? []) m.set(r.whatsapp_number_id, r);
+    return m;
+  }, [liveStats]);
+
   const { data: workspaces } = useQuery({
     queryKey: ["admin", "all-workspaces-mini"],
     queryFn: async () => {
@@ -97,14 +139,23 @@ export default function PartnerDetail() {
 
   if (partnerLoading || !partner) return <div className="p-6"><Loader2 className="animate-spin w-5 h-5" /></div>;
 
+  // ---- Aggregations across linked BMs / numbers ----
   const totalNums = numbers?.length || 0;
-  const activeNums = numbers?.filter(n => n.status === "active").length || 0;
-  const warmNums = numbers?.filter(n => n.status === "warming").length || 0;
-  const restrictedNums = numbers?.filter(n => n.status === "restricted" || n.status === "blocked" || n.status === "banned").length || 0;
+  const restrictedNums = (numbers || []).filter(n => n.status === "restricted").length;
+  const blockedNums = (numbers || []).filter(n => n.status === "blocked" || n.status === "banned").length;
+
+  const bmList = bms || [];
+  const lifecycleCounts = bmList.reduce(
+    (acc, b: any) => { acc[lifecycleBucket(b.status)]++; return acc; },
+    { ready: 0, warming_up: 0, verifying: 0, disabled: 0 } as Record<Lifecycle, number>,
+  );
+
+  const sent7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.sent_7d || 0), 0);
   const unpaid = (runs || []).filter(r => r.status === "draft" || r.status === "approved")
     .reduce((s, r) => s + Number(r.total_payout_usd || 0), 0);
-  const warmingBms = (bms || []).filter(b => b.status === "warming").length;
-  const adsRunningBms = (bms || []).filter(b => b.ads_running).length;
+  const monthStart = startOfMonth(new Date());
+  const paidThisMonth = (runs || []).filter(r => r.status === "paid" && r.paid_at && new Date(r.paid_at) >= monthStart)
+    .reduce((s, r) => s + Number(r.paid_amount_usd ?? r.total_payout_usd ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -120,9 +171,22 @@ export default function PartnerDetail() {
           </span>
         </div>
 
-        <Tabs defaultValue="overview">
+        {/* TOP SUMMARY STRIP - live across linked BMs / numbers */}
+        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
+          <Stat label="Total BMs" value={String(bmList.length)} />
+          <Stat label="Ready" value={String(lifecycleCounts.ready)} />
+          <Stat label="Warming up" value={String(lifecycleCounts.warming_up)} />
+          <Stat label="Verifying" value={String(lifecycleCounts.verifying)} />
+          <Stat label="Disabled" value={String(lifecycleCounts.disabled)} />
+          <Stat label="Restricted #" value={String(restrictedNums)} alert={restrictedNums > 0} />
+          <Stat label="Blocked #" value={String(blockedNums)} alert={blockedNums > 0} />
+          <Stat label="Sent 7d" value={sent7dTotal.toLocaleString()} />
+          <Stat label="Open payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
+          <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
+        </div>
+
+        <Tabs defaultValue="bms">
           <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="bms">Business Managers</TabsTrigger>
             <TabsTrigger value="numbers">Numbers</TabsTrigger>
             <TabsTrigger value="finance">Finance & Reports</TabsTrigger>
@@ -130,69 +194,92 @@ export default function PartnerDetail() {
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
-          {/* OVERVIEW */}
-          <TabsContent value="overview" className="pt-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Stat label="Active BMs" value={`${(bms || []).filter(b => b.status === "active").length} / ${bms?.length || 0}`} />
-              <Stat label="Active numbers" value={`${activeNums} / ${totalNums}`} />
-              <Stat label="Warm-up active" value={String(warmNums)} hint={`${warmingBms} BM(s)`} />
-              <Stat label="Restricted/blocked" value={String(restrictedNums)} alert={restrictedNums > 0} />
-              <Stat label="Ads running on" value={`${adsRunningBms} BM(s)`} />
-              <Stat label="Unpaid payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
-              <Stat label="Total runs" value={String(runs?.length || 0)} />
-              <Stat label="Cadence" value={partner.cadence} />
-            </div>
-          </TabsContent>
-
           {/* BUSINESS MANAGERS */}
           <TabsContent value="bms" className="pt-4 space-y-4">
-            <LinkBMCard partnerId={id!} onLinked={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })} />
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-sm text-muted-foreground">
+                {bmList.length} BM(s) linked - {totalNums} number(s) total
+              </div>
+              <div className="flex gap-2">
+                <CreateBMDialog
+                  partnerId={id!}
+                  partnerDefaultRate={Number(partner.default_payout_rate_usd) || 0.005}
+                  workspaces={workspaces || []}
+                  onCreated={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })}
+                />
+                <LinkBMDialog
+                  partnerId={id!}
+                  onLinked={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })}
+                />
+              </div>
+            </div>
+
             <Card>
               <CardHeader><CardTitle>Linked Business Managers</CardTitle></CardHeader>
-              <CardContent>
+              <CardContent className="overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead>BM</TableHead>
-                    <TableHead>Meta BM ID</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Ads</TableHead>
-                    <TableHead>Warm-up</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Verification</TableHead>
+                    <TableHead>Lifecycle</TableHead>
+                    <TableHead>Warm-up / Ads</TableHead>
                     <TableHead>Numbers</TableHead>
+                    <TableHead>Numbers summary</TableHead>
+                    <TableHead className="text-right">Sent today</TableHead>
+                    <TableHead className="text-right">Sent 7d</TableHead>
+                    <TableHead className="text-right">Sent all</TableHead>
+                    <TableHead className="text-right">Restricted</TableHead>
+                    <TableHead className="text-right">Blocked</TableHead>
+                    <TableHead className="text-right">Clients</TableHead>
                     <TableHead></TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {activeAssigns.map(a => {
-                      const bm = (bms || []).find(b => b.id === a.business_manager_id);
+                      const bm = bmList.find(b => b.id === a.business_manager_id);
                       const bmNums = (numbers || []).filter(n => n.business_manager_id === a.business_manager_id);
-                      const active = bmNums.filter(n => n.status === "active").length;
-                      const warming = bmNums.filter(n => n.status === "warming").length;
-                      const restricted = bmNums.filter(n => n.status === "restricted" || n.status === "blocked" || n.status === "banned").length;
+                      const restricted = bmNums.filter(n => n.status === "restricted").length;
+                      const blocked = bmNums.filter(n => n.status === "blocked" || n.status === "banned").length;
+                      const wsSet = new Set(bmNums.map(n => n.workspace_id).filter(Boolean));
+                      const sentToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_today || 0), 0);
+                      const sent7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_7d || 0), 0);
+                      const sentAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_all || 0), 0);
+                      const lc = lifecycleBucket(bm?.status);
+                      const summary = bmNums.slice(0, 3).map(n => n.display_name || `+${n.phone_number}`).join(", ")
+                        + (bmNums.length > 3 ? ` +${bmNums.length - 3}` : "");
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">
                             {bm ? <Link to={`/admin/business-managers/${bm.id}`} className="hover:underline">{bm.name}</Link> : a.business_manager_id.slice(0,8)}
+                            <div className="text-[10px] text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || ""}</div>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || "—"}</TableCell>
-                          <TableCell><Badge variant={a.role === "provider" ? "default" : "secondary"}>{a.role}</Badge></TableCell>
-                          <TableCell>${Number(a.rate_usd).toFixed(4)}</TableCell>
-                          <TableCell><Badge variant="outline">{bm?.status || "?"}</Badge></TableCell>
-                          <TableCell>{bm?.ads_running ? <Badge>running</Badge> : <span className="text-muted-foreground text-xs">off</span>}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={verificationVariant(bm?.verification_status || "unverified")}>
+                              {bm?.verification_status || "unverified"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell><Badge variant={lifecycleVariant(lc)}>{lc}</Badge></TableCell>
                           <TableCell className="text-xs">
-                            {bm?.status === "warming" ? (
-                              <div>
-                                <Badge variant="secondary">active</Badge>
-                                {bm.warmup_started_at && <div className="text-muted-foreground mt-0.5">started {format(new Date(bm.warmup_started_at), "MMM d")}</div>}
-                                {bm.warmup_target_date && <div className="text-muted-foreground">→ {bm.warmup_target_date}</div>}
+                            {bm?.ads_running ? <Badge>ads running</Badge> : null}
+                            {lc === "warming_up" && (
+                              <div className="text-muted-foreground mt-0.5">
+                                {bm?.warmup_started_at ? `since ${format(new Date(bm.warmup_started_at), "MMM d")}` : "warm-up"}
+                                {bm?.warmup_target_date ? ` → ${bm.warmup_target_date}` : ""}
                               </div>
-                            ) : bm?.warmup_completed_at ? (
-                              <div className="text-muted-foreground">done {format(new Date(bm.warmup_completed_at), "MMM d")}</div>
-                            ) : <span className="text-muted-foreground">—</span>}
+                            )}
+                            {!bm?.ads_running && lc !== "warming_up" && <span className="text-muted-foreground">—</span>}
                           </TableCell>
-                          <TableCell className="text-xs">
-                            {bmNums.length} <span className="text-muted-foreground">· {active}a / {warming}w / {restricted}r</span>
-                          </TableCell>
+                          <TableCell className="text-center">{bmNums.length}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate" title={summary}>{summary || "—"}</TableCell>
+                          <TableCell className="text-right tabular-nums">{sentToday.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums">{sent7d.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums">{sentAll.toLocaleString()}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${restricted > 0 ? "text-amber-600 font-medium" : ""}`}>{restricted}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${blocked > 0 ? "text-destructive font-medium" : ""}`}>{blocked}</TableCell>
+                          <TableCell className="text-right tabular-nums">{wsSet.size}</TableCell>
                           <TableCell>
                             <UnlinkButton assignmentId={a.id} onDone={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })} />
                           </TableCell>
@@ -200,7 +287,7 @@ export default function PartnerDetail() {
                       );
                     })}
                     {!activeAssigns.length && (
-                      <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">No BMs linked yet</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={14} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -352,7 +439,198 @@ const Stat = ({ label, value, hint, alert }: { label: string; value: string; hin
   </Card>
 );
 
-function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () => void }) {
+function CreateBMDialog({
+  partnerId, partnerDefaultRate, workspaces, onCreated,
+}: {
+  partnerId: string;
+  partnerDefaultRate: number;
+  workspaces: Array<{ id: string; name: string }>;
+  onCreated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [metaBmId, setMetaBmId] = useState("");
+  const [lifecycle, setLifecycle] = useState<Lifecycle>("warming_up");
+  const [verification, setVerification] = useState<Verification>("unverified");
+  const [role, setRole] = useState("provider");
+  const [rate, setRate] = useState(String(partnerDefaultRate));
+  const [pickedNumberIds, setPickedNumberIds] = useState<string[]>([]);
+
+  const { data: availableNumbers } = useQuery({
+    queryKey: ["admin", "numbers-for-bm-create", workspaceId],
+    queryFn: async () => {
+      let q = supabase
+        .from("whatsapp_numbers")
+        .select("id, phone_number, display_name, status, workspace_id, business_manager_id")
+        .order("display_name", { ascending: true });
+      if (workspaceId) q = q.eq("workspace_id", workspaceId);
+      const { data } = await q;
+      return (data ?? []) as any[];
+    },
+    enabled: open,
+  });
+
+  const reset = () => {
+    setName(""); setWorkspaceId(""); setMetaBmId("");
+    setLifecycle("warming_up"); setVerification("unverified");
+    setRole("provider"); setRate(String(partnerDefaultRate));
+    setPickedNumberIds([]);
+  };
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!name.trim()) throw new Error("BM name required");
+      if (!workspaceId) throw new Error("Pick a workspace");
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Not signed in");
+
+      // 1) Create the BM
+      const { data: bm, error: bmErr } = await supabase
+        .from("business_managers")
+        .insert({
+          name: name.trim(),
+          workspace_id: workspaceId,
+          provider: "gupshup",
+          meta_bm_id: metaBmId.trim() || null,
+          status: lifecycle,
+          verification_status: verification,
+          warmup_started_at: lifecycle === "warming_up" ? new Date().toISOString() : null,
+          created_by: u.user.id,
+        } as any)
+        .select("id")
+        .single();
+      if (bmErr) throw bmErr;
+
+      // 2) Auto-link to current partner
+      const { error: linkErr } = await supabase.from("bm_partner_assignments").insert({
+        business_manager_id: bm.id,
+        partner_id: partnerId,
+        role,
+        rate_usd: Number(rate),
+        created_by: u.user.id,
+      });
+      if (linkErr) throw linkErr;
+
+      // 3) Attach selected numbers to this BM
+      if (pickedNumberIds.length > 0) {
+        const { error: nErr } = await supabase
+          .from("whatsapp_numbers")
+          .update({ business_manager_id: bm.id } as any)
+          .in("id", pickedNumberIds);
+        if (nErr) throw nErr;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Business Manager created and linked");
+      setOpen(false); reset();
+      onCreated();
+    },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const toggleNum = (nid: string) =>
+    setPickedNumberIds(prev => prev.includes(nid) ? prev.filter(x => x !== nid) : [...prev, nid]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm"><Plus className="w-4 h-4 mr-1" />Create BM</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle><Building2 className="w-4 h-4 inline mr-2" />New Business Manager</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">BM name *</label>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. ISKRA-BM-04" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Meta BM ID</label>
+              <Input value={metaBmId} onChange={e => setMetaBmId(e.target.value)} placeholder="optional" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Workspace *</label>
+              <Select value={workspaceId} onValueChange={setWorkspaceId}>
+                <SelectTrigger><SelectValue placeholder="Pick workspace" /></SelectTrigger>
+                <SelectContent>
+                  {workspaces.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Lifecycle status</label>
+              <Select value={lifecycle} onValueChange={(v) => setLifecycle(v as Lifecycle)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {LIFECYCLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Verification status</label>
+              <Select value={verification} onValueChange={(v) => setVerification(v as Verification)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {VERIFICATION_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Partner role</label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="provider">Provider</SelectItem>
+                  <SelectItem value="referral">Referral</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Rate $/delivered</label>
+              <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground">
+              Linked numbers ({pickedNumberIds.length} selected)
+              {!workspaceId && " - pick a workspace first"}
+            </label>
+            <div className="mt-1 max-h-48 overflow-y-auto border border-border rounded-md p-2 space-y-1">
+              {(availableNumbers ?? []).length === 0 && (
+                <div className="text-xs text-muted-foreground py-2 text-center">
+                  {workspaceId ? "No numbers in this workspace" : "Pick a workspace to see numbers"}
+                </div>
+              )}
+              {(availableNumbers ?? []).map(n => (
+                <label key={n.id} className="flex items-center gap-2 text-sm hover:bg-muted/50 rounded px-1 py-0.5 cursor-pointer">
+                  <Checkbox
+                    checked={pickedNumberIds.includes(n.id)}
+                    onCheckedChange={() => toggleNum(n.id)}
+                  />
+                  <span className="font-mono text-xs">+{n.phone_number}</span>
+                  <span className="text-muted-foreground">{n.display_name || ""}</span>
+                  <Badge variant="outline" className="ml-auto text-[10px]">{n.status}</Badge>
+                  {n.business_manager_id && <span className="text-[10px] text-amber-600">(reassign)</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !name.trim() || !workspaceId}>
+            {create.isPending ? "Creating…" : "Create & link"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LinkBMDialog({ partnerId, onLinked }: { partnerId: string; onLinked: () => void }) {
+  const [open, setOpen] = useState(false);
   const [bmId, setBmId] = useState("");
   const [role, setRole] = useState("provider");
   const [rate, setRate] = useState("0.005");
@@ -363,6 +641,7 @@ function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () =
       const { data } = await supabase.from("business_managers").select("id, name, status").order("name");
       return data as any[] || [];
     },
+    enabled: open,
   });
 
   const link = useMutation({
@@ -375,20 +654,19 @@ function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () =
       });
       if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("BM linked");
-      setBmId(""); setRate("0.005");
-      onLinked();
-    },
+    onSuccess: () => { toast.success("BM linked"); setOpen(false); setBmId(""); onLinked(); },
     onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   return (
-    <Card>
-      <CardHeader><CardTitle>Link a Business Manager</CardTitle></CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2 items-end">
-          <div className="flex-1 min-w-[240px]">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">Link existing BM</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Link existing Business Manager</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
             <label className="text-xs text-muted-foreground">BM</label>
             <Select value={bmId} onValueChange={setBmId}>
               <SelectTrigger><SelectValue placeholder="Pick BM" /></SelectTrigger>
@@ -397,26 +675,31 @@ function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () =
               </SelectContent>
             </Select>
           </div>
-          <div className="w-[140px]">
-            <label className="text-xs text-muted-foreground">Role</label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="provider">Provider</SelectItem>
-                <SelectItem value="referral">Referral</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Role</label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="provider">Provider</SelectItem>
+                  <SelectItem value="referral">Referral</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Rate $/delivered</label>
+              <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
+            </div>
           </div>
-          <div className="w-[140px]">
-            <label className="text-xs text-muted-foreground">Rate $/delivered</label>
-            <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
-          </div>
-          <Button onClick={() => link.mutate()} disabled={link.isPending || !bmId}>
-            <Plus className="w-4 h-4 mr-1" />Link
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => link.mutate()} disabled={link.isPending || !bmId}>
+            {link.isPending ? "Linking…" : "Link"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
