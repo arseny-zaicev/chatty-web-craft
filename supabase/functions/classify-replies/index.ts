@@ -81,43 +81,44 @@ Deno.serve(async (req) => {
   const limit = Math.min(Number(body?.limit) || 50, 200);
   const campaignId = typeof body?.campaign_id === "string" ? body.campaign_id : null;
 
-  // Find conversations with at least one inbound message and no insight row.
-  let convQuery = admin
-    .from("conversations")
-    .select("id, workspace_id, contact_phone")
-    .order("last_message_at", { ascending: false })
-    .limit(limit * 3);
+  let toProcess: { id: string; workspace_id: string; contact_phone: string | null }[] = [];
+
   if (campaignId) {
+    // Targeted: tag every conversation linked to this campaign that isn't tagged yet.
     const { data: recips } = await admin
       .from("campaign_recipients")
       .select("conversation_id")
       .eq("campaign_id", campaignId)
       .not("conversation_id", "is", null);
-    const ids = (recips || []).map((r) => r.conversation_id).filter(Boolean);
+    const ids = (recips || []).map((r) => r.conversation_id).filter(Boolean) as string[];
     if (!ids.length) {
       return new Response(JSON.stringify({ ok: true, processed: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    convQuery = admin
+    const { data: tagged } = await admin
+      .from("conversation_insights")
+      .select("conversation_id")
+      .in("conversation_id", ids);
+    const taggedSet = new Set((tagged || []).map((t) => t.conversation_id));
+    const { data: convs } = await admin
       .from("conversations")
       .select("id, workspace_id, contact_phone")
-      .in("id", ids);
+      .in("id", ids.filter((id) => !taggedSet.has(id)));
+    toProcess = ((convs || []) as any[]).slice(0, limit);
+  } else {
+    // Default backlog: only conversations that already received an inbound message
+    // and don't have an insight row yet. This avoids burning the AI budget on
+    // outbound-only campaign sends that never replied.
+    const { data, error } = await admin.rpc("pending_classification_conversations", { _limit: limit });
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    toProcess = (data || []) as any[];
   }
-
-  const { data: convs, error: cErr } = await convQuery;
-  if (cErr) {
-    return new Response(JSON.stringify({ error: cErr.message }), { status: 500, headers: corsHeaders });
-  }
-
-  // Skip already-tagged
-  const convIds = (convs || []).map((c) => c.id);
-  const { data: tagged } = await admin
-    .from("conversation_insights")
-    .select("conversation_id")
-    .in("conversation_id", convIds);
-  const taggedSet = new Set((tagged || []).map((t) => t.conversation_id));
-  const toProcess = (convs || []).filter((c) => !taggedSet.has(c.id)).slice(0, limit);
 
   let processed = 0;
   for (const c of toProcess) {
