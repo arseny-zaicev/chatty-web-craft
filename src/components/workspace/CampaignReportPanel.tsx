@@ -203,21 +203,21 @@ export function CampaignReportPanel({
           </TabsList>
 
           <TabsContent value="summary" className="mt-3 space-y-3">
-            {totals && (
+            {liveTotals && (
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                <KpiMini label="Total" value={totals.total} />
-                <KpiMini label="Sent" value={totals.sent} tone="good" />
-                <KpiMini label="Failed" value={totals.failed} tone={totals.failed > 0 ? "bad" : undefined} />
-                <KpiMini label="Replied" value={totals.replied} />
-                <KpiMini label="Positive" value={totals.positive} tone="good" />
-                <KpiMini label="Meeting" value={totals.meeting} tone="good" />
+                <KpiMini label="Total" value={liveTotals.total} />
+                <KpiMini label="Sent" value={liveTotals.sent} tone="good" />
+                <KpiMini label="Failed" value={liveTotals.failed} tone={liveTotals.failed > 0 ? "bad" : undefined} />
+                <KpiMini label="Replied" value={liveTotals.replied} />
+                <KpiMini label="Positive" value={liveTotals.positive} tone="good" />
+                <KpiMini label="Meeting" value={liveTotals.meeting} tone="good" />
               </div>
             )}
             {insight.summary_md && (
               <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap rounded border border-border bg-background/40 p-3">
                 {insight.summary_md}
                 <div className="text-[10px] text-muted-foreground mt-2 not-prose">
-                  Generated {new Date(insight.generated_at).toLocaleString()} · {insight.model}
+                  Snapshot from {new Date(insight.generated_at).toLocaleString()} · {insight.model} — counters above update live every 30s
                 </div>
               </div>
             )}
