@@ -350,7 +350,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const whatsappNumberId = number.id;
   const templateId = template.id;
 
-  const cleanRecipients = recipients
+  const cleanRecipientsAll = recipients
     .map((r: any) => ({
       contact_phone: normalizePhone(r.phone || r.contact_phone),
       contact_name: String(r.name || r.contact_name || "").trim().slice(0, 160) || null,
@@ -359,7 +359,34 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }))
     .filter((r: any) => r.contact_phone.length >= 8 && r.contact_phone.length <= 18);
 
-  if (cleanRecipients.length === 0) return json({ error: "No valid phone numbers" }, 400);
+  if (cleanRecipientsAll.length === 0) return json({ error: "No valid phone numbers" }, 400);
+
+  // ============= CAPACITY-BOUND ALLOCATION (hard truncation) =============
+  // capacity = Σ(min(per_number_quota, whatsapp_numbers.daily_send_limit, windowFitCap)) × selected days.
+  // Anything beyond capacity is NOT inserted into campaign_recipients and stays
+  // free in the audience pool. No silent "send later", no future-day bucket.
+  const _wsMinPre = hhmmToMin(windowStart);
+  const _wsMaxPre = hhmmToMin(windowEnd);
+  const _windowSecondsPre = Math.max(60, (_wsMaxPre - _wsMinPre) * 60);
+  const _minGapPre = isBlastLaunch ? 1 : Math.max(60, minDelay || 60);
+  const _windowFitCapPre = isBlastLaunch ? perNumberQuota : Math.max(1, Math.floor(_windowSecondsPre / _minGapPre));
+  const perNumberCaps = new Map<string, number>();
+  let capacityPerDay = 0;
+  for (const nid of numberIds) {
+    const nrow: any = numberRows.find((n: any) => n.id === nid);
+    const dailyLimit = Math.max(1, Math.min(100000, Number(nrow?.daily_send_limit ?? 200)));
+    const cap = Math.max(1, Math.min(perNumberQuota, dailyLimit, _windowFitCapPre));
+    perNumberCaps.set(nid, cap);
+    capacityPerDay += cap;
+  }
+  const daysCount = Math.max(1, scheduledDates.length || 1);
+  const allocatedCapacity = capacityPerDay * daysCount;
+  const audienceTotalRequested = cleanRecipientsAll.length;
+  const cleanRecipients = cleanRecipientsAll.slice(0, allocatedCapacity);
+  const truncatedCount = audienceTotalRequested - cleanRecipients.length;
+
+  if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
+
 
   // Pre-flight: validate every template that will be used against its actual
   // recipient slice. This is the guard that would have caught the Nov 2025
