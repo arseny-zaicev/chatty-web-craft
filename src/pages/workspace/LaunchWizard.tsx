@@ -366,19 +366,13 @@ export default function LaunchWizard() {
   // Auto-fill numberIds based on mode + pool
   useEffect(() => {
     if (poolNumbers.length === 0) return;
-    if (type === "utility") {
-      // Utility: use ALL ready numbers in pool
-      const ids = readyInPool.map((n) => n.id);
-      setNumberIds(ids.length ? ids : [poolNumbers[0].id]);
-    } else {
-      // Marketing: single sender — keep current if still in pool & ready, else first ready/first
-      setNumberIds((prev) => {
-        const stillValid = prev.find((id) => poolNumbers.some((n) => n.id === id));
-        if (stillValid) return [stillValid];
-        const firstReady = readyInPool[0] ?? poolNumbers[0];
-        return [firstReady.id];
-      });
-    }
+    // Both modes: pre-select all ready numbers (operators can untick).
+    const ids = readyInPool.map((n) => n.id);
+    const fallback = ids.length ? ids : [poolNumbers[0].id];
+    setNumberIds((prev) => {
+      const stillValid = prev.filter((id) => poolNumbers.some((n) => n.id === id));
+      return stillValid.length ? stillValid : fallback;
+    });
   }, [type, poolCountry, readyInPool.length, poolNumbers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeNumbers = numbers.filter((n) => numberIds.includes(n.id));
@@ -428,8 +422,7 @@ export default function LaunchWizard() {
   // ----- Toggles -----
   const toggleNumber = (id: string) => {
     setNumberIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (!routing) return [id]; // single-number mode
+      if (prev.includes(id)) return prev.length > 1 ? prev.filter((x) => x !== id) : prev;
       return [...prev, id];
     });
   };
@@ -1029,12 +1022,12 @@ export default function LaunchWizard() {
                     {readyInPool.length} ready of {poolNumbers.length}
                   </Badge>
                   <Badge variant="outline" className="text-[11px] border-primary/30 text-primary">
-                    {type === "utility" ? "Utility · uses all ready numbers" : "Marketing · pick one sender"}
+                    {type === "utility" ? "Utility · uses all ready numbers" : "Marketing · pick one or more senders"}
                   </Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   {type === "marketing"
-                    ? "Pick one number below to send from. Marketing campaigns always use a single sender."
+                    ? "Pick one or more numbers to send from. Recipients are split evenly across selected senders."
                     : "All ready numbers below will share the load evenly."}
                 </p>
 
@@ -1042,15 +1035,13 @@ export default function LaunchWizard() {
                   {poolNumbers.map((n) => {
                     const selected = numberIds.includes(n.id);
                     const hasVariant = activeLogical?.variantByNumber.has(n.id);
-                    const inputType = type === "utility" ? "checkbox" : "radio";
                     return (
                       <label
                         key={n.id}
                         className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
                       >
                         <input
-                          type={inputType}
-                          name="number-pick"
+                          type="checkbox"
                           checked={selected}
                           onChange={() => toggleNumber(n.id)}
                         />
