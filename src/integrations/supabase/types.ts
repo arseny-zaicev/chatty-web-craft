@@ -811,13 +811,17 @@ export type Database = {
         Row: {
           active_responder_at: string | null
           active_responder_id: string | null
+          assigned_at: string | null
           assigned_user_id: string | null
           contact_name: string | null
           contact_phone: string
           created_at: string
+          first_human_reply_at: string | null
           id: string
           is_starred: boolean
           last_auto_positive_alert_at: string | null
+          last_human_reply_at: string | null
+          last_inbound_at: string | null
           last_message_at: string | null
           last_message_text: string | null
           pinned_at: string | null
@@ -825,19 +829,24 @@ export type Database = {
           unread_count: number
           updated_at: string
           user_id: string
+          waiting_since: string | null
           whatsapp_number_id: string
           workspace_id: string
         }
         Insert: {
           active_responder_at?: string | null
           active_responder_id?: string | null
+          assigned_at?: string | null
           assigned_user_id?: string | null
           contact_name?: string | null
           contact_phone: string
           created_at?: string
+          first_human_reply_at?: string | null
           id?: string
           is_starred?: boolean
           last_auto_positive_alert_at?: string | null
+          last_human_reply_at?: string | null
+          last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_text?: string | null
           pinned_at?: string | null
@@ -845,19 +854,24 @@ export type Database = {
           unread_count?: number
           updated_at?: string
           user_id: string
+          waiting_since?: string | null
           whatsapp_number_id: string
           workspace_id: string
         }
         Update: {
           active_responder_at?: string | null
           active_responder_id?: string | null
+          assigned_at?: string | null
           assigned_user_id?: string | null
           contact_name?: string | null
           contact_phone?: string
           created_at?: string
+          first_human_reply_at?: string | null
           id?: string
           is_starred?: boolean
           last_auto_positive_alert_at?: string | null
+          last_human_reply_at?: string | null
+          last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_text?: string | null
           pinned_at?: string | null
@@ -865,6 +879,7 @@ export type Database = {
           unread_count?: number
           updated_at?: string
           user_id?: string
+          waiting_since?: string | null
           whatsapp_number_id?: string
           workspace_id?: string
         }
@@ -3405,6 +3420,43 @@ export type Database = {
       number_owner_at: {
         Args: { _at: string; _whatsapp_number_id: string }
         Returns: string
+      }
+      ops_operator_assigned_conversations: {
+        Args: { _user_id: string }
+        Returns: {
+          assigned_at: string
+          contact_name: string
+          contact_phone: string
+          conversation_id: string
+          last_human_reply_at: string
+          last_inbound_at: string
+          pipeline_id: string
+          pipeline_name: string
+          unread_count: number
+          waiting_since: string
+          workspace_id: string
+          workspace_name: string
+          workspace_slug: string
+        }[]
+      }
+      ops_operator_performance: {
+        Args: { _window_end: string; _window_start: string }
+        Returns: {
+          active_now: number
+          assigned_now: number
+          email: string
+          full_name: string
+          human_replies_window: number
+          median_first_response_seconds: number
+          median_response_seconds: number
+          meetings_now: number
+          oldest_waiting_at: string
+          overdue_now: number
+          positive_replies_window: number
+          unread_now: number
+          user_id: string
+          waiting_now: number
+        }[]
       }
       partner_rate_at: {
         Args: {
