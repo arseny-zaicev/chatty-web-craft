@@ -1295,6 +1295,11 @@ async function processQueue(admin: any) {
         const code = extractErrorCode(msg);
         cState.codes.set(code, (cState.codes.get(code) ?? 0) + 1);
 
+        // Per-number restriction detection (fires immediate Slack via DB trigger).
+        if (recipient.whatsapp_number_id && RESTRICTION_CODES.has(code)) {
+          await maybeFlipNumberRestricted(recipient.whatsapp_number_id, msg, code);
+        }
+
         if (!cState.aborted && cState.fail >= 3 && cState.ok === 0) {
           const top = [...cState.codes.entries()].sort((a, b) => b[1] - a[1])[0];
           if (top && top[1] === cState.fail) {
