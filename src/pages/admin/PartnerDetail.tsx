@@ -348,6 +348,7 @@ export default function PartnerDetail() {
 
           {/* FINANCE */}
           <TabsContent value="finance" className="pt-4 space-y-4">
+            <ManagerReportCard managerId={id!} />
             <GenerateRunCard partnerId={id!} partnerKind={partner.kind} onGen={() => qc.invalidateQueries({ queryKey: ["admin", "partner-runs", id] })} />
             <Card>
               <CardHeader><CardTitle>Payout runs</CardTitle></CardHeader>
