@@ -149,6 +149,8 @@ export default function Partners() {
                         </TableCell>
                         <TableCell>{bms?.size || 0}</TableCell>
                         <TableCell>{numCount}</TableCell>
+                        <TableCell className="tabular-nums">{(pm?.sent_today ?? 0).toLocaleString()}</TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">{(pm?.sent_alltime ?? 0).toLocaleString()}</TableCell>
                         <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
                         <TableCell className="font-mono text-xs">{p.referral_rate_usd > 0 ? `$${Number(p.referral_rate_usd).toFixed(4)}` : <span className="text-muted-foreground">-</span>}</TableCell>
                         <TableCell className={unpaid > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
@@ -164,7 +166,7 @@ export default function Partners() {
                     );
                   })}
                   {!rows.length && (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                       No partners.
                     </TableCell></TableRow>
                   )}
