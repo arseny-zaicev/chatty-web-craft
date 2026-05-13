@@ -1130,6 +1130,30 @@ async function processQueue(admin: any) {
       }
       if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
 
+      // Per-number daily cap safety net. If this number has already sent its
+      // daily_send_limit today (Dubai TZ), bump this recipient to tomorrow at
+      // 09:00 Dubai and skip. Prevents silent overshoot if anything bypassed
+      // the launch-time capacity truncation.
+      const recNumId = recipient.whatsapp_number_id;
+      if (recNumId && dailyLimitByNum.has(recNumId)) {
+        const cap = dailyLimitByNum.get(recNumId)!;
+        const sentNow = sentTodayByNum.get(recNumId) ?? 0;
+        if (sentNow >= cap) {
+          // Bump 24h forward, snapped to 09:00 Dubai of the next day.
+          const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(next);
+          const bumpedIso = new Date(`${dubaiDate}T09:00:00+04:00`).toISOString();
+          await admin
+            .from("campaign_recipients")
+            .update({ scheduled_at: bumpedIso })
+            .eq("id", recipient.id)
+            .eq("status", "scheduled");
+          console.warn(`[cap_reached] number=${recNumId} sent_today=${sentNow} cap=${cap} -> bumped recipient=${recipient.id} to ${bumpedIso}`);
+          continue;
+        }
+      }
+
+
       // Pacing guard: enforce delay_min_seconds gap from the previous send for this campaign.
       const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
       const isUtility = tplCategory === "utility" || tplCategory === "authentication";
