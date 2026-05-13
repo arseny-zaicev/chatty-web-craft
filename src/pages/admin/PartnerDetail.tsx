@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfMonth } from "date-fns";
+import { fetchPartnerMetrics } from "@/lib/metrics";
 
 const LIFECYCLE_STATUSES = ["ready", "warming_up", "verifying", "disabled"] as const;
 const VERIFICATION_STATUSES = ["unverified", "verifying", "verified"] as const;
