@@ -33,6 +33,7 @@ type Section =
   | "companies.partners"
   | "companies.analytics"
   | "companies.webhook_health"
+  | "companies.reconciliation"
   | "forms.submissions"
   | "forms.analytics"
   | "site.analytics"
