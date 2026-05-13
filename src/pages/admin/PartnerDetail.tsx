@@ -180,7 +180,7 @@ export default function PartnerDetail() {
         </div>
 
         {/* TOP SUMMARY STRIP - live across linked BMs / numbers */}
-        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-3">
           <Stat label="Total BMs" value={String(bmList.length)} />
           <Stat label="Ready" value={String(lifecycleCounts.ready)} />
           <Stat label="Warming up" value={String(lifecycleCounts.warming_up)} />
@@ -188,6 +188,8 @@ export default function PartnerDetail() {
           <Stat label="Disabled" value={String(lifecycleCounts.disabled)} />
           <Stat label="Restricted #" value={String(restrictedNums)} alert={restrictedNums > 0} />
           <Stat label="Blocked #" value={String(blockedNums)} alert={blockedNums > 0} />
+          <Stat label="Sent today" value={(pm?.sent_today ?? 0).toLocaleString()} />
+          <Stat label="Sent all-time" value={(pm?.sent_alltime ?? 0).toLocaleString()} />
           <Stat label="Sent 7d" value={sent7dTotal.toLocaleString()} />
           <Stat label="Open payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
           <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
