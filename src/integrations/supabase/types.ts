@@ -2991,6 +2991,56 @@ export type Database = {
       }
     }
     Functions: {
+      admin_reconcile_daily: {
+        Args: {
+          _from: string
+          _partner_id?: string
+          _to: string
+          _workspace_id?: string
+        }
+        Returns: {
+          day: string
+          display_name: string
+          drift_sent: number
+          events_delivered: number
+          events_failed: number
+          events_sent: number
+          partner_id: string
+          partner_name: string
+          phone_number: string
+          recipients_failed: number
+          recipients_sent: number
+          whatsapp_number_id: string
+          workspace_id: string
+          workspace_name: string
+        }[]
+      }
+      admin_reconcile_orphans: {
+        Args: { _from: string; _to: string }
+        Returns: {
+          campaign_id: string
+          contact_phone: string
+          phone_number: string
+          provider_message_id: string
+          recipient_id: string
+          sent_at: string
+          whatsapp_number_id: string
+          workspace_id: string
+        }[]
+      }
+      admin_reconcile_summary: {
+        Args: { _from: string; _to: string }
+        Returns: {
+          drift_pct: number
+          drift_sent: number
+          events_delivered: number
+          events_failed: number
+          events_sent: number
+          orphan_count: number
+          recipients_failed: number
+          recipients_sent: number
+        }[]
+      }
       approve_payout_run: {
         Args: { _run_id: string }
         Returns: {
