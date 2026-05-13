@@ -58,6 +58,7 @@ import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipeline
 import { markConversationRead } from "@/lib/inbox";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import CRM from "./CRM";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
@@ -94,6 +95,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all"); // 'all' | 'me' | 'unassigned' | userId
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
+  const [chatConversationId, setChatConversationId] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
 
   const [showNew, setShowNew] = useState(false);
@@ -479,7 +481,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       deals={stageDeals}
                       total={totals}
                       onDealClick={(id) => setActiveDealId(id)}
-                      onOpenChat={(convId) => navigate(inboxPath(convId))}
+                      onOpenChat={(convId) => setChatConversationId(convId)}
                       conversationOf={(d) => (d.conversation_id ? convById.get(d.conversation_id) ?? null : null)}
                       assigneeOf={(d) => {
                         const c = d.conversation_id ? convById.get(d.conversation_id) : null;
@@ -653,7 +655,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(inboxPath(activeDeal.conversation_id!))}
+                      onClick={() => setChatConversationId(activeDeal.conversation_id!)}
                     >
                       <MessageSquare className="w-4 h-4 mr-1" /> Open chat
                     </Button>
