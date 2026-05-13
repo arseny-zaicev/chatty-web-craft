@@ -161,15 +161,31 @@ export default function FinanceRunDetail() {
           <span className="text-sm text-muted-foreground">{run.period_from} → {run.period_to}</span>
         </div>
 
-        {/* KPI bar */}
+        {/* Summary strip */}
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-xs text-muted-foreground mb-1">
+              Period {run.period_from} → {run.period_to} · Status <span className="uppercase font-medium text-foreground">{run.status}</span>
+            </div>
+            <div className="text-base">
+              <span className="font-medium">{Number(run.totals_delivered).toLocaleString()}</span>
+              <span className="text-muted-foreground"> delivered</span>
+              <span className="text-muted-foreground"> · </span>
+              <span className="font-medium">Partner payout due</span>{" "}
+              <span className="font-semibold text-foreground">{fmtUsd(Number(run.total_payout_usd))}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI bar - internal admin numbers */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
             ["Delivered", String(run.totals_delivered)],
             ["Failed", String(run.totals_failed)],
             ["Sent", String(run.totals_sent)],
-            ["Payout", fmtUsd(Number(run.total_payout_usd))],
-            ["Billed", fmtUsd(Number(run.total_billed_usd))],
-            ["Margin", fmtUsd(Number(run.margin_usd))],
+            ["Partner payout", fmtUsd(Number(run.total_payout_usd))],
+            ["Client billed", fmtUsd(Number(run.total_billed_usd))],
+            ["Our margin", fmtUsd(Number(run.margin_usd))],
           ].map(([l, v]) => (
             <Card key={l}><CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">{l}</div>
@@ -198,16 +214,24 @@ export default function FinanceRunDetail() {
               Mark as paid
             </Button>
           )}
-          <Button variant="outline" onClick={() => generatePdf.mutate()} disabled={generatePdf.isPending}>
-            <FileText className="w-4 h-4 mr-1" />{generatePdf.isPending ? "Generating…" : "Generate PDF"}
+          <Button variant="outline" onClick={() => generatePdf.mutate("internal")} disabled={generatePdf.isPending}>
+            <FileText className="w-4 h-4 mr-1" />Internal PDF
+          </Button>
+          <Button variant="outline" onClick={() => generatePdf.mutate("partner")} disabled={generatePdf.isPending}>
+            <FileText className="w-4 h-4 mr-1" />Partner PDF
           </Button>
           {run.pdf_storage_path && (
-            <Button variant="outline" onClick={() => downloadFile(run.pdf_storage_path)}>
-              <Download className="w-4 h-4 mr-1" />PDF
+            <Button variant="ghost" size="sm" onClick={() => downloadFile(run.pdf_storage_path)}>
+              <Download className="w-4 h-4 mr-1" />Internal
+            </Button>
+          )}
+          {run.partner_pdf_storage_path && (
+            <Button variant="ghost" size="sm" onClick={() => downloadFile(run.partner_pdf_storage_path)}>
+              <Download className="w-4 h-4 mr-1" />Partner
             </Button>
           )}
           {run.csv_storage_path && (
-            <Button variant="outline" onClick={() => downloadFile(run.csv_storage_path)}>
+            <Button variant="ghost" size="sm" onClick={() => downloadFile(run.csv_storage_path)}>
               <Download className="w-4 h-4 mr-1" />CSV
             </Button>
           )}
