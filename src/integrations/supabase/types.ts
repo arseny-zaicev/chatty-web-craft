@@ -3171,7 +3171,9 @@ export type Database = {
           positive: number
           replied: number
           sent: number
+          tagged: number
           total: number
+          warm: number
         }[]
       }
       campaign_live_status: { Args: { _campaign_id: string }; Returns: string }
@@ -3402,6 +3404,14 @@ export type Database = {
           _workspace_id: string
         }
         Returns: number
+      }
+      pending_classification_conversations: {
+        Args: { _limit?: number }
+        Returns: {
+          contact_phone: string
+          id: string
+          workspace_id: string
+        }[]
       }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
