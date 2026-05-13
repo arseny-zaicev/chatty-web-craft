@@ -583,12 +583,13 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
         const earliest = Math.max(startUtc, Date.now() + 5_000);
         const span = Math.max(60_000, endUtc - earliest);
         if (isBlastLaunch) {
-          for (const r of slice) {
+          const blastStart = Math.max(startUtc, Date.now());
+          for (let i = 0; i < slice.length; i++) {
             rows.push(tagRow({
-              ...r,
+              ...slice[i],
               user_id: ownerId, workspace_id: wsId,
               campaign_id: campaign.id, status: "scheduled",
-              scheduled_at: new Date(earliest).toISOString(),
+              scheduled_at: new Date(blastStart + i * 1000).toISOString(),
             }));
           }
         } else if (schedulerKind === "poisson") {
