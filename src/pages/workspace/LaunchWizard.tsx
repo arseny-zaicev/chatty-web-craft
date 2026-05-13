@@ -635,7 +635,10 @@ export default function LaunchWizard() {
           if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
           else if (src) raw = String(r.payload?.[src] ?? r.derived_payload?.[src] ?? "");
           // Fallback: if no mapping, try derived_payload["var_<v>"] (handles {{1}} -> var_1 etc.)
-          if (!raw) raw = String(r.derived_payload?.[`var_${v}`] ?? "");
+          if (!raw) {
+            const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
+            raw = String(r.derived_payload?.[dpKey] ?? r.derived_payload?.[v] ?? "");
+          }
           vals[v] = raw;
         }
         // First variable falls back to "there" automatically, so don't flag it.
@@ -704,7 +707,10 @@ export default function LaunchWizard() {
             let raw = "";
             if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
             else if (src) raw = String((r.payload as any)?.[src] ?? dp?.[src] ?? "");
-            if (!raw) raw = String(dp?.[`var_${v}`] ?? "");
+            if (!raw) {
+              const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
+              raw = String(dp?.[dpKey] ?? dp?.[v] ?? "");
+            }
             vars[v] = raw;
           }
           rowIdByPhone.set(r.phone, r.id);
@@ -1454,15 +1460,26 @@ export default function LaunchWizard() {
               icon={FileText}
               title="Variable mapping"
               right={
-                unmappedVars.length > 0 ? (
-                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/5">
-                    <AlertTriangle className="w-3 h-3 mr-1" />Action required · {variableNames.length - unmappedVars.length}/{variableNames.length} mapped
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">
-                    {variableNames.length}/{variableNames.length} mapped
-                  </Badge>
-                )
+                <div className="flex items-center gap-2">
+                  {unmappedVars.length > 0 ? (
+                    <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/5">
+                      <AlertTriangle className="w-3 h-3 mr-1" />Action required · {variableNames.length - unmappedVars.length}/{variableNames.length} mapped
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">
+                      {variableNames.length}/{variableNames.length} mapped
+                    </Badge>
+                  )}
+                  <button
+                    type="button"
+                    className="text-[11px] underline text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setMapping({});
+                      if (workspace && activeLogical) saveMapping(workspace.id, activeLogical.key, {});
+                      toast.success("Mapping reset — re-detecting from current audience");
+                    }}
+                  >Reset mapping</button>
+                </div>
               }
             >
               {unmappedVars.length > 0 && (
