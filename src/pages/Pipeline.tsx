@@ -66,8 +66,6 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const [searchParams, setSearchParams] = useSearchParams();
   const wsSlugMatch = location.pathname.match(/^\/ws\/([^/]+)/);
   const wsSlug = wsSlugMatch?.[1];
-  const inboxPath = (conversationId: string) =>
-    wsSlug ? `/ws/${wsSlug}/inbox?conversation=${conversationId}` : `/crm?conversation=${conversationId}`;
 
   const { data: pipelines = [] } = useQuery({
     queryKey: pipelinesKey(workspaceId),
@@ -715,6 +713,15 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         workspaceId={workspaceId}
         stages={stages}
       />
+
+      <Dialog open={!!chatConversationId} onOpenChange={(open) => !open && setChatConversationId(null)}>
+        <DialogContent className="max-w-5xl h-[86vh] p-0 overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Pipeline chat</DialogTitle>
+          </DialogHeader>
+          <CRM workspaceId={workspaceId} embedded standaloneChat initialConversationId={chatConversationId} />
+        </DialogContent>
+      </Dialog>
 
       {/* New deal dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
