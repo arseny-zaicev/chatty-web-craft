@@ -1113,6 +1113,55 @@ async function processQueue(admin: any) {
     return m ? `#${m[1]}` : msg.slice(0, 40).replace(/\s+/g, " ");
   };
 
+  // ============= Per-number restriction detection =============
+  // If a single number accumulates restriction-coded failures (Meta/Gupshup
+  // codes that mean "this number is being throttled or banned"), force-flip
+  // whatsapp_numbers.status -> 'restricted' so downstream sends stop and the
+  // existing DB trigger fires Slack `number_restricted` immediately, instead
+  // of waiting for the next health-sync tick.
+  const RESTRICTION_CODES = new Set(["#131048", "#131056", "#368", "#131045"]);
+  const restrictionFailsByNum = new Map<string, number>(); // tick-local count
+  const flippedNums = new Set<string>(); // already flipped this tick
+  const maybeFlipNumberRestricted = async (numId: string, sampleMsg: string, code: string) => {
+    if (!numId || flippedNums.has(numId)) return;
+    const tickCount = (restrictionFailsByNum.get(numId) ?? 0) + 1;
+    restrictionFailsByNum.set(numId, tickCount);
+    if (tickCount < 3) return; // wait for stronger signal before DB lookup
+    // Confirm against last 5 minutes across all campaigns for this number.
+    const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: rows } = await admin
+      .from("campaign_recipients")
+      .select("error_message")
+      .eq("whatsapp_number_id", numId)
+      .eq("status", "failed")
+      .gte("updated_at", since)
+      .limit(50);
+    let total = 0;
+    for (const r of rows ?? []) {
+      const m = String(r.error_message || "").match(/#(\d{4,6})/);
+      if (m && RESTRICTION_CODES.has(`#${m[1]}`)) total++;
+    }
+    if (total < 10) return;
+    flippedNums.add(numId);
+    // Read current status to avoid downgrading from 'banned'.
+    const { data: nrow } = await admin
+      .from("whatsapp_numbers")
+      .select("status")
+      .eq("id", numId)
+      .maybeSingle();
+    if (!nrow || nrow.status === "banned" || nrow.status === "restricted") return;
+    const nowIso = new Date().toISOString();
+    const { error: flipErr } = await admin
+      .from("whatsapp_numbers")
+      .update({ status: "restricted", restricted_at: nowIso })
+      .eq("id", numId);
+    if (flipErr) {
+      console.error(`[restriction_flip_failed] number=${numId} err=${flipErr.message}`);
+      return;
+    }
+    console.warn(`[number_auto_restricted] number=${numId} code=${code} failures_5min=${total} sample="${sampleMsg.slice(0, 200)}"`);
+  };
+
   // Hard pacing: utility templates throttled to >=60s gap (WhatsApp policy / cost).
   // Marketing templates use the campaign's configured delay_min_seconds (floor 1s).
   const lastSentMs = new Map<string, number>();
