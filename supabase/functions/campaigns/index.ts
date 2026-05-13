@@ -319,7 +319,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const numberIds = [...new Set(rawNumbers.map((n) => n.number_id))];
   const { data: numberRows } = await admin
     .from("whatsapp_numbers")
-    .select("id, user_id, workspace_id, phone_number, provider_app_id, country_code")
+    .select("id, user_id, workspace_id, phone_number, provider_app_id, country_code, daily_send_limit")
     .in("id", numberIds);
   if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "WhatsApp number not found" }, 404);
   const ownerId = numberRows[0].user_id;
@@ -350,7 +350,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const whatsappNumberId = number.id;
   const templateId = template.id;
 
-  const cleanRecipients = recipients
+  const cleanRecipientsAll = recipients
     .map((r: any) => ({
       contact_phone: normalizePhone(r.phone || r.contact_phone),
       contact_name: String(r.name || r.contact_name || "").trim().slice(0, 160) || null,
@@ -359,7 +359,34 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }))
     .filter((r: any) => r.contact_phone.length >= 8 && r.contact_phone.length <= 18);
 
-  if (cleanRecipients.length === 0) return json({ error: "No valid phone numbers" }, 400);
+  if (cleanRecipientsAll.length === 0) return json({ error: "No valid phone numbers" }, 400);
+
+  // ============= CAPACITY-BOUND ALLOCATION (hard truncation) =============
+  // capacity = Σ(min(per_number_quota, whatsapp_numbers.daily_send_limit, windowFitCap)) × selected days.
+  // Anything beyond capacity is NOT inserted into campaign_recipients and stays
+  // free in the audience pool. No silent "send later", no future-day bucket.
+  const _wsMinPre = hhmmToMin(windowStart);
+  const _wsMaxPre = hhmmToMin(windowEnd);
+  const _windowSecondsPre = Math.max(60, (_wsMaxPre - _wsMinPre) * 60);
+  const _minGapPre = isBlastLaunch ? 1 : Math.max(60, minDelay || 60);
+  const _windowFitCapPre = isBlastLaunch ? perNumberQuota : Math.max(1, Math.floor(_windowSecondsPre / _minGapPre));
+  const perNumberCaps = new Map<string, number>();
+  let capacityPerDay = 0;
+  for (const nid of numberIds) {
+    const nrow: any = numberRows.find((n: any) => n.id === nid);
+    const dailyLimit = Math.max(1, Math.min(100000, Number(nrow?.daily_send_limit ?? 200)));
+    const cap = Math.max(1, Math.min(perNumberQuota, dailyLimit, _windowFitCapPre));
+    perNumberCaps.set(nid, cap);
+    capacityPerDay += cap;
+  }
+  const daysCount = Math.max(1, scheduledDates.length || 1);
+  const allocatedCapacity = capacityPerDay * daysCount;
+  const audienceTotalRequested = cleanRecipientsAll.length;
+  const cleanRecipients = cleanRecipientsAll.slice(0, allocatedCapacity);
+  const truncatedCount = audienceTotalRequested - cleanRecipients.length;
+
+  if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
+
 
   // Pre-flight: validate every template that will be used against its actual
   // recipient slice. This is the guard that would have caught the Nov 2025
@@ -422,30 +449,46 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       pipeline_id: pipelineId,
       recipient_country: recipientCountry,
       per_number_quota: perNumberQuota,
+      allocated_capacity: allocatedCapacity,
+      audience_total: audienceTotalRequested,
     })
     .select("id")
     .single();
   if (campaignError || !campaign) return json({ error: campaignError?.message || "Failed to create campaign" }, 500);
 
-  // ------- Distribute recipients across numbers (round-robin) -------
+  // ------- Distribute recipients across numbers (capacity-aware round-robin) -------
+  // Each number's bucket is capped at perNumberCaps[number] × daysCount so we
+  // never assign more than that number can physically deliver.
   type CleanRecipient = (typeof cleanRecipients)[number];
   const assignments = new Map<string, { template_id: string; list: CleanRecipient[] }>();
   rawNumbers.forEach((n) => assignments.set(n.number_id, { template_id: n.template_id, list: [] }));
-  cleanRecipients.forEach((r, idx) => {
-    const target = rawNumbers[idx % rawNumbers.length];
-    assignments.get(target.number_id)!.list.push(r);
-  });
+  const bucketLimit = new Map<string, number>();
+  for (const n of rawNumbers) {
+    bucketLimit.set(n.number_id, (perNumberCaps.get(n.number_id) ?? perNumberQuota) * daysCount);
+  }
+  let rrCursor = 0;
+  for (const r of cleanRecipients) {
+    let placed = false;
+    for (let attempt = 0; attempt < rawNumbers.length; attempt++) {
+      const target = rawNumbers[(rrCursor + attempt) % rawNumbers.length];
+      const bucket = assignments.get(target.number_id)!;
+      if (bucket.list.length < (bucketLimit.get(target.number_id) ?? 0)) {
+        bucket.list.push(r);
+        rrCursor = (rrCursor + attempt + 1) % rawNumbers.length;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) break; // all buckets full — should not happen given capacity truncation
+  }
 
   // ------- Compute scheduled_at per recipient (per-number bucket) -------
   const wsMin = hhmmToMin(windowStart);
   const wsMax = hhmmToMin(windowEnd);
   const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
   const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
-
-  // Honor min 60s gap: cap effective per-day per number so window can fit it.
   const minGapSec = Math.max(60, minDelay || 60);
-  const windowFitCap = Math.max(1, Math.floor(windowSeconds / minGapSec));
-  const effectiveQuota = isBlastLaunch ? Math.max(1, perNumberQuota) : Math.max(1, Math.min(perNumberQuota, windowFitCap));
+
 
   const nextDateStr = (d: string) => {
     const [y, m, day] = d.split("-").map(Number);
@@ -467,6 +510,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     const bucketRecipients = bucket.list;
     if (bucketRecipients.length === 0) continue;
     const bucketShiftSec = rawNumbers.length > 1 ? Math.floor((avgDelay / rawNumbers.length) * bi) : 0;
+    // Per-number per-day cap (already enforced via bucketLimit, but slice respects it again).
+    const perNumPerDayCap = perNumberCaps.get(numId) ?? perNumberQuota;
 
     const tagRow = (base: any) => ({
       ...base,
@@ -483,20 +528,16 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }
 
     for (const [tz, list] of perTz) {
-      // Build the date sequence for THIS tz: either explicit scheduledDates,
-      // or auto-starting from today; extend forward until everyone fits at
-      // <= effectiveQuota per day.
-      const baseDates = scheduledDates.length > 0
+      // Date sequence: ONLY operator-selected dates. No auto-extension. Capacity
+      // truncation upstream guarantees list.length fits within dates.length × cap.
+      const dates = scheduledDates.length > 0
         ? [...scheduledDates].sort()
         : [todayKeyTz(tz)];
-      const dates = [...baseDates];
-      const need = Math.ceil(list.length / effectiveQuota);
-      while (dates.length < need) dates.push(nextDateStr(dates[dates.length - 1]));
 
       let cursor = 0;
       for (const date of dates) {
         if (cursor >= list.length) break;
-        const slice = list.slice(cursor, cursor + effectiveQuota);
+        const slice = list.slice(cursor, cursor + perNumPerDayCap);
         cursor += slice.length;
         if (slice.length === 0) continue;
 
@@ -594,7 +635,14 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   }
 
   // Slack notification handled by DB trigger on campaigns.status change.
-  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate, initial_status: initialStatus });
+  return json({
+    ok: true,
+    campaign_id: campaign.id,
+    scheduled: rows.length,
+    immediate,
+    initial_status: initialStatus,
+    capacity: { allocated: allocatedCapacity, requested: audienceTotalRequested, truncated: truncatedCount, per_number_caps: Object.fromEntries(perNumberCaps), days: daysCount },
+  });
 }
 
 async function upsertTemplate(admin: any, requesterId: string, body: any) {
@@ -1017,6 +1065,38 @@ async function processQueue(admin: any) {
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
 
+  // ============= Per-number daily cap safety net =============
+  // Pre-fetch daily_send_limit per number in this tick. Then count how many
+  // were already sent today (Dubai TZ) per number. We refuse to send a recipient
+  // whose number has reached its cap and bump the row to next day at 09:00 Dubai.
+  const numIdsInTick = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
+  const dailyLimitByNum = new Map<string, number>();
+  const sentTodayByNum = new Map<string, number>();
+  if (numIdsInTick.length > 0) {
+    const { data: numRows } = await admin
+      .from("whatsapp_numbers")
+      .select("id, daily_send_limit")
+      .in("id", numIdsInTick);
+    for (const n of numRows ?? []) dailyLimitByNum.set(n.id, Math.max(1, Number(n.daily_send_limit ?? 200)));
+    // Count sent today (Dubai) per number — single query.
+    const dubaiTodayStartUtcMs = (() => {
+      const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" });
+      const today = fmt.format(new Date()); // YYYY-MM-DD in Dubai
+      // Dubai is UTC+4 always, so 00:00 Dubai = (today - 4h) UTC
+      return new Date(`${today}T00:00:00+04:00`).getTime();
+    })();
+    const startIso = new Date(dubaiTodayStartUtcMs).toISOString();
+    for (const nid of numIdsInTick) {
+      const { count } = await admin
+        .from("campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("whatsapp_number_id", nid)
+        .gte("sent_at", startIso)
+        .not("sent_at", "is", null);
+      sentTodayByNum.set(nid, count ?? 0);
+    }
+  }
+
   // Per-campaign canary state. If the first 3 sends for a campaign in this
   // tick all fail with the same provider error code (and zero successes),
   // halt the campaign and skip its remaining recipients - caps damage at
@@ -1049,6 +1129,30 @@ async function processQueue(admin: any) {
         await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
       }
       if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
+
+      // Per-number daily cap safety net. If this number has already sent its
+      // daily_send_limit today (Dubai TZ), bump this recipient to tomorrow at
+      // 09:00 Dubai and skip. Prevents silent overshoot if anything bypassed
+      // the launch-time capacity truncation.
+      const recNumId = recipient.whatsapp_number_id;
+      if (recNumId && dailyLimitByNum.has(recNumId)) {
+        const cap = dailyLimitByNum.get(recNumId)!;
+        const sentNow = sentTodayByNum.get(recNumId) ?? 0;
+        if (sentNow >= cap) {
+          // Bump 24h forward, snapped to 09:00 Dubai of the next day.
+          const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(next);
+          const bumpedIso = new Date(`${dubaiDate}T09:00:00+04:00`).toISOString();
+          await admin
+            .from("campaign_recipients")
+            .update({ scheduled_at: bumpedIso })
+            .eq("id", recipient.id)
+            .eq("status", "scheduled");
+          console.warn(`[cap_reached] number=${recNumId} sent_today=${sentNow} cap=${cap} -> bumped recipient=${recipient.id} to ${bumpedIso}`);
+          continue;
+        }
+      }
+
 
       // Pacing guard: enforce delay_min_seconds gap from the previous send for this campaign.
       const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
@@ -1130,6 +1234,9 @@ async function processQueue(admin: any) {
         }
         cState.ok += 1;
         sentMu.inc();
+        if (recipient.whatsapp_number_id) {
+          sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
+        }
       } catch (err) {
         sentMu.incFail();
         const msg = err instanceof Error ? err.message : "Send failed";

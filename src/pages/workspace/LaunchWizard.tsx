@@ -508,6 +508,20 @@ export default function LaunchWizard() {
     return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, lastDay, capExceeded, overflowToday };
   }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length, isMarketing]);
 
+  // ----- Capacity (hard allocation cap) -----
+  // capacity = numbers × per_number_quota × selected days. The launch endpoint
+  // truncates anything above this; only `capacity` recipients are materialized
+  // into campaign_recipients. The rest of the audience stays in the pool.
+  const capacity = useMemo(() => {
+    const numbers = Math.max(1, activeNumbers.length);
+    const days = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
+    return numbers * Math.max(1, perNumberQuota) * days;
+  }, [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota]);
+  const overCapacity = audienceSource === "database"
+    ? Math.max(0, dbTargetCount - capacity)
+    : Math.max(0, recipients.length - capacity);
+
+
   // Realistic per-message gap when window mode is active (based on today's effective load)
   const pacing = useMemo(() => {
     const perNumber = Math.max(1, Math.ceil(dayPlan.effectivePerDay / dayPlan.numbers));
@@ -659,6 +673,19 @@ export default function LaunchWizard() {
       if (numberIds.length === 0) throw new Error("Select at least one sending number");
       if (resolution.missing.length > 0) throw new Error("Some numbers don't have an approved variant of this template");
 
+      // ---- Capacity gate (hard allocation cap) ----
+      const requestedTotal = audienceSource === "database" ? dbTargetCount : mappedRecipients.length;
+      const willTruncate = requestedTotal > capacity;
+      if (willTruncate) {
+        const proceed = window.confirm(
+          `Capacity is ${capacity} (${activeNumbers.length} number(s) × ${perNumberQuota}/day × ${scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1} day(s)).\n\n` +
+          `You selected ${requestedTotal}. Only the first ${capacity} will be sent. ` +
+          `The remaining ${requestedTotal - capacity} stay in the audience pool, untouched.\n\nContinue?`,
+        );
+        if (!proceed) throw new Error("Cancelled by operator");
+      }
+      const effectiveCount = Math.min(requestedTotal, capacity);
+
       // ---- Build the recipient list (and reserve DB rows if database mode) ----
       let workingRecipients: Recipient[] = mappedRecipients;
       let reservedRowIds: string[] = [];
@@ -667,9 +694,11 @@ export default function LaunchWizard() {
       if (audienceSource === "database") {
         if (!dbBatch) throw new Error("Pick a database batch");
         if (dbTargetCount <= 0) throw new Error("No unused rows available");
+        // Cap reservation at capacity — never reserve more than we can actually send.
+        const reserveCount = effectiveCount;
         const reserved: AudienceRow[] = await reserveRows(
           dbBatch.id,
-          dbAllUnused ? null : dbTargetCount,
+          dbAllUnused && reserveCount >= dbAvailable ? null : reserveCount,
         );
         if (reserved.length === 0) throw new Error("Could not reserve any rows (already used?)");
         reservedRowIds = reserved.map((r) => r.id);
@@ -691,6 +720,9 @@ export default function LaunchWizard() {
         workingRecipients = built;
       } else if (workingRecipients.length === 0) {
         throw new Error("Add recipients");
+      } else if (willTruncate) {
+        // CSV/paste mode — truncate client-side too so server and client agree.
+        workingRecipients = workingRecipients.slice(0, capacity);
       }
 
       const targets = resolution.ok;
@@ -1621,6 +1653,14 @@ export default function LaunchWizard() {
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
+          <Row
+            label="Capacity"
+            value={
+              <span className={overCapacity > 0 ? "text-amber-500 font-medium" : ""}>
+                {capacity}{overCapacity > 0 ? ` · only first ${capacity} sent (${overCapacity} stay in pool)` : ""}
+              </span>
+            }
+          />
           <Row label="Per day" value={dayPlan.effectivePerDay.toLocaleString()} />
           <Row label="Per number / day" value={activeNumbers.length ? Math.ceil(dayPlan.effectivePerDay / activeNumbers.length) : "-"} />
           <Row
