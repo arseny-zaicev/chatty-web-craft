@@ -70,6 +70,15 @@ Deno.serve(async (req) => {
         .select("last_message_text, contact_name, pipeline_id")
         .eq("id", cr.conversation_id)
         .maybeSingle();
+
+      // Strict qualification: only recover replies that the canonical gate
+      // accepts. Block / Not relevant / auto-replies / lost-stage / unclassified
+      // neutral text are silently dropped.
+      const { data: gate } = await admin.rpc("should_notify_lead_reply", {
+        _conversation_id: cr.conversation_id,
+        _reply_text: conv?.last_message_text ?? null,
+      });
+      if (!gate) continue;
       let pipelineName: string | null = null;
       let slackChannel: string | null = null;
       if (conv?.pipeline_id) {
