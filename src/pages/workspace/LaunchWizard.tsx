@@ -1454,15 +1454,26 @@ export default function LaunchWizard() {
               icon={FileText}
               title="Variable mapping"
               right={
-                unmappedVars.length > 0 ? (
-                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/5">
-                    <AlertTriangle className="w-3 h-3 mr-1" />Action required · {variableNames.length - unmappedVars.length}/{variableNames.length} mapped
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">
-                    {variableNames.length}/{variableNames.length} mapped
-                  </Badge>
-                )
+                <div className="flex items-center gap-2">
+                  {unmappedVars.length > 0 ? (
+                    <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 bg-amber-500/5">
+                      <AlertTriangle className="w-3 h-3 mr-1" />Action required · {variableNames.length - unmappedVars.length}/{variableNames.length} mapped
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">
+                      {variableNames.length}/{variableNames.length} mapped
+                    </Badge>
+                  )}
+                  <button
+                    type="button"
+                    className="text-[11px] underline text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setMapping({});
+                      if (workspace && activeLogical) saveMapping(workspace.id, activeLogical.key, {});
+                      toast.success("Mapping reset — re-detecting from current audience");
+                    }}
+                  >Reset mapping</button>
+                </div>
               }
             >
               {unmappedVars.length > 0 && (
