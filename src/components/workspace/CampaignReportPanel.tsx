@@ -131,7 +131,7 @@ export function CampaignReportPanel({
 
   // Live totals — never read from the cached insight snapshot.
   const { data: liveTotals } = useQuery({
-    queryKey: ["campaign-live-counts", ...campaignIds].join("|"),
+    queryKey: ["campaign-live-counts", campaignIds.slice().sort().join(",")],
     queryFn: () => fetchLiveTotals(campaignIds),
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
