@@ -673,6 +673,19 @@ export default function LaunchWizard() {
       if (numberIds.length === 0) throw new Error("Select at least one sending number");
       if (resolution.missing.length > 0) throw new Error("Some numbers don't have an approved variant of this template");
 
+      // ---- Capacity gate (hard allocation cap) ----
+      const requestedTotal = audienceSource === "database" ? dbTargetCount : mappedRecipients.length;
+      const willTruncate = requestedTotal > capacity;
+      if (willTruncate) {
+        const proceed = window.confirm(
+          `Capacity is ${capacity} (${activeNumbers.length} number(s) × ${perNumberQuota}/day × ${scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1} day(s)).\n\n` +
+          `You selected ${requestedTotal}. Only the first ${capacity} will be sent. ` +
+          `The remaining ${requestedTotal - capacity} stay in the audience pool, untouched.\n\nContinue?`,
+        );
+        if (!proceed) throw new Error("Cancelled by operator");
+      }
+      const effectiveCount = Math.min(requestedTotal, capacity);
+
       // ---- Build the recipient list (and reserve DB rows if database mode) ----
       let workingRecipients: Recipient[] = mappedRecipients;
       let reservedRowIds: string[] = [];
@@ -681,9 +694,11 @@ export default function LaunchWizard() {
       if (audienceSource === "database") {
         if (!dbBatch) throw new Error("Pick a database batch");
         if (dbTargetCount <= 0) throw new Error("No unused rows available");
+        // Cap reservation at capacity — never reserve more than we can actually send.
+        const reserveCount = effectiveCount;
         const reserved: AudienceRow[] = await reserveRows(
           dbBatch.id,
-          dbAllUnused ? null : dbTargetCount,
+          dbAllUnused && reserveCount >= dbAvailable ? null : reserveCount,
         );
         if (reserved.length === 0) throw new Error("Could not reserve any rows (already used?)");
         reservedRowIds = reserved.map((r) => r.id);
@@ -705,6 +720,9 @@ export default function LaunchWizard() {
         workingRecipients = built;
       } else if (workingRecipients.length === 0) {
         throw new Error("Add recipients");
+      } else if (willTruncate) {
+        // CSV/paste mode — truncate client-side too so server and client agree.
+        workingRecipients = workingRecipients.slice(0, capacity);
       }
 
       const targets = resolution.ok;
