@@ -1,93 +1,148 @@
-## What actually went wrong
+## Locked product rule (non-negotiable)
 
-### Incident A - 599/600 failed with WhatsApp `(#131008) Required parameter is missing`
+**Capacity-bound allocation.** A campaign may only materialize as many `campaign_recipients` rows as its real sending capacity:
 
-**Why.** Variable substitution lived in **two places**:
+```
+capacity = Σ(daily_send_limit of selected numbers) × number of selected sending days
+```
 
-- `renderTemplateBody()` - used by the wizard preview AND by the conversation message body after send. Had a `"there"` fallback for empty first variable.
-- The `params` array built inline at `supabase/functions/campaigns/index.ts:797-798` and shipped to Gupshup. **No fallback** - empty string was sent, WhatsApp rejected the whole template.
+| Numbers | Cap/number | Days | Allocatable |
+|---|---|---|---|
+| 1 | 200 | 1 | 200 |
+| 2 | 200 | 1 | 400 |
+| 2 | 200 | 2 | 800 |
+| 3 | 200 | 5 | 3000 |
 
-The preview looked correct, the inbox text looked correct, but the actual API call carried `""`. Two source-of-truth divergence.
-
-There was also no pre-flight check at launch time that would have caught "all 600 recipients have empty `{{1}}`" before the campaign went live.
-
-### Incident B - failed-recipient retry blasted at 10x intended rate
-
-**Why.** When I re-queued the 599 failed recipients, I set `scheduled_at = now() + random(30..1200)s` (i.e. spread over 20 minutes). The campaign is configured for `delay_min=60s, delay_max=120s` **per number**. With 3 numbers running, intended pace is ~1 send / 30s globally. My retry produced ~30 sends / minute - 10x faster.
-
-Root cause: the "reset failed to scheduled" operation was an ad-hoc SQL update with no awareness of the campaign's pacing rules. There is no built-in "retry failed" path that re-applies the configured delays.
+Rules:
+1. If the selected audience > capacity, only the first `capacity` recipients are inserted into `campaign_recipients`. The rest stay in audience as `unused`/free.
+2. Overflow is **not** reserved, **not** marked used, **not** moved to a "later" bucket. It remains fully available for any other campaign.
+3. No silent "we'll send tomorrow anyway" behavior. Spillover into future days only happens if the operator explicitly added those days at launch.
+4. Worker still enforces the per-number daily cap as a hard safety net, but the primary defense is at materialization time.
 
 ---
 
-## Plan
+## Task A — Hard capacity-bound allocation (priority 1)
 
-### 1. Single source of truth for template variables
+### A1. Schema
 
-Create `supabase/functions/_shared/template.ts` exporting:
+Migration:
+- `whatsapp_numbers.daily_send_limit int not null default 200` (backfill 200 for all rows; admin can edit per number later).
+- `campaigns.per_number_daily_cap int` — snapshot at launch.
+- `campaigns.allocated_capacity int` — snapshot at launch (`numbers × cap × days`).
+- `campaigns.audience_total int` — what operator originally selected (for "X of Y allocated" UX).
+- `campaign_recipients`: add partial unique index `(campaign_id, whatsapp_number_id, scheduled_day)` via a generated column `scheduled_day = (scheduled_at AT TIME ZONE 'Asia/Dubai')::date` to make per-number-per-day overload structurally impossible.
 
-- `buildTemplateParams(template, recipientVars)` -> `string[]` for Gupshup
-- `renderTemplateBody(template, recipientVars)` -> rendered text for inbox
+### A2. Materialization (in `LaunchWizard` → `campaigns` edge function `launch` action)
 
-Both call the same internal `resolveVar(name, idx, raw)` so the `"there"` fallback (and any future rule like trimming, stripping newlines, max length) is applied identically. Mirror it in `src/lib/launchData.ts` as a thin re-export so the wizard preview, the edge function send path, and the inbox renderer cannot drift again.
+New deterministic algorithm replacing current insert path:
 
-### 2. Pre-flight validation at launch
+```
+days     = scheduled_dates.length (>=1)
+numbers  = selectedNumbers (>=1)
+caps     = numbers.map(n => n.daily_send_limit)        // e.g. [200,200,200]
+capacity = sum(caps) * days
+take     = audience.slice(0, capacity)                 // hard truncate
+slots    = []
+for each day in days:
+  for each number in numbers:
+    slots.push({ day, number, free: number.daily_send_limit })
 
-In the `launch`/`schedule` action of `supabase/functions/campaigns/index.ts`, before the campaign transitions to `scheduled`/`running`:
+// round-robin fill, never exceeding any slot's `free`
+for r in take:
+  pick next slot with free > 0 (round-robin across numbers, then days)
+  insert campaign_recipient { number, scheduled_at: window-spread-within(day) }
+  slot.free--
+```
 
-- Aggregate over `campaign_recipients`: how many have an empty value for variable index 0 (name), how many have empty values for any other variable.
-- If >5% of recipients have empty non-name variables -> hard fail with a clear message.
-- If 100% of recipients have empty name -> show a soft warning the wizard must acknowledge ("All recipients will be greeted as 'there'. Continue?").
-- Also reject launches where `template.variables` count does not match the number of `{{N}}` placeholders in `template.body`.
+Spreading within a day uses `delay_min_seconds`/`delay_max_seconds` between consecutive sends **on the same number** inside `[schedule_window_start, schedule_window_end]`. If the window can't physically fit `daily_send_limit` at the configured pacing, we surface an error in the wizard ("window too narrow for cap") instead of silently re-spacing.
 
-### 3. First-N canary on every campaign send
+### A3. Wizard UX
 
-In `processQueue`, when a campaign first transitions `scheduled -> running`, send the **first 3 recipients** and inspect the result before unlocking the rest:
+In `LaunchWizard.tsx` audience step:
+- Show live: `Capacity: 400  ·  Selected: 930  ·  Will allocate: 400  ·  Leftover stays in audience: 530`.
+- "Launch" button stays enabled (capacity ≤ audience is fine), but a confirm modal appears when truncation > 0: *"Only 400 of 930 will be sent. The remaining 530 stay in the audience pool, untouched. Continue?"*
+- Toggle "Add another sending day" / "Add another number" recomputes capacity instantly.
+- If audience < capacity, show `Capacity: 400 · Selected: 120 · Slack: 280` (no truncation).
 
-- If all 3 fail with the same provider error (#131008, #132001, etc.), set `campaign.status = 'failed'`, write the error to `campaign.last_error`, and emit a Slack alert. The remaining 597 stay `scheduled` but the worker skips campaigns whose status is `failed`.
-- If at least 1 of 3 succeeds, proceed normally.
+### A4. Audience overflow handling
 
-This caps any future template/config bug at 3 wasted sends, not 600.
+- `mark_audience_rows_used` is called only for the `take` slice, not the full selection. The other rows remain `usage_status='unused'`.
+- No `reserved` state for overflow. No background job moves overflow into the campaign later.
 
-### 4. First-class "retry failed" action
+### A5. Worker safety net (`supabase/functions/campaigns/index.ts`)
 
-Add a `retry_failed` action handler in `supabase/functions/campaigns/index.ts` that:
+Before each send:
+- `sent_today = count(*) from campaign_recipients where whatsapp_number_id = X and (sent_at AT TIME ZONE 'Asia/Dubai')::date = today and status in ('sent','delivered','read','failed')`
+- if `sent_today >= number.daily_send_limit` → push the recipient's `scheduled_at` to next configured day at `schedule_window_start`, log `cap_reached`, do NOT send.
+- This guards against bulk SQL retries, manual reschedules, and any future bug that bypasses the wizard.
 
-- Resets `failed` recipients to `scheduled`, clears `error_message` and `provider_message_id`.
-- Rebuilds `scheduled_at` using the campaign's own `delay_min_seconds`/`delay_max_seconds` per number, starting from `now()` and respecting `schedule_window_start`/`schedule_window_end` (so retries do not blast outside business hours).
-- Re-opens the campaign (`status = 'running'`).
+### A6. Retry-failed action
 
-Expose a button in the campaign card so this never has to be done by hand-written SQL again.
+Already planned (`retry_failed`) — must respect the same cap. Retries that exceed `daily_send_limit` for today get pushed to the next operator-selected day, never into a brand-new day the operator didn't pick.
 
-### 5. Make pacing impossible to bypass
+---
 
-Add a server-side guard: a trigger (or a check inside `processQueue` before the per-recipient `pace`) that, when the gap between two consecutive `scheduled_at` values **for the same `whatsapp_number_id` in the same campaign** is shorter than `delay_min_seconds`, treats it as a misconfiguration and skips the recipient until the minimum gap has elapsed. This protects against any future bulk-update mistake (manual SQL, admin tool, retry script) that ignores pacing.
+## Task B — Restriction / blocked alerts (priority 2)
 
-### 6. Minimal observability
+Audit and fix:
+- `enqueue_number_slack_event` trigger fires on `status` transitions (`active → restricted/blocked`) and on `messaging_limit` changes. Verify it's actually attached to `whatsapp_numbers` and that `slack-dispatch` is consuming events for `number_restricted`, `number_blocked`, `number_quality_changed`.
+- `numbers-health-sync` edge function: confirm it's writing `restricted_at`, `messaging_limit`, `status` from Meta/Gupshup signal, not silently no-oping when the API returns "ok".
+- `numbers-health-digest` cron: confirm it's posting the daily roll-up.
+- Add a missing case: when a campaign hits ≥10 failures with provider error indicating restriction (`#131048`, `#131056`, `#368`, etc.) on the same number within 5 minutes, force-flip `whatsapp_numbers.status = 'restricted'` and emit the alert from the worker, not waiting for next health-sync tick.
 
-- Add a `campaign_errors` view: `(campaign_id, error_message, count, first_seen, last_seen)` aggregating distinct provider error messages over `campaign_recipients`. The campaign card surfaces the top 3 errors so the operator notices "599 of these all say #131008" within seconds, not after the fact.
-- On every `processQueue` tick that produces ≥10 failures with the same error code on the same campaign, post a single Slack message to the workspace channel ("Gs Main: 23 sends failed with #131008 in last minute"). Throttled to one alert per campaign per 5 minutes.
+Files to touch: `supabase/functions/numbers-health-sync/index.ts`, `supabase/functions/numbers-health-digest/index.ts`, `supabase/functions/campaigns/index.ts`, `supabase/functions/slack-dispatch/index.ts`.
 
-### 7. Regression test
+---
 
-Add `supabase/functions/campaigns/template_test.ts` covering:
+## Task C — Live metrics + stale Insights (priority 3)
 
-- Empty first var -> param[0] === "there", body contains "Hi there,"
-- Empty middle var -> param[i] === " " (Gupshup-safe), body has empty span
-- Mismatched variable count -> `buildTemplateParams` throws
-- Identity: `buildTemplateParams(t, vars).length === t.variables.length`
+- Replace stat cards (TOTAL/SENT/FAILED/REPLIED/POSITIVE/MEETING) with live read from `campaign_report_rows` on every panel mount + 30s poll. No reading from `campaign_insights.metrics` for numbers.
+- `campaign_insights` keeps only the AI Markdown narrative + a `generated_at` banner ("Snapshot from 13 May 11:42 GST · Regenerate").
+- `auto-generate-insights`: trigger regeneration when `(replied since last_snapshot) >= 10` OR `(classified since last_snapshot) >= 10`, throttled to once per 30 min per campaign.
+- `WorkspaceCampaigns.tsx` table: add `Replied` and `Reply rate` columns sourced from a new RPC `campaign_live_counts(uuid[]) -> (campaign_id, sent, failed, pending, replied, positive, meeting)`. Extend `CampaignRow` / `groupCampaigns` in `src/lib/campaigns.ts`.
 
-Wired into the existing edge-function test runner so a future refactor cannot ship the divergence again.
+---
+
+## Files touched (summary)
+
+```
+migrations:
+  + whatsapp_numbers.daily_send_limit
+  + campaigns.{per_number_daily_cap, allocated_capacity, audience_total}
+  + campaign_recipients.scheduled_day generated col + index
+  + RPC campaign_live_counts(uuid[])
+
+supabase/functions/campaigns/index.ts        (new materialization, cap guard, retry_failed)
+supabase/functions/numbers-health-sync/index.ts
+supabase/functions/numbers-health-digest/index.ts
+supabase/functions/slack-dispatch/index.ts
+supabase/functions/campaign-insights/index.ts (narrative-only)
+supabase/functions/auto-generate-insights/index.ts (new trigger criteria)
+
+src/pages/workspace/LaunchWizard.tsx         (capacity widget, confirm modal, days/numbers picker)
+src/lib/launchData.ts                        (capacity helpers, round-robin slot filler)
+src/lib/campaigns.ts                         (replied/positive in CampaignRow)
+src/pages/workspace/WorkspaceCampaigns.tsx   (Replied + Reply rate columns)
+src/components/workspace/CampaignReportPanel.tsx (live metrics, snapshot banner)
+src/components/workspace/LatestReportCard.tsx
+```
+
+---
+
+## Post-Task-A self-report I will deliver
+
+After Task A ships I will explicitly verify and report back on:
+
+1. **Audience > capacity.** Run a synthetic launch with `audience=930`, `numbers=1×200`, `days=1`. Report row count in `campaign_recipients` (must be 200) and row count in `audience_rows` with `usage_status='unused'` for the leftover (must be 730).
+2. **Overflow location.** Confirm the 730 leftover are still `usage_status='unused'`, not `reserved`, not `used`, not tagged with the new `campaign_id`.
+3. **Silent over-allocation impossible.** Two checks:
+   - DB-level: the partial unique index on `(campaign_id, whatsapp_number_id, scheduled_day)` plus a sum check trigger blocks any insert that would push that day's count over `daily_send_limit`.
+   - App-level: launch flow truncates before insert, wizard surfaces the truncation, worker re-checks per send.
+
+If any of those three fail in verification, Task A is not done — I'll fix and re-verify before moving to Task B.
 
 ---
 
 ## Implementation order
 
-1. Shared `template.ts` + tests (#1, #7) - 1 small PR, low risk, kills the original bug class.
-2. Pre-flight validation (#2) - same PR, called from `launch`/`schedule`.
-3. Retry-failed action + UI button (#4) - one edge-function action, one button.
-4. Canary + per-campaign error aggregation + Slack throttled alert (#3, #6) - one PR.
-5. Pacing guard in worker (#5) - last, because it changes scheduling semantics and needs the most care.
-
-## Recommendation
-
-This is cleanup, not new feature work, and it pays for itself the first time someone launches a 5,000-recipient campaign with a typo in the template. Land #1-#4 before the next big launch; #5-#6 can ship the week after.
+1. Migration (A1) → 2. Materialization rewrite (A2, A4) → 3. Wizard capacity UI (A3) → 4. Worker cap guard (A5) → 5. Retry-failed respects cap (A6) → 6. **Self-report** → 7. Task B → 8. Task C.
