@@ -889,23 +889,23 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
             </Select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Default provider rate $/delivered</label>
+            <label className="text-xs text-muted-foreground">Partner rate ($/delivered)</label>
             <Input type="number" step="0.0001" value={defRate} onChange={e => setDefRate(e.target.value)} />
           </div>
           <div></div>
 
           <div className="col-span-2 border-t border-border pt-3 mt-1">
-            <div className="text-sm font-medium mb-2">Referral</div>
+            <div className="text-sm font-medium mb-2">Manager (upline)</div>
             <p className="text-xs text-muted-foreground mb-3">
-              Если этого партнёра кто-то привёл — выбери реферрера и укажи ставку, которую <b>мы платим реферреру</b> за каждое доставленное сообщение этого партнёра.
+              If this partner reports to someone (a manager), pick the manager and set the rate <b>we pay the manager</b> per delivered message of this partner. The manager will see this in their consolidated PDF.
             </p>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Referred by</label>
+            <label className="text-xs text-muted-foreground">Manager</label>
             <Select value={referrerId} onValueChange={setReferrerId}>
-              <SelectTrigger><SelectValue placeholder="No referrer" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="No manager" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No referrer</SelectItem>
+                <SelectItem value="none">No manager</SelectItem>
                 {(otherPartners || []).map(p => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}
@@ -913,7 +913,7 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
             </Select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Referral rate $/delivered (paid to referrer)</label>
+            <label className="text-xs text-muted-foreground">Manager rate ($/delivered)</label>
             <Input type="number" step="0.0001" value={referralRate} onChange={e => setReferralRate(e.target.value)} />
           </div>
 
