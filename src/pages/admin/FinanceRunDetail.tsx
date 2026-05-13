@@ -160,6 +160,8 @@ export default function FinanceRunDetail() {
     },
     onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+
+  const downloadFile = async (path: string) => {
     const { data, error } = await supabase.storage.from("payout-reports").createSignedUrl(path, 60 * 60);
     if (error || !data?.signedUrl) { toast.error("Could not get download URL"); return; }
     window.open(data.signedUrl, "_blank");
