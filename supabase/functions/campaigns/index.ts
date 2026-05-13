@@ -510,6 +510,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     const bucketRecipients = bucket.list;
     if (bucketRecipients.length === 0) continue;
     const bucketShiftSec = rawNumbers.length > 1 ? Math.floor((avgDelay / rawNumbers.length) * bi) : 0;
+    // Per-number per-day cap (already enforced via bucketLimit, but slice respects it again).
+    const perNumPerDayCap = perNumberCaps.get(numId) ?? perNumberQuota;
 
     const tagRow = (base: any) => ({
       ...base,
@@ -526,20 +528,16 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }
 
     for (const [tz, list] of perTz) {
-      // Build the date sequence for THIS tz: either explicit scheduledDates,
-      // or auto-starting from today; extend forward until everyone fits at
-      // <= effectiveQuota per day.
-      const baseDates = scheduledDates.length > 0
+      // Date sequence: ONLY operator-selected dates. No auto-extension. Capacity
+      // truncation upstream guarantees list.length fits within dates.length × cap.
+      const dates = scheduledDates.length > 0
         ? [...scheduledDates].sort()
         : [todayKeyTz(tz)];
-      const dates = [...baseDates];
-      const need = Math.ceil(list.length / effectiveQuota);
-      while (dates.length < need) dates.push(nextDateStr(dates[dates.length - 1]));
 
       let cursor = 0;
       for (const date of dates) {
         if (cursor >= list.length) break;
-        const slice = list.slice(cursor, cursor + effectiveQuota);
+        const slice = list.slice(cursor, cursor + perNumPerDayCap);
         cursor += slice.length;
         if (slice.length === 0) continue;
 
