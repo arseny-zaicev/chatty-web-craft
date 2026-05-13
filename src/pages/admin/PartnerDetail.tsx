@@ -786,6 +786,54 @@ function SlackPostButton({ runId }: { runId: string }) {
   return <Button size="sm" variant="ghost" onClick={() => m.mutate()} disabled={m.isPending}><Send className="w-4 h-4" /></Button>;
 }
 
+function ManagerReportCard({ managerId }: { managerId: string }) {
+  const { data: downlines } = useQuery({
+    queryKey: ["admin", "partner-downlines", managerId],
+    queryFn: async () => {
+      const { data } = await supabase.from("partners")
+        .select("id, name, referral_rate_usd").eq("referrer_partner_id", managerId);
+      return (data || []) as any[];
+    },
+  });
+  const [from, setFrom] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
+  const [to, setTo] = useState(format(subDays(new Date(), 1), "yyyy-MM-dd"));
+  const gen = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("manager-payout-report-pdf", {
+        body: { manager_id: managerId, period_from: from, period_to: to },
+      });
+      if (error) throw error;
+      return data as { pdf_url?: string };
+    },
+    onSuccess: (d) => { if (d?.pdf_url) window.open(d.pdf_url, "_blank"); toast.success("Manager PDF generated"); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  if (!downlines?.length) return null;
+  return (
+    <Card>
+      <CardHeader><CardTitle>Manager PDF (consolidated)</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          This partner is the manager of {downlines.length} downline partner(s). Generate one consolidated payout PDF covering their own numbers + every attached partner for the chosen period.
+        </p>
+        <div className="flex gap-3 items-end flex-wrap">
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">From</label>
+            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">To (inclusive)</label>
+            <Input type="date" value={to} onChange={e => setTo(e.target.value)} />
+          </div>
+          <Button onClick={() => gen.mutate()} disabled={gen.isPending}>
+            <FileText className="w-4 h-4 mr-1" />{gen.isPending ? "Generating…" : "Generate manager PDF"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function MarkPaidButton({ runId, amount, onDone }: { runId: string; amount: number; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState(String(amount));
