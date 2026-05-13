@@ -82,10 +82,12 @@ export async function fetchCrmBase(workspaceId?: string) {
 
   let dealsQuery = supabase
     .from("deals")
-    .select("conversation_id, stage_id, workspace_id");
+    .select("conversation_id, stage_id, workspace_id")
+    .limit(5000);
   let stagesQuery = supabase
     .from("pipeline_stages")
-    .select("id, stage_type, workspace_id");
+    .select("id, stage_type, workspace_id")
+    .limit(2000);
   if (workspaceId) {
     dealsQuery = dealsQuery.eq("workspace_id", workspaceId);
     stagesQuery = stagesQuery.eq("workspace_id", workspaceId);
