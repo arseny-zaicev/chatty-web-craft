@@ -14,6 +14,8 @@ import { format } from "date-fns";
 
 const fmtUsd = (n: number) =>
   `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Per-delivered rates need 4 decimals, otherwise 0.005 rounds to $0.01.
+const fmtRate = (n: number) => `$${Number(n || 0).toFixed(4)}`;
 
 const statusVariant = (s: string): "default" | "secondary" | "destructive" | "outline" =>
   s === "paid" ? "default" : s === "approved" ? "secondary" : s === "void" ? "destructive" : "outline";
@@ -125,15 +127,15 @@ export default function FinanceRunDetail() {
   });
 
   const generatePdf = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("payout-report-pdf", { body: { run_id: id! } });
+    mutationFn: async (mode: "internal" | "partner") => {
+      const { data, error } = await supabase.functions.invoke("payout-report-pdf", { body: { run_id: id!, mode } });
       if (error) throw error;
-      return data as { pdf_url: string; csv_url: string };
+      return data as { pdf_url: string; csv_url?: string; mode: string };
     },
     onSuccess: (r) => {
-      toast.success("Report generated");
+      toast.success(`${r.mode === "partner" ? "Partner" : "Internal"} PDF generated`);
       if (r?.pdf_url) window.open(r.pdf_url, "_blank");
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      qc.invalidateQueries({ queryKey: ["finance", "run", id] });
     },
     onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -159,15 +161,31 @@ export default function FinanceRunDetail() {
           <span className="text-sm text-muted-foreground">{run.period_from} → {run.period_to}</span>
         </div>
 
-        {/* KPI bar */}
+        {/* Summary strip */}
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-xs text-muted-foreground mb-1">
+              Period {run.period_from} → {run.period_to} · Status <span className="uppercase font-medium text-foreground">{run.status}</span>
+            </div>
+            <div className="text-base">
+              <span className="font-medium">{Number(run.totals_delivered).toLocaleString()}</span>
+              <span className="text-muted-foreground"> delivered</span>
+              <span className="text-muted-foreground"> · </span>
+              <span className="font-medium">Partner payout due</span>{" "}
+              <span className="font-semibold text-foreground">{fmtUsd(Number(run.total_payout_usd))}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI bar - internal admin numbers */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
             ["Delivered", String(run.totals_delivered)],
             ["Failed", String(run.totals_failed)],
             ["Sent", String(run.totals_sent)],
-            ["Payout", fmtUsd(Number(run.total_payout_usd))],
-            ["Billed", fmtUsd(Number(run.total_billed_usd))],
-            ["Margin", fmtUsd(Number(run.margin_usd))],
+            ["Partner payout", fmtUsd(Number(run.total_payout_usd))],
+            ["Client billed", fmtUsd(Number(run.total_billed_usd))],
+            ["Our margin", fmtUsd(Number(run.margin_usd))],
           ].map(([l, v]) => (
             <Card key={l}><CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">{l}</div>
@@ -196,16 +214,24 @@ export default function FinanceRunDetail() {
               Mark as paid
             </Button>
           )}
-          <Button variant="outline" onClick={() => generatePdf.mutate()} disabled={generatePdf.isPending}>
-            <FileText className="w-4 h-4 mr-1" />{generatePdf.isPending ? "Generating…" : "Generate PDF"}
+          <Button variant="outline" onClick={() => generatePdf.mutate("internal")} disabled={generatePdf.isPending}>
+            <FileText className="w-4 h-4 mr-1" />Internal PDF
+          </Button>
+          <Button variant="outline" onClick={() => generatePdf.mutate("partner")} disabled={generatePdf.isPending}>
+            <FileText className="w-4 h-4 mr-1" />Partner PDF
           </Button>
           {run.pdf_storage_path && (
-            <Button variant="outline" onClick={() => downloadFile(run.pdf_storage_path)}>
-              <Download className="w-4 h-4 mr-1" />PDF
+            <Button variant="ghost" size="sm" onClick={() => downloadFile(run.pdf_storage_path)}>
+              <Download className="w-4 h-4 mr-1" />Internal
+            </Button>
+          )}
+          {run.partner_pdf_storage_path && (
+            <Button variant="ghost" size="sm" onClick={() => downloadFile(run.partner_pdf_storage_path)}>
+              <Download className="w-4 h-4 mr-1" />Partner
             </Button>
           )}
           {run.csv_storage_path && (
-            <Button variant="outline" onClick={() => downloadFile(run.csv_storage_path)}>
+            <Button variant="ghost" size="sm" onClick={() => downloadFile(run.csv_storage_path)}>
               <Download className="w-4 h-4 mr-1" />CSV
             </Button>
           )}
@@ -231,8 +257,10 @@ export default function FinanceRunDetail() {
               <TableHeader><TableRow>
                 <TableHead>Day</TableHead><TableHead>Number</TableHead><TableHead>Client</TableHead>
                 <TableHead className="text-right">Delivered</TableHead><TableHead className="text-right">Failed</TableHead>
-                <TableHead className="text-right">P. rate</TableHead><TableHead className="text-right">C. rate</TableHead>
-                <TableHead className="text-right">Payout</TableHead><TableHead className="text-right">Margin</TableHead>
+                <TableHead className="text-right" title="Number override → workspace override → partner default">Partner rate</TableHead>
+                <TableHead className="text-right">Client rate</TableHead>
+                <TableHead className="text-right">Partner payout</TableHead>
+                <TableHead className="text-right">Our margin</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {(items || []).map((i: any) => (
@@ -242,8 +270,8 @@ export default function FinanceRunDetail() {
                     <TableCell>{i.client_label}</TableCell>
                     <TableCell className="text-right">{i.delivered}</TableCell>
                     <TableCell className="text-right">{i.failed}</TableCell>
-                    <TableCell className="text-right">${Number(i.partner_rate_usd).toFixed(4)}</TableCell>
-                    <TableCell className="text-right">${Number(i.client_rate_usd).toFixed(4)}</TableCell>
+                    <TableCell className="text-right">{fmtRate(Number(i.partner_rate_usd))}</TableCell>
+                    <TableCell className="text-right">{fmtRate(Number(i.client_rate_usd))}</TableCell>
                     <TableCell className="text-right">{fmtUsd(Number(i.payout_usd))}</TableCell>
                     <TableCell className="text-right">{fmtUsd(Number(i.margin_usd))}</TableCell>
                   </TableRow>

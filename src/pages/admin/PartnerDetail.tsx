@@ -175,7 +175,7 @@ export default function PartnerDetail() {
           <Badge variant="outline">{partner.cadence}</Badge>
           {partner.referrer_partner_id && <ReferrerBadge id={partner.referrer_partner_id} /> }
           <span className="text-sm text-muted-foreground ml-auto">
-            Default rate: ${Number(partner.default_payout_rate_usd).toFixed(4)} {partner.currency}
+            Partner rate: ${Number(partner.default_payout_rate_usd || 0).toFixed(4)} {partner.currency}
           </span>
         </div>
 
@@ -348,6 +348,7 @@ export default function PartnerDetail() {
 
           {/* FINANCE */}
           <TabsContent value="finance" className="pt-4 space-y-4">
+            <ManagerReportCard managerId={id!} />
             <GenerateRunCard partnerId={id!} partnerKind={partner.kind} onGen={() => qc.invalidateQueries({ queryKey: ["admin", "partner-runs", id] })} />
             <Card>
               <CardHeader><CardTitle>Payout runs</CardTitle></CardHeader>
@@ -458,7 +459,7 @@ function ReferrerBadge({ id }: { id: string }) {
     },
   });
   if (!data) return null;
-  return <Badge variant="outline">Referred by: {data}</Badge>;
+  return <Badge variant="outline">Manager: {data}</Badge>;
 }
 
 function CreateBMDialog({
@@ -785,6 +786,54 @@ function SlackPostButton({ runId }: { runId: string }) {
   return <Button size="sm" variant="ghost" onClick={() => m.mutate()} disabled={m.isPending}><Send className="w-4 h-4" /></Button>;
 }
 
+function ManagerReportCard({ managerId }: { managerId: string }) {
+  const { data: downlines } = useQuery({
+    queryKey: ["admin", "partner-downlines", managerId],
+    queryFn: async () => {
+      const { data } = await supabase.from("partners")
+        .select("id, name, referral_rate_usd").eq("referrer_partner_id", managerId);
+      return (data || []) as any[];
+    },
+  });
+  const [from, setFrom] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
+  const [to, setTo] = useState(format(subDays(new Date(), 1), "yyyy-MM-dd"));
+  const gen = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("manager-payout-report-pdf", {
+        body: { manager_id: managerId, period_from: from, period_to: to },
+      });
+      if (error) throw error;
+      return data as { pdf_url?: string };
+    },
+    onSuccess: (d) => { if (d?.pdf_url) window.open(d.pdf_url, "_blank"); toast.success("Manager PDF generated"); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  if (!downlines?.length) return null;
+  return (
+    <Card>
+      <CardHeader><CardTitle>Manager PDF (consolidated)</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          This partner is the manager of {downlines.length} downline partner(s). Generate one consolidated payout PDF covering their own numbers + every attached partner for the chosen period.
+        </p>
+        <div className="flex gap-3 items-end flex-wrap">
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">From</label>
+            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">To (inclusive)</label>
+            <Input type="date" value={to} onChange={e => setTo(e.target.value)} />
+          </div>
+          <Button onClick={() => gen.mutate()} disabled={gen.isPending}>
+            <FileText className="w-4 h-4 mr-1" />{gen.isPending ? "Generating…" : "Generate manager PDF"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function MarkPaidButton({ runId, amount, onDone }: { runId: string; amount: number; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [amt, setAmt] = useState(String(amount));
@@ -889,23 +938,23 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
             </Select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Default provider rate $/delivered</label>
+            <label className="text-xs text-muted-foreground">Partner rate ($/delivered)</label>
             <Input type="number" step="0.0001" value={defRate} onChange={e => setDefRate(e.target.value)} />
           </div>
           <div></div>
 
           <div className="col-span-2 border-t border-border pt-3 mt-1">
-            <div className="text-sm font-medium mb-2">Referral</div>
+            <div className="text-sm font-medium mb-2">Manager (upline)</div>
             <p className="text-xs text-muted-foreground mb-3">
-              Если этого партнёра кто-то привёл — выбери реферрера и укажи ставку, которую <b>мы платим реферреру</b> за каждое доставленное сообщение этого партнёра.
+              If this partner reports to someone (a manager), pick the manager and set the rate <b>we pay the manager</b> per delivered message of this partner. The manager will see this in their consolidated PDF.
             </p>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Referred by</label>
+            <label className="text-xs text-muted-foreground">Manager</label>
             <Select value={referrerId} onValueChange={setReferrerId}>
-              <SelectTrigger><SelectValue placeholder="No referrer" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="No manager" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No referrer</SelectItem>
+                <SelectItem value="none">No manager</SelectItem>
                 {(otherPartners || []).map(p => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}
@@ -913,7 +962,7 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
             </Select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Referral rate $/delivered (paid to referrer)</label>
+            <label className="text-xs text-muted-foreground">Manager rate ($/delivered)</label>
             <Input type="number" step="0.0001" value={referralRate} onChange={e => setReferralRate(e.target.value)} />
           </div>
 

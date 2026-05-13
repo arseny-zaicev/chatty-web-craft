@@ -1,94 +1,131 @@
-## Что реально сломано
+## Goal
 
-Slack показывает ответы из `slack_event_queue`, а Inbox сейчас грузит только последние 200 conversations по workspace.
+1. One trustworthy rate everywhere (fix display bug).
+2. Plain-English labels.
+3. Partner-facing PDF that hides all internal info (no client rate, no billed, no margin).
+4. Manual control over both **partner rate** and **manager rate** (today called "referral rate").
+5. Two separate downloadable PDFs from the run page:
+   - **Partner PDF** — only this partner's own numbers and own payout. No mention of the manager / upline.
+   - **Manager PDF** — one consolidated report for the manager covering their own numbers + every partner attached to them in the period, with each attached partner's payout shown as a line.
 
-По данным:
-- Salesforge: 814 conversations, но Inbox берёт 200.
-- goswyft: 915 conversations, один Slack lead сейчас на позиции 89 - виден.
-- Salesforge последние Slack leads сейчас на позициях 1-4 - должны быть видны, но фильтры/поиск всё равно ненадёжные.
-- Другие pipelines “работают” потому что либо меньше данных, либо нужные ответы попадают в первые 200.
+---
 
-Главная проблема: Inbox не умеет нормально искать/фильтровать весь workspace/pipeline. Он фильтрует только уже загруженные 200 строк. Поэтому ты видишь Slack-уведомление, заходишь искать в Inbox - и часть ответов физически не загружена в UI.
+## Part A — Fix rate truth (display bug)
 
-## План фикса
+Math is correct in the DB. The PDF formats rates with a 2-decimal money formatter, so `0.005` renders as `$0.01`. The UI uses `.toFixed(4)` and shows `$0.0050`. Same row, different format.
 
-### 1. Сделать Inbox нормальным, а не “последние 200 и молись”
+Fix: add `fmtRate` (4 decimals) and use it everywhere a `$/delivered` rate is rendered:
+- `supabase/functions/payout-report-pdf/index.ts`
+- `src/pages/admin/FinanceRunDetail.tsx`
+- `src/pages/admin/FinancePartnerDetail.tsx`, `PartnerDetail.tsx`, `Partners.tsx`
 
-В `fetchCrmBase`:
-- поднять initial load conversations с 200 до 1000 для workspace view;
-- добавить `.limit(5000)` на служебные queries (`deals`, inbound messages), чтобы не упираться в дефолтный лимит 1000;
-- `repliedConversationIds` считать не только по загруженным conversations, а по workspace/pipeline data, чтобы фильтр Replied не врал.
+`fmtUsd` (2 decimals) stays only for total amounts.
 
-### 2. Добавить server-side lookup для Slack/search cases
+Document precedence already implemented in `partner_rate_at()`: **number override → workspace override → partner default**. Surface this as a tooltip in the run detail page.
 
-В `src/lib/inbox.ts` добавить функцию поиска conversations по workspace:
-- phone;
-- contact_name;
-- last_message_text;
-- conversation id;
-- pipeline filter;
-- unread/replied filter.
+---
 
-В `CRM.tsx`:
-- если пользователь вводит search и локальных результатов нет или мало - догружать matching conversations из базы;
-- если включён `Replied`/`Unread`/pipeline filter - догружать не только из первых 200/1000, а matching rows из базы;
-- новые найденные conversations добавлять в local state, чтобы клик открывал чат сразу.
+## Part B — Plain-English labels
 
-Итог: если Slack пишет `+1415... btw your setup looks solid`, ты вставляешь телефон/имя/кусок текста - Inbox реально находит conversation, даже если она была не в первой пачке.
+Rename in UI + PDF + CSV:
 
-### 3. Починить фильтры как UX и как логику
+| Old | New |
+|---|---|
+| P. rate | Partner rate ($/delivered) |
+| C. rate | Client rate ($/delivered) — internal only |
+| Payout | Partner payout |
+| Billed | Client billed — internal only |
+| Margin | Our margin — internal only |
+| Referral rate | Manager rate ($/delivered) |
+| Referrer | Manager |
 
-Переделать верх фильтров Inbox:
+Wherever the current UI says "Referral / Referrer / Ref", switch to "Manager".
+
+---
+
+## Part C — Manual control over partner & manager rates
+
+Today partners.referral_rate_usd is editable in `PartnerDetail.tsx`. Keep that. Make sure both fields are obviously editable on one screen with clear labels:
+
+In `PartnerDetail.tsx` settings:
+- **Partner rate ($/delivered)** — `default_payout_rate_usd`
+- **Manager rate ($/delivered)** — `referral_rate_usd` (what the upline manager earns per delivered message from this partner's numbers)
+- **Manager** — `referrer_partner_id` dropdown
+
+Both numeric inputs use `step="0.0001"` and render with `fmtRate`.
+
+No DB schema change required for this part — fields already exist.
+
+---
+
+## Part D — Three views, three PDFs
+
+The run is computed per partner exactly like today. Presentation gets three modes via a `mode` param on `payout-report-pdf`:
+
+### 1. Internal admin PDF (`mode=internal`, default)
+What we have today, with new labels. Includes client rate, billed, margin, manager-payable line.
+
+### 2. Partner PDF (`mode=partner`)
+For the partner themselves. Shows only:
+- Partner name, period, payment status, paid date/ref if paid
+- Totals: Delivered · Failed · **Partner rate** · **Partner payout due**
+- Breakdown: Day · Number · Client · Delivered · Failed · Partner rate · Partner payout
+- No client rate, no billed, no margin, no mention of manager
+
+### 3. Manager PDF (`mode=manager`)
+One consolidated report for a given manager covering a period. Driven by a new edge function `manager-payout-report-pdf` (or same function with `mode=manager` + `manager_id` param). It:
+- Resolves all partners where `partners.referrer_partner_id = manager_id` AND the manager themself
+- For each, pulls (or generates a draft of) the payout run for the same period
+- Shows:
+  - Manager name, period, payment status
+  - Top-line: Total payout due to manager = (manager's own delivered × partner rate) + Σ (each downline partner's delivered × manager rate)
+  - Section A — "Your own numbers": Day · Number · Client · Delivered · Partner rate · Partner payout (the manager is also a partner)
+  - Section B — "Your team": one row per downline partner with Partner name · Delivered · Manager rate · Manager payout. Optional expandable per-day rows.
+- No client rate, no billed, no our-margin shown.
+
+UI in `FinanceRunDetail.tsx`:
+- Replace the single "Generate PDF" with a dropdown menu: **Internal PDF**, **Partner PDF**, **Manager PDF** (Manager PDF disabled with a tooltip if the partner has no `referrer_partner_id`, since then they are the manager — in that case show **Manager PDF** at the manager's own page).
+- Store storage paths separately on `payout_runs`: `internal_pdf_storage_path`, `partner_pdf_storage_path`, `manager_pdf_storage_path` (rename current `pdf_storage_path` → `internal_pdf_storage_path` via migration).
+
+On `PartnerDetail.tsx` (or a new "Manager Reports" section visible only when this partner has downlines), add a date-range picker + **Generate manager PDF** button covering all their downlines + own numbers.
+
+---
+
+## Part E — Clear summary strip
+
+Top of `FinanceRunDetail.tsx` and the partner/manager PDF header:
 
 ```text
-Search conversations
-Numbers        Pipeline        Sort
-All   Unread   Replied   Starred   Mine   Negative
+Period 2026-05-01 → 2026-05-13   ·   Status: PAID
+Delivered 12,430   ·   Partner rate $0.0050   ·   Partner payout due $62.15
 ```
 
-- `All` реально сбрасывает все toggles, search, number, pipeline.
-- Все pills в одном стиле, без зелёно-красно-жёлтой ёлки.
-- `Replied` показывает conversations с inbound-сообщениями, а не только те, что случайно попали в initial batch.
-- `Unread` показывает unread conversations по workspace/pipeline, а не только локально загруженные.
-- `Negative` не прячет всё неожиданно: если включён - показывает lost-stage conversations, если выключен - скрывает lost как сейчас.
+Manager PDF variant adds: `Manager payout due $X.XX (own + N downlines)`.
 
-### 4. Добавить быстрый путь из Slack в Inbox
+---
 
-В Slack payload уже есть `conversation_id`. В UI уже поддерживается `?conversation=<id>` и Pipeline dialog тоже умеет `initialConversationId`.
+## Part F — Performance
 
-Я сделаю стабильное поведение:
-- при открытии `/workspace/.../inbox?conversation=<id>` Inbox напрямую fetch-ит conversation и messages, даже если conversation не в первой пачке;
-- фильтры сбрасываются только для открытия конкретного чата;
-- если чат из другого pipeline/недоступен текущему пользователю - показать понятный toast.
+In `FinanceRunDetail.tsx`:
+- Memoize per-number rollups
+- Batch `run` + `items` + `audit` queries
+- Precompute formatted dates in the select mapper
+- After PDF generate, only refetch the run row (no full reload)
 
-### 5. Backend webhook guard: Slack alert не должен расходиться с Inbox
+---
 
-В `whatsapp-webhook`:
-- автоматизации сейчас берутся по `user_id`, без ограничения workspace/pipeline. Это риск cross-pipeline мусора.
-- ограничить automations текущим `workspace_id` и target stage pipeline/current conversation pipeline.
-- positive Slack alert отправлять только если conversation всё ещё имеет pipeline и deal stage совпадает с positive target.
+## Files to change
 
-Это уберёт случаи, где Slack уже сказал “positive”, а потом Inbox/Deal ушли в другой scope.
+- New migration on `payout_runs`: rename `pdf_storage_path` → `internal_pdf_storage_path`; add `partner_pdf_storage_path`, `manager_pdf_storage_path`
+- `supabase/functions/payout-report-pdf/index.ts` — accept `mode: "internal" | "partner"`, add `fmtRate`, relabel
+- New `supabase/functions/manager-payout-report-pdf/index.ts` — consolidated manager PDF over a date range
+- `supabase/functions/slack-payout-post/index.ts` — point to the partner PDF (not internal) for any partner-shared channel
+- `src/pages/admin/FinanceRunDetail.tsx` — labels, summary strip, three PDF buttons, memoization, rate-precedence tooltip
+- `src/pages/admin/PartnerDetail.tsx` — clear "Partner rate" + "Manager rate" inputs, Manager Reports section with date range + generate button
+- `src/pages/admin/FinancePartnerDetail.tsx`, `Partners.tsx` — `fmtRate` for rate columns, "Referral" → "Manager" copy
 
-### 6. “Other Reply” отдельно
+## Out of scope
 
-Я не буду больше чинить “пустую колонку”, потому ты уточнил: проблема не колонка, а то, что из Inbox нельзя найти ответы.
-
-Но добавлю маленький guard в Pipeline: в `Other Reply` нельзя вручную перетащить deal без inbound message. Это защита от мусора, не основной фикс.
-
-## Что изменю
-
-- `src/lib/crmData.ts` - лимиты и корректные replied ids.
-- `src/lib/inbox.ts` - server-side поиск/догрузка conversations.
-- `src/pages/CRM.tsx` - рабочие фильтры, догрузка, новый дизайн фильтров.
-- `src/pages/Pipeline.tsx` - guard для `Other Reply` без inbound.
-- `supabase/functions/whatsapp-webhook/index.ts` - ограничение automations по workspace/pipeline.
-
-## Как проверю
-
-- По Salesforge: найти последние Slack contacts по телефону/имени/тексту.
-- Включить `Replied` и `Unread` - список меняется и не становится пустым из-за локального лимита.
-- Открыть Inbox с `?conversation=<recent Slack conversation id>` - чат открывается напрямую.
-- Проверить, что pipeline filter не ломает поиск.
-
-После одобрения внесу правки.
+- Auto-emailing PDFs to partners/managers (kept manual download for now per user)
+- Changing the rate-precedence SQL (already correct)
+- Changing payout math
