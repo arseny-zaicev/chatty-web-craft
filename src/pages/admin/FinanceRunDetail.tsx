@@ -142,7 +142,24 @@ export default function FinanceRunDetail() {
     onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
-  const downloadFile = async (path: string) => {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteRun = useMutation({
+    mutationFn: async () => {
+      const cleanPaths = [run?.pdf_storage_path, run?.csv_storage_path, run?.partner_pdf_storage_path]
+        .filter((p): p is string => !!p);
+      if (cleanPaths.length) {
+        await supabase.storage.from("payout-reports").remove(cleanPaths).catch(() => {});
+      }
+      const { error } = await supabase.from("payout_runs").delete().eq("id", id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Run deleted");
+      qc.invalidateQueries({ queryKey: ["finance"] });
+      navigate(`/admin/finance/partners/${run?.partner_id}`);
+    },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
     const { data, error } = await supabase.storage.from("payout-reports").createSignedUrl(path, 60 * 60);
     if (error || !data?.signedUrl) { toast.error("Could not get download URL"); return; }
     window.open(data.signedUrl, "_blank");
