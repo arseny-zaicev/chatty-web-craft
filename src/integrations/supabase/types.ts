@@ -1816,6 +1816,7 @@ export type Database = {
           generated_at: string
           generated_by: string | null
           id: string
+          manager_pdf_storage_path: string | null
           margin_usd: number
           notes: string | null
           paid_amount_usd: number | null
@@ -1823,6 +1824,7 @@ export type Database = {
           paid_by: string | null
           paid_reference: string | null
           partner_id: string
+          partner_pdf_storage_path: string | null
           pdf_storage_path: string | null
           period_from: string
           period_to: string
@@ -1847,6 +1849,7 @@ export type Database = {
           generated_at?: string
           generated_by?: string | null
           id?: string
+          manager_pdf_storage_path?: string | null
           margin_usd?: number
           notes?: string | null
           paid_amount_usd?: number | null
@@ -1854,6 +1857,7 @@ export type Database = {
           paid_by?: string | null
           paid_reference?: string | null
           partner_id: string
+          partner_pdf_storage_path?: string | null
           pdf_storage_path?: string | null
           period_from: string
           period_to: string
@@ -1878,6 +1882,7 @@ export type Database = {
           generated_at?: string
           generated_by?: string | null
           id?: string
+          manager_pdf_storage_path?: string | null
           margin_usd?: number
           notes?: string | null
           paid_amount_usd?: number | null
@@ -1885,6 +1890,7 @@ export type Database = {
           paid_by?: string | null
           paid_reference?: string | null
           partner_id?: string
+          partner_pdf_storage_path?: string | null
           pdf_storage_path?: string | null
           period_from?: string
           period_to?: string
@@ -3128,6 +3134,7 @@ export type Database = {
           generated_at: string
           generated_by: string | null
           id: string
+          manager_pdf_storage_path: string | null
           margin_usd: number
           notes: string | null
           paid_amount_usd: number | null
@@ -3135,6 +3142,7 @@ export type Database = {
           paid_by: string | null
           paid_reference: string | null
           partner_id: string
+          partner_pdf_storage_path: string | null
           pdf_storage_path: string | null
           period_from: string
           period_to: string
@@ -3333,6 +3341,7 @@ export type Database = {
           generated_at: string
           generated_by: string | null
           id: string
+          manager_pdf_storage_path: string | null
           margin_usd: number
           notes: string | null
           paid_amount_usd: number | null
@@ -3340,6 +3349,7 @@ export type Database = {
           paid_by: string | null
           paid_reference: string | null
           partner_id: string
+          partner_pdf_storage_path: string | null
           pdf_storage_path: string | null
           period_from: string
           period_to: string
@@ -3440,6 +3450,7 @@ export type Database = {
           generated_at: string
           generated_by: string | null
           id: string
+          manager_pdf_storage_path: string | null
           margin_usd: number
           notes: string | null
           paid_amount_usd: number | null
@@ -3447,6 +3458,7 @@ export type Database = {
           paid_by: string | null
           paid_reference: string | null
           partner_id: string
+          partner_pdf_storage_path: string | null
           pdf_storage_path: string | null
           period_from: string
           period_to: string
@@ -3480,6 +3492,7 @@ export type Database = {
           generated_at: string
           generated_by: string | null
           id: string
+          manager_pdf_storage_path: string | null
           margin_usd: number
           notes: string | null
           paid_amount_usd: number | null
@@ -3487,6 +3500,7 @@ export type Database = {
           paid_by: string | null
           paid_reference: string | null
           partner_id: string
+          partner_pdf_storage_path: string | null
           pdf_storage_path: string | null
           period_from: string
           period_to: string
@@ -3561,6 +3575,7 @@ export type Database = {
           generated_at: string
           generated_by: string | null
           id: string
+          manager_pdf_storage_path: string | null
           margin_usd: number
           notes: string | null
           paid_amount_usd: number | null
@@ -3568,6 +3583,7 @@ export type Database = {
           paid_by: string | null
           paid_reference: string | null
           partner_id: string
+          partner_pdf_storage_path: string | null
           pdf_storage_path: string | null
           period_from: string
           period_to: string
