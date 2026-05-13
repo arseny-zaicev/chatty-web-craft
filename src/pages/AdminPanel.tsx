@@ -33,6 +33,7 @@ type Section =
   | "companies.partners"
   | "companies.analytics"
   | "companies.webhook_health"
+  | "companies.reconciliation"
   | "forms.submissions"
   | "forms.analytics"
   | "site.analytics"
@@ -54,6 +55,7 @@ const NAV: NavGroup[] = [
       { id: "companies.fleet", label: "Fleet · Numbers", icon: Phone, external: "/admin/fleet" },
       { id: "companies.partners", label: "Partners", icon: Building2, external: "/admin/partners" },
       { id: "companies.analytics", label: "Fleet analytics", icon: BarChart3, external: "/admin/analytics" },
+      { id: "companies.reconciliation", label: "Stats reconciliation", icon: AlertTriangle, external: "/admin/reconciliation" },
       { id: "companies.webhook_health", label: "Webhook health", icon: AlertTriangle },
     ],
   },

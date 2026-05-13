@@ -92,6 +92,7 @@ const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"
 const OpsLive = lazyWithRetry(() => import("./pages/admin/OpsLive"));
 const OpsAssistant = lazyWithRetry(() => import("./pages/admin/OpsAssistant"));
 const FinanceRunDetail = lazyWithRetry(() => import("./pages/admin/FinanceRunDetail"));
+const Reconciliation = lazyWithRetry(() => import("./pages/admin/Reconciliation"));
 const Partners = lazyWithRetry(() => import("./pages/admin/Partners"));
 const PartnerDetail = lazyWithRetry(() => import("./pages/admin/PartnerDetail"));
 const BusinessManagers = lazyWithRetry(() => import("./pages/admin/BusinessManagers"));
@@ -191,6 +192,7 @@ const App = () => (
               <Route path="/admin/finance/partners" element={<Navigate to="/admin/partners" replace />} />
               <Route path="/admin/finance/partners/:id" element={<RedirectPartnerDetail />} />
               <Route path="/admin/finance/runs/:id" element={<FinanceRunDetail />} />
+              <Route path="/admin/reconciliation" element={<Reconciliation />} />
               <Route path="/tv/:token" element={<OpsLive />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
