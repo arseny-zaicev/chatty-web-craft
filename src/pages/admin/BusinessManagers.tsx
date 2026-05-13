@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, ArrowLeft, Plus, Search, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
+import { fetchBmMetrics } from "@/lib/metrics";
 
 type BM = {
   id: string;
@@ -90,6 +91,13 @@ const BusinessManagers = () => {
       return true;
     });
   }, [data?.bms, statusFilter, wsFilter, q]);
+
+  const bmIds = useMemo(() => (data?.bms ?? []).map(b => b.id), [data?.bms]);
+  const { data: bmMetrics } = useQuery({
+    queryKey: ["business-managers", "metrics", bmIds],
+    enabled: bmIds.length > 0,
+    queryFn: () => fetchBmMetrics(bmIds),
+  });
 
   const create = useMutation({
     mutationFn: async () => {
