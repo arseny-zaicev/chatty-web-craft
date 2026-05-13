@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, AlertTriangle, XCircle, Phone, RefreshCw, Save, Loader2, Ban, Copy, Check, ExternalLink } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Phone, RefreshCw, Save, Loader2, Ban, Copy, Check, ExternalLink, Activity } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,6 +133,20 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
     [workspaces, workspaceId],
   );
 
+  const numberIds = useMemo(() => numbers.map((n) => n.id), [numbers]);
+  const { data: liveStats } = useQuery({
+    queryKey: ["number-live-stats", workspaceId, numberIds.join(",")],
+    enabled: numberIds.length > 0,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)("number_live_stats", { p_number_ids: numberIds });
+      if (error) throw error;
+      const map = new Map<string, any>();
+      for (const r of (data ?? []) as any[]) map.set(r.whatsapp_number_id, r);
+      return map;
+    },
+  });
+
   const save = useMutation({
     mutationFn: async (id: string) => {
       const patch = drafts[id];
@@ -230,6 +245,8 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                 {!ready.ready && (
                   <div className="text-[11px] text-amber-700">Missing: {ready.reasons.join(", ")}</div>
                 )}
+
+                <LiveStatsStrip stats={liveStats?.get(n.id)} numberId={n.id} workspaceId={workspaceId} />
 
                 {/* Operator-facing fields only */}
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -370,3 +387,111 @@ const WebhookUrlRow = ({
     </div>
   );
 };
+
+type LiveStats = {
+  whatsapp_number_id: string;
+  sent_today: number;
+  sent_7d: number;
+  sent_all: number;
+  failed_today: number;
+  failed_7d: number;
+  pending_now: number;
+  last_sent_at: string | null;
+  last_failed_at: string | null;
+  daily_send_limit: number;
+  restricted_at: string | null;
+  status: string;
+};
+
+const fmtRel = (iso: string | null) =>
+  iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "-";
+
+const LiveStatsStrip = ({
+  stats,
+  numberId,
+  workspaceId,
+}: {
+  stats: LiveStats | undefined;
+  numberId: string;
+  workspaceId: string;
+}) => {
+  if (!stats) {
+    return (
+      <div className="rounded-md border border-border bg-muted/20 p-2 text-[11px] text-muted-foreground flex items-center gap-2">
+        <Activity className="w-3 h-3" />Loading live stats...
+      </div>
+    );
+  }
+  const today = Number(stats.sent_today ?? 0);
+  const limit = Number(stats.daily_send_limit ?? 0);
+  const usagePct = limit > 0 ? Math.min(100, Math.round((today / limit) * 100)) : 0;
+  const heavy = limit > 0 && today >= limit * 0.9;
+  const failedToday = Number(stats.failed_today ?? 0);
+  const failureSpike = today + failedToday >= 20 && failedToday / Math.max(1, today + failedToday) >= 0.3;
+  const restricted = stats.status === "restricted" || stats.status === "banned";
+
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-2.5 space-y-2">
+      <div className="flex items-center justify-between text-[11px]">
+        <div className="flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+          <Activity className="w-3 h-3" />Live activity
+        </div>
+        <Link
+          to={`/workspace/${workspaceId}/campaigns?number=${numberId}`}
+          className="text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+        >
+          Campaign usage <ExternalLink className="w-3 h-3" />
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+        <Metric
+          label="Sent today"
+          value={`${today}${limit > 0 ? ` / ${limit}` : ""}`}
+          tone={heavy ? "warn" : today > 0 ? "ok" : "muted"}
+          sub={limit > 0 ? `${usagePct}% of cap` : undefined}
+        />
+        <Metric label="Sent 7d" value={String(stats.sent_7d ?? 0)} tone="muted" />
+        <Metric label="Sent all-time" value={String(stats.sent_all ?? 0)} tone="muted" />
+        <Metric
+          label="Failed today"
+          value={String(failedToday)}
+          tone={failureSpike ? "bad" : failedToday > 0 ? "warn" : "muted"}
+        />
+        <Metric label="Failed 7d" value={String(stats.failed_7d ?? 0)} tone={Number(stats.failed_7d ?? 0) > 0 ? "warn" : "muted"} />
+        <Metric label="Pending" value={String(stats.pending_now ?? 0)} tone="muted" />
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <span>Last sent: <span className="text-foreground">{fmtRel(stats.last_sent_at)}</span></span>
+        <span>Last failure: <span className="text-foreground">{fmtRel(stats.last_failed_at)}</span></span>
+        {restricted && stats.restricted_at && (
+          <span className="text-red-700">
+            Restricted: {fmtRel(stats.restricted_at)}
+            {stats.last_sent_at &&
+              new Date(stats.last_sent_at) < new Date(stats.restricted_at) &&
+              " - flipped after last send"}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Metric = ({
+  label,
+  value,
+  sub,
+  tone: t,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone: "ok" | "warn" | "bad" | "muted";
+}) => (
+  <div className={`rounded border px-2 py-1.5 ${tone(t)}`}>
+    <div className="text-[10px] uppercase tracking-wide opacity-80">{label}</div>
+    <div className="text-sm font-semibold tabular-nums">{value}</div>
+    {sub && <div className="text-[10px] opacity-70">{sub}</div>}
+  </div>
+);
