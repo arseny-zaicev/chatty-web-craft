@@ -307,6 +307,38 @@ const CRM = ({
     return () => { cancelled = true; };
   }, [baseData, searchParams, initialConversationId]);
 
+  // Server-side search: when the user types something not in the local batch
+  // (e.g. an old chat from a Slack alert), query the workspace and merge.
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) return;
+    const lower = q.toLowerCase();
+    const localHit = conversations.some((c) =>
+      `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`
+        .toLowerCase()
+        .includes(lower),
+    );
+    if (localHit) return;
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const found = await searchConversations({ workspaceId, query: q, limit: 50 });
+        if (cancelled || !found.length) return;
+        setConversations((prev) => {
+          const have = new Set(prev.map((c) => c.id));
+          const merged = [...prev];
+          for (const c of found as Conversation[]) if (!have.has(c.id)) merged.push(c);
+          return merged;
+        });
+      } catch { /* non-blocking */ }
+      finally { if (!cancelled) setSearching(false); }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, workspaceId]);
+
   // Scroll the active conversation into view when it changes (e.g. opened from Pipeline)
   useEffect(() => {
     if (!activeId) return;
