@@ -635,7 +635,10 @@ export default function LaunchWizard() {
           if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
           else if (src) raw = String(r.payload?.[src] ?? r.derived_payload?.[src] ?? "");
           // Fallback: if no mapping, try derived_payload["var_<v>"] (handles {{1}} -> var_1 etc.)
-          if (!raw) raw = String(r.derived_payload?.[`var_${v}`] ?? "");
+          if (!raw) {
+            const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
+            raw = String(r.derived_payload?.[dpKey] ?? r.derived_payload?.[v] ?? "");
+          }
           vals[v] = raw;
         }
         // First variable falls back to "there" automatically, so don't flag it.
