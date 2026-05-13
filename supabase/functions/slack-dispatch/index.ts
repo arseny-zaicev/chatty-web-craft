@@ -339,6 +339,22 @@ Deno.serve(async (req) => {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
+        // Final guardrail: re-check qualification at dispatch time. Stops any
+        // stale/buggy enqueue path (trigger, watchdog, manual backfill) from
+        // pinging clients with Block / Not relevant / auto-replies / lost leads.
+        // Bypassed only when the enqueuer explicitly marks payload.force=true.
+        if (!p?.force && p?.conversation_id) {
+          const { data: gate } = await supabase.rpc("should_notify_lead_reply", {
+            _conversation_id: p.conversation_id,
+            _reply_text: p?.last_message_text ?? null,
+          });
+          if (!gate) {
+            await supabase.from("slack_event_queue")
+              .update({ status: "skipped", processed_at: new Date().toISOString(), error: "guardrail: unqualified reply" })
+              .eq("id", ev.id);
+            continue;
+          }
+        }
         const msg = buildFirstReplyBlocks(ws, p);
         // Cross-event dedupe: if positive_lead already posted for this
         // conversation, skip the pipeline post but still mirror to delivery-leads
