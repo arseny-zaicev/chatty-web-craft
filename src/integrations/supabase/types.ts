@@ -3405,6 +3405,14 @@ export type Database = {
         }
         Returns: number
       }
+      pending_classification_conversations: {
+        Args: { _limit?: number }
+        Returns: {
+          contact_phone: string
+          id: string
+          workspace_id: string
+        }[]
+      }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
