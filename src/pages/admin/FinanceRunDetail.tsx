@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, RefreshCw, ShieldCheck, CheckCircle2, FileText, Download, AlertTriangle, Ban } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, ShieldCheck, CheckCircle2, FileText, Download, AlertTriangle, Ban, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
