@@ -246,6 +246,8 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
                   <div className="text-[11px] text-amber-700">Missing: {ready.reasons.join(", ")}</div>
                 )}
 
+                <LiveStatsStrip stats={liveStats?.get(n.id)} numberId={n.id} workspaceId={workspaceId} />
+
                 {/* Operator-facing fields only */}
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Field label="Country / sender label">
