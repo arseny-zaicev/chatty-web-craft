@@ -104,6 +104,66 @@ Deno.serve(async (req) => {
   }
   try {
 
+  // --- Backfill coalescer ---------------------------------------------------
+  // lead.first_reply events with source='backfill_missed_first_reply' or
+  // 'watchdog_backfill' should NOT spam client channels one-by-one. Group all
+  // pending backfill events by (workspace, pipeline_channel) and post a single
+  // digest, then mark them all as sent. This runs before the normal drain so
+  // backfills don't compete for the 50-row limit.
+  const { data: backfillRowsRaw } = await supabase
+    .from("slack_event_queue")
+    .select("*")
+    .eq("status", "pending")
+    .eq("event_type", "lead.first_reply")
+    .limit(2000);
+  const backfillRows = (backfillRowsRaw || []).filter((r: any) => {
+    const src = (r.payload as any)?.source;
+    return src === "backfill_missed_first_reply" || src === "watchdog_backfill";
+  });
+  if (backfillRows && backfillRows.length > 0) {
+    type Group = { ws: any; channel: string | null; rows: any[] };
+    const groups = new Map<string, Group>();
+    const wsCache = new Map<string, any>();
+    for (const r of backfillRows) {
+      let ws = r.workspace_id ? wsCache.get(r.workspace_id) : null;
+      if (r.workspace_id && !ws) {
+        const { data } = await supabase
+          .from("workspaces")
+          .select("id, name, slug, internal_code, slack_channel_id")
+          .eq("id", r.workspace_id).maybeSingle();
+        ws = data || null;
+        if (ws) wsCache.set(r.workspace_id, ws);
+      }
+      const channel = (r.payload as any)?.slack_channel_id || ws?.slack_channel_id || null;
+      const key = `${r.workspace_id || "_"}::${channel || "_"}`;
+      if (!groups.has(key)) groups.set(key, { ws, channel, rows: [] });
+      groups.get(key)!.rows.push(r);
+    }
+    for (const g of groups.values()) {
+      const ids = g.rows.map((r) => r.id);
+      const lines = g.rows.slice(0, 25).map((r) => {
+        const p = (r.payload as any) || {};
+        const name = p.contact_name || "Unknown";
+        const phone = p.contact_phone ? `+${String(p.contact_phone).replace(/^\+/, "")}` : "-";
+        const txt = p.last_message_text ? String(p.last_message_text).slice(0, 80) : "(no text)";
+        return `• *${name}* · ${phone} — ${txt}`;
+      });
+      const more = g.rows.length > 25 ? `\n…and ${g.rows.length - 25} more — open the CRM Inbox to review.` : "";
+      const wsTag = g.ws?.name ? `${g.ws.name}${g.ws.internal_code ? `-${g.ws.internal_code}` : ""}` : "Workspace";
+      const text = `🛟 *Reply notification recovery* · ${wsTag}\nWe detected *${g.rows.length}* recent reply(ies) that were not delivered to Slack at the time. Recovered list:\n${lines.join("\n")}${more}`;
+      const msg = { text, blocks: [{ type: "section", text: { type: "mrkdwn", text } }] };
+      if (g.channel) {
+        try { await postSlack(g.channel, msg); } catch (e) { console.warn("backfill digest post failed", e); }
+      }
+      // Always mirror to Iskra delivery-leads
+      try { await postSlack("delivery-leads", msg); } catch { /* ignore */ }
+      await supabase.from("slack_event_queue")
+        .update({ status: "sent", processed_at: new Date().toISOString(), error: "coalesced into backfill digest" })
+        .in("id", ids);
+    }
+  }
+  // --- /coalescer -----------------------------------------------------------
+
   const { data: events, error } = await supabase
     .from("slack_event_queue")
     .select("*")
