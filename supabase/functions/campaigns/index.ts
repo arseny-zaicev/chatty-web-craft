@@ -583,12 +583,13 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
         const earliest = Math.max(startUtc, Date.now() + 5_000);
         const span = Math.max(60_000, endUtc - earliest);
         if (isBlastLaunch) {
-          for (const r of slice) {
+          const blastStart = Math.max(startUtc, Date.now());
+          for (let i = 0; i < slice.length; i++) {
             rows.push(tagRow({
-              ...r,
+              ...slice[i],
               user_id: ownerId, workspace_id: wsId,
               campaign_id: campaign.id, status: "scheduled",
-              scheduled_at: new Date(earliest).toISOString(),
+              scheduled_at: new Date(blastStart + i * 1000).toISOString(),
             }));
           }
         } else if (schedulerKind === "poisson") {
@@ -1017,24 +1018,10 @@ async function processQueue(admin: any) {
   }
 
 
-  // Scale the per-tick batch with the number of active ready numbers so utility
-  // throughput is not bottlenecked by a fixed ceiling when multiple numbers are live.
-  // Floor 50 (single-number safe), 20 recipients per active number, hard cap 500.
-  let perTickLimit = 200;
-  try {
-    // Count both 'active' and 'ready' numbers (matches lead-dispatch sender filter).
-    // Previously only counted 'ready', which capped throughput at 50/min once
-    // numbers transitioned to 'active' status.
-    const { count: activeNumbers } = await admin
-      .from("whatsapp_numbers")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["active", "ready"])
-      .eq("is_active", true);
-    const n = activeNumbers ?? 0;
-    perTickLimit = Math.min(500, Math.max(50, n * 20));
-  } catch (_) {
-    perTickLimit = 200;
-  }
+  // Fetch enough due recipients for marketing blasts. Actual send speed is still
+  // controlled below per WhatsApp number (1/sec for marketing, 60/sec for utility),
+  // so this limit must not become a hidden campaign-level throttle.
+  const perTickLimit = 500;
 
   // Look ahead window: pg_cron fires at minute boundaries, so fetch anything
   // due within the next ~55s and pace sends inside the tick. This honors the
@@ -1198,8 +1185,8 @@ async function processQueue(admin: any) {
     console.warn(`[number_auto_restricted] number=${numId} code=${code} failures_5min=${total} sample="${sampleMsg.slice(0, 200)}"`);
   };
 
-  // Hard pacing: utility templates throttled to >=60s gap (WhatsApp policy / cost).
-  // Marketing templates use the campaign's configured delay_min_seconds (floor 1s).
+  // Hard pacing per WhatsApp number: utility templates throttled to >=60s;
+  // marketing blasts run at the configured floor of 1 message/sec per number.
   const lastSentMs = new Map<string, number>();
 
   for (const recipient of due ?? []) {
@@ -1270,18 +1257,19 @@ async function processQueue(admin: any) {
       }
 
 
-      // Pacing guard: enforce delay_min_seconds gap from the previous send for this campaign.
+      // Pacing guard: enforce the gap from the previous send on this WhatsApp number.
       const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
       const isUtility = tplCategory === "utility" || tplCategory === "authentication";
       const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
       const floor = isUtility ? 60 : 1;
       const minGapMs = Math.max(floor, configuredMin) * 1000;
-      let lastMs = lastSentMs.get(recipient.campaign_id) ?? 0;
+      const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
+      let lastMs = lastSentMs.get(pacingKey) ?? 0;
       if (!lastMs) {
         const { data: lastRecipient } = await admin
           .from("campaign_recipients")
           .select("sent_at")
-          .eq("campaign_id", recipient.campaign_id)
+          .eq("whatsapp_number_id", pacingKey)
           .not("sent_at", "is", null)
           .order("sent_at", { ascending: false })
           .limit(1)
@@ -1306,7 +1294,7 @@ async function processQueue(admin: any) {
         .select("id")
         .maybeSingle();
       if (!locked) continue;
-      lastSentMs.set(recipient.campaign_id, Date.now());
+      lastSentMs.set(pacingKey, Date.now());
 
 
       try {
