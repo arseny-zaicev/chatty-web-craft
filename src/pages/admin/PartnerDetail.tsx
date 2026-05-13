@@ -439,6 +439,18 @@ const Stat = ({ label, value, hint, alert }: { label: string; value: string; hin
   </Card>
 );
 
+function ReferrerBadge({ id }: { id: string }) {
+  const { data } = useQuery({
+    queryKey: ["partner-name", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("partners").select("name").eq("id", id).maybeSingle();
+      return data?.name as string | undefined;
+    },
+  });
+  if (!data) return null;
+  return <Badge variant="outline">Referred by: {data}</Badge>;
+}
+
 function CreateBMDialog({
   partnerId, partnerDefaultRate, workspaces, onCreated,
 }: {
