@@ -458,7 +458,7 @@ function ReferrerBadge({ id }: { id: string }) {
     },
   });
   if (!data) return null;
-  return <Badge variant="outline">Referred by: {data}</Badge>;
+  return <Badge variant="outline">Manager: {data}</Badge>;
 }
 
 function CreateBMDialog({

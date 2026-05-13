@@ -155,7 +155,7 @@ export default function FinancePartnerDetail() {
           <h1 className="font-display text-2xl">{partner.name}</h1>
           <Badge variant={partner.status === "active" ? "default" : "secondary"}>{partner.status}</Badge>
           <span className="text-sm text-muted-foreground ml-auto">
-            Default rate: ${Number(partner.default_payout_rate_usd).toFixed(4)} {partner.currency}
+            Partner rate: ${Number(partner.default_payout_rate_usd || 0).toFixed(4)} {partner.currency}
           </span>
         </div>
 
@@ -174,8 +174,8 @@ export default function FinancePartnerDetail() {
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead>Period</TableHead><TableHead>Status</TableHead>
-                    <TableHead>Delivered</TableHead><TableHead>Payout</TableHead>
-                    <TableHead>Margin</TableHead><TableHead>Generated</TableHead><TableHead></TableHead>
+                    <TableHead>Delivered</TableHead><TableHead>Partner payout</TableHead>
+                    <TableHead>Our margin</TableHead><TableHead>Generated</TableHead><TableHead></TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {(runs || []).map(r => (

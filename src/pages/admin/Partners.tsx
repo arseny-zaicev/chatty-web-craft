@@ -119,13 +119,13 @@ export default function Partners() {
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Referred by</TableHead>
+                  <TableHead>Manager</TableHead>
                   <TableHead>BMs</TableHead>
                   <TableHead>Numbers</TableHead>
                   <TableHead>Sent today</TableHead>
                   <TableHead>Sent all-time</TableHead>
-                  <TableHead>Provider rate</TableHead>
-                  <TableHead>Referral rate</TableHead>
+                  <TableHead>Partner rate</TableHead>
+                  <TableHead>Manager rate</TableHead>
                   <TableHead>Unpaid</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead></TableHead>
