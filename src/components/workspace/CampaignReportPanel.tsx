@@ -129,6 +129,14 @@ export function CampaignReportPanel({
     queryFn: () => fetchInsight(primaryCampaignId),
   });
 
+  // Live totals — never read from the cached insight snapshot.
+  const { data: liveTotals } = useQuery({
+    queryKey: ["campaign-live-counts", ...campaignIds].join("|"),
+    queryFn: () => fetchLiveTotals(campaignIds),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
   const generate = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("campaign-insights", {
@@ -158,7 +166,6 @@ export function CampaignReportPanel({
   };
 
   const metrics = insight?.metrics ?? null;
-  const totals = metrics?.totals;
   const segments = metrics?.by_segment ?? {};
   const templates = metrics?.by_template ?? [];
 
