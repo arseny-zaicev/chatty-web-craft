@@ -258,6 +258,22 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     <ProgressBar value={g.sent} total={g.total} className="flex-1" />
                     <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-[80px] text-right">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
                   </div>
+                  {(() => {
+                    const lc = groupLiveCounts.get(g.key);
+                    const sentForRate = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                    const rate = sentForRate > 0 ? Math.round(((lc?.replied ?? 0) / sentForRate) * 100) : 0;
+                    return (
+                      <div className="hidden lg:flex items-center gap-2 shrink-0 w-[140px] justify-end">
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          <span className="font-semibold text-foreground">{(lc?.replied ?? 0).toLocaleString()}</span> replied
+                          {sentForRate > 0 && <span className="text-muted-foreground/70"> · {rate}%</span>}
+                        </span>
+                        {(lc?.positive ?? 0) > 0 && (
+                          <span className="text-[11px] text-emerald-600 tabular-nums">+{lc!.positive}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {g.failed > 0 && <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{g.failed} failed</span>}
                   <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>
