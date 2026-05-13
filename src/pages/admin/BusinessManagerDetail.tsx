@@ -175,10 +175,28 @@ const BusinessManagerDetail = () => {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Daily cap / sent today</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Daily cap</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               <Input type="number" value={bm.daily_warmup_cap ?? ""} placeholder="e.g. 80" onChange={(e) => updateBm.mutate({ daily_warmup_cap: e.target.value ? Number(e.target.value) : null })} />
-              <div className="text-xs text-muted-foreground">Sent today: {bm.current_day_sent}</div>
+              <div className="text-xs text-muted-foreground">Sent today is shown in the BM list.</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Ads launched before?</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <Select value={(bm as any).ads_launched_before ? "yes" : "no"} onValueChange={(v) => updateBm.mutate({ ads_launched_before: v === "yes" } as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="yes">Yes</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Next warm-up date</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <Input type="date" value={(bm as any).next_warmup_run_date ?? ""} onChange={(e) => updateBm.mutate({ next_warmup_run_date: e.target.value || null } as any)} />
             </CardContent>
           </Card>
         </div>

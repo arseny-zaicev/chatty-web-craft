@@ -2,7 +2,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { baseName as splitBase } from "./campaigns";
 
 const startOfDayIso = () => {
-  // Start of "today" in Dubai (GST, UTC+4)
   const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
   return new Date(`${dubaiDate}T00:00:00+04:00`).toISOString();
 };
@@ -16,6 +15,7 @@ export type WorkspaceMetrics = {
   numbers_total: number;
   numbers_ready: number;
   numbers_active: number;
+  sent_today: number;
   delivered_today: number;
   replies_today: number;
   last_activity: string | null;
@@ -37,6 +37,7 @@ export type PortfolioSnapshot = {
     clients: number;
     active_campaigns: number;
     unread_replies: number;
+    sent_today: number;
     delivered_today: number;
     replies_today: number;
     booked_calls_today: number;
@@ -50,25 +51,34 @@ export const portfolioKeys = {
   workspaceOverview: (id: string) => ["portfolio", "workspace", id] as const,
 };
 
+const RECENT_ACTIVITY_WINDOW_MIN = 10;
+
 export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
-  const today = startOfDayIso();
+  const recentSinceIso = new Date(Date.now() - RECENT_ACTIVITY_WINDOW_MIN * 60_000).toISOString();
 
   const [
     { data: workspaces },
     { data: convs },
     { data: numbers },
     { data: campaigns },
-    { data: msgsToday },
-    { data: eventsToday },
+    { data: metricsToday },
+    { data: recentSent },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
     supabase.from("conversations").select("id, workspace_id, unread_count, last_message_at"),
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
-    supabase.from("campaigns").select("workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients").in("status", ["scheduled", "running", "paused"]),
-    supabase.from("messages").select("conversation_id, direction, created_at").gte("created_at", today).eq("direction", "inbound"),
-    supabase.from("whatsapp_message_events").select("workspace_id, event_type").gte("received_at", today).in("event_type", ["delivered"]),
+    supabase
+      .from("campaigns")
+      .select("id, workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients")
+      .in("status", ["scheduled", "running", "paused"]),
+    // v_metrics_today is the truth source for sent/delivered/replies today.
+    supabase.from("v_metrics_today").select("workspace_id, sent_today, delivered_today, replies_today, campaign_id"),
+    // Recent recipient activity per workspace -> drives is_sending_now.
+    supabase
+      .from("campaign_recipients")
+      .select("workspace_id, campaign_id, sent_at")
+      .gte("sent_at", recentSinceIso),
   ]);
-  const bookedToday: { id: string }[] = [];
 
   const byWorkspace: Record<string, WorkspaceMetrics> = {};
   const ensure = (id: string): WorkspaceMetrics => {
@@ -80,6 +90,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
         numbers_total: 0,
         numbers_ready: 0,
         numbers_active: 0,
+        sent_today: 0,
         delivered_today: 0,
         replies_today: 0,
         last_activity: null,
@@ -101,14 +112,12 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
 
   (workspaces ?? []).forEach((w) => ensure(w.id));
 
-  const convWs = new Map<string, string>();
   (convs ?? []).forEach((c) => {
     const m = ensure(c.workspace_id);
     m.unread_replies += c.unread_count ?? 0;
     if (c.last_message_at && (!m.last_activity || c.last_message_at > m.last_activity)) {
       m.last_activity = c.last_message_at;
     }
-    convWs.set(c.id as unknown as string, c.workspace_id);
   });
 
   (numbers ?? []).forEach((n) => {
@@ -118,12 +127,39 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     if (n.is_active && n.connected_in_gupshup && n.connected_in_iskra) m.numbers_ready += 1;
   });
 
-  // Track aggregated sent/total per workspace for the "active" campaign group
-  // (running siblings preferred; otherwise next-scheduled siblings) using base name.
+  // Aggregate truth-layer metrics per workspace.
+  // Group by workspace+campaign so we can also use them for the active-campaign-group "sent today".
+  const sentByWsCampaign = new Map<string, number>(); // key = ws|campaign
+  (metricsToday ?? []).forEach((r: any) => {
+    if (!r.workspace_id) return;
+    const m = ensure(r.workspace_id);
+    m.sent_today += r.sent_today ?? 0;
+    m.delivered_today += r.delivered_today ?? 0;
+    m.replies_today += r.replies_today ?? 0;
+    if (r.campaign_id) {
+      const k = `${r.workspace_id}|${r.campaign_id}`;
+      sentByWsCampaign.set(k, (sentByWsCampaign.get(k) ?? 0) + (r.sent_today ?? 0));
+    }
+  });
+
+  // Recent activity per (workspace, campaign) for sending-now detection.
+  const recentByWsCampaign = new Set<string>();
+  const recentByWs = new Set<string>();
+  (recentSent ?? []).forEach((r: any) => {
+    if (!r.workspace_id || !r.sent_at) return;
+    if (r.campaign_id) recentByWsCampaign.add(`${r.workspace_id}|${r.campaign_id}`);
+    recentByWs.add(r.workspace_id);
+  });
+
   const nowIso = new Date().toISOString();
   const baseOf = (name: string) => splitBase(name ?? "");
-  // First pass: pick active group base per workspace (running > soonest scheduled)
-  const activeBase: Record<string, { base: string; status: "running" | "scheduled"; kind: string | null; startsAt?: string }> = {};
+
+  // Pick the active group base per workspace (running > soonest scheduled).
+  // Cancelled / failed siblings are already excluded by the .in() filter above.
+  const activeBase: Record<
+    string,
+    { base: string; status: "running" | "scheduled"; kind: string | null; startsAt?: string }
+  > = {};
   (campaigns ?? []).forEach((c: any) => {
     const wsId = c.workspace_id as string;
     const dates = (c.scheduled_dates as string[] | null) ?? [];
@@ -145,12 +181,22 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
       }
       if (endDate && (!m.campaign_end || endDate > m.campaign_end)) m.campaign_end = endDate;
       const cur = activeBase[wsId];
-      if (!cur || (cur.status === "scheduled" && (!cur.startsAt || c.scheduled_start_at < cur.startsAt))) {
-        activeBase[wsId] = { base: baseOf(c.name), status: "scheduled", kind: c.kind ?? null, startsAt: c.scheduled_start_at };
+      if (
+        !cur ||
+        (cur.status === "scheduled" && (!cur.startsAt || c.scheduled_start_at < cur.startsAt))
+      ) {
+        activeBase[wsId] = {
+          base: baseOf(c.name),
+          status: "scheduled",
+          kind: c.kind ?? null,
+          startsAt: c.scheduled_start_at,
+        };
       }
     }
   });
-  // Second pass: aggregate sent/total across siblings in the active group
+
+  // Aggregate sent/total across siblings IN the active group only.
+  // sent = today's sent from v_metrics_today (truth); total = total_recipients from row.
   (campaigns ?? []).forEach((c: any) => {
     const wsId = c.workspace_id as string;
     const grp = activeBase[wsId];
@@ -160,39 +206,27 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     m.active_campaign_name = grp.base;
     m.active_campaign_status = grp.status;
     m.active_campaign_kind = grp.kind;
-    m.active_campaign_sent += c.sent_count ?? 0;
+    const todaySent = sentByWsCampaign.get(`${wsId}|${c.id}`) ?? 0;
+    m.active_campaign_sent += todaySent;
     m.active_campaign_total += c.total_recipients ?? 0;
   });
-  // "Sending now" = campaign is in running state AND still has recipients to send
+
+  // "Sending now": status=running AND activity in last 10 min in any sibling of the active group.
   Object.values(byWorkspace).forEach((m) => {
-    m.is_sending_now = m.active_campaign_status === "running"
-      && m.active_campaign_total > 0
-      && m.active_campaign_sent < m.active_campaign_total;
+    m.is_sending_now =
+      m.active_campaign_status === "running" &&
+      (campaigns ?? []).some((c: any) => {
+        if (c.workspace_id !== m.workspace_id) return false;
+        const grp = activeBase[m.workspace_id];
+        if (!grp || baseOf(c.name) !== grp.base) return false;
+        return recentByWsCampaign.has(`${m.workspace_id}|${c.id}`);
+      });
   });
 
-  // Replies today: from messages (inbound only)
-  (msgsToday ?? []).forEach((msg) => {
-    const wsId = convWs.get(msg.conversation_id as unknown as string);
-    if (!wsId) return;
-    const m = ensure(wsId);
-    if (msg.direction === "inbound") m.replies_today += 1;
-  });
-
-  // Delivered today: from real Gupshup webhook events (truth source)
-  (eventsToday ?? []).forEach((ev: any) => {
-    if (!ev.workspace_id) return;
-    const m = ensure(ev.workspace_id);
-    if (ev.event_type === "delivered") m.delivered_today += 1;
-  });
-
-  // Health rule (realistic):
-  // - blocked: zero active numbers (literally cannot send)
-  // - running: campaign currently running
-  // - scheduled: future launch queued
-  // - attention: many unread replies and no active campaign
-  // - idle: numbers ready, nothing scheduled — "ready to launch"
+  // Health
   Object.values(byWorkspace).forEach((m) => {
     if (m.numbers_active === 0) m.health = "blocked";
+    else if (m.is_sending_now) m.health = "running";
     else if (m.running_campaign_name) m.health = "running";
     else if (m.next_launch) m.health = "scheduled";
     else if (m.unread_replies >= 20) m.health = "attention";
@@ -203,9 +237,10 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     clients: (workspaces ?? []).length,
     active_campaigns: Object.values(byWorkspace).reduce((s, m) => s + m.active_campaigns, 0),
     unread_replies: Object.values(byWorkspace).reduce((s, m) => s + m.unread_replies, 0),
+    sent_today: Object.values(byWorkspace).reduce((s, m) => s + m.sent_today, 0),
     delivered_today: Object.values(byWorkspace).reduce((s, m) => s + m.delivered_today, 0),
     replies_today: Object.values(byWorkspace).reduce((s, m) => s + m.replies_today, 0),
-    booked_calls_today: bookedToday.length,
+    booked_calls_today: 0,
     issues: Object.values(byWorkspace).filter((m) => m.health === "blocked" || m.health === "attention").length,
   };
 
@@ -217,38 +252,43 @@ export type WorkspaceOverview = WorkspaceMetrics & {
   recent_launches: Array<{ id: string; name: string; status: string; created_at: string; sent_count: number; total: number }>;
 };
 
-
 export async function fetchWorkspaceOverview(workspaceId: string): Promise<WorkspaceOverview> {
-  const today = startOfDayIso();
-  const [{ data: convs }, { data: numbers }, { data: campaigns }, { data: templates }, { data: recent }] = await Promise.all([
+  const [
+    { data: convs },
+    { data: numbers },
+    { data: campaigns },
+    { data: templates },
+    { data: recent },
+    { data: metricsToday },
+  ] = await Promise.all([
     supabase.from("conversations").select("id, unread_count, last_message_at").eq("workspace_id", workspaceId),
     supabase.from("whatsapp_numbers").select("is_active, connected_in_gupshup, connected_in_iskra").eq("workspace_id", workspaceId),
     supabase.from("campaigns").select("name, status, scheduled_start_at").eq("workspace_id", workspaceId),
     supabase.from("message_templates").select("status").eq("workspace_id", workspaceId).eq("status", "approved"),
-    supabase.from("campaigns").select("id, name, status, created_at, sent_count, total_recipients").eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(20),
+    supabase
+      .from("campaigns")
+      .select("id, name, status, created_at, sent_count, total_recipients")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("v_metrics_today")
+      .select("sent_today, delivered_today, replies_today")
+      .eq("workspace_id", workspaceId),
   ]);
 
-  const convIds = (convs ?? []).map((c) => c.id);
-  let delivered_today = 0;
-  let replies_today = 0;
-  if (convIds.length) {
-    const { data: msgsToday } = await supabase
-      .from("messages")
-      .select("direction, status, created_at")
-      .gte("created_at", today)
-      .in("conversation_id", convIds);
-    (msgsToday ?? []).forEach((m) => {
-      if (m.direction === "outbound" && (m.status === "delivered" || m.status === "read" || m.status === "sent")) delivered_today += 1;
-      if (m.direction === "inbound") replies_today += 1;
-    });
-  }
+  let sent_today = 0, delivered_today = 0, replies_today = 0;
+  (metricsToday ?? []).forEach((r: any) => {
+    sent_today += r.sent_today ?? 0;
+    delivered_today += r.delivered_today ?? 0;
+    replies_today += r.replies_today ?? 0;
+  });
 
   const numbers_total = (numbers ?? []).length;
   const numbers_active = (numbers ?? []).filter((n) => n.is_active).length;
   const numbers_ready = (numbers ?? []).filter((n) => n.is_active && n.connected_in_gupshup && n.connected_in_iskra).length;
   const unread_replies = (convs ?? []).reduce((s, c) => s + (c.unread_count ?? 0), 0);
 
-  // Group sibling campaigns (same launch across multiple numbers) by base name
   const activeBases = new Set<string>();
   (campaigns ?? []).forEach((c: any) => {
     if (c.status === "scheduled" || c.status === "running") activeBases.add(splitBase(c.name ?? ""));
@@ -266,27 +306,35 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
   else if (next_launch) health = "scheduled";
   else if (unread_replies >= 20) health = "attention";
 
-  // Group recent launches by base name -> single row per launch (sums across numbers)
+  // Group recent launches by base name (exclude cancelled/failed siblings if a live one exists).
   type Launch = { id: string; name: string; status: string; created_at: string; sent_count: number; total: number };
-  const launchMap = new Map<string, Launch>();
+  const byBase = new Map<string, any[]>();
   for (const r of (recent ?? [])) {
     const base = splitBase(r.name ?? "");
-    const existing = launchMap.get(base);
-    if (!existing) {
-      launchMap.set(base, {
-        id: r.id,
-        name: base,
-        status: r.status,
-        created_at: r.created_at,
-        sent_count: r.sent_count ?? 0,
-        total: r.total_recipients ?? 0,
-      });
-    } else {
-      existing.sent_count += r.sent_count ?? 0;
-      existing.total += r.total_recipients ?? 0;
-      if ((statusRank[r.status] ?? 0) > (statusRank[existing.status] ?? 0)) existing.status = r.status;
-      if (r.created_at < existing.created_at) existing.created_at = r.created_at;
-    }
+    if (!byBase.has(base)) byBase.set(base, []);
+    byBase.get(base)!.push(r);
+  }
+  const launchMap = new Map<string, Launch>();
+  for (const [base, siblings] of byBase) {
+    const live = siblings.filter((r: any) => !["cancelled", "failed"].includes(r.status));
+    const effective = live.length ? live : siblings;
+    const sum = effective.reduce(
+      (acc, r: any) => ({
+        sent: acc.sent + (r.sent_count ?? 0),
+        total: acc.total + (r.total_recipients ?? 0),
+        created: acc.created < r.created_at ? acc.created : r.created_at,
+        status: (statusRank[r.status] ?? 0) > (statusRank[acc.status] ?? 0) ? r.status : acc.status,
+      }),
+      { sent: 0, total: 0, created: effective[0].created_at, status: effective[0].status }
+    );
+    launchMap.set(base, {
+      id: effective[0].id,
+      name: base,
+      status: sum.status,
+      created_at: sum.created,
+      sent_count: sum.sent,
+      total: sum.total,
+    });
   }
   const recent_launches = Array.from(launchMap.values())
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
@@ -299,6 +347,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     numbers_total,
     numbers_ready,
     numbers_active,
+    sent_today,
     delivered_today,
     replies_today,
     last_activity,
@@ -319,5 +368,5 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
 }
 
 const statusRank: Record<string, number> = {
-  running: 6, scheduled: 5, paused: 4, failed: 3, completed: 2, draft: 1,
+  running: 6, scheduled: 5, paused: 4, failed: 3, completed: 2, draft: 1, cancelled: 0,
 };

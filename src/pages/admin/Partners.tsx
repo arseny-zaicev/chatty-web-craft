@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, ArrowLeft, Search } from "lucide-react";
 import { toast } from "sonner";
+import { fetchPartnerMetrics } from "@/lib/metrics";
 
 type Partner = {
   id: string; name: string; contact_email: string | null; kind: string;
@@ -68,6 +69,13 @@ export default function Partners() {
     },
   });
 
+  const partnerIds = useMemo(() => (partners || []).map(p => p.id), [partners]);
+  const { data: partnerMetrics } = useQuery({
+    queryKey: ["admin", "partners", "metrics", partnerIds],
+    enabled: partnerIds.length > 0,
+    queryFn: () => fetchPartnerMetrics(partnerIds),
+  });
+
   const rows = useMemo(() => {
     return (partners || []).filter((p) => {
       if (refFilter === "with" && !p.referrer_partner_id) return false;
@@ -114,6 +122,8 @@ export default function Partners() {
                   <TableHead>Referred by</TableHead>
                   <TableHead>BMs</TableHead>
                   <TableHead>Numbers</TableHead>
+                  <TableHead>Sent today</TableHead>
+                  <TableHead>Sent all-time</TableHead>
                   <TableHead>Provider rate</TableHead>
                   <TableHead>Referral rate</TableHead>
                   <TableHead>Unpaid</TableHead>
@@ -127,6 +137,7 @@ export default function Partners() {
                     const numCount = bmIds.reduce((s, id) => s + (agg?.numsPerBm.get(id) || 0), 0);
                     const unpaid = agg?.unpaidByPartner.get(p.id) || 0;
                     const refName = partnerName(p.referrer_partner_id);
+                    const pm = partnerMetrics?.get(p.id);
                     return (
                       <TableRow key={p.id} className="cursor-pointer hover:bg-muted/40">
                         <TableCell className="font-medium">
@@ -138,6 +149,8 @@ export default function Partners() {
                         </TableCell>
                         <TableCell>{bms?.size || 0}</TableCell>
                         <TableCell>{numCount}</TableCell>
+                        <TableCell className="tabular-nums">{(pm?.sent_today ?? 0).toLocaleString()}</TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">{(pm?.sent_alltime ?? 0).toLocaleString()}</TableCell>
                         <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
                         <TableCell className="font-mono text-xs">{p.referral_rate_usd > 0 ? `$${Number(p.referral_rate_usd).toFixed(4)}` : <span className="text-muted-foreground">-</span>}</TableCell>
                         <TableCell className={unpaid > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
@@ -153,7 +166,7 @@ export default function Partners() {
                     );
                   })}
                   {!rows.length && (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                       No partners.
                     </TableCell></TableRow>
                   )}

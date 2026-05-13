@@ -83,10 +83,10 @@ export default function WorkspaceOverview() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi icon={MessageSquare} label="Unread replies" value={data.unread_replies} accent={data.unread_replies > 0 ? "text-emerald-500" : undefined} />
         <Kpi icon={Megaphone} label="Active campaigns" value={data.active_campaigns} />
+        {canManage && <Kpi icon={Send} label="Sent today" value={data.sent_today} />}
         {canManage && <Kpi icon={Send} label="Delivered today" value={data.delivered_today} />}
         <Kpi icon={MessageSquare} label="Replies today" value={data.replies_today} />
         {canManage && <Kpi icon={Phone} label="Numbers ready" value={`${data.numbers_ready}/${data.numbers_total}`} />}
-        {canManage && <Kpi icon={FileText} label="Approved templates" value={data.templates_approved} />}
       </div>
 
       <LatestReportCard workspaceId={workspace.id} slug={slug} />

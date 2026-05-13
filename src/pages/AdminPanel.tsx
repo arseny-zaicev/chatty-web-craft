@@ -235,10 +235,11 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <Kpi icon={Building2} label="Clients" value={t?.clients ?? workspaces.length} />
         <Kpi icon={Megaphone} label="Active campaigns" value={t?.active_campaigns ?? 0} />
         <Kpi icon={MessageSquare} label="Unread replies" value={t?.unread_replies ?? 0} accent={t && t.unread_replies > 0 ? "text-emerald-500" : undefined} />
+        <Kpi icon={Send} label="Sent today" value={t?.sent_today ?? 0} />
         <Kpi icon={Send} label="Delivered today" value={t?.delivered_today ?? 0} />
         <Kpi icon={MessageSquare} label="Replies today" value={t?.replies_today ?? 0} />
         <Kpi icon={Calendar} label="Booked today" value={t?.booked_calls_today ?? 0} />
@@ -402,7 +403,7 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
                       </div>
                       <div className="text-xs text-muted-foreground mt-1 tabular-nums">
                         {pct}% sent · {sent.toLocaleString()}/{total.toLocaleString()}
-                        {isRunning ? ` · ${m.delivered_today ?? 0} today` : m.next_launch ? ` · starts ${formatDateShort(m.next_launch)}` : ""}
+                        {isRunning ? ` · ${m.sent_today ?? 0} today` : m.next_launch ? ` · starts ${formatDateShort(m.next_launch)}` : ""}
                       </div>
                     </>
                   )}
@@ -425,7 +426,7 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
         <div className="grid grid-cols-3 gap-2 text-center">
           <MiniStat label="Numbers" value={`${numbersActive}/${numbersTotal}`} />
           <MiniStat label="Unread" value={unread} highlight={unread > 0} />
-          <MiniStat label="Sent today" value={m?.delivered_today ?? 0} />
+          <MiniStat label="Sent today" value={m?.sent_today ?? 0} />
         </div>
 
         <div className="flex items-center gap-2 mt-auto">
