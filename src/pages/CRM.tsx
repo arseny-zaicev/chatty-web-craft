@@ -32,6 +32,7 @@ import {
   fetchConversationMessages,
   markConversationRead,
   markConversationUnread,
+  searchConversations,
   setConversationPinned,
   setConversationStarred,
   touchResponder as touchResponderApi,
@@ -306,6 +307,38 @@ const CRM = ({
     return () => { cancelled = true; };
   }, [baseData, searchParams, initialConversationId]);
 
+  // Server-side search: when the user types something not in the local batch
+  // (e.g. an old chat from a Slack alert), query the workspace and merge.
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) return;
+    const lower = q.toLowerCase();
+    const localHit = conversations.some((c) =>
+      `${c.contact_name ?? ""} ${c.contact_phone} ${c.last_message_text ?? ""}`
+        .toLowerCase()
+        .includes(lower),
+    );
+    if (localHit) return;
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const found = await searchConversations({ workspaceId, query: q, limit: 50 });
+        if (cancelled || !found.length) return;
+        setConversations((prev) => {
+          const have = new Set(prev.map((c) => c.id));
+          const merged = [...prev];
+          for (const c of found as Conversation[]) if (!have.has(c.id)) merged.push(c);
+          return merged;
+        });
+      } catch { /* non-blocking */ }
+      finally { if (!cancelled) setSearching(false); }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, workspaceId]);
+
   // Scroll the active conversation into view when it changes (e.g. opened from Pipeline)
   useEffect(() => {
     if (!activeId) return;
@@ -521,111 +554,105 @@ const CRM = ({
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search conversations"
+                  placeholder="Search by name, phone or message"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9 h-9"
                 />
+                {searching && (
+                  <Loader2 className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin" />
+                )}
               </div>
 
-              <div className="flex flex-wrap gap-1 items-center">
-                {sortedNumbers.length > 1 && (
-                  <select
-                    value={numberFilter}
-                    onChange={(e) => setNumberFilter(e.target.value)}
-                    className="text-xs px-2 py-1 rounded-full border bg-transparent transition max-w-[180px] truncate border-border text-muted-foreground hover:border-primary/40 focus:outline-none focus:border-primary/60"
-                    title="Filter by sender number"
-                    style={numberFilter !== "all" ? { borderColor: "hsl(var(--primary))", color: "hsl(var(--primary))" } : undefined}
-                  >
-                    <option value="all">All numbers · {conversations.length}</option>
-                    {sortedNumbers.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        +{n.phone_number} · {numberCounts.get(n.id) ?? 0} chats
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button
-                  onClick={() => setStarredOnly((v) => !v)}
-                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
-                    starredOnly
-                      ? "bg-amber-500/15 text-amber-600 border-amber-500/40"
-                      : "border-border text-muted-foreground hover:border-amber-500/40"
-                  }`}
-                >
-                  <Star className={`w-3 h-3 ${starredOnly ? "fill-amber-500" : ""}`} />
-                  Starred
-                </button>
-                <button
-                  onClick={() => setMyOnly((v) => !v)}
-                  className={`text-xs px-2 py-1 rounded-full border transition ${
-                    myOnly
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-                  title="Show only chats assigned to me"
-                >
-                  My chats
-                </button>
-                <button
-                  onClick={() => setRepliedOnly((v) => !v)}
-                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
-                    repliedOnly
-                      ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/40"
-                      : "border-border text-muted-foreground hover:border-emerald-500/40"
-                  }`}
-                  title="Show only conversations where the contact replied"
-                >
-                  Replied{repliedCount > 0 && ` · ${repliedCount}`}
-                </button>
-                <button
-                  onClick={() => setUnreadOnly((v) => !v)}
-                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
-                    unreadOnly
-                      ? "bg-primary/15 text-primary border-primary/40"
-                      : "border-border text-muted-foreground hover:border-primary/40"
-                  }`}
-                  title="Show only conversations with unread messages"
-                >
-                  Unread{(() => { const n = conversations.reduce((s, c) => s + ((c.unread_count ?? 0) > 0 ? 1 : 0), 0); return n > 0 ? ` · ${n}` : ""; })()}
-                </button>
-                <button
-                  onClick={() => setShowNegative((v) => !v)}
-                  className={`text-xs px-2 py-1 rounded-full border transition flex items-center gap-1 ${
-                    showNegative
-                      ? "bg-red-500/15 text-red-600 border-red-500/40"
-                      : "border-border text-muted-foreground hover:border-red-500/40"
-                  }`}
-                  title={showNegative ? "Show active conversations" : "Show negative replies (Not interested / Lost)"}
-                >
-                  Negative{negativeCount > 0 && ` · ${negativeCount}`}
-                </button>
-                <select
-                  value={sortMode}
-                  onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
-                  className="text-xs px-2 py-1 rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary/40 transition"
-                  title="Sort conversations"
-                >
-                  <option value="recent">Recent</option>
-                  <option value="replied">Replied first</option>
-                  <option value="unread">Unread first</option>
-                  <option value="oldest">Oldest</option>
-                </select>
-                {pipelines.length > 0 && (
-                  <select
-                    value={pipelineFilter}
-                    onChange={(e) => setPipelineFilter(e.target.value)}
-                    className="text-xs px-2 py-1 rounded-full border border-border bg-transparent text-muted-foreground hover:border-primary/40 transition"
-                    title="Filter by pipeline"
-                  >
-                    <option value="all">All pipelines</option>
-                    <option value="unassigned">Unassigned</option>
-                    {pipelines.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                )}
+              {/* Row 1: dropdowns */}
+              <div className="grid grid-cols-2 gap-1.5">
+                {sortedNumbers.length > 1 ? (
+                  <Select value={numberFilter} onValueChange={setNumberFilter}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="All numbers" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All numbers · {conversations.length}</SelectItem>
+                      {sortedNumbers.map((n) => (
+                        <SelectItem key={n.id} value={n.id}>
+                          +{n.phone_number} · {numberCounts.get(n.id) ?? 0}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : <div />}
+                {pipelines.length > 0 ? (
+                  <Select value={pipelineFilter} onValueChange={setPipelineFilter}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="All pipelines" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All pipelines</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {pipelines.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : <div />}
+                <Select value={sortMode} onValueChange={(v) => setSortMode(v as typeof sortMode)}>
+                  <SelectTrigger className="h-8 text-xs col-span-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="recent">Sort: Recent</SelectItem>
+                    <SelectItem value="replied">Sort: Replied first</SelectItem>
+                    <SelectItem value="unread">Sort: Unread first</SelectItem>
+                    <SelectItem value="oldest">Sort: Oldest</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Row 2: unified pill toggles */}
+              {(() => {
+                const unreadCount = conversations.reduce((s, c) => s + ((c.unread_count ?? 0) > 0 ? 1 : 0), 0);
+                const anyActive = starredOnly || myOnly || repliedOnly || unreadOnly || showNegative
+                  || numberFilter !== "all" || pipelineFilter !== "all" || search.length > 0;
+                const pill = (active: boolean, extra = "") =>
+                  `text-xs px-2.5 py-1 rounded-full border transition flex items-center gap-1 ${
+                    active
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  } ${extra}`;
+                return (
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      onClick={() => {
+                        setStarredOnly(false); setMyOnly(false); setRepliedOnly(false);
+                        setUnreadOnly(false); setShowNegative(false);
+                        setNumberFilter("all"); setPipelineFilter("all"); setSearch("");
+                      }}
+                      className={pill(!anyActive)}
+                      title="Reset all filters"
+                    >
+                      All
+                    </button>
+                    <button onClick={() => setUnreadOnly((v) => !v)} className={pill(unreadOnly)}>
+                      Unread{unreadCount > 0 && ` · ${unreadCount}`}
+                    </button>
+                    <button onClick={() => setRepliedOnly((v) => !v)} className={pill(repliedOnly)}>
+                      Replied{repliedCount > 0 && ` · ${repliedCount}`}
+                    </button>
+                    <button onClick={() => setStarredOnly((v) => !v)} className={pill(starredOnly)}>
+                      <Star className={`w-3 h-3 ${starredOnly ? "fill-current" : ""}`} />
+                      Starred
+                    </button>
+                    <button onClick={() => setMyOnly((v) => !v)} className={pill(myOnly)}>Mine</button>
+                    <button
+                      onClick={() => setShowNegative((v) => !v)}
+                      className={pill(showNegative)}
+                      title="Show negative / lost replies"
+                    >
+                      Negative{negativeCount > 0 && ` · ${negativeCount}`}
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">

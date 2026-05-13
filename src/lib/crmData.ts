@@ -71,8 +71,9 @@ export async function fetchCrmBase(workspaceId?: string) {
       "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id",
     )
     .order("last_message_at", { ascending: false, nullsFirst: false })
-    // Cap to most recent 200 conversations to keep payload bounded; older ones are paginated in.
-    .limit(200);
+    // Cap initial load to 1000 most-recent conversations. Older ones are
+    // discoverable via server-side search (see searchConversations).
+    .limit(1000);
 
   if (workspaceId) {
     numbersQuery = numbersQuery.eq("workspace_id", workspaceId);
@@ -81,10 +82,12 @@ export async function fetchCrmBase(workspaceId?: string) {
 
   let dealsQuery = supabase
     .from("deals")
-    .select("conversation_id, stage_id, workspace_id");
+    .select("conversation_id, stage_id, workspace_id")
+    .limit(5000);
   let stagesQuery = supabase
     .from("pipeline_stages")
-    .select("id, stage_type, workspace_id");
+    .select("id, stage_type, workspace_id")
+    .limit(2000);
   if (workspaceId) {
     dealsQuery = dealsQuery.eq("workspace_id", workspaceId);
     stagesQuery = stagesQuery.eq("workspace_id", workspaceId);
@@ -113,15 +116,28 @@ export async function fetchCrmBase(workspaceId?: string) {
   });
 
   // Set of conversation ids that have at least one inbound message (i.e. contact replied).
+  // Computed across the entire workspace (not just loaded conversations) so the Replied
+  // filter and counter are accurate even when older threads aren't in the initial batch.
   const repliedConversationIds = new Set<string>();
-  const convIds = (conversations ?? []).map((c: any) => c.id);
-  if (convIds.length > 0) {
+  if (workspaceId) {
     const { data: inbound } = await supabase
       .from("messages")
-      .select("conversation_id")
+      .select("conversation_id, conversations!inner(workspace_id)")
       .eq("direction", "inbound")
-      .in("conversation_id", convIds);
-    (inbound ?? []).forEach((m: any) => repliedConversationIds.add(m.conversation_id));
+      .eq("conversations.workspace_id", workspaceId)
+      .limit(20000);
+    (inbound ?? []).forEach((m: any) => m.conversation_id && repliedConversationIds.add(m.conversation_id));
+  } else {
+    const convIds = (conversations ?? []).map((c: any) => c.id);
+    if (convIds.length > 0) {
+      const { data: inbound } = await supabase
+        .from("messages")
+        .select("conversation_id")
+        .eq("direction", "inbound")
+        .in("conversation_id", convIds)
+        .limit(20000);
+      (inbound ?? []).forEach((m: any) => repliedConversationIds.add(m.conversation_id));
+    }
   }
 
   return {

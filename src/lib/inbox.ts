@@ -50,3 +50,39 @@ export async function fetchConversationMessages(conversationId: string, limit = 
   if (error) throw error;
   return (data ?? []).slice().reverse();
 }
+
+/**
+ * Server-side conversation search across an entire workspace.
+ * Used when the local in-memory list (most-recent N) doesn't contain a chat
+ * the user is looking for via Slack notification, manual search, etc.
+ */
+export async function searchConversations(opts: {
+  workspaceId?: string;
+  query: string;
+  limit?: number;
+}) {
+  const q = opts.query.trim();
+  if (!q) return [];
+  const limit = Math.min(opts.limit ?? 50, 200);
+  const digits = q.replace(/\D/g, "");
+  let req = supabase
+    .from("conversations")
+    .select(
+      "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id",
+    )
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (opts.workspaceId) req = req.eq("workspace_id", opts.workspaceId);
+
+  // Build OR filter: phone digits, name, last message body. Conversation id
+  // exact match handled separately via maybeSingle.
+  const ors: string[] = [];
+  if (digits.length >= 4) ors.push(`contact_phone.ilike.%${digits}%`);
+  const safe = q.replace(/[%,]/g, " ");
+  ors.push(`contact_name.ilike.%${safe}%`);
+  ors.push(`last_message_text.ilike.%${safe}%`);
+  req = req.or(ors.join(","));
+  const { data, error } = await req;
+  if (error) throw error;
+  return data ?? [];
+}

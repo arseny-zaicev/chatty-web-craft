@@ -1,71 +1,94 @@
-## SOP: Avoiding WhatsApp Blocks & Spam Throttling
-*(Best practices, исключительно на базе наших данных за последние 14 дней)*
+## Что реально сломано
 
-### 1. Что мы реально видим в БД (last 14 days)
+Slack показывает ответы из `slack_event_queue`, а Inbox сейчас грузит только последние 200 conversations по workspace.
 
-**Top errors:**
-| Code | Что значит | Кол-во | Где болит |
-|---|---|---|---|
-| 131008 | Required parameter missing (наш баг отправки template) | **620** | US SMB кампания (Myra Curvera, Bala Bangle x2) - по ~200 на номер, это **наш косяк payload**, не Meta-блок |
-| 131026 | Message Undeliverable (нет WhatsApp / неактивный) | 69 | Greece Medspa - 30/30 на одном номере (мёртвая база) |
-| 135000 | Generic user error | 48 | Похоже на 131008-родственник |
-| **471** | **Spam Rate Limit hit** | **35** | **UK Carrots, Kartik 447401573177 - 38 fails из 394 sent (9.6%)** |
-| 131031 | Business Account locked | 5 | Greece Kartik 306976333065 - **аккаунт уже залочен** |
-| 470 | Re-engagement >24h | 2 | мелочь |
+По данным:
+- Salesforge: 814 conversations, но Inbox берёт 200.
+- goswyft: 915 conversations, один Slack lead сейчас на позиции 89 - виден.
+- Salesforge последние Slack leads сейчас на позициях 1-4 - должны быть видны, но фильтры/поиск всё равно ненадёжные.
+- Другие pipelines “работают” потому что либо меньше данных, либо нужные ответы попадают в первые 200.
 
-**Самые "горящие" номера:**
-- `447401573177` (Kartik UK) - **35x #471 на 394 sent** = красная зона, нужно вывести из ротации
-- `306976333065` (Kartik Greece) - **5x #131031 (locked)** + 30x undeliverable из 930 sent → BM уже наказан
-- `12232681516`, `18649013748`, `16062904573` (Bala/Myra US) - 200+ failed из 200+ sent = **100% provayder/payload bug, не Meta**
+Главная проблема: Inbox не умеет нормально искать/фильтровать весь workspace/pipeline. Он фильтрует только уже загруженные 200 строк. Поэтому ты видишь Slack-уведомление, заходишь искать в Inbox - и часть ответов физически не загружена в UI.
 
-### 2. Что попадает в SOP (выводы из данных)
+## План фикса
 
-**A. Pre-flight: чистка базы**
-- Greece-кейс показал: 30/30 undeliverable на одном номере = база без WhatsApp. Перед запуском - HLR/WA-check на сэмпле 50 контактов; если >10% undeliverable - стоп, чистим CSV.
-- Любая база, где первые 100 sent дают >5% #131026, автоматически паузится.
+### 1. Сделать Inbox нормальным, а не “последние 200 и молись”
 
-**B. Warmup и ramp**
-- UK Kartik словил #471 после ~390 sent за период - значит на новом номере **≤200/день первые 3 дня, +100/день**, пока quality rating не подтверждён HIGH.
-- Per-number quota уже стоит 200 - оставляем, но добавляем "circuit breaker": если на номере >2% #471 или >1% #131031 - автоматический pause на 48ч.
+В `fetchCrmBase`:
+- поднять initial load conversations с 200 до 1000 для workspace view;
+- добавить `.limit(5000)` на служебные queries (`deals`, inbound messages), чтобы не упираться в дефолтный лимит 1000;
+- `repliedConversationIds` считать не только по загруженным conversations, а по workspace/pipeline data, чтобы фильтр Replied не врал.
 
-**C. Quality monitoring (real-time)**
-- Триггер в админке: при появлении **3+ #471 за час** на номере - алерт в Slack + автопауза.
-- При **любом #131031** - номер в blacklist до ручного review (BM уже locked).
-- Дашборд Fleet Health: показать per-number `failed_rate_24h`, `spam_471_count`, `last_locked_at`.
+### 2. Добавить server-side lookup для Slack/search cases
 
-**D. Контент / template**
-- 620 #131008 = **наш payload-баг, не Meta**. Это в SOP отдельным пунктом: "перед массовым запуском - smoke-test 5 сообщений и проверка `event_type='sent'`, не `failed`". Без прохождения smoke-test кампания не стартует.
-- Templates: ротация 3-5 вариантов на BM, чтобы Meta не флагала повторы (пока нет данных, чтобы это доказать на наших цифрах - помечаем как "best practice from Meta docs", не из наших данных).
+В `src/lib/inbox.ts` добавить функцию поиска conversations по workspace:
+- phone;
+- contact_name;
+- last_message_text;
+- conversation id;
+- pipeline filter;
+- unread/replied filter.
 
-**E. Recovery протокол для номера с #471**
-1. Stop рассылку с номера на **48 часов** (Meta восстанавливает quality rating обычно за 24-72ч).
-2. Не удалять из ротации навсегда - после паузы запустить **warmup-кампанию на тёплую базу** (текущие лиды, кто отвечал) на 50 сообщений/день x 3 дня.
-3. Только после 3 чистых дней без #471 - возврат к 200/день.
+В `CRM.tsx`:
+- если пользователь вводит search и локальных результатов нет или мало - догружать matching conversations из базы;
+- если включён `Replied`/`Unread`/pipeline filter - догружать не только из первых 200/1000, а matching rows из базы;
+- новые найденные conversations добавлять в local state, чтобы клик открывал чат сразу.
 
-**F. Recovery для #131031 (BM locked)**
-- Номер в карантин, BM в Meta Business Suite → подать appeal.
-- Из ротации этого BM убрать **все** номера на время review (риск каскадного бана).
+Итог: если Slack пишет `+1415... btw your setup looks solid`, ты вставляешь телефон/имя/кусок текста - Inbox реально находит conversation, даже если она была не в первой пачке.
 
-### 3. Что я предлагаю сделать в коде/процессе
+### 3. Починить фильтры как UX и как логику
 
-1. **Док `docs/sop-anti-block.md`** в репо - с таблицей выше, привязанной к реальным номерам/датам как примерам.
-2. **Fleet Health дашборд** (`/workspace/fleet`) - добавить колонки `spam_471_24h`, `locked_count`, `failed_rate_pct`, цветовая индикация (>2% red, >1% amber).
-3. **Auto-pause функция** - SQL trigger или cron, который при 3+ #471/час на номере пишет `whatsapp_numbers.paused_until = now()+48h`.
-4. **Pre-flight smoke-test в LaunchWizard** - перед "Launch" слать 5 тестовых на наши internal-контакты, ждать sent-callback, только потом разрешить старт.
-5. **Slack alert** через edge function `whatsapp-error-monitor`, триггерится на `#471`, `#131031`, `#131008 > 50/hour`.
+Переделать верх фильтров Inbox:
 
-### 4. Что НЕ войдёт в SOP (нет данных)
+```text
+Search conversations
+Numbers        Pipeline        Sort
+All   Unread   Replied   Starred   Mine   Negative
+```
 
-- Оптимальное время суток для отправки - у нас нет per-hour reply-rate breakdown.
-- Влияние длины сообщения / эмодзи на spam-флаги - у нас все шаблоны похожие, сравнить не на чем.
-- Tier upgrade triggers (250→1k→10k) - данных по апгрейдам в таблицах нет.
+- `All` реально сбрасывает все toggles, search, number, pipeline.
+- Все pills в одном стиле, без зелёно-красно-жёлтой ёлки.
+- `Replied` показывает conversations с inbound-сообщениями, а не только те, что случайно попали в initial batch.
+- `Unread` показывает unread conversations по workspace/pipeline, а не только локально загруженные.
+- `Negative` не прячет всё неожиданно: если включён - показывает lost-stage conversations, если выключен - скрывает lost как сейчас.
 
-Эти пункты можно добавить позже, когда соберём 30+ дней истории.
+### 4. Добавить быстрый путь из Slack в Inbox
 
-### 5. Открытые вопросы перед реализацией
+В Slack payload уже есть `conversation_id`. В UI уже поддерживается `?conversation=<id>` и Pipeline dialog тоже умеет `initialConversationId`.
 
-1. SOP нужен **в виде документа** (markdown в репо / Notion / PDF клиенту), или **встроенный в админку** (страница `/workspace/sop` с живыми цифрами)?
-2. Делаем сразу **auto-pause** на #471, или сначала только алерты + ручное решение (безопаснее на старте)?
-3. Smoke-test перед запуском - блокирующий (нельзя стартовать без него) или опциональный чекбокс?
+Я сделаю стабильное поведение:
+- при открытии `/workspace/.../inbox?conversation=<id>` Inbox напрямую fetch-ит conversation и messages, даже если conversation не в первой пачке;
+- фильтры сбрасываются только для открытия конкретного чата;
+- если чат из другого pipeline/недоступен текущему пользователю - показать понятный toast.
 
-После ответов - выкатываю код + документ одной итерацией.
+### 5. Backend webhook guard: Slack alert не должен расходиться с Inbox
+
+В `whatsapp-webhook`:
+- автоматизации сейчас берутся по `user_id`, без ограничения workspace/pipeline. Это риск cross-pipeline мусора.
+- ограничить automations текущим `workspace_id` и target stage pipeline/current conversation pipeline.
+- positive Slack alert отправлять только если conversation всё ещё имеет pipeline и deal stage совпадает с positive target.
+
+Это уберёт случаи, где Slack уже сказал “positive”, а потом Inbox/Deal ушли в другой scope.
+
+### 6. “Other Reply” отдельно
+
+Я не буду больше чинить “пустую колонку”, потому ты уточнил: проблема не колонка, а то, что из Inbox нельзя найти ответы.
+
+Но добавлю маленький guard в Pipeline: в `Other Reply` нельзя вручную перетащить deal без inbound message. Это защита от мусора, не основной фикс.
+
+## Что изменю
+
+- `src/lib/crmData.ts` - лимиты и корректные replied ids.
+- `src/lib/inbox.ts` - server-side поиск/догрузка conversations.
+- `src/pages/CRM.tsx` - рабочие фильтры, догрузка, новый дизайн фильтров.
+- `src/pages/Pipeline.tsx` - guard для `Other Reply` без inbound.
+- `supabase/functions/whatsapp-webhook/index.ts` - ограничение automations по workspace/pipeline.
+
+## Как проверю
+
+- По Salesforge: найти последние Slack contacts по телефону/имени/тексту.
+- Включить `Replied` и `Unread` - список меняется и не становится пустым из-за локального лимита.
+- Открыть Inbox с `?conversation=<recent Slack conversation id>` - чат открывается напрямую.
+- Проверить, что pipeline filter не ломает поиск.
+
+После одобрения внесу правки.

@@ -256,6 +256,23 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     const targetStageId = overId;
     if (deal.stage_id === targetStageId) return;
 
+    // Guard: don't allow moving to "Other Reply" if the conversation has no
+    // inbound messages — that's how the column accumulates ghost cards with
+    // empty chats. Only manual user moves trip this; automations bypass.
+    const targetStage = stages.find((s) => s.id === targetStageId);
+    if (targetStage?.name?.toLowerCase().trim() === "other reply" && deal.conversation_id) {
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("conversation_id", deal.conversation_id)
+        .eq("direction", "inbound");
+      if (!count || count === 0) {
+        toast.error("This contact hasn't replied yet — can't move to Other Reply.");
+        return;
+      }
+    }
+
+
     // optimistic
     const prevStageId = deal.stage_id;
     const newPosition = (dealsByStage.get(targetStageId)?.length ?? 0);

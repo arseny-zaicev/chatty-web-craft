@@ -340,11 +340,16 @@ async function handleInbound(payload: Record<string, unknown>) {
     return;
   }
 
-  const { data: automations } = await supabase
+  // Scope automations to this workspace AND, when known, the conversation's
+  // pipeline. This prevents button replies from triggering moves on unrelated
+  // pipelines that share the same operator user_id.
+  let autoQuery = supabase
     .from("stage_automations")
-    .select("trigger, trigger_value, target_stage_id")
+    .select("trigger, trigger_value, target_stage_id, workspace_id")
     .eq("user_id", number.user_id)
     .eq("is_active", true);
+  if (number.workspace_id) autoQuery = autoQuery.eq("workspace_id", number.workspace_id);
+  const { data: automations } = await autoQuery;
 
   let movedToStageId: string | null = null;
 
