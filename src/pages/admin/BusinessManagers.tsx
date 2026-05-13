@@ -178,17 +178,21 @@ const BusinessManagers = () => {
                   <TableHead>Stage</TableHead>
                   <TableHead>Health</TableHead>
                   <TableHead>Numbers</TableHead>
+                  <TableHead>Sent today</TableHead>
+                  <TableHead>Ads before?</TableHead>
+                  <TableHead>Next warm-up</TableHead>
                   <TableHead>Last warmup</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-12">No Business Managers yet</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-12">No Business Managers yet</TableCell></TableRow>
                 ) : rows.map((b) => {
                   const nums = numbersByBm.get(b.id) ?? [];
                   const active = nums.filter((n) => n.status === "active").length;
                   const restricted = nums.filter((n) => n.status === "restricted").length;
                   const blocked = nums.filter((n) => n.status === "banned" || n.status === "blocked").length;
+                  const bm = bmMetrics?.get(b.id);
                   return (
                     <TableRow key={b.id} className="cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/admin/business-managers/${b.id}`)}>
                       <TableCell className="font-medium">
@@ -202,6 +206,13 @@ const BusinessManagers = () => {
                       <TableCell className="text-sm">
                         <span>{nums.length}</span>
                         <span className="text-muted-foreground"> · {active}a / {restricted}r / {blocked}b</span>
+                      </TableCell>
+                      <TableCell className="text-sm tabular-nums">{(bm?.sent_today ?? 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-sm">
+                        {b.ads_launched_before ? <Badge variant="default">Yes</Badge> : <span className="text-muted-foreground">No</span>}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {b.next_warmup_run_date ? format(new Date(b.next_warmup_run_date), "MMM d") : "—"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {b.last_warmup_action_at ? formatDistanceToNow(new Date(b.last_warmup_action_at), { addSuffix: true }) : "—"}
