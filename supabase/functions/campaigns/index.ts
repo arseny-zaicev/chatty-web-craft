@@ -1065,6 +1065,38 @@ async function processQueue(admin: any) {
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
 
+  // ============= Per-number daily cap safety net =============
+  // Pre-fetch daily_send_limit per number in this tick. Then count how many
+  // were already sent today (Dubai TZ) per number. We refuse to send a recipient
+  // whose number has reached its cap and bump the row to next day at 09:00 Dubai.
+  const numIdsInTick = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
+  const dailyLimitByNum = new Map<string, number>();
+  const sentTodayByNum = new Map<string, number>();
+  if (numIdsInTick.length > 0) {
+    const { data: numRows } = await admin
+      .from("whatsapp_numbers")
+      .select("id, daily_send_limit")
+      .in("id", numIdsInTick);
+    for (const n of numRows ?? []) dailyLimitByNum.set(n.id, Math.max(1, Number(n.daily_send_limit ?? 200)));
+    // Count sent today (Dubai) per number — single query.
+    const dubaiTodayStartUtcMs = (() => {
+      const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" });
+      const today = fmt.format(new Date()); // YYYY-MM-DD in Dubai
+      // Dubai is UTC+4 always, so 00:00 Dubai = (today - 4h) UTC
+      return new Date(`${today}T00:00:00+04:00`).getTime();
+    })();
+    const startIso = new Date(dubaiTodayStartUtcMs).toISOString();
+    for (const nid of numIdsInTick) {
+      const { count } = await admin
+        .from("campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("whatsapp_number_id", nid)
+        .gte("sent_at", startIso)
+        .not("sent_at", "is", null);
+      sentTodayByNum.set(nid, count ?? 0);
+    }
+  }
+
   // Per-campaign canary state. If the first 3 sends for a campaign in this
   // tick all fail with the same provider error code (and zero successes),
   // halt the campaign and skip its remaining recipients - caps damage at
