@@ -1018,24 +1018,10 @@ async function processQueue(admin: any) {
   }
 
 
-  // Scale the per-tick batch with the number of active ready numbers so utility
-  // throughput is not bottlenecked by a fixed ceiling when multiple numbers are live.
-  // Floor 50 (single-number safe), 20 recipients per active number, hard cap 500.
-  let perTickLimit = 200;
-  try {
-    // Count both 'active' and 'ready' numbers (matches lead-dispatch sender filter).
-    // Previously only counted 'ready', which capped throughput at 50/min once
-    // numbers transitioned to 'active' status.
-    const { count: activeNumbers } = await admin
-      .from("whatsapp_numbers")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["active", "ready"])
-      .eq("is_active", true);
-    const n = activeNumbers ?? 0;
-    perTickLimit = Math.min(500, Math.max(50, n * 20));
-  } catch (_) {
-    perTickLimit = 200;
-  }
+  // Fetch enough due recipients for marketing blasts. Actual send speed is still
+  // controlled below per WhatsApp number (1/sec for marketing, 60/sec for utility),
+  // so this limit must not become a hidden campaign-level throttle.
+  const perTickLimit = 500;
 
   // Look ahead window: pg_cron fires at minute boundaries, so fetch anything
   // due within the next ~55s and pace sends inside the tick. This honors the
