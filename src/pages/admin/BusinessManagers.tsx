@@ -29,6 +29,8 @@ type BM = {
   health_score: number;
   last_warmup_action_at: string | null;
   created_at: string;
+  ads_launched_before: boolean;
+  next_warmup_run_date: string | null;
 };
 
 type WS = { id: string; name: string };
