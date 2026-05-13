@@ -383,6 +383,21 @@ export default function FinanceRunDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete payout run?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The run, all its line items and audit entries, and any generated PDF / CSV files will be removed permanently. This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteRun.mutate()} disabled={deleteRun.isPending}>
+              {deleteRun.isPending ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
