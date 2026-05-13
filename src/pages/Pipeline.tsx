@@ -136,19 +136,25 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
     if (pipelineData.stages[0] && !newStageId) setNewStageId(pipelineData.stages[0].id);
   }, [pipelineData, newStageId]);
 
-  // Realtime deals — workspace-scoped channel; client filters to selected pipeline.
+  // Realtime deals — scoped to the selected pipeline when one is set, so operators
+  // on a single pipeline don't pay the cost of every other pipeline's deal updates.
+  // Falls back to workspace scope when no pipeline is selected (rare).
   useRealtimeTable<Deal>(
     {
-      channel: `pipeline-deals-${workspaceId ?? "all"}`,
+      channel: `pipeline-deals-${workspaceId ?? "all"}-${selectedPipelineId ?? "all"}`,
       table: "deals",
-      filter: workspaceId ? `workspace_id=eq.${workspaceId}` : undefined,
+      filter: selectedPipelineId
+        ? `pipeline_id=eq.${selectedPipelineId}`
+        : workspaceId
+          ? `workspace_id=eq.${workspaceId}`
+          : undefined,
       enabled: !!workspaceId,
     },
     (payload) => {
       setDeals((prev) => {
         if (payload.eventType === "DELETE") return prev.filter((d) => d.id !== (payload.old as Deal).id);
         const incoming = payload.new as Deal;
-        // Drop events for other pipelines; remove if previously belonged here.
+        // Defensive: drop events for other pipelines that slipped through.
         if (selectedPipelineId && incoming.pipeline_id && incoming.pipeline_id !== selectedPipelineId) {
           return prev.filter((d) => d.id !== incoming.id);
         }

@@ -3577,6 +3577,7 @@ export type Database = {
       }
       record_heartbeat: { Args: never; Returns: undefined }
       release_audience_rows: { Args: { _row_ids: string[] }; Returns: number }
+      release_job_lock: { Args: { _job_name: string }; Returns: boolean }
       release_stale_reservations: {
         Args: { _older_than_minutes?: number }
         Returns: number
@@ -3604,6 +3605,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      try_job_lock: { Args: { _job_name: string }; Returns: boolean }
       verify_payout_run: {
         Args: { _run_id: string }
         Returns: {

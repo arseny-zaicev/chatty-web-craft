@@ -1,6 +1,7 @@
 // Drains slack_event_queue and posts formatted Block Kit messages to the right channels.
 // Triggered by pg_cron every minute and ad-hoc.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { acquireJobLock } from "../_shared/jobLock.ts";
 import {
   buildCampaignGroupBlocks,
   buildNumberAlertBlocks,
@@ -92,6 +93,16 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // Prevent two dispatcher invocations from draining the same rows in parallel
+  // (cron + manual trigger, or slow run colliding with the next tick).
+  const release = await acquireJobLock(supabase, "slack-dispatch");
+  if (!release) {
+    return new Response(JSON.stringify({ skipped: "locked" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  try {
 
   const { data: events, error } = await supabase
     .from("slack_event_queue")
@@ -342,4 +353,7 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ processed, failed, total: events?.length || 0 }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+  } finally {
+    await release();
+  }
 });

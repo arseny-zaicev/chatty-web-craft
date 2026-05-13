@@ -116,29 +116,18 @@ export async function fetchCrmBase(workspaceId?: string) {
   });
 
   // Set of conversation ids that have at least one inbound message (i.e. contact replied).
-  // Computed across the entire workspace (not just loaded conversations) so the Replied
-  // filter and counter are accurate even when older threads aren't in the initial batch.
+  // Backed by conversations.last_inbound_at (maintained by trigger) so this is one
+  // small index lookup, not a 20k-row message scan. Accurate across the whole workspace
+  // even when older threads are not in the initial 1000-row batch.
   const repliedConversationIds = new Set<string>();
-  if (workspaceId) {
-    const { data: inbound } = await supabase
-      .from("messages")
-      .select("conversation_id, conversations!inner(workspace_id)")
-      .eq("direction", "inbound")
-      .eq("conversations.workspace_id", workspaceId)
-      .limit(20000);
-    (inbound ?? []).forEach((m: any) => m.conversation_id && repliedConversationIds.add(m.conversation_id));
-  } else {
-    const convIds = (conversations ?? []).map((c: any) => c.id);
-    if (convIds.length > 0) {
-      const { data: inbound } = await supabase
-        .from("messages")
-        .select("conversation_id")
-        .eq("direction", "inbound")
-        .in("conversation_id", convIds)
-        .limit(20000);
-      (inbound ?? []).forEach((m: any) => repliedConversationIds.add(m.conversation_id));
-    }
-  }
+  let repliedQuery = supabase
+    .from("conversations")
+    .select("id")
+    .not("last_inbound_at", "is", null)
+    .limit(50000);
+  if (workspaceId) repliedQuery = repliedQuery.eq("workspace_id", workspaceId);
+  const { data: repliedRows } = await repliedQuery;
+  (repliedRows ?? []).forEach((r: any) => r.id && repliedConversationIds.add(r.id));
 
   return {
     numbers: (numbers ?? []) as WhatsAppNumber[],
