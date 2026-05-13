@@ -51,7 +51,12 @@ type Message = {
   sent_by_user_id: string | null;
 };
 
-const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
+const CRM = ({
+  workspaceId,
+  embedded = false,
+  initialConversationId,
+  standaloneChat = false,
+}: { workspaceId?: string; embedded?: boolean; initialConversationId?: string | null; standaloneChat?: boolean } = {}) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // queryClient no longer needed: realtime updates flow through local state, react-query stays the cache.
@@ -262,7 +267,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
     if (!baseData) return;
     setNumbers(baseData.numbers);
     setConversations(baseData.conversations);
-    const requested = searchParams.get("conversation");
+    const requested = initialConversationId ?? searchParams.get("conversation");
     if (requested && baseData.conversations.some((c) => c.id === requested)) {
       setActiveId(requested);
       // Reset filters so the requested conversation is visible in the list
@@ -271,7 +276,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
       setStarredOnly(false);
       setSearch("");
     }
-  }, [baseData, searchParams]);
+  }, [baseData, searchParams, initialConversationId]);
 
   // Scroll the active conversation into view when it changes (e.g. opened from Pipeline)
   useEffect(() => {
@@ -483,7 +488,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
 
         <div className="flex-1 min-h-0 overflow-hidden flex">
           {/* Left: conversation list */}
-          <aside className="w-[260px] xl:w-[320px] shrink-0 min-h-0 overflow-hidden border-r border-border flex flex-col bg-card/20">
+          {!standaloneChat && <aside className="w-[260px] xl:w-[320px] shrink-0 min-h-0 overflow-hidden border-r border-border flex flex-col bg-card/20">
             <div className="shrink-0 p-3 space-y-2 border-b border-border">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -699,7 +704,7 @@ const CRM = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded
                 })
               )}
             </div>
-          </aside>
+          </aside>}
 
           {/* Right: chat window */}
           <section className="flex-1 min-h-0 overflow-hidden flex flex-col min-w-0">
