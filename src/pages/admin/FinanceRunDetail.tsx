@@ -257,8 +257,10 @@ export default function FinanceRunDetail() {
               <TableHeader><TableRow>
                 <TableHead>Day</TableHead><TableHead>Number</TableHead><TableHead>Client</TableHead>
                 <TableHead className="text-right">Delivered</TableHead><TableHead className="text-right">Failed</TableHead>
-                <TableHead className="text-right">P. rate</TableHead><TableHead className="text-right">C. rate</TableHead>
-                <TableHead className="text-right">Payout</TableHead><TableHead className="text-right">Margin</TableHead>
+                <TableHead className="text-right" title="Number override → workspace override → partner default">Partner rate</TableHead>
+                <TableHead className="text-right">Client rate</TableHead>
+                <TableHead className="text-right">Partner payout</TableHead>
+                <TableHead className="text-right">Our margin</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {(items || []).map((i: any) => (
@@ -268,8 +270,8 @@ export default function FinanceRunDetail() {
                     <TableCell>{i.client_label}</TableCell>
                     <TableCell className="text-right">{i.delivered}</TableCell>
                     <TableCell className="text-right">{i.failed}</TableCell>
-                    <TableCell className="text-right">${Number(i.partner_rate_usd).toFixed(4)}</TableCell>
-                    <TableCell className="text-right">${Number(i.client_rate_usd).toFixed(4)}</TableCell>
+                    <TableCell className="text-right">{fmtRate(Number(i.partner_rate_usd))}</TableCell>
+                    <TableCell className="text-right">{fmtRate(Number(i.client_rate_usd))}</TableCell>
                     <TableCell className="text-right">{fmtUsd(Number(i.payout_usd))}</TableCell>
                     <TableCell className="text-right">{fmtUsd(Number(i.margin_usd))}</TableCell>
                   </TableRow>
