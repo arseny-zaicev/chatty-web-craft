@@ -1234,6 +1234,9 @@ async function processQueue(admin: any) {
         }
         cState.ok += 1;
         sentMu.inc();
+        if (recipient.whatsapp_number_id) {
+          sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
+        }
       } catch (err) {
         sentMu.incFail();
         const msg = err instanceof Error ? err.message : "Send failed";
