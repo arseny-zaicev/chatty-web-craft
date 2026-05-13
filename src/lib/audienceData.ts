@@ -334,13 +334,40 @@ export async function deleteBatch(batchId: string): Promise<void> {
 
 /* ---------- Reservation (used by Launch) ---------- */
 
+// PostgREST caps SETOF responses at db.max_rows (1000 by default), even though
+// the RPC mutates more rows under the hood. We chunk the reservation in batches
+// of 500 so the SDK actually returns every reserved row to us — otherwise rows
+// get marked `reserved` server-side but never returned to the caller, leaving
+// them stuck forever and silently truncating campaigns to 1000 recipients.
+const RESERVE_CHUNK = 500;
+
 export async function reserveRows(batchId: string, quantity: number | null): Promise<AudienceRow[]> {
-  const { data, error } = await supabase.rpc("reserve_audience_rows", {
-    _batch_id: batchId,
-    _quantity: quantity ?? 0,
-  });
-  if (error) throw error;
-  return (data ?? []) as AudienceRow[];
+  const target = quantity == null ? Number.POSITIVE_INFINITY : Math.max(0, quantity);
+  if (target === 0) return [];
+
+  const collected: AudienceRow[] = [];
+  // Loop until we've collected `target` rows or the RPC returns empty (pool drained).
+  while (collected.length < target) {
+    const remaining = target === Number.POSITIVE_INFINITY
+      ? RESERVE_CHUNK
+      : Math.min(RESERVE_CHUNK, target - collected.length);
+    const { data, error } = await supabase.rpc("reserve_audience_rows", {
+      _batch_id: batchId,
+      _quantity: remaining,
+    });
+    if (error) {
+      // Roll back anything we already grabbed so it doesn't sit as orphan `reserved`.
+      if (collected.length > 0) {
+        try { await supabase.rpc("release_audience_rows", { _row_ids: collected.map((r) => r.id) }); } catch { /* ignore */ }
+      }
+      throw error;
+    }
+    const batch = (data ?? []) as AudienceRow[];
+    if (batch.length === 0) break;
+    collected.push(...batch);
+    if (batch.length < remaining) break; // pool drained
+  }
+  return collected;
 }
 
 export async function markRowsUsed(rowIds: string[], campaignId: string): Promise<number> {

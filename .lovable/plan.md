@@ -1,68 +1,56 @@
-## Что не так
+## Корневая причина
 
-Проверил БД и код — стата на Portfolio врёт **из-за вьюхи `v_metrics_today`**, а не из-за UI.
-
-Текущая `v_metrics_today` строится так:
-- `sent` агрегируется по `(workspace_id, whatsapp_number_id, campaign_id)` — много строк на воркспейс
-- `delivered` агрегируется по `(workspace_id, whatsapp_number_id)`
-- `replies` агрегируется по `(workspace_id)` — одна строка на воркспейс
-- потом всё это склеивается через `FULL JOIN`
-
-Из-за `FULL JOIN` строки `delivered` и `replies` **дублируются на каждую строку sent**. А `portfolioMetrics.ts` потом просто `.sum()` всё подряд → числа умножаются.
-
-Конкретно сейчас в БД (Dubai today):
-
-| Workspace | sent (sum) | delivered (sum) | replies (sum) | rows во вьюхе | реальные replies today |
-|---|---|---|---|---|---|
-| Carrotsnotsticks | 761 | **1568** | **1080** | 4 | 270 |
-| GoSwyft | 691 | 787 | **416** | 8 | 52 |
-| Growth-onomics | 533 | 494 | **202** | 2 | 101 |
-| ISKRA | 902 | 873 | 147 | 1 | 147 |
-| Salesforge | 6 | 36 | **30** | 6 | 5 |
-
-Поэтому на Portfolio видно **Delivered 3619 > Sent 2842** (бред — нельзя доставить больше чем отправлено) и **Replies 1785** вместо реальных ~575.
-
-## Что чиним
-
-### 1. Переписать `v_metrics_today` (миграция)
-
-Разделить на нормальные слои без перекрёстной мультипликации:
-
-```text
-v_metrics_today              -- одна строка на workspace (totals)
-  workspace_id, sent_today, delivered_today, failed_today, replies_today
-
-v_metrics_today_by_number    -- одна строка на (workspace, number)
-  workspace_id, whatsapp_number_id, sent_today, delivered_today, failed_today
-
-v_metrics_today_by_campaign  -- одна строка на (workspace, campaign)
-  workspace_id, campaign_id, sent_today, failed_today
+В `audience_batch_stats` сейчас:
 ```
+total=7571, valid=7571, unused=5571, reserved=400, used=1600
+```
+То есть в БД лежит **7571 валидный контакт**, и при «All unused» клиент должен был забрать 5571.
 
-Каждая вьюха считает свой срез независимым `GROUP BY` без `FULL JOIN`-мультипликации. `replies_today` живёт только на уровне воркспейса (т.к. реплаи не привязаны к номеру/кампании).
+Кампания `5acc6c71...` ушла с `audience_total=1000` при `allocated_capacity=1400`. На клиенте всё рассчитано правильно (`requestedTotal = dbAvailable = 5571`, `effectiveCount = min(5571, 1400) = 1400`), и в `reserve_audience_rows(_quantity=1400)` уходит правильное число. Сама RPC тоже без лимита — она реально помечает 1400 строк `reserved` в БД.
 
-### 2. Обновить три места в коде
+**Но** `supabase-js`/PostgREST по дефолту режут ответ до **1000 строк** (`db.max_rows = 1000`). Поэтому:
 
-- **`src/lib/portfolioMetrics.ts`** (`fetchPortfolioSnapshot`):
-  - `sent/delivered/replies_today` берём из `v_metrics_today` (по 1 строке на ws → суммирование больше не дублирует)
-  - `active_campaign_sent` (today по группе кампаний) — из `v_metrics_today_by_campaign`
-- **`src/lib/portfolioMetrics.ts`** (`fetchWorkspaceOverview`): из `v_metrics_today` (1 строка на ws)
-- **`src/lib/metrics.ts`**:
-  - `fetchWorkspaceMetrics` → `v_metrics_today`
-  - `fetchNumberMetrics` → `v_metrics_today_by_number`
+1. Клиент получает обратно только **1000 строк** из 1400 зарезервированных.
+2. `workingRecipients.length = 1000` → отправляется в edge-функцию → `audience_total = 1000`.
+3. Оставшиеся **400 строк висят в статусе `reserved`** навсегда — никто их не «использует» и не освободит. Именно эти 400 ты сейчас видишь в `audience_batch_stats.reserved`.
 
-### 3. Регенерация типов
+Так что баг бьёт сразу в две стороны: **аудитория усечена до 1000** и **сжигается потолок 1000 контактов на запуск, даже если ёмкость больше**.
 
-После миграции `src/integrations/supabase/types.ts` обновится автоматически.
+## План исправления
 
-## Что НЕ трогаем
+### 1. `src/lib/audienceData.ts` — чанковая резервация
 
-- `v_metrics_alltime` — отдельная вьюха, не в этом баге.
-- UI карточек на Portfolio — рендер правильный, чинить не надо.
-- Логика sending/health/active_campaign_total — не трогаем, считаются из `campaigns`/`campaign_recipients` напрямую.
+Переписать `reserveRows()` так, чтобы она звала RPC порциями ≤ 500 строк до тех пор, пока:
+- не наберём нужное `quantity`, либо
+- очередной вызов вернёт пусто (батч исчерпан).
 
-## Проверка после фикса
+При `quantity = null` (все unused) — сначала прочитать `audience_batch_stats.unused` и крутить тот же цикл, пока RPC возвращает строки.
 
-Запросом сравню `v_metrics_today.replies_today` с прямым `count(*)` из `messages WHERE direction='inbound' AND created_at >= dubai_start_of_day()` — должны совпадать по каждому воркспейсу. Также проверю `Delivered ≤ Sent` для каждого ws.
+Если на каком-то шаге верхний поток упадёт (ошибка/отмена) — собрать уже зарезервированные `id` и вызвать `release_audience_rows`, чтобы не плодить осиротевшие `reserved`.
 
-Жми Implement plan если ок.
+### 2. `LaunchWizard.tsx` — небольшая страховка
+
+После `reserveRows` сравнить `reserved.length` с запрошенным `reserveCount`. Если меньше — показать тост («зарезервировано N из M, остальные сейчас заняты другим запуском») и продолжить с фактическим N. Сейчас расхождение проглатывается молча.
+
+### 3. Edge `campaigns/launch` — поднять верхнюю планку
+
+В `launchCampaign` строка:
+```ts
+if (recipients.length < 1 || recipients.length > 5000) ...
+```
+Сейчас это режет любые большие запуски на 5000. Поднять до **50 000** (или убрать верхний предел и оставить только нижний `>= 1`), потому что капасити уже жёстко ограничивается `allocated_capacity` ниже по коду — двойного лимита тут не нужно.
+
+### 4. Чистка текущих 400 «застрявших» reserved
+
+Одноразовый release для батча `0ee28ebc-31d8-4731-b2f9-955ba9bbb53e`: вернуть в `unused` все строки, у которых `usage_status='reserved'` и `reserved_at` старше, например, 1 часа и нет `used_in_campaign_id`. Сделать это через миграцию-SQL (UPDATE), а заодно добавить **cron-функцию** (или просто SQL-функцию `release_stale_reservations()`), которая раз в N минут чистит зависшие резервации > 30 мин.
+
+### 5. Почему мы вообще на это напоролись
+
+Это классическая ловушка PostgREST: дефолтный `db.max_rows=1000` молча режет любой ответ, в том числе `SETOF` из RPC. Когда RPC одновременно **меняет** строки и **возвращает** их, разница между «сколько RPC изменила» и «сколько SDK увидел» становится тихим источником рассинхрона. Лечится либо чанкованием на клиенте (наш путь — без миграций инфры), либо отдельной RPC, которая возвращает только агрегаты (`count`) + второй запрос за самими строками страницами. Чанкование проще и не требует менять RPC.
+
+## Технические детали
+
+- Размер чанка: 500 (хорошо ложится в дефолтный лимит и оставляет запас на потенциальные джойны).
+- Параллелить чанки **нельзя** — каждый следующий вызов должен видеть результат предыдущего, иначе `FOR UPDATE SKIP LOCKED` нам не поможет и можно зарезервировать одно и то же дважды (ну, не сможет, но получим лишние пустые ответы и риск).
+- В тосте показать `reserved.length` vs `reserveCount`, чтобы оператор видел реальную цифру перед стартом.
+- Высокий `total_recipients` (до 50k) на edge-функции означает batched insert в `campaign_recipients` — текущий код уже вставляет чанками, проверю что чанк там адекватный (~500–1000 строк за insert).

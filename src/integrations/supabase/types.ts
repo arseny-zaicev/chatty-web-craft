@@ -3501,6 +3501,10 @@ export type Database = {
       }
       record_heartbeat: { Args: never; Returns: undefined }
       release_audience_rows: { Args: { _row_ids: string[] }; Returns: number }
+      release_stale_reservations: {
+        Args: { _older_than_minutes?: number }
+        Returns: number
+      }
       reserve_audience_rows: {
         Args: { _batch_id: string; _quantity: number }
         Returns: {
