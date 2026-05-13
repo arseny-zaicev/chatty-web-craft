@@ -172,7 +172,6 @@ export default function Partners() {
 function NewPartnerDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [kind, setKind] = useState("provider");
   const [cadence, setCadence] = useState("weekly");
   const [rate, setRate] = useState("0");
   const [notes, setNotes] = useState("");
@@ -183,7 +182,7 @@ function NewPartnerDialog({ open, onOpenChange, onCreated }: { open: boolean; on
       const { error } = await supabase.from("partners").insert({
         name: name.trim(),
         contact_email: email.trim() || null,
-        kind, cadence,
+        kind: "provider", cadence,
         default_payout_rate_usd: Number(rate) || 0,
         payment_notes: notes.trim() || null,
         created_by: u.user?.id,
@@ -193,7 +192,7 @@ function NewPartnerDialog({ open, onOpenChange, onCreated }: { open: boolean; on
     onSuccess: () => {
       toast.success("Partner created");
       onCreated(); onOpenChange(false);
-      setName(""); setEmail(""); setRate("0"); setNotes(""); setKind("provider"); setCadence("weekly");
+      setName(""); setEmail(""); setRate("0"); setNotes(""); setCadence("weekly");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -205,32 +204,21 @@ function NewPartnerDialog({ open, onOpenChange, onCreated }: { open: boolean; on
         <div className="space-y-3">
           <Field label="Name"><Input value={name} onChange={e => setName(e.target.value)} placeholder="Nitish" /></Field>
           <Field label="Contact email"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder="partner@example.com" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Kind">
-              <Select value={kind} onValueChange={setKind}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="provider">Provider</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                  <SelectItem value="both">Both</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Report cadence">
-              <Select value={cadence} onValueChange={setCadence}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="off">Off</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <Field label="Default payout rate per delivered ($)">
+          <Field label="Report cadence">
+            <Select value={cadence} onValueChange={setCadence}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Off</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Default provider rate $/delivered">
             <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
           </Field>
           <Field label="Payment notes"><Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Wise, IBAN, etc." /></Field>
+          <p className="text-xs text-muted-foreground">Если этого партнёра кто-то привёл — задай реферрера и ставку в Settings после создания.</p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
