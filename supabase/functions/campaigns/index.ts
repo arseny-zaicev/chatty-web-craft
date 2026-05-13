@@ -1033,8 +1033,8 @@ async function processQueue(admin: any) {
     return m ? `#${m[1]}` : msg.slice(0, 40).replace(/\s+/g, " ");
   };
 
-  // Hard pacing: one campaign send per 60+ seconds globally, not per sender number.
-  // Utility campaigns must never multiply throughput by number count.
+  // Hard pacing: utility templates throttled to >=60s gap (WhatsApp policy / cost).
+  // Marketing templates use the campaign's configured delay_min_seconds (floor 1s).
   const lastSentMs = new Map<string, number>();
 
   for (const recipient of due ?? []) {
@@ -1050,10 +1050,12 @@ async function processQueue(admin: any) {
       }
       if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
 
-      // Pacing guard: enforce delay_min_seconds gap from the previous send
-      // for this (campaign, number). Skip the recipient until next tick if
-      // the required wait exceeds remaining budget.
-      const minGapMs = Math.max(60, recipient.campaigns?.delay_min_seconds || 60) * 1000;
+      // Pacing guard: enforce delay_min_seconds gap from the previous send for this campaign.
+      const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
+      const isUtility = tplCategory === "utility" || tplCategory === "authentication";
+      const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
+      const floor = isUtility ? 60 : 1;
+      const minGapMs = Math.max(floor, configuredMin) * 1000;
       let lastMs = lastSentMs.get(recipient.campaign_id) ?? 0;
       if (!lastMs) {
         const { data: lastRecipient } = await admin
