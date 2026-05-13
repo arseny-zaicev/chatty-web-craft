@@ -353,4 +353,7 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ processed, failed, total: events?.length || 0 }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+  } finally {
+    await release();
+  }
 });
