@@ -163,6 +163,41 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
 
   const groups = useMemo(() => groupCampaigns(campaigns as CampaignRow[]), [campaigns]);
 
+  // Live per-campaign reply/positive counts — never read from cached insights snapshot.
+  const allCampaignIds = useMemo(
+    () => groups.flatMap((g) => g.campaigns.map((c) => c.id)),
+    [groups],
+  );
+  const { data: liveCountsByCampaign } = useQuery({
+    queryKey: ["campaigns", "live-counts", workspaceId, allCampaignIds.slice().sort().join(",")],
+    queryFn: async () => {
+      if (allCampaignIds.length === 0) return new Map<string, { replied: number; positive: number; sent: number }>();
+      const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: allCampaignIds });
+      if (error || !data) return new Map<string, { replied: number; positive: number; sent: number }>();
+      const m = new Map<string, { replied: number; positive: number; sent: number }>();
+      for (const r of data as any[]) {
+        m.set(r.campaign_id, { replied: Number(r.replied ?? 0), positive: Number(r.positive ?? 0), sent: Number(r.sent ?? 0) });
+      }
+      return m;
+    },
+    enabled: allCampaignIds.length > 0,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const groupLiveCounts = useMemo(() => {
+    const out = new Map<string, { replied: number; positive: number; sent: number }>();
+    for (const g of groups) {
+      let replied = 0, positive = 0, sent = 0;
+      for (const c of g.campaigns) {
+        const v = liveCountsByCampaign?.get(c.id);
+        if (v) { replied += v.replied; positive += v.positive; sent += v.sent; }
+      }
+      out.set(g.key, { replied, positive, sent });
+    }
+    return out;
+  }, [groups, liveCountsByCampaign]);
+
   if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
@@ -223,6 +258,22 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     <ProgressBar value={g.sent} total={g.total} className="flex-1" />
                     <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-[80px] text-right">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
                   </div>
+                  {(() => {
+                    const lc = groupLiveCounts.get(g.key);
+                    const sentForRate = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                    const rate = sentForRate > 0 ? Math.round(((lc?.replied ?? 0) / sentForRate) * 100) : 0;
+                    return (
+                      <div className="hidden lg:flex items-center gap-2 shrink-0 w-[140px] justify-end">
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          <span className="font-semibold text-foreground">{(lc?.replied ?? 0).toLocaleString()}</span> replied
+                          {sentForRate > 0 && <span className="text-muted-foreground/70"> · {rate}%</span>}
+                        </span>
+                        {(lc?.positive ?? 0) > 0 && (
+                          <span className="text-[11px] text-emerald-600 tabular-nums">+{lc!.positive}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {g.failed > 0 && <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{g.failed} failed</span>}
                   <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>

@@ -38,6 +38,24 @@ async function fetchInsight(campaignId: string): Promise<Insight | null> {
   return (data as Insight | null) ?? null;
 }
 
+type LiveTotals = { total: number; sent: number; failed: number; pending: number; replied: number; positive: number; meeting: number };
+
+async function fetchLiveTotals(campaignIds: string[]): Promise<LiveTotals> {
+  const empty: LiveTotals = { total: 0, sent: 0, failed: 0, pending: 0, replied: 0, positive: 0, meeting: 0 };
+  if (campaignIds.length === 0) return empty;
+  const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: campaignIds });
+  if (error || !data) return empty;
+  return (data as any[]).reduce<LiveTotals>((acc, r) => ({
+    total:    acc.total    + Number(r.total ?? 0),
+    sent:     acc.sent     + Number(r.sent ?? 0),
+    failed:   acc.failed   + Number(r.failed ?? 0),
+    pending:  acc.pending  + Number(r.pending ?? 0),
+    replied:  acc.replied  + Number(r.replied ?? 0),
+    positive: acc.positive + Number(r.positive ?? 0),
+    meeting:  acc.meeting  + Number(r.meeting ?? 0),
+  }), empty);
+}
+
 async function downloadCsv(campaignId: string, campaignName: string) {
   const { data: { session } } = await supabase.auth.getSession();
   const jwt = session?.access_token;
@@ -111,6 +129,14 @@ export function CampaignReportPanel({
     queryFn: () => fetchInsight(primaryCampaignId),
   });
 
+  // Live totals — never read from the cached insight snapshot.
+  const { data: liveTotals } = useQuery({
+    queryKey: ["campaign-live-counts", campaignIds.slice().sort().join(",")],
+    queryFn: () => fetchLiveTotals(campaignIds),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
   const generate = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke("campaign-insights", {
@@ -140,7 +166,6 @@ export function CampaignReportPanel({
   };
 
   const metrics = insight?.metrics ?? null;
-  const totals = metrics?.totals;
   const segments = metrics?.by_segment ?? {};
   const templates = metrics?.by_template ?? [];
 
@@ -163,11 +188,23 @@ export function CampaignReportPanel({
         </div>
       </div>
 
+      {/* Live KPI strip — always visible, polled every 30s, never read from cached snapshot */}
+      {liveTotals && (
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+          <KpiMini label="Total" value={liveTotals.total} />
+          <KpiMini label="Sent" value={liveTotals.sent} tone="good" />
+          <KpiMini label="Failed" value={liveTotals.failed} tone={liveTotals.failed > 0 ? "bad" : undefined} />
+          <KpiMini label="Replied" value={liveTotals.replied} />
+          <KpiMini label="Positive" value={liveTotals.positive} tone="good" />
+          <KpiMini label="Meeting" value={liveTotals.meeting} tone="good" />
+        </div>
+      )}
+
       {loadingInsight ? (
         <div className="text-xs text-muted-foreground">Loading insights…</div>
       ) : !insight ? (
         <div className="text-xs text-muted-foreground">
-          No insights yet. They auto-generate within ~15 min after a campaign completes, or click <strong>Generate insights</strong>.
+          No AI summary yet. They auto-generate within ~15 min after a campaign completes, or click <strong>Generate insights</strong>.
         </div>
       ) : (
         <Tabs defaultValue="summary">
@@ -178,21 +215,11 @@ export function CampaignReportPanel({
           </TabsList>
 
           <TabsContent value="summary" className="mt-3 space-y-3">
-            {totals && (
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                <KpiMini label="Total" value={totals.total} />
-                <KpiMini label="Sent" value={totals.sent} tone="good" />
-                <KpiMini label="Failed" value={totals.failed} tone={totals.failed > 0 ? "bad" : undefined} />
-                <KpiMini label="Replied" value={totals.replied} />
-                <KpiMini label="Positive" value={totals.positive} tone="good" />
-                <KpiMini label="Meeting" value={totals.meeting} tone="good" />
-              </div>
-            )}
             {insight.summary_md && (
               <div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap rounded border border-border bg-background/40 p-3">
                 {insight.summary_md}
                 <div className="text-[10px] text-muted-foreground mt-2 not-prose">
-                  Generated {new Date(insight.generated_at).toLocaleString()} · {insight.model}
+                  Snapshot from {new Date(insight.generated_at).toLocaleString()} · {insight.model} — counters above update live every 30s
                 </div>
               </div>
             )}
