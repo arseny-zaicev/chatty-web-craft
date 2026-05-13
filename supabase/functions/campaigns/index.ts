@@ -635,7 +635,14 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   }
 
   // Slack notification handled by DB trigger on campaigns.status change.
-  return json({ ok: true, campaign_id: campaign.id, scheduled: rows.length, immediate, initial_status: initialStatus });
+  return json({
+    ok: true,
+    campaign_id: campaign.id,
+    scheduled: rows.length,
+    immediate,
+    initial_status: initialStatus,
+    capacity: { allocated: allocatedCapacity, requested: audienceTotalRequested, truncated: truncatedCount, per_number_caps: Object.fromEntries(perNumberCaps), days: daysCount },
+  });
 }
 
 async function upsertTemplate(admin: any, requesterId: string, body: any) {
