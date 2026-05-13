@@ -92,7 +92,7 @@ export async function fetchNumberMetrics(
 ): Promise<Map<string, TodayMetrics & AlltimeMetrics>> {
   if (!numberIds.length) return new Map();
   const [{ data: today }, { data: all }] = await Promise.all([
-    supabase.from("v_metrics_today").select("whatsapp_number_id, sent_today, delivered_today, failed_today").in("whatsapp_number_id", numberIds),
+    supabase.from("v_metrics_today_by_number").select("whatsapp_number_id, sent_today, delivered_today, failed_today").in("whatsapp_number_id", numberIds),
     supabase.from("v_metrics_alltime").select("whatsapp_number_id, sent_alltime, delivered_alltime, failed_alltime").in("whatsapp_number_id", numberIds),
   ]);
   const byNum = new Map<string, TodayMetrics & AlltimeMetrics>();
