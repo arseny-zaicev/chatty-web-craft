@@ -3032,6 +3032,19 @@ export type Database = {
         Args: { _at: string; _bm: string; _partner: string; _role: string }
         Returns: number
       }
+      campaign_live_counts: {
+        Args: { p_campaign_ids: string[] }
+        Returns: {
+          campaign_id: string
+          failed: number
+          meeting: number
+          pending: number
+          positive: number
+          replied: number
+          sent: number
+          total: number
+        }[]
+      }
       campaign_recipient_counts: {
         Args: { p_campaign_ids: string[] }
         Returns: {
