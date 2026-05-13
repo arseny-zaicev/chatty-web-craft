@@ -108,13 +108,17 @@ function headerSubtitle(group: CampaignGroup): string {
     parts.push(`${dr.days} ${dr.days === 1 ? "day" : "days"}`);
     parts.push(dr.range);
   }
+  const tz = tzInfo(group.recipientCountry).tz;
   if (group.today > 0) {
-    const tz = tzInfo(group.recipientCountry).tz;
     if (group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) === todayKeyInTz(tz)) {
       parts.push(`today ${group.today.toLocaleString()} @ ${timeInTz(group.firstScheduledAt, tz)}`);
     } else {
       parts.push(`today ${group.today.toLocaleString()}`);
     }
+  } else if (group.firstScheduledAt && dateKeyInTz(group.firstScheduledAt, tz) > todayKeyInTz(tz)) {
+    // Nothing scheduled for today — surface when the next send actually fires
+    // (e.g. recipients pushed to next day by the per-number cap bumper).
+    parts.push(`next ${shortDateInTz(group.firstScheduledAt, tz)} @ ${timeInTz(group.firstScheduledAt, tz)}`);
   }
   return parts.join(" · ");
 }

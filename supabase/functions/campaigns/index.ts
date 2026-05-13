@@ -371,19 +371,55 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const _minGapPre = isBlastLaunch ? 1 : Math.max(60, minDelay || 60);
   const _windowFitCapPre = isBlastLaunch ? perNumberQuota : Math.max(1, Math.floor(_windowSecondsPre / _minGapPre));
   const perNumberCaps = new Map<string, number>();
+  // Pre-fetch sent_today per number (Dubai TZ) so the launch knows real remaining
+  // headroom and refuses to silently push the rest to tomorrow.
+  const dubaiTodayStartIso = (() => {
+    const dubaiKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+    return new Date(`${dubaiKey}T00:00:00+04:00`).toISOString();
+  })();
+  const sentTodayByNumber = new Map<string, number>();
+  for (const nid of numberIds) {
+    const { count } = await admin
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("whatsapp_number_id", nid)
+      .gte("sent_at", dubaiTodayStartIso);
+    sentTodayByNumber.set(nid, count ?? 0);
+  }
   let capacityPerDay = 0;
+  let capacityToday = 0;
+  const capWarnings: string[] = [];
   for (const nid of numberIds) {
     const nrow: any = numberRows.find((n: any) => n.id === nid);
     const dailyLimit = Math.max(1, Math.min(100000, Number(nrow?.daily_send_limit ?? 200)));
     const cap = Math.max(1, Math.min(perNumberQuota, dailyLimit, _windowFitCapPre));
     perNumberCaps.set(nid, cap);
     capacityPerDay += cap;
+    const sentToday = sentTodayByNumber.get(nid) ?? 0;
+    const remainingToday = Math.max(0, dailyLimit - sentToday);
+    capacityToday += Math.min(cap, remainingToday);
+    if (sentToday >= dailyLimit) {
+      capWarnings.push(`Number ${nrow?.phone_number || nid} already sent ${sentToday}/${dailyLimit} today — new recipients on this number would be deferred to tomorrow.`);
+    } else if (sentToday > 0 && cap > remainingToday) {
+      capWarnings.push(`Number ${nrow?.phone_number || nid} has ${remainingToday}/${dailyLimit} headroom today (already sent ${sentToday}); excess will spill to next day.`);
+    }
   }
   const daysCount = Math.max(1, scheduledDates.length || 1);
   const allocatedCapacity = capacityPerDay * daysCount;
   const audienceTotalRequested = cleanRecipientsAll.length;
   const cleanRecipients = cleanRecipientsAll.slice(0, allocatedCapacity);
   const truncatedCount = audienceTotalRequested - cleanRecipients.length;
+
+  // Single-day launch crossing today's remaining quota? Block unless force=true.
+  if (scheduledDates.length <= 1 && capWarnings.length > 0 && cleanRecipients.length > capacityToday && body.force !== true) {
+    return json({
+      error: "Daily cap would defer recipients to tomorrow",
+      code: "would_defer_to_next_day",
+      warnings: capWarnings,
+      capacity_today: capacityToday,
+      requested_today: cleanRecipients.length,
+    }, 409);
+  }
 
   if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
 
@@ -1197,6 +1233,37 @@ async function processQueue(admin: any) {
             .update({ scheduled_at: bumpedIso })
             .eq("id", recipient.id)
             .eq("status", "scheduled");
+          // Refresh campaigns.first_scheduled_at + today_recipients_count so cards
+          // stop saying "today X @ HH:MM" when reality is "tomorrow 09:00".
+          try {
+            const { data: minRow } = await admin
+              .from("campaign_recipients")
+              .select("scheduled_at")
+              .eq("campaign_id", recipient.campaign_id)
+              .eq("status", "scheduled")
+              .is("sent_at", null)
+              .order("scheduled_at", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            const todayStartIso = (() => {
+              const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+              return new Date(`${k}T00:00:00+04:00`).toISOString();
+            })();
+            const tomorrowStartIso = (() => {
+              const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
+              return new Date(`${k}T00:00:00+04:00`).toISOString();
+            })();
+            const { count: todayLeft } = await admin
+              .from("campaign_recipients")
+              .select("id", { count: "exact", head: true })
+              .eq("campaign_id", recipient.campaign_id)
+              .gte("scheduled_at", todayStartIso)
+              .lt("scheduled_at", tomorrowStartIso);
+            await admin.from("campaigns").update({
+              first_scheduled_at: minRow?.scheduled_at ?? bumpedIso,
+              today_recipients_count: todayLeft ?? 0,
+            }).eq("id", recipient.campaign_id);
+          } catch (_) { /* best-effort */ }
           console.warn(`[cap_reached] number=${recNumId} sent_today=${sentNow} cap=${cap} -> bumped recipient=${recipient.id} to ${bumpedIso}`);
           continue;
         }
