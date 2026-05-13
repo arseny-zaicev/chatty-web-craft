@@ -38,7 +38,8 @@ type Section =
   | "forms.analytics"
   | "site.analytics"
   | "internal.roadmap"
-  | "internal.assistant";
+  | "internal.assistant"
+  | "internal.team_performance";
 
 type NavGroup = {
   id: string;
@@ -77,6 +78,7 @@ const NAV: NavGroup[] = [
     items: [
       { id: "internal.roadmap", label: "Product roadmap", icon: MapIcon, external: "/admin/roadmap" },
       { id: "internal.assistant", label: "Ops Assistant", icon: Sparkles, external: "/admin/assistant" },
+      { id: "internal.team_performance", label: "Team performance", icon: Activity, external: "/admin/ops/performance" },
       
     ],
   },

@@ -1,131 +1,94 @@
-## Goal
+# Operator Performance Dashboard
 
-1. One trustworthy rate everywhere (fix display bug).
-2. Plain-English labels.
-3. Partner-facing PDF that hides all internal info (no client rate, no billed, no margin).
-4. Manual control over both **partner rate** and **manager rate** (today called "referral rate").
-5. Two separate downloadable PDFs from the run page:
-   - **Partner PDF** — only this partner's own numbers and own payout. No mention of the manager / upline.
-   - **Manager PDF** — one consolidated report for the manager covering their own numbers + every partner attached to them in the period, with each attached partner's payout shown as a line.
+Internal-only dashboard at `/admin/ops/performance` showing ownership, response speed and outcomes for every operator in the team. Same admin guard pattern as `OpsLive` / `FleetAnalytics`.
 
----
+## 1. Definitions (locked)
 
-## Part A — Fix rate truth (display bug)
-
-Math is correct in the DB. The PDF formats rates with a 2-decimal money formatter, so `0.005` renders as `$0.01`. The UI uses `.toFixed(4)` and shows `$0.0050`. Same row, different format.
-
-Fix: add `fmtRate` (4 decimals) and use it everywhere a `$/delivered` rate is rendered:
-- `supabase/functions/payout-report-pdf/index.ts`
-- `src/pages/admin/FinanceRunDetail.tsx`
-- `src/pages/admin/FinancePartnerDetail.tsx`, `PartnerDetail.tsx`, `Partners.tsx`
-
-`fmtUsd` (2 decimals) stays only for total amounts.
-
-Document precedence already implemented in `partner_rate_at()`: **number override → workspace override → partner default**. Surface this as a tooltip in the run detail page.
-
----
-
-## Part B — Plain-English labels
-
-Rename in UI + PDF + CSV:
-
-| Old | New |
+| Term | Meaning |
 |---|---|
-| P. rate | Partner rate ($/delivered) |
-| C. rate | Client rate ($/delivered) — internal only |
-| Payout | Partner payout |
-| Billed | Client billed — internal only |
-| Margin | Our margin — internal only |
-| Referral rate | Manager rate ($/delivered) |
-| Referrer | Manager |
+| **Assigned** | `conversations.assigned_user_id = operator` (currently owned). |
+| **Active** | Operator has sent at least one human reply in the last 7 days (`messages.sent_by_user_id = operator` with `direction='outbound'`). |
+| **Human reply** | `messages.direction='outbound' AND sent_by_user_id IS NOT NULL`. Campaign sends (`sent_by_user_id IS NULL`) are **never** counted. |
+| **First human reply time** | `min(human_msg.created_at) - first_inbound.created_at` for that conversation. |
+| **Waiting** | Last message in conversation is `inbound` AND no human reply since. |
+| **Waiting since** | `created_at` of that last unanswered inbound. |
+| **Overdue** | `waiting` AND `waiting_since < now() - 2h` during business hours (09:00-18:00 GST, Mon-Sat). Threshold is a constant in code, easy to tune. |
+| **Positive reply** | Conversation moved into a stage whose `stage_type='open'` AND name matches positive regex (same regex the webhook already uses). Counted once per conversation per day. Attributed to current `assigned_user_id`. |
+| **Meeting** | Deal currently in a stage whose name matches `/meeting|booked|demo|call\s*scheduled/i`. Attributed to `assigned_user_id` of the linked conversation. |
 
-Wherever the current UI says "Referral / Referrer / Ref", switch to "Manager".
+Automated outbound campaign messages are excluded everywhere by the `sent_by_user_id IS NOT NULL` filter — no schema change needed for that.
 
----
+## 2. Data model changes
 
-## Part C — Manual control over partner & manager rates
+Existing columns we already use as-is: `conversations.assigned_user_id`, `conversations.active_responder_id`, `messages.sent_by_user_id`, `messages.direction`, `messages.created_at`.
 
-Today partners.referral_rate_usd is editable in `PartnerDetail.tsx`. Keep that. Make sure both fields are obviously editable on one screen with clear labels:
+New, all on `conversations` (cheap, no history table in v1):
 
-In `PartnerDetail.tsx` settings:
-- **Partner rate ($/delivered)** — `default_payout_rate_usd`
-- **Manager rate ($/delivered)** — `referral_rate_usd` (what the upline manager earns per delivered message from this partner's numbers)
-- **Manager** — `referrer_partner_id` dropdown
+- `assigned_at timestamptz` — set whenever `assigned_user_id` changes (trigger).
+- `first_human_reply_at timestamptz` — set once, by trigger on `messages` insert.
+- `last_human_reply_at timestamptz` — updated by same trigger on every human outbound.
+- `last_inbound_at timestamptz` — updated by trigger on every inbound insert.
+- `waiting_since timestamptz` — set to inbound `created_at` when an inbound arrives and there is no later human reply; cleared (set NULL) when a human reply lands.
 
-Both numeric inputs use `step="0.0001"` and render with `fmtRate`.
+Backfill all five from existing `messages` in the migration.
 
-No DB schema change required for this part — fields already exist.
+Assignment history is **out of scope for v1** (per "keep first version simple"). We can add `conversation_assignments` later if managers ask for "who handled this before".
 
----
+## 3. Backend: one RPC, one view
 
-## Part D — Three views, three PDFs
+Single SQL function `ops_operator_performance(window_start, window_end)` returns one row per workspace member with all per-operator metrics. The dashboard page calls it once and renders both the team strip (sums) and the operator table (rows).
 
-The run is computed per partner exactly like today. Presentation gets three modes via a `mode` param on `payout-report-pdf`:
+Drilldown reads `conversations` directly with filter `assigned_user_id = :id`, ordered by `waiting_since DESC NULLS LAST`.
 
-### 1. Internal admin PDF (`mode=internal`, default)
-What we have today, with new labels. Includes client rate, billed, margin, manager-payable line.
+Both protected by `is_admin(auth.uid())` — internal tool only.
 
-### 2. Partner PDF (`mode=partner`)
-For the partner themselves. Shows only:
-- Partner name, period, payment status, paid date/ref if paid
-- Totals: Delivered · Failed · **Partner rate** · **Partner payout due**
-- Breakdown: Day · Number · Client · Delivered · Failed · Partner rate · Partner payout
-- No client rate, no billed, no margin, no mention of manager
+## 4. UI
 
-### 3. Manager PDF (`mode=manager`)
-One consolidated report for a given manager covering a period. Driven by a new edge function `manager-payout-report-pdf` (or same function with `mode=manager` + `manager_id` param). It:
-- Resolves all partners where `partners.referrer_partner_id = manager_id` AND the manager themself
-- For each, pulls (or generates a draft of) the payout run for the same period
-- Shows:
-  - Manager name, period, payment status
-  - Top-line: Total payout due to manager = (manager's own delivered × partner rate) + Σ (each downline partner's delivered × manager rate)
-  - Section A — "Your own numbers": Day · Number · Client · Delivered · Partner rate · Partner payout (the manager is also a partner)
-  - Section B — "Your team": one row per downline partner with Partner name · Delivered · Manager rate · Manager payout. Optional expandable per-day rows.
-- No client rate, no billed, no our-margin shown.
+Route: `/admin/ops/performance` → `src/pages/admin/OpsPerformance.tsx`. Linked from the existing admin nav next to Ops Live.
 
-UI in `FinanceRunDetail.tsx`:
-- Replace the single "Generate PDF" with a dropdown menu: **Internal PDF**, **Partner PDF**, **Manager PDF** (Manager PDF disabled with a tooltip if the partner has no `referrer_partner_id`, since then they are the manager — in that case show **Manager PDF** at the manager's own page).
-- Store storage paths separately on `payout_runs`: `internal_pdf_storage_path`, `partner_pdf_storage_path`, `manager_pdf_storage_path` (rename current `pdf_storage_path` → `internal_pdf_storage_path` via migration).
+### 4.1 Team overview strip (7 tiles)
 
-On `PartnerDetail.tsx` (or a new "Manager Reports" section visible only when this partner has downlines), add a date-range picker + **Generate manager PDF** button covering all their downlines + own numbers.
+Assigned chats now • Unread chats now • Waiting for reply • Overdue by SLA • Median first response today • Positive replies today • Meetings today.
 
----
+### 4.2 Operator table
 
-## Part E — Clear summary strip
+Columns: Operator · Assigned · Active · Unread · Waiting first reply · Median first response · Median reply time · Overdue · Positive replies (today / 7d) · Meetings · Oldest waiting.
 
-Top of `FinanceRunDetail.tsx` and the partner/manager PDF header:
+Sortable, default sort: Overdue desc → Oldest waiting desc.
 
-```text
-Period 2026-05-01 → 2026-05-13   ·   Status: PAID
-Delivered 12,430   ·   Partner rate $0.0050   ·   Partner payout due $62.15
-```
+Row click → drilldown drawer.
 
-Manager PDF variant adds: `Manager payout due $X.XX (own + N downlines)`.
+### 4.3 Drilldown
 
----
+Operator name, summary tiles (same metrics, scoped), then a table of their assigned conversations:
 
-## Part F — Performance
+Workspace · Pipeline · Contact · Last inbound · Last outbound · Waiting since · Status badge (Replied / Waiting / Overdue / Stuck >24h) · link to `/ws/:slug/inbox?conversation=:id`.
 
-In `FinanceRunDetail.tsx`:
-- Memoize per-number rollups
-- Batch `run` + `items` + `audit` queries
-- Precompute formatted dates in the select mapper
-- After PDF generate, only refetch the run row (no full reload)
+### 4.4 Time window control
 
----
+Today / 7d / 30d toggle (drives `window_start/end` passed to the RPC). "Now" tiles always reflect current state regardless of window.
 
-## Files to change
+## 5. Files
 
-- New migration on `payout_runs`: rename `pdf_storage_path` → `internal_pdf_storage_path`; add `partner_pdf_storage_path`, `manager_pdf_storage_path`
-- `supabase/functions/payout-report-pdf/index.ts` — accept `mode: "internal" | "partner"`, add `fmtRate`, relabel
-- New `supabase/functions/manager-payout-report-pdf/index.ts` — consolidated manager PDF over a date range
-- `supabase/functions/slack-payout-post/index.ts` — point to the partner PDF (not internal) for any partner-shared channel
-- `src/pages/admin/FinanceRunDetail.tsx` — labels, summary strip, three PDF buttons, memoization, rate-precedence tooltip
-- `src/pages/admin/PartnerDetail.tsx` — clear "Partner rate" + "Manager rate" inputs, Manager Reports section with date range + generate button
-- `src/pages/admin/FinancePartnerDetail.tsx`, `Partners.tsx` — `fmtRate` for rate columns, "Referral" → "Manager" copy
+- `supabase/migrations/<ts>_operator_performance.sql` — 5 columns, triggers on `messages`, backfill, `ops_operator_performance` SQL function, indexes on `(assigned_user_id, waiting_since)` and `(assigned_user_id, last_human_reply_at)`.
+- `src/pages/admin/OpsPerformance.tsx` — page.
+- `src/components/ops/OperatorTable.tsx` — table.
+- `src/components/ops/OperatorDrilldown.tsx` — side sheet.
+- `src/components/ops/TeamOverviewStrip.tsx` — 7 tiles.
+- `src/lib/opsPerformance.ts` — typed wrapper around the RPC + drilldown query.
+- `src/App.tsx` — register route.
+- Admin sidebar: add "Team Performance" link.
 
-## Out of scope
+## 6. What this unlocks
 
-- Auto-emailing PDFs to partners/managers (kept manual download for now per user)
-- Changing the rate-precedence SQL (already correct)
-- Changing payout math
+Before: managers had no way to see who owned what, who was slow, or which chats were rotting. Slack alerts told us a positive reply happened, but not who picked it up or how long the lead waited.
+
+After: one screen shows, for every operator, their current load, their reply speed (median first reply + median follow-up), how many chats are overdue right now, and how many positive replies / meetings they've actually closed. Click an operator → see exactly which conversations are stuck and jump straight into the inbox to handle them. Automated campaign sends are excluded from "operator replied" everywhere, so the numbers are trustworthy.
+
+## 7. Out of scope (v1)
+
+- Per-operator goals / targets.
+- Reassignment from this screen (use existing inbox).
+- Per-pipeline performance breakdown (can layer later).
+- Historical assignment audit trail.
+- Email/Slack daily digest of this dashboard.
