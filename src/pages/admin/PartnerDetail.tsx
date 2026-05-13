@@ -164,8 +164,8 @@ export default function PartnerDetail() {
           <Link to="/admin/partners"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Partners</Button></Link>
           <h1 className="font-display text-2xl">{partner.name}</h1>
           <Badge variant={partner.status === "active" ? "default" : "secondary"}>{partner.status}</Badge>
-          <Badge variant="outline">{partner.kind}</Badge>
           <Badge variant="outline">{partner.cadence}</Badge>
+          {partner.referrer_partner_id && <ReferrerBadge id={partner.referrer_partner_id} /> }
           <span className="text-sm text-muted-foreground ml-auto">
             Default rate: ${Number(partner.default_payout_rate_usd).toFixed(4)} {partner.currency}
           </span>
@@ -561,16 +561,6 @@ function CreateBMDialog({
               </Select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Partner role</label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="provider">Provider</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
               <label className="text-xs text-muted-foreground">Rate $/delivered</label>
               <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
             </div>
@@ -657,21 +647,9 @@ function LinkBMDialog({ partnerId, onLinked }: { partnerId: string; onLinked: ()
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Role</label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="provider">Provider</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Rate $/delivered</label>
-              <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
-            </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Rate $/delivered</label>
+            <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
