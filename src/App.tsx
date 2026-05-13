@@ -91,6 +91,7 @@ const AdminMfaSetup = lazyWithRetry(() => import("./pages/admin/AdminMfaSetup"))
 const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"));
 const OpsLive = lazyWithRetry(() => import("./pages/admin/OpsLive"));
 const OpsAssistant = lazyWithRetry(() => import("./pages/admin/OpsAssistant"));
+const OpsPerformance = lazyWithRetry(() => import("./pages/admin/OpsPerformance"));
 const FinanceRunDetail = lazyWithRetry(() => import("./pages/admin/FinanceRunDetail"));
 const Reconciliation = lazyWithRetry(() => import("./pages/admin/Reconciliation"));
 const Partners = lazyWithRetry(() => import("./pages/admin/Partners"));
@@ -186,6 +187,7 @@ const App = () => (
               <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
               <Route path="/admin/mfa-verify" element={<AdminMfaVerify />} />
               <Route path="/admin/ops-live" element={<OpsLive />} />
+              <Route path="/admin/ops/performance" element={<OpsPerformance />} />
               <Route path="/admin/assistant" element={<OpsAssistant />} />
               <Route path="/admin/partners" element={<Partners />} />
               <Route path="/admin/partners/:id" element={<PartnerDetail />} />
