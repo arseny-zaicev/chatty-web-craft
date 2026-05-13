@@ -449,31 +449,30 @@ function CreateBMDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [workspaceId, setWorkspaceId] = useState<string>("");
   const [metaBmId, setMetaBmId] = useState("");
   const [lifecycle, setLifecycle] = useState<Lifecycle>("warming_up");
-  const [verification, setVerification] = useState<Verification>("unverified");
   const [role, setRole] = useState("provider");
   const [rate, setRate] = useState(String(partnerDefaultRate));
   const [pickedNumberIds, setPickedNumberIds] = useState<string[]>([]);
 
   const { data: availableNumbers } = useQuery({
-    queryKey: ["admin", "numbers-for-bm-create", workspaceId],
+    queryKey: ["admin", "numbers-for-bm-create"],
     queryFn: async () => {
-      let q = supabase
+      const { data } = await supabase
         .from("whatsapp_numbers")
         .select("id, phone_number, display_name, status, workspace_id, business_manager_id")
         .order("display_name", { ascending: true });
-      if (workspaceId) q = q.eq("workspace_id", workspaceId);
-      const { data } = await q;
       return (data ?? []) as any[];
     },
     enabled: open,
   });
 
+  const wsName = (wsId: string | null) =>
+    workspaces.find(w => w.id === wsId)?.name || "—";
+
   const reset = () => {
-    setName(""); setWorkspaceId(""); setMetaBmId("");
-    setLifecycle("warming_up"); setVerification("unverified");
+    setName(""); setMetaBmId("");
+    setLifecycle("warming_up");
     setRole("provider"); setRate(String(partnerDefaultRate));
     setPickedNumberIds([]);
   };
@@ -481,20 +480,23 @@ function CreateBMDialog({
   const create = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error("BM name required");
-      if (!workspaceId) throw new Error("Pick a workspace");
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Not signed in");
 
-      // 1) Create the BM
+      // 1) Create the BM (workspace inferred from linked numbers, if any)
+      const inferredWorkspaceId = pickedNumberIds.length
+        ? (availableNumbers ?? []).find(n => pickedNumberIds.includes(n.id))?.workspace_id ?? null
+        : null;
+
       const { data: bm, error: bmErr } = await supabase
         .from("business_managers")
         .insert({
           name: name.trim(),
-          workspace_id: workspaceId,
+          workspace_id: inferredWorkspaceId,
           provider: "gupshup",
           meta_bm_id: metaBmId.trim() || null,
           status: lifecycle,
-          verification_status: verification,
+          verification_status: "unverified",
           warmup_started_at: lifecycle === "warming_up" ? new Date().toISOString() : null,
           created_by: u.user.id,
         } as any)
@@ -550,29 +552,11 @@ function CreateBMDialog({
               <Input value={metaBmId} onChange={e => setMetaBmId(e.target.value)} placeholder="optional" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Workspace *</label>
-              <Select value={workspaceId} onValueChange={setWorkspaceId}>
-                <SelectTrigger><SelectValue placeholder="Pick workspace" /></SelectTrigger>
-                <SelectContent>
-                  {workspaces.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Lifecycle status</label>
+              <label className="text-xs text-muted-foreground">Status</label>
               <Select value={lifecycle} onValueChange={(v) => setLifecycle(v as Lifecycle)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {LIFECYCLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Verification status</label>
-              <Select value={verification} onValueChange={(v) => setVerification(v as Verification)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {VERIFICATION_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -595,13 +579,10 @@ function CreateBMDialog({
           <div>
             <label className="text-xs text-muted-foreground">
               Linked numbers ({pickedNumberIds.length} selected)
-              {!workspaceId && " - pick a workspace first"}
             </label>
             <div className="mt-1 max-h-48 overflow-y-auto border border-border rounded-md p-2 space-y-1">
               {(availableNumbers ?? []).length === 0 && (
-                <div className="text-xs text-muted-foreground py-2 text-center">
-                  {workspaceId ? "No numbers in this workspace" : "Pick a workspace to see numbers"}
-                </div>
+                <div className="text-xs text-muted-foreground py-2 text-center">No numbers available</div>
               )}
               {(availableNumbers ?? []).map(n => (
                 <label key={n.id} className="flex items-center gap-2 text-sm hover:bg-muted/50 rounded px-1 py-0.5 cursor-pointer">
@@ -611,7 +592,8 @@ function CreateBMDialog({
                   />
                   <span className="font-mono text-xs">+{n.phone_number}</span>
                   <span className="text-muted-foreground">{n.display_name || ""}</span>
-                  <Badge variant="outline" className="ml-auto text-[10px]">{n.status}</Badge>
+                  <Badge variant="outline" className="ml-auto text-[10px]">{wsName(n.workspace_id)}</Badge>
+                  <Badge variant="outline" className="text-[10px]">{n.status}</Badge>
                   {n.business_manager_id && <span className="text-[10px] text-amber-600">(reassign)</span>}
                 </label>
               ))}
@@ -620,7 +602,7 @@ function CreateBMDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !name.trim() || !workspaceId}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !name.trim()}>
             {create.isPending ? "Creating…" : "Create & link"}
           </Button>
         </DialogFooter>
