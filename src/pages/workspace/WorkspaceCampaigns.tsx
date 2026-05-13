@@ -272,14 +272,30 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     const lc = groupLiveCounts.get(g.key);
                     const sentForRate = Math.max(lc?.sent ?? 0, g.sent ?? 0);
                     const rate = sentForRate > 0 ? Math.round(((lc?.replied ?? 0) / sentForRate) * 100) : 0;
+                    const replied = lc?.replied ?? 0;
+                    const tagged = lc?.tagged ?? 0;
+                    const pending = Math.max(0, replied - tagged);
                     return (
-                      <div className="hidden lg:flex items-center gap-2 shrink-0 w-[140px] justify-end">
+                      <div className="hidden lg:flex items-center gap-2 shrink-0 w-[200px] justify-end">
                         <span className="text-[11px] text-muted-foreground tabular-nums">
-                          <span className="font-semibold text-foreground">{(lc?.replied ?? 0).toLocaleString()}</span> replied
+                          <span className="font-semibold text-foreground">{replied.toLocaleString()}</span> replied
                           {sentForRate > 0 && <span className="text-muted-foreground/70"> · {rate}%</span>}
                         </span>
-                        {(lc?.positive ?? 0) > 0 && (
-                          <span className="text-[11px] text-emerald-600 tabular-nums">+{lc!.positive}</span>
+                        {(lc?.warm ?? 0) > 0 && (
+                          <span
+                            className="text-[11px] text-emerald-600 tabular-nums"
+                            title={`${lc?.positive ?? 0} positive + objections/pricing/meeting`}
+                          >
+                            +{lc!.warm} warm
+                          </span>
+                        )}
+                        {pending > 0 && (
+                          <span
+                            className="text-[10px] text-amber-600 tabular-nums"
+                            title={`${pending} replies awaiting AI classification (refreshes every 2 min)`}
+                          >
+                            {pending}⏳
+                          </span>
                         )}
                       </div>
                     );
