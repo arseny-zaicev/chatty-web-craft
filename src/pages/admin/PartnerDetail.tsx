@@ -97,6 +97,26 @@ export default function PartnerDetail() {
     enabled: bmIds.length > 0,
   });
 
+  const numberIds = useMemo(() => (numbers || []).map((n: any) => n.id), [numbers]);
+
+  const { data: liveStats } = useQuery({
+    queryKey: ["admin", "partner-num-live", numberIds],
+    queryFn: async () => {
+      if (!numberIds.length) return [] as any[];
+      const { data, error } = await (supabase.rpc as any)("number_live_stats", { p_number_ids: numberIds });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: numberIds.length > 0,
+    refetchInterval: 30_000,
+  });
+
+  const liveByNum = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const r of liveStats ?? []) m.set(r.whatsapp_number_id, r);
+    return m;
+  }, [liveStats]);
+
   const { data: workspaces } = useQuery({
     queryKey: ["admin", "all-workspaces-mini"],
     queryFn: async () => {
@@ -119,14 +139,23 @@ export default function PartnerDetail() {
 
   if (partnerLoading || !partner) return <div className="p-6"><Loader2 className="animate-spin w-5 h-5" /></div>;
 
+  // ---- Aggregations across linked BMs / numbers ----
   const totalNums = numbers?.length || 0;
-  const activeNums = numbers?.filter(n => n.status === "active").length || 0;
-  const warmNums = numbers?.filter(n => n.status === "warming").length || 0;
-  const restrictedNums = numbers?.filter(n => n.status === "restricted" || n.status === "blocked" || n.status === "banned").length || 0;
+  const restrictedNums = (numbers || []).filter(n => n.status === "restricted").length;
+  const blockedNums = (numbers || []).filter(n => n.status === "blocked" || n.status === "banned").length;
+
+  const bmList = bms || [];
+  const lifecycleCounts = bmList.reduce(
+    (acc, b: any) => { acc[lifecycleBucket(b.status)]++; return acc; },
+    { ready: 0, warming_up: 0, verifying: 0, disabled: 0 } as Record<Lifecycle, number>,
+  );
+
+  const sent7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.sent_7d || 0), 0);
   const unpaid = (runs || []).filter(r => r.status === "draft" || r.status === "approved")
     .reduce((s, r) => s + Number(r.total_payout_usd || 0), 0);
-  const warmingBms = (bms || []).filter(b => b.status === "warming").length;
-  const adsRunningBms = (bms || []).filter(b => b.ads_running).length;
+  const monthStart = startOfMonth(new Date());
+  const paidThisMonth = (runs || []).filter(r => r.status === "paid" && r.paid_at && new Date(r.paid_at) >= monthStart)
+    .reduce((s, r) => s + Number(r.paid_amount_usd ?? r.total_payout_usd ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-background p-6">
