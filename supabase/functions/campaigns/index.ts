@@ -312,8 +312,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   if (!name || rawNumbers.length === 0) {
     return json({ error: "Campaign name and at least one number+template are required" }, 400);
   }
-  if (recipients.length < 1 || recipients.length > 5000) {
-    return json({ error: "Add 1-5000 recipients" }, 400);
+  if (recipients.length < 1 || recipients.length > 50000) {
+    return json({ error: "Add 1-50000 recipients" }, 400);
   }
 
   const numberIds = [...new Set(rawNumbers.map((n) => n.number_id))];
