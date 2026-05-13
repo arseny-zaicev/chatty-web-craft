@@ -133,6 +133,20 @@ export default function NumbersInventory({ workspaceId }: { workspaceId: string 
     [workspaces, workspaceId],
   );
 
+  const numberIds = useMemo(() => numbers.map((n) => n.id), [numbers]);
+  const { data: liveStats } = useQuery({
+    queryKey: ["number-live-stats", workspaceId, numberIds.join(",")],
+    enabled: numberIds.length > 0,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)("number_live_stats", { p_number_ids: numberIds });
+      if (error) throw error;
+      const map = new Map<string, any>();
+      for (const r of (data ?? []) as any[]) map.set(r.whatsapp_number_id, r);
+      return map;
+    },
+  });
+
   const save = useMutation({
     mutationFn: async (id: string) => {
       const patch = drafts[id];
