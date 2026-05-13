@@ -1653,6 +1653,14 @@ export default function LaunchWizard() {
           <Row label="Template" value={activeLogical?.label ?? "-"} />
           <Row label="Numbers" value={activeNumbers.length || "Pick at least 1"} />
           <Row label="Recipients" value={recipients.length} />
+          <Row
+            label="Capacity"
+            value={
+              <span className={overCapacity > 0 ? "text-amber-500 font-medium" : ""}>
+                {capacity}{overCapacity > 0 ? ` · only first ${capacity} sent (${overCapacity} stay in pool)` : ""}
+              </span>
+            }
+          />
           <Row label="Per day" value={dayPlan.effectivePerDay.toLocaleString()} />
           <Row label="Per number / day" value={activeNumbers.length ? Math.ceil(dayPlan.effectivePerDay / activeNumbers.length) : "-"} />
           <Row
