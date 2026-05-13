@@ -130,19 +130,21 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     if (n.is_active && n.connected_in_gupshup && n.connected_in_iskra) m.numbers_ready += 1;
   });
 
-  // Aggregate truth-layer metrics per workspace.
-  // Group by workspace+campaign so we can also use them for the active-campaign-group "sent today".
-  const sentByWsCampaign = new Map<string, number>(); // key = ws|campaign
+  // Workspace-level totals: one row per workspace, safe to sum directly.
   (metricsToday ?? []).forEach((r: any) => {
     if (!r.workspace_id) return;
     const m = ensure(r.workspace_id);
     m.sent_today += r.sent_today ?? 0;
     m.delivered_today += r.delivered_today ?? 0;
     m.replies_today += r.replies_today ?? 0;
-    if (r.campaign_id) {
-      const k = `${r.workspace_id}|${r.campaign_id}`;
-      sentByWsCampaign.set(k, (sentByWsCampaign.get(k) ?? 0) + (r.sent_today ?? 0));
-    }
+  });
+
+  // Per-campaign sent for active-group rollup.
+  const sentByWsCampaign = new Map<string, number>(); // key = ws|campaign
+  (metricsByCampaign ?? []).forEach((r: any) => {
+    if (!r.workspace_id || !r.campaign_id) return;
+    const k = `${r.workspace_id}|${r.campaign_id}`;
+    sentByWsCampaign.set(k, (sentByWsCampaign.get(k) ?? 0) + (r.sent_today ?? 0));
   });
 
   // Recent activity per (workspace, campaign) for sending-now detection.
