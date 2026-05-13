@@ -94,6 +94,16 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Prevent two dispatcher invocations from draining the same rows in parallel
+  // (cron + manual trigger, or slow run colliding with the next tick).
+  const release = await acquireJobLock(supabase, "slack-dispatch");
+  if (!release) {
+    return new Response(JSON.stringify({ skipped: "locked" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  try {
+
   const { data: events, error } = await supabase
     .from("slack_event_queue")
     .select("*")
