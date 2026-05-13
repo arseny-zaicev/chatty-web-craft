@@ -3242,6 +3242,23 @@ export type Database = {
         }
         Returns: number
       }
+      number_live_stats: {
+        Args: { p_number_ids: string[] }
+        Returns: {
+          daily_send_limit: number
+          failed_7d: number
+          failed_today: number
+          last_failed_at: string
+          last_sent_at: string
+          pending_now: number
+          restricted_at: string
+          sent_7d: number
+          sent_all: number
+          sent_today: number
+          status: string
+          whatsapp_number_id: string
+        }[]
+      }
       number_owner_at: {
         Args: { _at: string; _whatsapp_number_id: string }
         Returns: string
