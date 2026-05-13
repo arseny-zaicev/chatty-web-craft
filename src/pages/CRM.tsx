@@ -32,6 +32,7 @@ import {
   fetchConversationMessages,
   markConversationRead,
   markConversationUnread,
+  searchConversations,
   setConversationPinned,
   setConversationStarred,
   touchResponder as touchResponderApi,
