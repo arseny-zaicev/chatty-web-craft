@@ -1,12 +1,13 @@
 // Generates a PDF + CSV payout report for a given run, uploads both to Storage,
 // updates the run row with the storage paths, and returns signed URLs.
 // POST { run_id: string, mode?: "internal" | "partner" }
-//
-// mode=internal (default): full admin view with client rate, billed, margin
-// mode=partner: clean partner-facing view (no internal info, no manager)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 import autoTable from "https://esm.sh/jspdf-autotable@3.8.2?deps=jspdf@2.5.1";
+import {
+  BRAND, BRAND_COPY, drawHeader, drawFooter,
+  fmtUsd, fmtRate, fmtDateRangeDxb, spellOutRate,
+} from "../_shared/brand.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,16 +22,6 @@ function csvCell(v: unknown): string {
   if (v == null) return "";
   const s = typeof v === "object" ? JSON.stringify(v) : String(v);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-// Money totals: 2 decimals.
-function fmtUsd(n: number) {
-  return `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-// Per-delivered rates: 4 decimals so 0.005 doesn't round to 0.01.
-function fmtRate(n: number) {
-  return `$${Number(n || 0).toFixed(4)}`;
 }
 
 Deno.serve(async (req) => {
@@ -51,7 +42,6 @@ Deno.serve(async (req) => {
   });
   const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
-  // Verify caller is admin
   const { data: u } = await userClient.auth.getUser();
   if (!u?.user) return json({ error: "unauthorized" }, 401);
   const { data: isAdmin } = await admin.rpc("is_admin", { _user_id: u.user.id }).single();
@@ -62,7 +52,6 @@ Deno.serve(async (req) => {
   if (!body.run_id) return json({ error: "run_id required" }, 400);
   const mode: "internal" | "partner" = body.mode === "partner" ? "partner" : "internal";
 
-  // Fetch run + partner + line items + numbers + workspaces
   const { data: run, error: runErr } = await admin
     .from("payout_runs").select("*").eq("id", body.run_id).single();
   if (runErr || !run) return json({ error: runErr?.message || "run not found" }, 404);
@@ -93,7 +82,7 @@ Deno.serve(async (req) => {
   // ---------- CSV ----------
   let csv: string;
   if (mode === "partner") {
-    const header = ["day", "number", "client", "delivered", "failed", "partner_rate_usd", "partner_payout_usd"];
+    const header = ["day", "number", "client", "delivered", "failed", "rate_per_delivered_usd", "earnings_usd"];
     const lines = [header.join(",")];
     for (const r of items || []) {
       lines.push([
@@ -121,29 +110,34 @@ Deno.serve(async (req) => {
   // ---------- PDF ----------
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
-  let y = 48;
 
-  doc.setFont("helvetica", "bold"); doc.setFontSize(20);
-  doc.text(mode === "partner" ? "Payout statement" : "Partner payout report", 40, y); y += 8;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120);
-  doc.text("Iskra · WhatsApp Outreach", 40, y + 12); y += 28;
+  let y = drawHeader(doc, {
+    title: mode === "partner" ? "Payout statement" : "Partner payout report",
+    subtitle: mode === "partner" ? BRAND_COPY.partnerSubtitle : "Internal admin view",
+  });
 
-  doc.setTextColor(20); doc.setFontSize(11); doc.setFont("helvetica", "bold");
-  doc.text(partner?.name || "Partner", 40, y); y += 14;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(90);
+  // Recipient block
+  doc.setTextColor(...BRAND.ink);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text(partner?.name || "Partner", 40, y); y += 16;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...BRAND.inkSoft);
   if (partner?.contact_email) { doc.text(partner.contact_email, 40, y); y += 11; }
-  doc.text(`Period: ${run.period_from} -> ${run.period_to}`, 40, y); y += 11;
+  doc.text(`Period: ${fmtDateRangeDxb(run.period_from, run.period_to)}`, 40, y); y += 11;
   if (mode === "internal") {
     doc.text(`Run ID: ${run.id}`, 40, y); y += 11;
   }
-  doc.text(`Generated: ${new Date(run.generated_at).toISOString().slice(0, 16).replace("T", " ")} UTC`, 40, y); y += 11;
   doc.text(`Status: ${String(run.status).toUpperCase()}`, 40, y); y += 11;
   if (run.status === "paid" && run.paid_at) {
-    doc.text(`Paid on: ${String(run.paid_at).slice(0, 10)}${run.paid_reference ? ` · Ref ${run.paid_reference}` : ""}`, 40, y); y += 11;
+    doc.text(`Paid on: ${String(run.paid_at).slice(0, 10)}${run.paid_reference ? ` - Ref ${run.paid_reference}` : ""}`, 40, y);
+    y += 11;
   }
-  y += 7;
+  y += 10;
 
-  // Determine the partner rate to show (most-common rate across line items).
+  // Determine the partner rate to show (most-common rate across line items by delivered volume).
   const rateCounts = new Map<number, number>();
   for (const r of (items || []) as any[]) {
     const k = Number(r.partner_rate_usd);
@@ -155,16 +149,14 @@ Deno.serve(async (req) => {
     if (v > topCount) { topRate = k; topCount = v; }
   }
   const ratesAreUniform = rateCounts.size <= 1;
-  const partnerRateLabel = ratesAreUniform ? fmtRate(topRate) : `${fmtRate(topRate)} (mixed)`;
 
-  // Totals box
-  doc.setDrawColor(220); doc.setFillColor(248, 248, 245);
+  // ---- Totals box ----
   const totalsCells: [string, string][] = mode === "partner"
     ? [
-        ["Delivered", String(run.totals_delivered)],
-        ["Failed", String(run.totals_failed)],
-        ["Partner rate", partnerRateLabel],
-        ["Partner payout due", fmtUsd(Number(run.total_payout_usd))],
+        ["Messages delivered", Number(run.totals_delivered).toLocaleString()],
+        ["Attempts in period", Number(run.totals_sent).toLocaleString()],
+        ["Rate per delivered", ratesAreUniform ? fmtRate(topRate) : `${fmtRate(topRate)} (mixed)`],
+        ["Your earnings", fmtUsd(Number(run.total_payout_usd))],
       ]
     : [
         ["Delivered", String(run.totals_delivered)],
@@ -174,70 +166,78 @@ Deno.serve(async (req) => {
         ["Client billed", fmtUsd(Number(run.total_billed_usd))],
         ["Our margin", fmtUsd(Number(run.margin_usd))],
       ];
-  doc.roundedRect(40, y, W - 80, 70, 6, 6, "FD");
-  doc.setTextColor(20); doc.setFontSize(9); doc.setFont("helvetica", "bold");
+
+  doc.setDrawColor(...BRAND.rule);
+  doc.setFillColor(...BRAND.cream);
+  doc.roundedRect(40, y, W - 80, 70, 8, 8, "FD");
   const cw = (W - 80) / totalsCells.length;
   totalsCells.forEach(([lbl, val], i) => {
     const x = 40 + i * cw + 12;
-    doc.setFont("helvetica", "normal"); doc.setTextColor(120); doc.setFontSize(8);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.inkSoft); doc.setFontSize(8);
     doc.text(String(lbl), x, y + 22);
-    doc.setFont("helvetica", "bold"); doc.setTextColor(20); doc.setFontSize(13);
+    doc.setFont("helvetica", "bold"); doc.setTextColor(...BRAND.ink); doc.setFontSize(13);
     doc.text(String(val), x, y + 46);
   });
   y += 88;
 
-  // Per-number summary
-  type Roll = { number: string; client: string; delivered: number; failed: number; payout: number; billed: number; margin: number };
-  const byNumber = new Map<string, Roll>();
-  for (const r of items || []) {
-    const k = `${r.whatsapp_number_id}|${r.workspace_id}`;
-    const existing = byNumber.get(k) || {
-      number: numLabel(r.whatsapp_number_id), client: wsLabel(r.workspace_id),
-      delivered: 0, failed: 0, payout: 0, billed: 0, margin: 0,
-    };
-    existing.delivered += r.delivered; existing.failed += r.failed;
-    existing.payout += Number(r.payout_usd);
-    existing.billed += Number(r.billed_usd);
-    existing.margin += Number(r.margin_usd);
-    byNumber.set(k, existing);
-  }
-
+  // ---- Spelled-out rate line (partner PDF only) ----
   if (mode === "partner") {
-    autoTable(doc, {
-      startY: y,
-      head: [["Number", "Client", "Delivered", "Failed", "Partner payout"]],
-      body: Array.from(byNumber.values()).map(r => [r.number, r.client, r.delivered, r.failed, fmtUsd(r.payout)]),
-      styles: { font: "helvetica", fontSize: 9 },
-      headStyles: { fillColor: [40, 40, 40], textColor: 255 },
-      margin: { left: 40, right: 40 },
-    });
-  } else {
-    autoTable(doc, {
-      startY: y,
-      head: [["Number", "Client", "Delivered", "Failed", "Partner payout", "Client billed", "Our margin"]],
-      body: Array.from(byNumber.values()).map(r => [r.number, r.client, r.delivered, r.failed, fmtUsd(r.payout), fmtUsd(r.billed), fmtUsd(r.margin)]),
-      styles: { font: "helvetica", fontSize: 9 },
-      headStyles: { fillColor: [40, 40, 40], textColor: 255 },
-      margin: { left: 40, right: 40 },
-    });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...BRAND.ink);
+    if (ratesAreUniform) {
+      doc.text(
+        `Your rate for this period: ${fmtRate(topRate)} per delivered message  -  (${spellOutRate(topRate)} per delivered message).`,
+        40, y,
+      );
+    } else {
+      doc.text(
+        `Multiple rates applied during this period - see the daily breakdown below for the rate that applied each day.`,
+        40, y,
+      );
+    }
+    y += 18;
   }
-  y = (doc as any).lastAutoTable.finalY + 18;
 
-  // Per-day breakdown
-  if ((items || []).length) {
+  // ---- Per-day breakdown (PRIMARY for partner PDF) ----
+  type DayRoll = { day: string; numbers: Set<string>; delivered: number; failed: number; sent: number; payout: number; rateSum: number; rateN: number };
+  const byDay = new Map<string, DayRoll>();
+  for (const r of items || []) {
+    const k = String(r.day);
+    const existing = byDay.get(k) || { day: k, numbers: new Set(), delivered: 0, failed: 0, sent: 0, payout: 0, rateSum: 0, rateN: 0 };
+    if (r.whatsapp_number_id) existing.numbers.add(r.whatsapp_number_id);
+    existing.delivered += Number(r.delivered || 0);
+    existing.failed += Number(r.failed || 0);
+    existing.sent += Number(r.sent || 0);
+    existing.payout += Number(r.payout_usd || 0);
+    existing.rateSum += Number(r.partner_rate_usd || 0);
+    existing.rateN += 1;
+    byDay.set(k, existing);
+  }
+  const dayRows = Array.from(byDay.values()).sort((a, b) => (a.day < b.day ? -1 : 1));
+
+  if (dayRows.length) {
     if (y > 700) { doc.addPage(); y = 48; }
-    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(20);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(...BRAND.emeraldDark);
     doc.text("Daily breakdown", 40, y); y += 8;
+
     if (mode === "partner") {
       autoTable(doc, {
         startY: y,
-        head: [["Day", "Number", "Client", "Delivered", "Failed", "Partner rate", "Partner payout"]],
-        body: (items || []).map((r: any) => [
-          r.day, numLabel(r.whatsapp_number_id), wsLabel(r.workspace_id),
-          r.delivered, r.failed, fmtRate(Number(r.partner_rate_usd)), fmtUsd(Number(r.payout_usd)),
+        head: [["Day", "Active numbers", "Messages delivered", "Your earnings"]],
+        body: dayRows.map(d => [
+          d.day,
+          d.numbers.size,
+          d.delivered.toLocaleString(),
+          fmtUsd(d.payout),
         ]),
-        styles: { font: "helvetica", fontSize: 8 },
-        headStyles: { fillColor: [60, 60, 60], textColor: 255 },
+        foot: [[
+          "Total",
+          new Set(dayRows.flatMap(d => Array.from(d.numbers))).size,
+          dayRows.reduce((s, d) => s + d.delivered, 0).toLocaleString(),
+          fmtUsd(dayRows.reduce((s, d) => s + d.payout, 0)),
+        ]],
+        styles: { font: "helvetica", fontSize: 9, textColor: BRAND.ink as any },
+        headStyles: { fillColor: BRAND.emeraldDark as any, textColor: 255 },
+        footStyles: { fillColor: BRAND.cream as any, textColor: BRAND.ink as any, fontStyle: "bold" },
         margin: { left: 40, right: 40 },
       });
     } else {
@@ -249,28 +249,73 @@ Deno.serve(async (req) => {
           r.delivered, r.failed, fmtRate(Number(r.partner_rate_usd)), fmtRate(Number(r.client_rate_usd)), fmtUsd(Number(r.payout_usd)),
         ]),
         styles: { font: "helvetica", fontSize: 8 },
-        headStyles: { fillColor: [60, 60, 60], textColor: 255 },
+        headStyles: { fillColor: [60, 60, 60] as any, textColor: 255 },
         margin: { left: 40, right: 40 },
       });
     }
     y = (doc as any).lastAutoTable.finalY + 18;
   }
 
-  // Footer
-  if (y > 740) { doc.addPage(); y = 48; }
-  doc.setDrawColor(220); doc.line(40, y, W - 40, y); y += 14;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120);
-  if (mode === "internal") {
-    doc.text(`Verification - source events: ${run.source_event_count}  ·  hash: ${(run.source_data_hash || "-").slice(0, 16)}…`, 40, y); y += 11;
-    doc.text(`Rates as of ${new Date(run.generated_at).toISOString()}. Computed from raw provider delivery events.`, 40, y);
-  } else {
-    doc.text(`Computed from raw provider delivery events. Rates fixed at the moment each message was delivered.`, 40, y); y += 11;
-    doc.text(`Questions about this statement? Reply to the email this PDF was sent with.`, 40, y);
+  // ---- Per-number summary (secondary for partner) ----
+  type NumRoll = { number: string; client: string; delivered: number; failed: number; payout: number; billed: number; margin: number; days: Set<string> };
+  const byNumber = new Map<string, NumRoll>();
+  for (const r of items || []) {
+    const k = `${r.whatsapp_number_id}|${r.workspace_id}`;
+    const existing = byNumber.get(k) || {
+      number: numLabel(r.whatsapp_number_id), client: wsLabel(r.workspace_id),
+      delivered: 0, failed: 0, payout: 0, billed: 0, margin: 0, days: new Set<string>(),
+    };
+    existing.delivered += Number(r.delivered || 0);
+    existing.failed += Number(r.failed || 0);
+    existing.payout += Number(r.payout_usd || 0);
+    existing.billed += Number(r.billed_usd || 0);
+    existing.margin += Number(r.margin_usd || 0);
+    existing.days.add(String(r.day));
+    byNumber.set(k, existing);
   }
+
+  if (byNumber.size) {
+    if (y > 700) { doc.addPage(); y = 48; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(...BRAND.emeraldDark);
+    doc.text(mode === "partner" ? "Numbers worked in this period" : "Per-number summary", 40, y);
+    y += 8;
+
+    if (mode === "partner") {
+      autoTable(doc, {
+        startY: y,
+        head: [["Number", "Client", "Days active", "Messages delivered", "Your earnings"]],
+        body: Array.from(byNumber.values()).map(r => [
+          r.number, r.client, r.days.size, r.delivered.toLocaleString(), fmtUsd(r.payout),
+        ]),
+        styles: { font: "helvetica", fontSize: 9, textColor: BRAND.ink as any },
+        headStyles: { fillColor: BRAND.emerald as any, textColor: 255 },
+        margin: { left: 40, right: 40 },
+      });
+    } else {
+      autoTable(doc, {
+        startY: y,
+        head: [["Number", "Client", "Delivered", "Failed", "Partner payout", "Client billed", "Our margin"]],
+        body: Array.from(byNumber.values()).map(r => [
+          r.number, r.client, r.delivered, r.failed, fmtUsd(r.payout), fmtUsd(r.billed), fmtUsd(r.margin),
+        ]),
+        styles: { font: "helvetica", fontSize: 9 },
+        headStyles: { fillColor: [40, 40, 40] as any, textColor: 255 },
+        margin: { left: 40, right: 40 },
+      });
+    }
+    y = (doc as any).lastAutoTable.finalY + 18;
+  }
+
+  // VOID watermark
   if (run.status === "void") {
-    doc.setTextColor(180, 30, 30); doc.setFontSize(36);
-    doc.text("VOID", W / 2 - 40, 400);
+    doc.setTextColor(180, 30, 30); doc.setFontSize(72);
+    doc.text("VOID", W / 2 - 80, 400, { angle: -20 } as any);
   }
+
+  // Footer (page numbers + contact). Internal mode adds verification line.
+  drawFooter(doc, mode === "internal"
+    ? `Verification - source events: ${run.source_event_count}, hash: ${(run.source_data_hash || "-").slice(0, 16)}`
+    : BRAND_COPY.earningsBasis);
 
   const pdfBytes = doc.output("arraybuffer") as ArrayBuffer;
 
