@@ -2,6 +2,7 @@
 // `campaign_day_completed` Slack event with tomorrow's start time and batch size.
 // Cron: every 15 minutes.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { acquireJobLock } from "../_shared/jobLock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +36,14 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  const release = await acquireJobLock(admin, "campaign-day-rollover");
+  if (!release) {
+    return new Response(JSON.stringify({ ok: true, skipped: "locked" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  try {
 
   // Pull running multi-day campaigns
   const { data: campaigns, error } = await admin
@@ -236,4 +245,7 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, checked, emitted }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+  } finally {
+    await release();
+  }
 });

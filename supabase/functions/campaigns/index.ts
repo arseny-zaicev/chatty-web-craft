@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { acquireJobLock } from "../_shared/jobLock.ts";
 import {
   buildTemplateParams,
   renderTemplateBody as sharedRenderTemplateBody,
@@ -1829,7 +1830,15 @@ serve(async (req) => {
       if (cronSecret && provided && provided !== cronSecret && !isServiceAuth) {
         return json({ error: "Unauthorized" }, 401);
       }
-      return await processQueue(admin);
+      // Cron + manual triggers can fire concurrently; serialize processQueue
+      // so two ticks don't pick up the same scheduled recipients and double-send.
+      const release = await acquireJobLock(admin, "campaigns-process");
+      if (!release) return json({ ok: true, skipped: "locked" });
+      try {
+        return await processQueue(admin);
+      } finally {
+        await release();
+      }
     }
 
     const auth = await getUser(req, supabaseUrl, anonKey);
