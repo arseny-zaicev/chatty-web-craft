@@ -38,6 +38,24 @@ async function fetchInsight(campaignId: string): Promise<Insight | null> {
   return (data as Insight | null) ?? null;
 }
 
+type LiveTotals = { total: number; sent: number; failed: number; pending: number; replied: number; positive: number; meeting: number };
+
+async function fetchLiveTotals(campaignIds: string[]): Promise<LiveTotals> {
+  const empty: LiveTotals = { total: 0, sent: 0, failed: 0, pending: 0, replied: 0, positive: 0, meeting: 0 };
+  if (campaignIds.length === 0) return empty;
+  const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: campaignIds });
+  if (error || !data) return empty;
+  return (data as any[]).reduce<LiveTotals>((acc, r) => ({
+    total:    acc.total    + Number(r.total ?? 0),
+    sent:     acc.sent     + Number(r.sent ?? 0),
+    failed:   acc.failed   + Number(r.failed ?? 0),
+    pending:  acc.pending  + Number(r.pending ?? 0),
+    replied:  acc.replied  + Number(r.replied ?? 0),
+    positive: acc.positive + Number(r.positive ?? 0),
+    meeting:  acc.meeting  + Number(r.meeting ?? 0),
+  }), empty);
+}
+
 async function downloadCsv(campaignId: string, campaignName: string) {
   const { data: { session } } = await supabase.auth.getSession();
   const jwt = session?.access_token;
