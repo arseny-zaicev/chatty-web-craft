@@ -381,10 +381,16 @@ export default function PartnerDetail() {
                         <TableCell><Badge variant={runStatusVariant(r.status)}>{r.status}</Badge></TableCell>
                         <TableCell>{r.totals_delivered}</TableCell>
                         <TableCell>{fmtUsd(Number(r.total_payout_usd))}</TableCell>
-                        <TableCell className="flex gap-2">
+                        <TableCell className="flex gap-1">
                           <Link to={`/admin/finance/runs/${r.id}`}><Button size="sm" variant="ghost">Open</Button></Link>
                           <PdfButton runId={r.id} />
                           <SlackPostButton runId={r.id} />
+                          <DeleteRunButton
+                            runId={r.id}
+                            status={r.status}
+                            paths={[r.pdf_storage_path, r.csv_storage_path, r.partner_pdf_storage_path]}
+                            onDeleted={() => qc.invalidateQueries({ queryKey: ["admin", "partner-runs", id] })}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
