@@ -106,8 +106,8 @@ export default function Partners() {
             <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All partners</SelectItem>
-              <SelectItem value="with">With referrer</SelectItem>
-              <SelectItem value="without">Without referrer</SelectItem>
+              <SelectItem value="with">With manager</SelectItem>
+              <SelectItem value="without">Without manager</SelectItem>
             </SelectContent>
           </Select>
         </div>
