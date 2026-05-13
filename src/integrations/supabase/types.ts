@@ -348,6 +348,7 @@ export type Database = {
           provider: string
           status: string
           updated_at: string
+          verification_status: string
           warmup_completed_at: string | null
           warmup_stage: string | null
           warmup_started_at: string | null
@@ -371,6 +372,7 @@ export type Database = {
           provider?: string
           status?: string
           updated_at?: string
+          verification_status?: string
           warmup_completed_at?: string | null
           warmup_stage?: string | null
           warmup_started_at?: string | null
@@ -394,6 +396,7 @@ export type Database = {
           provider?: string
           status?: string
           updated_at?: string
+          verification_status?: string
           warmup_completed_at?: string | null
           warmup_stage?: string | null
           warmup_started_at?: string | null
