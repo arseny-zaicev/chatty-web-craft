@@ -62,6 +62,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     { data: numbers },
     { data: campaigns },
     { data: metricsToday },
+    { data: metricsByCampaign },
     { data: recentSent },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
@@ -71,8 +72,10 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
       .from("campaigns")
       .select("id, workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients")
       .in("status", ["scheduled", "running", "paused"]),
-    // v_metrics_today is the truth source for sent/delivered/replies today.
-    supabase.from("v_metrics_today").select("workspace_id, sent_today, delivered_today, replies_today, campaign_id"),
+    // v_metrics_today: one row per workspace - safe to sum.
+    supabase.from("v_metrics_today").select("workspace_id, sent_today, delivered_today, replies_today"),
+    // v_metrics_today_by_campaign: per-campaign sent for active-group rollup.
+    supabase.from("v_metrics_today_by_campaign").select("workspace_id, campaign_id, sent_today"),
     // Recent recipient activity per workspace -> drives is_sending_now.
     supabase
       .from("campaign_recipients")
