@@ -8,11 +8,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { format, subDays } from "date-fns";
+import { format, subDays, startOfMonth } from "date-fns";
+
+const LIFECYCLE_STATUSES = ["ready", "warming_up", "verifying", "disabled"] as const;
+const VERIFICATION_STATUSES = ["unverified", "verifying", "verified"] as const;
+type Lifecycle = typeof LIFECYCLE_STATUSES[number];
+type Verification = typeof VERIFICATION_STATUSES[number];
+
+// Map legacy statuses to new lifecycle buckets for display.
+const lifecycleBucket = (s?: string | null): Lifecycle => {
+  const v = String(s ?? "").toLowerCase();
+  if (v === "ready" || v === "active") return "ready";
+  if (v === "warming_up" || v === "warming") return "warming_up";
+  if (v === "verifying") return "verifying";
+  if (v === "disabled" || v === "inactive" || v === "paused") return "disabled";
+  return "warming_up";
+};
+
+const lifecycleVariant = (l: Lifecycle): any =>
+  l === "ready" ? "default" : l === "disabled" ? "destructive" : "secondary";
+
+const verificationVariant = (v: string): any =>
+  v === "verified" ? "default" : v === "verifying" ? "secondary" : "outline";
 
 const fmtUsd = (n: number) =>
   `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
