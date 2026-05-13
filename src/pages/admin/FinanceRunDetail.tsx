@@ -201,14 +201,14 @@ export default function FinanceRunDetail() {
         {/* KPI bar - internal admin numbers */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
-            ["Delivered", String(run.totals_delivered)],
-            ["Failed", String(run.totals_failed)],
-            ["Sent", String(run.totals_sent)],
-            ["Partner payout", fmtUsd(Number(run.total_payout_usd))],
-            ["Client billed", fmtUsd(Number(run.total_billed_usd))],
-            ["Our margin", fmtUsd(Number(run.margin_usd))],
-          ].map(([l, v]) => (
-            <Card key={l}><CardContent className="pt-4">
+            ["Delivered", String(run.totals_delivered), "Confirmed deliveries from WhatsApp. Earnings paid on this number only."],
+            ["Failed", String(run.totals_failed), "Send attempts that failed at provider or carrier."],
+            ["Attempts", String(run.totals_sent), "Messages we tried to send (sent events). Always >= Delivered."],
+            ["Partner payout", fmtUsd(Number(run.total_payout_usd)), ""],
+            ["Client billed", fmtUsd(Number(run.total_billed_usd)), ""],
+            ["Our margin", fmtUsd(Number(run.margin_usd)), ""],
+          ].map(([l, v, t]) => (
+            <Card key={l} title={t || undefined}><CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">{l}</div>
               <div className="text-xl font-semibold">{v}</div>
             </CardContent></Card>
