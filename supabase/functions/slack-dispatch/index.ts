@@ -110,13 +110,16 @@ Deno.serve(async (req) => {
   // pending backfill events by (workspace, pipeline_channel) and post a single
   // digest, then mark them all as sent. This runs before the normal drain so
   // backfills don't compete for the 50-row limit.
-  const { data: backfillRows } = await supabase
+  const { data: backfillRowsRaw } = await supabase
     .from("slack_event_queue")
     .select("*")
     .eq("status", "pending")
     .eq("event_type", "lead.first_reply")
-    .in("payload->>source", ["backfill_missed_first_reply", "watchdog_backfill"])
     .limit(2000);
+  const backfillRows = (backfillRowsRaw || []).filter((r: any) => {
+    const src = (r.payload as any)?.source;
+    return src === "backfill_missed_first_reply" || src === "watchdog_backfill";
+  });
   if (backfillRows && backfillRows.length > 0) {
     type Group = { ws: any; channel: string | null; rows: any[] };
     const groups = new Map<string, Group>();
