@@ -175,7 +175,7 @@ export default function PartnerDetail() {
           <Badge variant="outline">{partner.cadence}</Badge>
           {partner.referrer_partner_id && <ReferrerBadge id={partner.referrer_partner_id} /> }
           <span className="text-sm text-muted-foreground ml-auto">
-            Default rate: ${Number(partner.default_payout_rate_usd).toFixed(4)} {partner.currency}
+            Partner rate: ${Number(partner.default_payout_rate_usd || 0).toFixed(4)} {partner.currency}
           </span>
         </div>
 
