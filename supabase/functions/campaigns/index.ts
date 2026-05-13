@@ -319,7 +319,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const numberIds = [...new Set(rawNumbers.map((n) => n.number_id))];
   const { data: numberRows } = await admin
     .from("whatsapp_numbers")
-    .select("id, user_id, workspace_id, phone_number, provider_app_id, country_code")
+    .select("id, user_id, workspace_id, phone_number, provider_app_id, country_code, daily_send_limit")
     .in("id", numberIds);
   if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "WhatsApp number not found" }, 404);
   const ownerId = numberRows[0].user_id;
