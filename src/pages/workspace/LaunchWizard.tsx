@@ -805,16 +805,19 @@ export default function LaunchWizard() {
       }
 
 
-      // Mark used / release per overall result
+      // Mark used / release per overall result. Wrapped in a hard timeout so a
+      // slow RPC can never leave the Launch button stuck on "Launching...".
+      const withTimeout = <T,>(p: Promise<T>, ms: number) =>
+        Promise.race<T | undefined>([p, new Promise<undefined>((res) => setTimeout(() => res(undefined), ms))]);
       if (audienceSource === "database") {
         const anyOk = results.some((r) => r.ok);
         if (anyOk) {
           const cid = (results.find((r) => r.ok)?.res as any)?.campaign_id;
           if (cid && allRowIds.length > 0) {
-            try { await markRowsUsed(allRowIds, cid); } catch { /* ignore */ }
+            try { await withTimeout(markRowsUsed(allRowIds, cid), 8000); } catch { /* ignore */ }
           }
         } else if (reservedRowIds.length > 0) {
-          try { await releaseRows(reservedRowIds); } catch { /* ignore */ }
+          try { await withTimeout(releaseRows(reservedRowIds), 8000); } catch { /* ignore */ }
         }
       }
 
