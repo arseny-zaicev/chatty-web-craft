@@ -422,8 +422,7 @@ export default function LaunchWizard() {
   // ----- Toggles -----
   const toggleNumber = (id: string) => {
     setNumberIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (!routing) return [id]; // single-number mode
+      if (prev.includes(id)) return prev.length > 1 ? prev.filter((x) => x !== id) : prev;
       return [...prev, id];
     });
   };
