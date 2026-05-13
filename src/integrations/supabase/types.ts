@@ -332,6 +332,7 @@ export type Database = {
       }
       business_managers: {
         Row: {
+          ads_launched_before: boolean
           ads_running: boolean
           created_at: string
           created_by: string
@@ -343,6 +344,7 @@ export type Database = {
           last_warmup_action_at: string | null
           meta_bm_id: string | null
           name: string
+          next_warmup_run_date: string | null
           notes: string | null
           owner_email: string | null
           provider: string
@@ -356,6 +358,7 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          ads_launched_before?: boolean
           ads_running?: boolean
           created_at?: string
           created_by: string
@@ -367,6 +370,7 @@ export type Database = {
           last_warmup_action_at?: string | null
           meta_bm_id?: string | null
           name: string
+          next_warmup_run_date?: string | null
           notes?: string | null
           owner_email?: string | null
           provider?: string
@@ -380,6 +384,7 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          ads_launched_before?: boolean
           ads_running?: boolean
           created_at?: string
           created_by?: string
@@ -391,6 +396,7 @@ export type Database = {
           last_warmup_action_at?: string | null
           meta_bm_id?: string | null
           name?: string
+          next_warmup_run_date?: string | null
           notes?: string | null
           owner_email?: string | null
           provider?: string
@@ -2985,6 +2991,45 @@ export type Database = {
           },
         ]
       }
+      v_metrics_alltime: {
+        Row: {
+          campaign_id: string | null
+          delivered_alltime: number | null
+          failed_alltime: number | null
+          sent_alltime: number | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_metrics_today: {
+        Row: {
+          campaign_id: string | null
+          delivered_today: number | null
+          failed_today: number | null
+          replies_today: number | null
+          sent_today: number | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_number_usage_summary: {
         Row: {
           active_campaign_count: number | null
@@ -3112,6 +3157,7 @@ export type Database = {
           total: number
         }[]
       }
+      campaign_live_status: { Args: { _campaign_id: string }; Returns: string }
       campaign_recipient_counts: {
         Args: { p_campaign_ids: string[] }
         Returns: {
@@ -3133,6 +3179,7 @@ export type Database = {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
       }
+      dubai_start_of_day: { Args: { _at?: string }; Returns: string }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
