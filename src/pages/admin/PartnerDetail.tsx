@@ -267,9 +267,18 @@ export default function PartnerDetail() {
                             {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={verificationVariant(bm?.verification_status || "unverified")}>
-                              {bm?.verification_status || "unverified"}
-                            </Badge>
+                            {bm ? (
+                              <VerificationSelect
+                                bmId={bm.id}
+                                value={(bm.verification_status as Verification) || "unverified"}
+                                onChanged={() => {
+                                  qc.invalidateQueries({ queryKey: ["admin", "partner-bms", id, bmIds] });
+                                  qc.invalidateQueries({ queryKey: ["business-managers"] });
+                                }}
+                              />
+                            ) : (
+                              <Badge variant="outline">unverified</Badge>
+                            )}
                           </TableCell>
                           <TableCell><Badge variant={lifecycleVariant(lc)}>{lc}</Badge></TableCell>
                           <TableCell className="text-xs">
