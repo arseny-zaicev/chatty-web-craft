@@ -3171,7 +3171,9 @@ export type Database = {
           positive: number
           replied: number
           sent: number
+          tagged: number
           total: number
+          warm: number
         }[]
       }
       campaign_live_status: { Args: { _campaign_id: string }; Returns: string }
