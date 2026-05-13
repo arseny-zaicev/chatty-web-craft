@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, ArrowLeft, Search } from "lucide-react";
 import { toast } from "sonner";
+import { fetchPartnerMetrics } from "@/lib/metrics";
 
 type Partner = {
   id: string; name: string; contact_email: string | null; kind: string;
@@ -68,6 +69,13 @@ export default function Partners() {
     },
   });
 
+  const partnerIds = useMemo(() => (partners || []).map(p => p.id), [partners]);
+  const { data: partnerMetrics } = useQuery({
+    queryKey: ["admin", "partners", "metrics", partnerIds],
+    enabled: partnerIds.length > 0,
+    queryFn: () => fetchPartnerMetrics(partnerIds),
+  });
+
   const rows = useMemo(() => {
     return (partners || []).filter((p) => {
       if (refFilter === "with" && !p.referrer_partner_id) return false;
@@ -114,6 +122,8 @@ export default function Partners() {
                   <TableHead>Referred by</TableHead>
                   <TableHead>BMs</TableHead>
                   <TableHead>Numbers</TableHead>
+                  <TableHead>Sent today</TableHead>
+                  <TableHead>Sent all-time</TableHead>
                   <TableHead>Provider rate</TableHead>
                   <TableHead>Referral rate</TableHead>
                   <TableHead>Unpaid</TableHead>
@@ -127,6 +137,7 @@ export default function Partners() {
                     const numCount = bmIds.reduce((s, id) => s + (agg?.numsPerBm.get(id) || 0), 0);
                     const unpaid = agg?.unpaidByPartner.get(p.id) || 0;
                     const refName = partnerName(p.referrer_partner_id);
+                    const pm = partnerMetrics?.get(p.id);
                     return (
                       <TableRow key={p.id} className="cursor-pointer hover:bg-muted/40">
                         <TableCell className="font-medium">
