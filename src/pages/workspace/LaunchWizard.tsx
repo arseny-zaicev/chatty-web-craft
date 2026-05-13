@@ -707,7 +707,10 @@ export default function LaunchWizard() {
             let raw = "";
             if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
             else if (src) raw = String((r.payload as any)?.[src] ?? dp?.[src] ?? "");
-            if (!raw) raw = String(dp?.[`var_${v}`] ?? "");
+            if (!raw) {
+              const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
+              raw = String(dp?.[dpKey] ?? dp?.[v] ?? "");
+            }
             vars[v] = raw;
           }
           rowIdByPhone.set(r.phone, r.id);
