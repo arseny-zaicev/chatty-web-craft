@@ -164,8 +164,8 @@ export default function PartnerDetail() {
           <Link to="/admin/partners"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Partners</Button></Link>
           <h1 className="font-display text-2xl">{partner.name}</h1>
           <Badge variant={partner.status === "active" ? "default" : "secondary"}>{partner.status}</Badge>
-          <Badge variant="outline">{partner.kind}</Badge>
           <Badge variant="outline">{partner.cadence}</Badge>
+          {partner.referrer_partner_id && <ReferrerBadge id={partner.referrer_partner_id} /> }
           <span className="text-sm text-muted-foreground ml-auto">
             Default rate: ${Number(partner.default_payout_rate_usd).toFixed(4)} {partner.currency}
           </span>
@@ -439,6 +439,18 @@ const Stat = ({ label, value, hint, alert }: { label: string; value: string; hin
   </Card>
 );
 
+function ReferrerBadge({ id }: { id: string }) {
+  const { data } = useQuery({
+    queryKey: ["partner-name", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("partners").select("name").eq("id", id).maybeSingle();
+      return data?.name as string | undefined;
+    },
+  });
+  if (!data) return null;
+  return <Badge variant="outline">Referred by: {data}</Badge>;
+}
+
 function CreateBMDialog({
   partnerId, partnerDefaultRate, workspaces, onCreated,
 }: {
@@ -561,16 +573,6 @@ function CreateBMDialog({
               </Select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Partner role</label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="provider">Provider</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
               <label className="text-xs text-muted-foreground">Rate $/delivered</label>
               <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
             </div>
@@ -657,21 +659,9 @@ function LinkBMDialog({ partnerId, onLinked }: { partnerId: string; onLinked: ()
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Role</label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="provider">Provider</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Rate $/delivered</label>
-              <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
-            </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Rate $/delivered</label>
+            <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
@@ -828,22 +818,33 @@ function MarkPaidButton({ runId, amount, onDone }: { runId: string; amount: numb
 }
 
 function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void }) {
-  const [kind, setKind] = useState(partner.kind);
   const [cadence, setCadence] = useState(partner.cadence);
   const [autoSlack, setAutoSlack] = useState(partner.auto_post_slack);
   const [defRate, setDefRate] = useState(String(partner.default_payout_rate_usd));
   const [email, setEmail] = useState(partner.contact_email || "");
   const [notes, setNotes] = useState(partner.payment_notes || "");
   const [status, setStatus] = useState(partner.status);
+  const [referrerId, setReferrerId] = useState<string>(partner.referrer_partner_id || "none");
+  const [referralRate, setReferralRate] = useState(String(partner.referral_rate_usd ?? 0));
+
+  const { data: otherPartners } = useQuery({
+    queryKey: ["admin", "all-partners-mini"],
+    queryFn: async () => {
+      const { data } = await supabase.from("partners").select("id, name").order("name");
+      return (data || []).filter((p: any) => p.id !== partner.id) as any[];
+    },
+  });
 
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("partners").update({
-        kind, cadence, auto_post_slack: autoSlack,
+        cadence, auto_post_slack: autoSlack,
         default_payout_rate_usd: Number(defRate),
         contact_email: email || null,
         payment_notes: notes || null,
         status,
+        referrer_partner_id: referrerId === "none" ? null : referrerId,
+        referral_rate_usd: Number(referralRate) || 0,
       } as any).eq("id", partner.id);
       if (error) throw error;
     },
@@ -856,17 +857,6 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
       <CardHeader><CardTitle>Settings</CardTitle></CardHeader>
       <CardContent className="space-y-3 max-w-2xl">
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground">Kind</label>
-            <Select value={kind} onValueChange={setKind}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="provider">Provider</SelectItem>
-                <SelectItem value="referral">Referral</SelectItem>
-                <SelectItem value="both">Both</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div>
             <label className="text-xs text-muted-foreground">Cadence</label>
             <Select value={cadence} onValueChange={setCadence}>
@@ -889,10 +879,35 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
             </Select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Default rate</label>
+            <label className="text-xs text-muted-foreground">Default provider rate $/delivered</label>
             <Input type="number" step="0.0001" value={defRate} onChange={e => setDefRate(e.target.value)} />
           </div>
-          <div className="col-span-2">
+          <div></div>
+
+          <div className="col-span-2 border-t border-border pt-3 mt-1">
+            <div className="text-sm font-medium mb-2">Referral</div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Если этого партнёра кто-то привёл — выбери реферрера и укажи ставку, которую <b>мы платим реферреру</b> за каждое доставленное сообщение этого партнёра.
+            </p>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Referred by</label>
+            <Select value={referrerId} onValueChange={setReferrerId}>
+              <SelectTrigger><SelectValue placeholder="No referrer" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No referrer</SelectItem>
+                {(otherPartners || []).map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Referral rate $/delivered (paid to referrer)</label>
+            <Input type="number" step="0.0001" value={referralRate} onChange={e => setReferralRate(e.target.value)} />
+          </div>
+
+          <div className="col-span-2 border-t border-border pt-3 mt-1">
             <label className="text-xs text-muted-foreground">Contact email</label>
             <Input value={email} onChange={e => setEmail(e.target.value)} />
           </div>
@@ -910,3 +925,4 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
     </Card>
   );
 }
+

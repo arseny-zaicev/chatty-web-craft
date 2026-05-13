@@ -2,9 +2,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { baseName as splitBase } from "./campaigns";
 
 const startOfDayIso = () => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  // Start of "today" in Dubai (GST, UTC+4)
+  const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+  return new Date(`${dubaiDate}T00:00:00+04:00`).toISOString();
 };
 
 export type WorkspaceHealth = "running" | "scheduled" | "idle" | "attention" | "blocked";
@@ -59,12 +59,14 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     { data: numbers },
     { data: campaigns },
     { data: msgsToday },
+    { data: eventsToday },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
     supabase.from("conversations").select("id, workspace_id, unread_count, last_message_at"),
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
-    supabase.from("campaigns").select("workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients").in("status", ["scheduled", "running", "paused", "draft"]),
-    supabase.from("messages").select("conversation_id, direction, created_at, status").gte("created_at", today),
+    supabase.from("campaigns").select("workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients").in("status", ["scheduled", "running", "paused"]),
+    supabase.from("messages").select("conversation_id, direction, created_at").gte("created_at", today).eq("direction", "inbound"),
+    supabase.from("whatsapp_message_events").select("workspace_id, event_type").gte("received_at", today).in("event_type", ["delivered"]),
   ]);
   const bookedToday: { id: string }[] = [];
 
@@ -168,15 +170,19 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
       && m.active_campaign_sent < m.active_campaign_total;
   });
 
+  // Replies today: from messages (inbound only)
   (msgsToday ?? []).forEach((msg) => {
     const wsId = convWs.get(msg.conversation_id as unknown as string);
     if (!wsId) return;
     const m = ensure(wsId);
-    if (msg.direction === "outbound") {
-      if (msg.status === "delivered" || msg.status === "read" || msg.status === "sent") m.delivered_today += 1;
-    } else if (msg.direction === "inbound") {
-      m.replies_today += 1;
-    }
+    if (msg.direction === "inbound") m.replies_today += 1;
+  });
+
+  // Delivered today: from real Gupshup webhook events (truth source)
+  (eventsToday ?? []).forEach((ev: any) => {
+    if (!ev.workspace_id) return;
+    const m = ensure(ev.workspace_id);
+    if (ev.event_type === "delivered") m.delivered_today += 1;
   });
 
   // Health rule (realistic):

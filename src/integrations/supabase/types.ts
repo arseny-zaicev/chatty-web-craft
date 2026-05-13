@@ -1631,6 +1631,8 @@ export type Database = {
           name: string
           notes: string | null
           payment_notes: string | null
+          referral_rate_usd: number
+          referrer_partner_id: string | null
           status: string
           timezone: string
           updated_at: string
@@ -1651,6 +1653,8 @@ export type Database = {
           name: string
           notes?: string | null
           payment_notes?: string | null
+          referral_rate_usd?: number
+          referrer_partner_id?: string | null
           status?: string
           timezone?: string
           updated_at?: string
@@ -1671,11 +1675,21 @@ export type Database = {
           name?: string
           notes?: string | null
           payment_notes?: string | null
+          referral_rate_usd?: number
+          referrer_partner_id?: string | null
           status?: string
           timezone?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "partners_referrer_partner_id_fkey"
+            columns: ["referrer_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payout_line_items: {
         Row: {
