@@ -235,10 +235,11 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <Kpi icon={Building2} label="Clients" value={t?.clients ?? workspaces.length} />
         <Kpi icon={Megaphone} label="Active campaigns" value={t?.active_campaigns ?? 0} />
         <Kpi icon={MessageSquare} label="Unread replies" value={t?.unread_replies ?? 0} accent={t && t.unread_replies > 0 ? "text-emerald-500" : undefined} />
+        <Kpi icon={Send} label="Sent today" value={t?.sent_today ?? 0} />
         <Kpi icon={Send} label="Delivered today" value={t?.delivered_today ?? 0} />
         <Kpi icon={MessageSquare} label="Replies today" value={t?.replies_today ?? 0} />
         <Kpi icon={Calendar} label="Booked today" value={t?.booked_calls_today ?? 0} />
