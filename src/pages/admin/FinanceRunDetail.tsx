@@ -24,6 +24,7 @@ const statusVariant = (s: string): "default" | "secondary" | "destructive" | "ou
 export default function FinanceRunDetail() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: run, isLoading } = useQuery({
     queryKey: ["finance", "run", id],
