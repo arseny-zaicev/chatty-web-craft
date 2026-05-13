@@ -171,9 +171,22 @@ export default function PartnerDetail() {
           </span>
         </div>
 
-        <Tabs defaultValue="overview">
+        {/* TOP SUMMARY STRIP - live across linked BMs / numbers */}
+        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
+          <Stat label="Total BMs" value={String(bmList.length)} />
+          <Stat label="Ready" value={String(lifecycleCounts.ready)} />
+          <Stat label="Warming up" value={String(lifecycleCounts.warming_up)} />
+          <Stat label="Verifying" value={String(lifecycleCounts.verifying)} />
+          <Stat label="Disabled" value={String(lifecycleCounts.disabled)} />
+          <Stat label="Restricted #" value={String(restrictedNums)} alert={restrictedNums > 0} />
+          <Stat label="Blocked #" value={String(blockedNums)} alert={blockedNums > 0} />
+          <Stat label="Sent 7d" value={sent7dTotal.toLocaleString()} />
+          <Stat label="Open payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
+          <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
+        </div>
+
+        <Tabs defaultValue="bms">
           <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="bms">Business Managers</TabsTrigger>
             <TabsTrigger value="numbers">Numbers</TabsTrigger>
             <TabsTrigger value="finance">Finance & Reports</TabsTrigger>
@@ -181,69 +194,92 @@ export default function PartnerDetail() {
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
-          {/* OVERVIEW */}
-          <TabsContent value="overview" className="pt-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Stat label="Active BMs" value={`${(bms || []).filter(b => b.status === "active").length} / ${bms?.length || 0}`} />
-              <Stat label="Active numbers" value={`${activeNums} / ${totalNums}`} />
-              <Stat label="Warm-up active" value={String(warmNums)} hint={`${warmingBms} BM(s)`} />
-              <Stat label="Restricted/blocked" value={String(restrictedNums)} alert={restrictedNums > 0} />
-              <Stat label="Ads running on" value={`${adsRunningBms} BM(s)`} />
-              <Stat label="Unpaid payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
-              <Stat label="Total runs" value={String(runs?.length || 0)} />
-              <Stat label="Cadence" value={partner.cadence} />
-            </div>
-          </TabsContent>
-
           {/* BUSINESS MANAGERS */}
           <TabsContent value="bms" className="pt-4 space-y-4">
-            <LinkBMCard partnerId={id!} onLinked={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })} />
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-sm text-muted-foreground">
+                {bmList.length} BM(s) linked - {totalNums} number(s) total
+              </div>
+              <div className="flex gap-2">
+                <CreateBMDialog
+                  partnerId={id!}
+                  partnerDefaultRate={Number(partner.default_payout_rate_usd) || 0.005}
+                  workspaces={workspaces || []}
+                  onCreated={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })}
+                />
+                <LinkBMDialog
+                  partnerId={id!}
+                  onLinked={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })}
+                />
+              </div>
+            </div>
+
             <Card>
               <CardHeader><CardTitle>Linked Business Managers</CardTitle></CardHeader>
-              <CardContent>
+              <CardContent className="overflow-x-auto">
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead>BM</TableHead>
-                    <TableHead>Meta BM ID</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Ads</TableHead>
-                    <TableHead>Warm-up</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Verification</TableHead>
+                    <TableHead>Lifecycle</TableHead>
+                    <TableHead>Warm-up / Ads</TableHead>
                     <TableHead>Numbers</TableHead>
+                    <TableHead>Numbers summary</TableHead>
+                    <TableHead className="text-right">Sent today</TableHead>
+                    <TableHead className="text-right">Sent 7d</TableHead>
+                    <TableHead className="text-right">Sent all</TableHead>
+                    <TableHead className="text-right">Restricted</TableHead>
+                    <TableHead className="text-right">Blocked</TableHead>
+                    <TableHead className="text-right">Clients</TableHead>
                     <TableHead></TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {activeAssigns.map(a => {
-                      const bm = (bms || []).find(b => b.id === a.business_manager_id);
+                      const bm = bmList.find(b => b.id === a.business_manager_id);
                       const bmNums = (numbers || []).filter(n => n.business_manager_id === a.business_manager_id);
-                      const active = bmNums.filter(n => n.status === "active").length;
-                      const warming = bmNums.filter(n => n.status === "warming").length;
-                      const restricted = bmNums.filter(n => n.status === "restricted" || n.status === "blocked" || n.status === "banned").length;
+                      const restricted = bmNums.filter(n => n.status === "restricted").length;
+                      const blocked = bmNums.filter(n => n.status === "blocked" || n.status === "banned").length;
+                      const wsSet = new Set(bmNums.map(n => n.workspace_id).filter(Boolean));
+                      const sentToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_today || 0), 0);
+                      const sent7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_7d || 0), 0);
+                      const sentAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_all || 0), 0);
+                      const lc = lifecycleBucket(bm?.status);
+                      const summary = bmNums.slice(0, 3).map(n => n.display_name || `+${n.phone_number}`).join(", ")
+                        + (bmNums.length > 3 ? ` +${bmNums.length - 3}` : "");
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">
                             {bm ? <Link to={`/admin/business-managers/${bm.id}`} className="hover:underline">{bm.name}</Link> : a.business_manager_id.slice(0,8)}
+                            <div className="text-[10px] text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || ""}</div>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || "—"}</TableCell>
-                          <TableCell><Badge variant={a.role === "provider" ? "default" : "secondary"}>{a.role}</Badge></TableCell>
-                          <TableCell>${Number(a.rate_usd).toFixed(4)}</TableCell>
-                          <TableCell><Badge variant="outline">{bm?.status || "?"}</Badge></TableCell>
-                          <TableCell>{bm?.ads_running ? <Badge>running</Badge> : <span className="text-muted-foreground text-xs">off</span>}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={verificationVariant(bm?.verification_status || "unverified")}>
+                              {bm?.verification_status || "unverified"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell><Badge variant={lifecycleVariant(lc)}>{lc}</Badge></TableCell>
                           <TableCell className="text-xs">
-                            {bm?.status === "warming" ? (
-                              <div>
-                                <Badge variant="secondary">active</Badge>
-                                {bm.warmup_started_at && <div className="text-muted-foreground mt-0.5">started {format(new Date(bm.warmup_started_at), "MMM d")}</div>}
-                                {bm.warmup_target_date && <div className="text-muted-foreground">→ {bm.warmup_target_date}</div>}
+                            {bm?.ads_running ? <Badge>ads running</Badge> : null}
+                            {lc === "warming_up" && (
+                              <div className="text-muted-foreground mt-0.5">
+                                {bm?.warmup_started_at ? `since ${format(new Date(bm.warmup_started_at), "MMM d")}` : "warm-up"}
+                                {bm?.warmup_target_date ? ` → ${bm.warmup_target_date}` : ""}
                               </div>
-                            ) : bm?.warmup_completed_at ? (
-                              <div className="text-muted-foreground">done {format(new Date(bm.warmup_completed_at), "MMM d")}</div>
-                            ) : <span className="text-muted-foreground">—</span>}
+                            )}
+                            {!bm?.ads_running && lc !== "warming_up" && <span className="text-muted-foreground">—</span>}
                           </TableCell>
-                          <TableCell className="text-xs">
-                            {bmNums.length} <span className="text-muted-foreground">· {active}a / {warming}w / {restricted}r</span>
-                          </TableCell>
+                          <TableCell className="text-center">{bmNums.length}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate" title={summary}>{summary || "—"}</TableCell>
+                          <TableCell className="text-right tabular-nums">{sentToday.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums">{sent7d.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums">{sentAll.toLocaleString()}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${restricted > 0 ? "text-amber-600 font-medium" : ""}`}>{restricted}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${blocked > 0 ? "text-destructive font-medium" : ""}`}>{blocked}</TableCell>
+                          <TableCell className="text-right tabular-nums">{wsSet.size}</TableCell>
                           <TableCell>
                             <UnlinkButton assignmentId={a.id} onDone={() => qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] })} />
                           </TableCell>
@@ -251,7 +287,7 @@ export default function PartnerDetail() {
                       );
                     })}
                     {!activeAssigns.length && (
-                      <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">No BMs linked yet</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={14} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
