@@ -366,19 +366,13 @@ export default function LaunchWizard() {
   // Auto-fill numberIds based on mode + pool
   useEffect(() => {
     if (poolNumbers.length === 0) return;
-    if (type === "utility") {
-      // Utility: use ALL ready numbers in pool
-      const ids = readyInPool.map((n) => n.id);
-      setNumberIds(ids.length ? ids : [poolNumbers[0].id]);
-    } else {
-      // Marketing: single sender — keep current if still in pool & ready, else first ready/first
-      setNumberIds((prev) => {
-        const stillValid = prev.find((id) => poolNumbers.some((n) => n.id === id));
-        if (stillValid) return [stillValid];
-        const firstReady = readyInPool[0] ?? poolNumbers[0];
-        return [firstReady.id];
-      });
-    }
+    // Both modes: pre-select all ready numbers (operators can untick).
+    const ids = readyInPool.map((n) => n.id);
+    const fallback = ids.length ? ids : [poolNumbers[0].id];
+    setNumberIds((prev) => {
+      const stillValid = prev.filter((id) => poolNumbers.some((n) => n.id === id));
+      return stillValid.length ? stillValid : fallback;
+    });
   }, [type, poolCountry, readyInPool.length, poolNumbers.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeNumbers = numbers.filter((n) => numberIds.includes(n.id));
