@@ -1,148 +1,113 @@
-## Goal
+## Findings
 
-Fix four operator pain points in the Partner / BM area:
+This was my mistake. You asked to check one missing positive lead, and the implemented recovery path was too broad.
 
-1. Verification status on Linked Business Managers is read-only — must be editable.
-2. Payout runs cannot be deleted — admin needs a delete control.
-3. Partner / Referrer PDFs are not branded, still use cryptic short labels, and lack the per-day breakdown the partner needs to read on their own.
-4. "Delivered 219" on a payout run vs "Sent 1742" on the same BM looks like a bug — actually two different metrics over two different windows, with no UI hint. Make them comparable.
+### What happened
 
-This plan does not redesign anything else.
+1. A new `campaign_recipients -> lead.first_reply` trigger was added to catch missed campaign replies.
+2. A backfill/watchdog was also added to recover replies that had no Slack event.
+3. Both paths treated `status = replied` as enough to notify Slack.
+4. That is wrong for this product. `replied` includes block buttons, not relevant, auto-replies, location questions, and random inbound noise.
+5. The first negative filter only caught obvious words like `Block` and `Stop`. It did not catch `Not relevant`, `Not for me`, `Where are you located`, auto-replies, or neutral/non-qualified messages.
+6. The watchdog still had no negative/qualification filter, so it reintroduced bad events even after the trigger was partly filtered.
 
----
+### Scope of bad Slack events
 
-## A. Editable BM verification
+From `13 May 2026 23:00 GST` onward:
 
-**Where:** `src/pages/admin/PartnerDetail.tsx` (Linked Business Managers table, "Verification" column) and `src/pages/admin/BusinessManagerDetail.tsx` header.
+- `65` `lead.first_reply` events were sent.
+- At least `21` were obvious bad/noise notifications.
+- `320` backfill events were skipped/halted before sending individually.
+- For goswyft specifically:
+  - `16` `lead.first_reply` events were sent.
+  - `6` were `Block` via watchdog digest.
+  - `4` were `Not relevant` direct notifications.
+  - Several were auto-replies like “Thank you for contacting...”
 
-**Change:** Replace the read-only `Badge` with an inline `Select` (values: `unverified`, `verifying`, `verified`). On change, call `supabase.from("business_managers").update({ verification_status }).eq("id", bm.id)`, optimistic update, toast, invalidate `["business-managers"]` + `["admin", "partner-assigns", id]`.
+There are no currently pending bad `lead.first_reply` Slack events.
 
-RLS is already in place (`is_workspace_manager` allows updates); no migration needed.
+## The Moran Group - goswyft
 
----
+Found it.
 
-## B. Delete payout runs
+- Workspace: `goswyft-GS`
+- Contact: `The Moran Group`
+- Phone: `+12167749816`
+- Campaign: `2026-05-13 | US | 2026-05-11 | US | SMB Owners with D&B Profile | GoSwyft Main | Call`
+- Pipeline: `US / Main`
+- First inbound reply: `Where are you located`
+- Received: `13 May 2026, 20:30 GST`
+- Current stage: `Message sent`
+- AI classification: `neutral / info`
+- Slack event status: `skipped`
+- Why skipped: it was created by the one-off recovery backfill at `13 May 2026, 23:44 GST`, then halted at `23:48 GST` to stop the mass spam.
 
-**Where:** `src/pages/admin/PartnerDetail.tsx` Payout-runs table row, and `src/pages/admin/FinanceRunDetail.tsx` header.
+Important: The Moran Group was not classified as a positive lead by the current classifier. It is an engaged info/location question, not a block. If you consider this a client-worthy lead notification, the rule should be “positive or engaged buyer question”, not only strictly positive.
 
-**Rules (operator safety):**
-- Allow delete only when `status IN ('draft','void')`.
-- For `approved` / `paid` runs, the button is hidden and a small note explains "Void first to delete".
-- Confirmation dialog ("Delete run permanently? Line items, audit, and PDF/CSV files will be removed.").
+## Fix plan
 
-**Backend:**
-- DB: RLS already permits `Admins manage payout runs` ALL, and `payout_line_items` cascades on `payout_run_id`. So a direct `supabase.from("payout_runs").delete().eq("id", id)` works.
-- Storage cleanup: also delete the PDF/CSV objects under `payout-reports/<partner_id>/...` listed on the row (`pdf_storage_path`, `csv_storage_path`, `partner_pdf_storage_path`). Best-effort, ignore not-found.
+### 1. Stop broad `lead.first_reply` client notifications
 
-No migration needed.
+Change Slack routing so client/pipeline notifications only go out when the reply is qualified:
 
----
+- allow: positive sentiment, meeting request, pricing question, clear info request, “learn more”, “send details”, location/availability questions
+- block: `Block`, `Stop`, `Spam`, `Not relevant`, `Not for me`, `Not interested`, unsubscribe, wrong person, hostile replies, auto-replies
+- if no classification exists yet, do not notify client immediately from `lead.first_reply`
 
-## C. Branded, partner-friendly PDFs
+### 2. Move qualification to one shared database function
 
-Both `supabase/functions/payout-report-pdf/index.ts` (mode=`partner`) and `supabase/functions/manager-payout-report-pdf/index.ts` get the same brand pass.
+Create one canonical function such as `should_notify_lead_reply(conversation_id, reply_text)` used by:
 
-### C.1 Brand and layout
+- `campaign_recipients` trigger
+- `lead_imports` trigger
+- `reply-notification-watchdog`
+- any backfill/recovery logic
 
-- Header band in Craft-Champagne `#F5EFE3` with Emerald `#0F5132` accent rule; logo wordmark "Iskra" in bold serif-style (jsPDF only ships core fonts, so we use `helvetica` bold at large size with the Emerald color — no external font fetch, keeps the function fast and offline-safe).
-- Subtitle "WhatsApp Outreach - Partner statement".
-- Partner name + email in body color, period in Dubai local format (`12 May 2026 - 13 May 2026`) instead of ISO arrows.
-- Footer with single Emerald rule, contact line "Questions? reply@iskra.ae", page numbers `1 / N`.
+This prevents the watchdog and trigger from drifting again.
 
-### C.2 Plain-English labels (no abbreviations)
+### 3. Make watchdog recovery safe
 
-Replace every short label with the spelled-out version on the partner-facing PDF only (internal mode keeps the dense labels):
+Update `reply-notification-watchdog` so it only recovers qualified lead replies and never posts raw `status = replied` rows.
 
-| Old label | New label |
-|---|---|
-| `P. rate` / `Partner rate` | `Rate per delivered message` |
-| `C. rate` / `Client rate` | (removed from partner PDF) |
-| `Delivered` | `Messages delivered` |
-| `Failed` | `Messages failed` |
-| `Sent` | (removed from partner PDF totals; only daily breakdown shows it as "Attempts") |
-| `Partner payout` | `Your earnings` |
-| `Manager rate` | `Your referral rate` |
-| `Your referral earnings` | unchanged |
+It should skip:
 
-### C.3 Rate is shown spelled out
+- lost-stage conversations
+- obvious negative text
+- auto-replies
+- unclassified neutral/noise
+- rows already covered by `positive_lead`
 
-Below the totals box, add one line:
+### 4. Clean current queue state
 
-> Your rate for this period: **$0.0050** per delivered message (zero point zero zero five US dollars)
+Mark any remaining pending or future-created bad `lead.first_reply` events as skipped before they can dispatch.
 
-Computed from the partner_rate of the run (or `referral_rate_usd` for manager PDF). If multiple rates appear in the period, show "Mixed rates - see daily breakdown".
+Also mark already-sent bad events with a clear `error` note for audit, without deleting history.
 
-### C.4 Per-day breakdown is the headline section (partner PDF)
+### 5. Recover The Moran Group correctly
 
-Make the daily table the primary table, with these columns:
+After the filter is fixed, enqueue one safe qualified notification for The Moran Group only if we decide that `Where are you located` counts as an engaged lead.
 
-`Day | Active numbers | Messages delivered | Your earnings`
+Recommended message type: “Engaged reply” rather than “positive lead”, because the classifier marked it neutral/info.
 
-`Active numbers` = distinct `whatsapp_number_id` count per `day` from `payout_line_items`. Earnings per day = `SUM(payout_usd)` per `day`. Add a foot row with totals.
+### 6. Add a no-spam guardrail
 
-The existing per-number summary stays but moves below as a secondary table titled "Numbers worked in this period" with columns: `Number | Days active | Messages delivered | Your earnings`.
+Add a hard dispatcher-level safety check before posting Slack:
 
-### C.5 Manager (referrer) PDF gets a per-day section too
+If event is `lead.first_reply` and it fails qualification, mark it `skipped` even if a buggy trigger/watchdog created it.
 
-Currently the manager PDF only shows totals + per-partner. Add a "Daily breakdown" table aggregated across the manager's own numbers + every downline:
+This is the last line of defense so this cannot happen again from another source.
 
-`Day | Source (You / <partner name>) | Messages delivered | Earnings type | Earnings`
+## Technical notes
 
-This is one PDF the manager can hand-read and reconcile with their team chat. No separate per-partner PDF needs to be sent.
-
-### C.6 Branding constants
-
-Put colors and labels in a small shared module `supabase/functions/_shared/brand.ts` so both functions reference the same palette and copy. Keep all colors HSL-translated to RGB tuples for jsPDF.
-
----
-
-## D. Delivered vs Sent reconciliation
-
-The "delivered 219" vs BM "sent 1742" disconnect is two real things, not a bug:
-
-- Payout run "Delivered" counts `whatsapp_message_events.event_type='delivered'` over `[period_from, period_to]`.
-- BM "Sent today / 7d / all" comes from `v_metrics_today_by_number` / `v_metrics_alltime` over fixed today / rolling 7d / all-time windows, and counts attempts (sent), not delivered confirmations.
-
-Plan to make them readable side-by-side:
-
-### D.1 Add "Messages sent (attempts)" to the payout run header
-
-`payout_runs.totals_sent` already exists. Show it next to Delivered on the partner PDF totals (under a discreet label "Attempts in period") and on `FinanceRunDetail.tsx` so admins immediately see both numbers without opening BM page. Also add a tooltip: "Attempts = messages we tried to send. Delivered = messages WhatsApp confirmed reaching the contact. Earnings are paid on Delivered only."
-
-### D.2 Add a period filter to the BM "Sent" columns
-
-Currently the BM card on Partner Detail shows fixed `Sent today`, `Sent 7d`, `Sent all`. Add a small date-range picker at the top of the BMs tab; when set, the columns become `Sent in period`, `Delivered in period`, `Replies in period`, computed from `v_metrics_*_by_number` filtered by date if available, otherwise from `whatsapp_message_events` aggregated. The same range pre-fills the "Generate draft run" form below so an operator clicks Generate and gets a run for the same window they were just looking at.
-
-This single change makes the "1742 vs 219" question disappear: same window, both numbers visible, with the explanation that one is attempts and one is confirmed deliveries.
-
-### D.3 In-PDF cross-check footer
-
-Partner-facing PDF gets one extra footer line:
-
-> Statement covers attempts (`totals_sent`) and confirmed deliveries (`totals_delivered`). Earnings are paid per confirmed delivery.
-
----
-
-## Order of work
-
-1. **A** (verification editor) - 30 min, no migration.
-2. **B** (delete runs + storage cleanup) - 1h.
-3. **D.1** (Attempts on PDF header + Run detail) - 30 min, makes "1742 vs 219" intelligible immediately.
-4. **C** (branded PDF + plain labels + per-day primary table + manager per-day) - half a day.
-5. **D.2** (date-range on BM tab, prefills run generator) - 1.5h.
-6. **D.3** (footer line) - 5 min, comes free with C.
-
-No database migrations. No new edge functions. Existing RLS already allows all the writes.
-
-## Out of scope
-
-- Renaming internal admin labels (still dense by design).
-- Custom font embedding in PDF (would slow cold start; helvetica + color is enough for brand recognition).
-- Reworking the underlying delivered/sent metrics pipeline.
-- Sending PDF by email - manual download + share for now.
-
-## Open questions to confirm before building
-
-1. Should deletion be allowed on `approved` runs (after explicit "void then delete"), or only on `draft`/`void`? (Default in plan: only draft / void.)
-2. For the manager PDF, should each downline still have an individual section, or is "Daily breakdown" + "Per-partner totals" enough? (Default in plan: drop the individual sections, keep one combined daily table + per-partner totals.)
-3. Confirm the partner PDF should hide `Client rate`, `Client billed`, `Our margin` entirely (yes, per the previous round, but flagging because the current internal-mode CSV still exposes them and that is fine).
+- The broken paths are in:
+  - `enqueue_recipient_first_reply_event()`
+  - `enqueue_lead_first_reply_event()`
+  - `reply-notification-watchdog`
+  - `slack-dispatch`
+- Current negative SQL regex returns:
+  - `Block` -> blocked
+  - `Stop` -> blocked
+  - `Not relevant` -> not blocked
+  - `Not for me` -> not blocked
+  - `Where are you located` -> not blocked
+- The Moran Group event exists in `slack_event_queue` but is `skipped`, not `sent`.

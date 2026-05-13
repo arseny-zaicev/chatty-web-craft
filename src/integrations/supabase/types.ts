@@ -3092,7 +3092,9 @@ export type Database = {
         Args: { _conversation_id: string }
         Returns: boolean
       }
+      _is_auto_reply_text: { Args: { _text: string }; Returns: boolean }
       _is_negative_reply_text: { Args: { _text: string }; Returns: boolean }
+      _is_positive_reply_text: { Args: { _text: string }; Returns: boolean }
       admin_reconcile_daily: {
         Args: {
           _from: string
@@ -3609,6 +3611,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      should_notify_lead_reply: {
+        Args: { _conversation_id: string; _reply_text: string }
+        Returns: boolean
       }
       try_job_lock: { Args: { _job_name: string }; Returns: boolean }
       verify_payout_run: {
