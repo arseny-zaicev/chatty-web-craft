@@ -439,7 +439,198 @@ const Stat = ({ label, value, hint, alert }: { label: string; value: string; hin
   </Card>
 );
 
-function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () => void }) {
+function CreateBMDialog({
+  partnerId, partnerDefaultRate, workspaces, onCreated,
+}: {
+  partnerId: string;
+  partnerDefaultRate: number;
+  workspaces: Array<{ id: string; name: string }>;
+  onCreated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [metaBmId, setMetaBmId] = useState("");
+  const [lifecycle, setLifecycle] = useState<Lifecycle>("warming_up");
+  const [verification, setVerification] = useState<Verification>("unverified");
+  const [role, setRole] = useState("provider");
+  const [rate, setRate] = useState(String(partnerDefaultRate));
+  const [pickedNumberIds, setPickedNumberIds] = useState<string[]>([]);
+
+  const { data: availableNumbers } = useQuery({
+    queryKey: ["admin", "numbers-for-bm-create", workspaceId],
+    queryFn: async () => {
+      let q = supabase
+        .from("whatsapp_numbers")
+        .select("id, phone_number, display_name, status, workspace_id, business_manager_id")
+        .order("display_name", { ascending: true });
+      if (workspaceId) q = q.eq("workspace_id", workspaceId);
+      const { data } = await q;
+      return (data ?? []) as any[];
+    },
+    enabled: open,
+  });
+
+  const reset = () => {
+    setName(""); setWorkspaceId(""); setMetaBmId("");
+    setLifecycle("warming_up"); setVerification("unverified");
+    setRole("provider"); setRate(String(partnerDefaultRate));
+    setPickedNumberIds([]);
+  };
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!name.trim()) throw new Error("BM name required");
+      if (!workspaceId) throw new Error("Pick a workspace");
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Not signed in");
+
+      // 1) Create the BM
+      const { data: bm, error: bmErr } = await supabase
+        .from("business_managers")
+        .insert({
+          name: name.trim(),
+          workspace_id: workspaceId,
+          provider: "gupshup",
+          meta_bm_id: metaBmId.trim() || null,
+          status: lifecycle,
+          verification_status: verification,
+          warmup_started_at: lifecycle === "warming_up" ? new Date().toISOString() : null,
+          created_by: u.user.id,
+        } as any)
+        .select("id")
+        .single();
+      if (bmErr) throw bmErr;
+
+      // 2) Auto-link to current partner
+      const { error: linkErr } = await supabase.from("bm_partner_assignments").insert({
+        business_manager_id: bm.id,
+        partner_id: partnerId,
+        role,
+        rate_usd: Number(rate),
+        created_by: u.user.id,
+      });
+      if (linkErr) throw linkErr;
+
+      // 3) Attach selected numbers to this BM
+      if (pickedNumberIds.length > 0) {
+        const { error: nErr } = await supabase
+          .from("whatsapp_numbers")
+          .update({ business_manager_id: bm.id } as any)
+          .in("id", pickedNumberIds);
+        if (nErr) throw nErr;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Business Manager created and linked");
+      setOpen(false); reset();
+      onCreated();
+    },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const toggleNum = (nid: string) =>
+    setPickedNumberIds(prev => prev.includes(nid) ? prev.filter(x => x !== nid) : [...prev, nid]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm"><Plus className="w-4 h-4 mr-1" />Create BM</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle><Building2 className="w-4 h-4 inline mr-2" />New Business Manager</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">BM name *</label>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. ISKRA-BM-04" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Meta BM ID</label>
+              <Input value={metaBmId} onChange={e => setMetaBmId(e.target.value)} placeholder="optional" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Workspace *</label>
+              <Select value={workspaceId} onValueChange={setWorkspaceId}>
+                <SelectTrigger><SelectValue placeholder="Pick workspace" /></SelectTrigger>
+                <SelectContent>
+                  {workspaces.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Lifecycle status</label>
+              <Select value={lifecycle} onValueChange={(v) => setLifecycle(v as Lifecycle)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {LIFECYCLE_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Verification status</label>
+              <Select value={verification} onValueChange={(v) => setVerification(v as Verification)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {VERIFICATION_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Partner role</label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="provider">Provider</SelectItem>
+                  <SelectItem value="referral">Referral</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Rate $/delivered</label>
+              <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground">
+              Linked numbers ({pickedNumberIds.length} selected)
+              {!workspaceId && " - pick a workspace first"}
+            </label>
+            <div className="mt-1 max-h-48 overflow-y-auto border border-border rounded-md p-2 space-y-1">
+              {(availableNumbers ?? []).length === 0 && (
+                <div className="text-xs text-muted-foreground py-2 text-center">
+                  {workspaceId ? "No numbers in this workspace" : "Pick a workspace to see numbers"}
+                </div>
+              )}
+              {(availableNumbers ?? []).map(n => (
+                <label key={n.id} className="flex items-center gap-2 text-sm hover:bg-muted/50 rounded px-1 py-0.5 cursor-pointer">
+                  <Checkbox
+                    checked={pickedNumberIds.includes(n.id)}
+                    onCheckedChange={() => toggleNum(n.id)}
+                  />
+                  <span className="font-mono text-xs">+{n.phone_number}</span>
+                  <span className="text-muted-foreground">{n.display_name || ""}</span>
+                  <Badge variant="outline" className="ml-auto text-[10px]">{n.status}</Badge>
+                  {n.business_manager_id && <span className="text-[10px] text-amber-600">(reassign)</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !name.trim() || !workspaceId}>
+            {create.isPending ? "Creating…" : "Create & link"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LinkBMDialog({ partnerId, onLinked }: { partnerId: string; onLinked: () => void }) {
+  const [open, setOpen] = useState(false);
   const [bmId, setBmId] = useState("");
   const [role, setRole] = useState("provider");
   const [rate, setRate] = useState("0.005");
@@ -450,6 +641,7 @@ function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () =
       const { data } = await supabase.from("business_managers").select("id, name, status").order("name");
       return data as any[] || [];
     },
+    enabled: open,
   });
 
   const link = useMutation({
@@ -462,20 +654,19 @@ function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () =
       });
       if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("BM linked");
-      setBmId(""); setRate("0.005");
-      onLinked();
-    },
+    onSuccess: () => { toast.success("BM linked"); setOpen(false); setBmId(""); onLinked(); },
     onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   return (
-    <Card>
-      <CardHeader><CardTitle>Link a Business Manager</CardTitle></CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2 items-end">
-          <div className="flex-1 min-w-[240px]">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">Link existing BM</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Link existing Business Manager</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
             <label className="text-xs text-muted-foreground">BM</label>
             <Select value={bmId} onValueChange={setBmId}>
               <SelectTrigger><SelectValue placeholder="Pick BM" /></SelectTrigger>
@@ -484,26 +675,31 @@ function LinkBMCard({ partnerId, onLinked }: { partnerId: string; onLinked: () =
               </SelectContent>
             </Select>
           </div>
-          <div className="w-[140px]">
-            <label className="text-xs text-muted-foreground">Role</label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="provider">Provider</SelectItem>
-                <SelectItem value="referral">Referral</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Role</label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="provider">Provider</SelectItem>
+                  <SelectItem value="referral">Referral</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Rate $/delivered</label>
+              <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
+            </div>
           </div>
-          <div className="w-[140px]">
-            <label className="text-xs text-muted-foreground">Rate $/delivered</label>
-            <Input type="number" step="0.0001" value={rate} onChange={e => setRate(e.target.value)} />
-          </div>
-          <Button onClick={() => link.mutate()} disabled={link.isPending || !bmId}>
-            <Plus className="w-4 h-4 mr-1" />Link
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => link.mutate()} disabled={link.isPending || !bmId}>
+            {link.isPending ? "Linking…" : "Link"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
