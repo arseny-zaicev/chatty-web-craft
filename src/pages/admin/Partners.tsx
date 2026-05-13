@@ -16,16 +16,14 @@ import { toast } from "sonner";
 type Partner = {
   id: string; name: string; contact_email: string | null; kind: string;
   cadence: string; default_payout_rate_usd: number; currency: string; status: string;
+  referrer_partner_id: string | null; referral_rate_usd: number;
 };
-
-const kindVariant = (k: string) =>
-  k === "provider" ? "default" : k === "referral" ? "secondary" : "outline";
 
 export default function Partners() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [kindFilter, setKindFilter] = useState("all");
+  const [refFilter, setRefFilter] = useState("all");
 
   const { data: partners, isLoading } = useQuery({
     queryKey: ["admin", "partners"],
@@ -72,11 +70,13 @@ export default function Partners() {
 
   const rows = useMemo(() => {
     return (partners || []).filter((p) => {
-      if (kindFilter !== "all" && p.kind !== kindFilter) return false;
+      if (refFilter === "with" && !p.referrer_partner_id) return false;
+      if (refFilter === "without" && p.referrer_partner_id) return false;
       if (q && !`${p.name} ${p.contact_email || ""}`.toLowerCase().includes(q.toLowerCase())) return false;
       return true;
     });
-  }, [partners, kindFilter, q]);
+  }, [partners, refFilter, q]);
+  const partnerName = (id: string | null) => id ? (partners || []).find(p => p.id === id)?.name || "?" : null;
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -94,13 +94,12 @@ export default function Partners() {
             <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
             <Input className="pl-9" placeholder="Search by name or email" value={q} onChange={e => setQ(e.target.value)} />
           </div>
-          <Select value={kindFilter} onValueChange={setKindFilter}>
-            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <Select value={refFilter} onValueChange={setRefFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All kinds</SelectItem>
-              <SelectItem value="provider">Provider</SelectItem>
-              <SelectItem value="referral">Referral</SelectItem>
-              <SelectItem value="both">Both</SelectItem>
+              <SelectItem value="all">All partners</SelectItem>
+              <SelectItem value="with">With referrer</SelectItem>
+              <SelectItem value="without">Without referrer</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -112,11 +111,12 @@ export default function Partners() {
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Kind</TableHead>
+                  <TableHead>Referred by</TableHead>
                   <TableHead>BMs</TableHead>
                   <TableHead>Numbers</TableHead>
+                  <TableHead>Provider rate</TableHead>
+                  <TableHead>Referral rate</TableHead>
                   <TableHead>Unpaid</TableHead>
-                  <TableHead>Cadence</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow></TableHeader>
@@ -126,19 +126,23 @@ export default function Partners() {
                     const bmIds = bms ? Array.from(bms) : [];
                     const numCount = bmIds.reduce((s, id) => s + (agg?.numsPerBm.get(id) || 0), 0);
                     const unpaid = agg?.unpaidByPartner.get(p.id) || 0;
+                    const refName = partnerName(p.referrer_partner_id);
                     return (
                       <TableRow key={p.id} className="cursor-pointer hover:bg-muted/40">
                         <TableCell className="font-medium">
                           <Link to={`/admin/partners/${p.id}`} className="hover:underline">{p.name}</Link>
                           {p.contact_email && <div className="text-xs text-muted-foreground">{p.contact_email}</div>}
                         </TableCell>
-                        <TableCell><Badge variant={kindVariant(p.kind) as any}>{p.kind}</Badge></TableCell>
+                        <TableCell className="text-sm">
+                          {refName ? <Badge variant="outline">{refName}</Badge> : <span className="text-muted-foreground">-</span>}
+                        </TableCell>
                         <TableCell>{bms?.size || 0}</TableCell>
                         <TableCell>{numCount}</TableCell>
+                        <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
+                        <TableCell className="font-mono text-xs">{p.referral_rate_usd > 0 ? `$${Number(p.referral_rate_usd).toFixed(4)}` : <span className="text-muted-foreground">-</span>}</TableCell>
                         <TableCell className={unpaid > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
                           ${unpaid.toFixed(2)}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{p.cadence}</TableCell>
                         <TableCell><Badge variant={p.status === "active" ? "default" : "secondary"}>{p.status}</Badge></TableCell>
                         <TableCell>
                           <Link to={`/admin/partners/${p.id}`}>
@@ -149,7 +153,7 @@ export default function Partners() {
                     );
                   })}
                   {!rows.length && (
-                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       No partners.
                     </TableCell></TableRow>
                   )}
