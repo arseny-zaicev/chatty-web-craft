@@ -21,15 +21,6 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export type JobLockRelease = () => Promise<void>;
 
-async function rpcRaw(admin: SupabaseClient, sql: string): Promise<any> {
-  // We expose two tiny helpers via a single SECURITY DEFINER function so callers
-  // don't need direct exec-sql privilege. The function is created in a migration
-  // alongside this helper.
-  const { data, error } = await admin.rpc("exec_advisory", { _sql: sql });
-  if (error) throw error;
-  return data;
-}
-
 export async function acquireJobLock(
   admin: SupabaseClient,
   jobName: string,
