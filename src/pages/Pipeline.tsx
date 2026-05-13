@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,10 +62,7 @@ import CRM from "./CRM";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const wsSlugMatch = location.pathname.match(/^\/ws\/([^/]+)/);
-  const wsSlug = wsSlugMatch?.[1];
 
   const { data: pipelines = [] } = useQuery({
     queryKey: pipelinesKey(workspaceId),
