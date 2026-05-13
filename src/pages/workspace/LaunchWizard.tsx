@@ -508,6 +508,20 @@ export default function LaunchWizard() {
     return { numbers, total, dailyCap, daysSelected, idealPerDay, effectivePerDay, daysNeeded, lastDay, capExceeded, overflowToday };
   }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length, isMarketing]);
 
+  // ----- Capacity (hard allocation cap) -----
+  // capacity = numbers × per_number_quota × selected days. The launch endpoint
+  // truncates anything above this; only `capacity` recipients are materialized
+  // into campaign_recipients. The rest of the audience stays in the pool.
+  const capacity = useMemo(() => {
+    const numbers = Math.max(1, activeNumbers.length);
+    const days = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
+    return numbers * Math.max(1, perNumberQuota) * days;
+  }, [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota]);
+  const overCapacity = audienceSource === "database"
+    ? Math.max(0, dbTargetCount - capacity)
+    : Math.max(0, recipients.length - capacity);
+
+
   // Realistic per-message gap when window mode is active (based on today's effective load)
   const pacing = useMemo(() => {
     const perNumber = Math.max(1, Math.ceil(dayPlan.effectivePerDay / dayPlan.numbers));
