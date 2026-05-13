@@ -547,6 +547,8 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          allocated_capacity: number | null
+          audience_total: number | null
           auto_allocated: boolean
           created_at: string
           delay_max_seconds: number
@@ -579,6 +581,8 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          allocated_capacity?: number | null
+          audience_total?: number | null
           auto_allocated?: boolean
           created_at?: string
           delay_max_seconds?: number
@@ -611,6 +615,8 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          allocated_capacity?: number | null
+          audience_total?: number | null
           auto_allocated?: boolean
           created_at?: string
           delay_max_seconds?: number
@@ -2410,6 +2416,7 @@ export type Database = {
           connected_in_iskra: boolean
           country_code: string | null
           created_at: string
+          daily_send_limit: number
           display_name: string | null
           display_name_checked_at: string | null
           display_name_status: string
@@ -2447,6 +2454,7 @@ export type Database = {
           connected_in_iskra?: boolean
           country_code?: string | null
           created_at?: string
+          daily_send_limit?: number
           display_name?: string | null
           display_name_checked_at?: string | null
           display_name_status?: string
@@ -2484,6 +2492,7 @@ export type Database = {
           connected_in_iskra?: boolean
           country_code?: string | null
           created_at?: string
+          daily_send_limit?: number
           display_name?: string | null
           display_name_checked_at?: string | null
           display_name_status?: string
@@ -3035,6 +3044,10 @@ export type Database = {
       can_access_pipeline: {
         Args: { _pipeline_id: string; _user_id: string; _workspace_id: string }
         Returns: boolean
+      }
+      count_sent_today_for_number: {
+        Args: { _number_id: string }
+        Returns: number
       }
       delete_email: {
         Args: { message_id: number; queue_name: string }
