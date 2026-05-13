@@ -261,6 +261,15 @@ export default function FinanceRunDetail() {
               <Ban className="w-4 h-4 mr-1" />Void
             </Button>
           )}
+          {(run.status === "draft" || run.status === "void") ? (
+            <Button variant="ghost" className="text-destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="w-4 h-4 mr-1" />Delete
+            </Button>
+          ) : (
+            <Button variant="ghost" disabled title="Void this run before it can be deleted">
+              <Trash2 className="w-4 h-4 mr-1 opacity-30" />Delete
+            </Button>
+          )}
         </div>
 
         {isFrozen && (
