@@ -962,7 +962,7 @@ async function processQueue(admin: any) {
 
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, delay_min_seconds, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id, category))")
     .eq("status", "scheduled")
     .lte("scheduled_at", horizonIso)
     .eq("campaigns.status", "running")
