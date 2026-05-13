@@ -1233,6 +1233,37 @@ async function processQueue(admin: any) {
             .update({ scheduled_at: bumpedIso })
             .eq("id", recipient.id)
             .eq("status", "scheduled");
+          // Refresh campaigns.first_scheduled_at + today_recipients_count so cards
+          // stop saying "today X @ HH:MM" when reality is "tomorrow 09:00".
+          try {
+            const { data: minRow } = await admin
+              .from("campaign_recipients")
+              .select("scheduled_at")
+              .eq("campaign_id", recipient.campaign_id)
+              .eq("status", "scheduled")
+              .is("sent_at", null)
+              .order("scheduled_at", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            const todayStartIso = (() => {
+              const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+              return new Date(`${k}T00:00:00+04:00`).toISOString();
+            })();
+            const tomorrowStartIso = (() => {
+              const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
+              return new Date(`${k}T00:00:00+04:00`).toISOString();
+            })();
+            const { count: todayLeft } = await admin
+              .from("campaign_recipients")
+              .select("id", { count: "exact", head: true })
+              .eq("campaign_id", recipient.campaign_id)
+              .gte("scheduled_at", todayStartIso)
+              .lt("scheduled_at", tomorrowStartIso);
+            await admin.from("campaigns").update({
+              first_scheduled_at: minRow?.scheduled_at ?? bumpedIso,
+              today_recipients_count: todayLeft ?? 0,
+            }).eq("id", recipient.campaign_id);
+          } catch (_) { /* best-effort */ }
           console.warn(`[cap_reached] number=${recNumId} sent_today=${sentNow} cap=${cap} -> bumped recipient=${recipient.id} to ${bumpedIso}`);
           continue;
         }
