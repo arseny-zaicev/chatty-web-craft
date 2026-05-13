@@ -3012,12 +3012,19 @@ export type Database = {
       }
       v_metrics_today: {
         Row: {
-          campaign_id: string | null
           delivered_today: number | null
           failed_today: number | null
           replies_today: number | null
           sent_today: number | null
-          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Relationships: []
+      }
+      v_metrics_today_by_campaign: {
+        Row: {
+          campaign_id: string | null
+          failed_today: number | null
+          sent_today: number | null
           workspace_id: string | null
         }
         Relationships: [
@@ -3029,6 +3036,16 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_metrics_today_by_number: {
+        Row: {
+          delivered_today: number | null
+          failed_today: number | null
+          sent_today: number | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Relationships: []
       }
       whatsapp_number_usage_summary: {
         Row: {
