@@ -14,6 +14,8 @@ import { format } from "date-fns";
 
 const fmtUsd = (n: number) =>
   `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Per-delivered rates need 4 decimals, otherwise 0.005 rounds to $0.01.
+const fmtRate = (n: number) => `$${Number(n || 0).toFixed(4)}`;
 
 const statusVariant = (s: string): "default" | "secondary" | "destructive" | "outline" =>
   s === "paid" ? "default" : s === "approved" ? "secondary" : s === "void" ? "destructive" : "outline";
