@@ -353,7 +353,7 @@ export type Database = {
           warmup_stage: string | null
           warmup_started_at: string | null
           warmup_target_date: string | null
-          workspace_id: string
+          workspace_id: string | null
         }
         Insert: {
           ads_running?: boolean
@@ -377,7 +377,7 @@ export type Database = {
           warmup_stage?: string | null
           warmup_started_at?: string | null
           warmup_target_date?: string | null
-          workspace_id: string
+          workspace_id?: string | null
         }
         Update: {
           ads_running?: boolean
@@ -401,7 +401,7 @@ export type Database = {
           warmup_stage?: string | null
           warmup_started_at?: string | null
           warmup_target_date?: string | null
-          workspace_id?: string
+          workspace_id?: string | null
         }
         Relationships: []
       }

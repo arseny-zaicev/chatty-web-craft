@@ -1,0 +1,1 @@
+ALTER TABLE public.business_managers ALTER COLUMN workspace_id DROP NOT NULL;
