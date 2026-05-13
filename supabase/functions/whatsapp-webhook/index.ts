@@ -345,7 +345,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   // pipelines that share the same operator user_id.
   let autoQuery = supabase
     .from("stage_automations")
-    .select("trigger, trigger_value, target_stage_id, workspace_id, pipeline_id:target_stage_id(pipeline_id)")
+    .select("trigger, trigger_value, target_stage_id, workspace_id")
     .eq("user_id", number.user_id)
     .eq("is_active", true);
   if (number.workspace_id) autoQuery = autoQuery.eq("workspace_id", number.workspace_id);
