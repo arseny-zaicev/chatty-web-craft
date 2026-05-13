@@ -268,14 +268,42 @@ const CRM = ({
     setNumbers(baseData.numbers);
     setConversations(baseData.conversations);
     const requested = initialConversationId ?? searchParams.get("conversation");
-    if (requested && baseData.conversations.some((c) => c.id === requested)) {
+    if (!requested) return;
+    const inList = baseData.conversations.some((c) => c.id === requested);
+    if (inList) {
       setActiveId(requested);
       // Reset filters so the requested conversation is visible in the list
       setNumberFilter("all");
       setMyOnly(false);
       setStarredOnly(false);
       setSearch("");
+      return;
     }
+    // Older conversation not in the most-recent-200 window — fetch it directly
+    // and inject so the chat panel actually renders. Common when opening a chat
+    // from a pipeline deal whose last reply is days/weeks old.
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select(
+          "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id",
+        )
+        .eq("id", requested)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        toast.error("Could not load this conversation");
+        return;
+      }
+      setConversations((prev) => (prev.some((c) => c.id === data.id) ? prev : [data as Conversation, ...prev]));
+      setActiveId(data.id);
+      setNumberFilter("all");
+      setMyOnly(false);
+      setStarredOnly(false);
+      setSearch("");
+    })();
+    return () => { cancelled = true; };
   }, [baseData, searchParams, initialConversationId]);
 
   // Scroll the active conversation into view when it changes (e.g. opened from Pipeline)
