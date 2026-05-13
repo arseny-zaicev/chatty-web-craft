@@ -384,7 +384,7 @@ async function handleInbound(payload: Record<string, unknown>) {
     };
     for (const a of automations) {
       let match = false;
-      if (a.trigger === "inbound_any") match = true;
+      if (a.trigger === "inbound_any") match = !isAutoReply;
       else if (a.trigger === "button_click" && triggers.includes("button_click")) {
         if (!a.trigger_value) match = true;
         else {
@@ -392,8 +392,11 @@ async function handleInbound(payload: Record<string, unknown>) {
           match = variants.some((v) => v === loweredButton || v === (body ?? "").toLowerCase());
         }
       } else if (a.trigger === "inbound_keyword" && a.trigger_value) {
-        const keywords = a.trigger_value.split("|");
-        match = keywords.some(matchKeyword);
+        if (isAutoReply) { match = false; }
+        else {
+          const keywords = a.trigger_value.split("|");
+          match = keywords.some(matchKeyword);
+        }
       }
       if (match) {
         const resolvedStageId = await resolveTargetStage(a.target_stage_id);
