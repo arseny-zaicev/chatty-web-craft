@@ -403,7 +403,7 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
                       </div>
                       <div className="text-xs text-muted-foreground mt-1 tabular-nums">
                         {pct}% sent · {sent.toLocaleString()}/{total.toLocaleString()}
-                        {isRunning ? ` · ${m.delivered_today ?? 0} today` : m.next_launch ? ` · starts ${formatDateShort(m.next_launch)}` : ""}
+                        {isRunning ? ` · ${m.sent_today ?? 0} today` : m.next_launch ? ` · starts ${formatDateShort(m.next_launch)}` : ""}
                       </div>
                     </>
                   )}
@@ -426,7 +426,7 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
         <div className="grid grid-cols-3 gap-2 text-center">
           <MiniStat label="Numbers" value={`${numbersActive}/${numbersTotal}`} />
           <MiniStat label="Unread" value={unread} highlight={unread > 0} />
-          <MiniStat label="Sent today" value={m?.delivered_today ?? 0} />
+          <MiniStat label="Sent today" value={m?.sent_today ?? 0} />
         </div>
 
         <div className="flex items-center gap-2 mt-auto">
