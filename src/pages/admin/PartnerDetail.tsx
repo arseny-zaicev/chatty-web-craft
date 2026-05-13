@@ -267,9 +267,18 @@ export default function PartnerDetail() {
                             {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={verificationVariant(bm?.verification_status || "unverified")}>
-                              {bm?.verification_status || "unverified"}
-                            </Badge>
+                            {bm ? (
+                              <VerificationSelect
+                                bmId={bm.id}
+                                value={(bm.verification_status as Verification) || "unverified"}
+                                onChanged={() => {
+                                  qc.invalidateQueries({ queryKey: ["admin", "partner-bms", id, bmIds] });
+                                  qc.invalidateQueries({ queryKey: ["business-managers"] });
+                                }}
+                              />
+                            ) : (
+                              <Badge variant="outline">unverified</Badge>
+                            )}
                           </TableCell>
                           <TableCell><Badge variant={lifecycleVariant(lc)}>{lc}</Badge></TableCell>
                           <TableCell className="text-xs">
@@ -372,10 +381,16 @@ export default function PartnerDetail() {
                         <TableCell><Badge variant={runStatusVariant(r.status)}>{r.status}</Badge></TableCell>
                         <TableCell>{r.totals_delivered}</TableCell>
                         <TableCell>{fmtUsd(Number(r.total_payout_usd))}</TableCell>
-                        <TableCell className="flex gap-2">
+                        <TableCell className="flex gap-1">
                           <Link to={`/admin/finance/runs/${r.id}`}><Button size="sm" variant="ghost">Open</Button></Link>
                           <PdfButton runId={r.id} />
                           <SlackPostButton runId={r.id} />
+                          <DeleteRunButton
+                            runId={r.id}
+                            status={r.status}
+                            paths={[r.pdf_storage_path, r.csv_storage_path, r.partner_pdf_storage_path]}
+                            onDeleted={() => qc.invalidateQueries({ queryKey: ["admin", "partner-runs", id] })}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -985,3 +1000,80 @@ function SettingsCard({ partner, onSaved }: { partner: any; onSaved: () => void 
   );
 }
 
+
+function VerificationSelect({
+  bmId, value, onChanged,
+}: { bmId: string; value: Verification; onChanged: () => void }) {
+  const m = useMutation({
+    mutationFn: async (next: Verification) => {
+      const { error } = await supabase
+        .from("business_managers")
+        .update({ verification_status: next, updated_at: new Date().toISOString() } as any)
+        .eq("id", bmId);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Verification updated"); onChanged(); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  return (
+    <Select value={value} onValueChange={(v) => m.mutate(v as Verification)}>
+      <SelectTrigger className="h-7 w-[120px] text-xs">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {VERIFICATION_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function DeleteRunButton({
+  runId, status, paths, onDeleted,
+}: { runId: string; status: string; paths: Array<string | null | undefined>; onDeleted: () => void }) {
+  const [open, setOpen] = useState(false);
+  const allowed = status === "draft" || status === "void";
+
+  const m = useMutation({
+    mutationFn: async () => {
+      // Best-effort storage cleanup first
+      const cleanPaths = paths.filter((p): p is string => !!p);
+      if (cleanPaths.length) {
+        await supabase.storage.from("payout-reports").remove(cleanPaths).catch(() => {});
+      }
+      const { error } = await supabase.from("payout_runs").delete().eq("id", runId);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Run deleted"); setOpen(false); onDeleted(); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  if (!allowed) {
+    return (
+      <Button size="sm" variant="ghost" disabled title="Void this run before it can be deleted">
+        <Trash2 className="w-4 h-4 opacity-30" />
+      </Button>
+    );
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setOpen(true)} title="Delete run">
+        <Trash2 className="w-4 h-4" />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete payout run?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The run, all its line items and audit entries, and any generated PDF / CSV files will be removed permanently. This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => m.mutate()} disabled={m.isPending}>
+              {m.isPending ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

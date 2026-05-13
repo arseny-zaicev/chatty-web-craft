@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, RefreshCw, ShieldCheck, CheckCircle2, FileText, Download, AlertTriangle, Ban } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, ShieldCheck, CheckCircle2, FileText, Download, AlertTriangle, Ban, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -23,6 +24,7 @@ const statusVariant = (s: string): "default" | "secondary" | "destructive" | "ou
 export default function FinanceRunDetail() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: run, isLoading } = useQuery({
     queryKey: ["finance", "run", id],
@@ -140,6 +142,25 @@ export default function FinanceRunDetail() {
     onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteRun = useMutation({
+    mutationFn: async () => {
+      const cleanPaths = [run?.pdf_storage_path, run?.csv_storage_path, run?.partner_pdf_storage_path]
+        .filter((p): p is string => !!p);
+      if (cleanPaths.length) {
+        await supabase.storage.from("payout-reports").remove(cleanPaths).catch(() => {});
+      }
+      const { error } = await supabase.from("payout_runs").delete().eq("id", id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Run deleted");
+      qc.invalidateQueries({ queryKey: ["finance"] });
+      navigate(`/admin/finance/partners/${run?.partner_id}`);
+    },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
   const downloadFile = async (path: string) => {
     const { data, error } = await supabase.storage.from("payout-reports").createSignedUrl(path, 60 * 60);
     if (error || !data?.signedUrl) { toast.error("Could not get download URL"); return; }
@@ -180,14 +201,14 @@ export default function FinanceRunDetail() {
         {/* KPI bar - internal admin numbers */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
-            ["Delivered", String(run.totals_delivered)],
-            ["Failed", String(run.totals_failed)],
-            ["Sent", String(run.totals_sent)],
-            ["Partner payout", fmtUsd(Number(run.total_payout_usd))],
-            ["Client billed", fmtUsd(Number(run.total_billed_usd))],
-            ["Our margin", fmtUsd(Number(run.margin_usd))],
-          ].map(([l, v]) => (
-            <Card key={l}><CardContent className="pt-4">
+            ["Delivered", String(run.totals_delivered), "Confirmed deliveries from WhatsApp. Earnings paid on this number only."],
+            ["Failed", String(run.totals_failed), "Send attempts that failed at provider or carrier."],
+            ["Attempts", String(run.totals_sent), "Messages we tried to send (sent events). Always >= Delivered."],
+            ["Partner payout", fmtUsd(Number(run.total_payout_usd)), ""],
+            ["Client billed", fmtUsd(Number(run.total_billed_usd)), ""],
+            ["Our margin", fmtUsd(Number(run.margin_usd)), ""],
+          ].map(([l, v, t]) => (
+            <Card key={l} title={t || undefined}><CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">{l}</div>
               <div className="text-xl font-semibold">{v}</div>
             </CardContent></Card>
@@ -238,6 +259,15 @@ export default function FinanceRunDetail() {
           {run.status !== "void" && (
             <Button variant="ghost" className="text-destructive" onClick={() => setVoidOpen(true)}>
               <Ban className="w-4 h-4 mr-1" />Void
+            </Button>
+          )}
+          {(run.status === "draft" || run.status === "void") ? (
+            <Button variant="ghost" className="text-destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="w-4 h-4 mr-1" />Delete
+            </Button>
+          ) : (
+            <Button variant="ghost" disabled title="Void this run before it can be deleted">
+              <Trash2 className="w-4 h-4 mr-1 opacity-30" />Delete
             </Button>
           )}
         </div>
@@ -349,6 +379,21 @@ export default function FinanceRunDetail() {
             <Button variant="ghost" onClick={() => setVoidOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={() => voidRun.mutate()} disabled={voidRun.isPending || !voidReason.trim()}>
               {voidRun.isPending ? "Voiding…" : "Void run"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete payout run?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The run, all its line items and audit entries, and any generated PDF / CSV files will be removed permanently. This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteRun.mutate()} disabled={deleteRun.isPending}>
+              {deleteRun.isPending ? "Deleting…" : "Delete permanently"}
             </Button>
           </DialogFooter>
         </DialogContent>
