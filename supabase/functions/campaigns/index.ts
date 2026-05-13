@@ -449,6 +449,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       pipeline_id: pipelineId,
       recipient_country: recipientCountry,
       per_number_quota: perNumberQuota,
+      allocated_capacity: allocatedCapacity,
+      audience_total: audienceTotalRequested,
     })
     .select("id")
     .single();
