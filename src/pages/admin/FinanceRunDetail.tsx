@@ -127,15 +127,15 @@ export default function FinanceRunDetail() {
   });
 
   const generatePdf = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("payout-report-pdf", { body: { run_id: id! } });
+    mutationFn: async (mode: "internal" | "partner") => {
+      const { data, error } = await supabase.functions.invoke("payout-report-pdf", { body: { run_id: id!, mode } });
       if (error) throw error;
-      return data as { pdf_url: string; csv_url: string };
+      return data as { pdf_url: string; csv_url?: string; mode: string };
     },
     onSuccess: (r) => {
-      toast.success("Report generated");
+      toast.success(`${r.mode === "partner" ? "Partner" : "Internal"} PDF generated`);
       if (r?.pdf_url) window.open(r.pdf_url, "_blank");
-      qc.invalidateQueries({ queryKey: ["finance"] });
+      qc.invalidateQueries({ queryKey: ["finance", "run", id] });
     },
     onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
   });
