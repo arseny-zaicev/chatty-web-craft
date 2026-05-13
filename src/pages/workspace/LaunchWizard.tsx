@@ -1022,12 +1022,12 @@ export default function LaunchWizard() {
                     {readyInPool.length} ready of {poolNumbers.length}
                   </Badge>
                   <Badge variant="outline" className="text-[11px] border-primary/30 text-primary">
-                    {type === "utility" ? "Utility · uses all ready numbers" : "Marketing · pick one sender"}
+                    {type === "utility" ? "Utility · uses all ready numbers" : "Marketing · pick one or more senders"}
                   </Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   {type === "marketing"
-                    ? "Pick one number below to send from. Marketing campaigns always use a single sender."
+                    ? "Pick one or more numbers to send from. Recipients are split evenly across selected senders."
                     : "All ready numbers below will share the load evenly."}
                 </p>
 
@@ -1035,15 +1035,13 @@ export default function LaunchWizard() {
                   {poolNumbers.map((n) => {
                     const selected = numberIds.includes(n.id);
                     const hasVariant = activeLogical?.variantByNumber.has(n.id);
-                    const inputType = type === "utility" ? "checkbox" : "radio";
                     return (
                       <label
                         key={n.id}
                         className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}
                       >
                         <input
-                          type={inputType}
-                          name="number-pick"
+                          type="checkbox"
                           checked={selected}
                           onChange={() => toggleNumber(n.id)}
                         />
