@@ -230,9 +230,8 @@ export default function PartnerDetail() {
                   <TableHeader><TableRow>
                     <TableHead>BM</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead>Verification</TableHead>
-                    <TableHead>Lifecycle</TableHead>
-                    <TableHead>Warm-up / Ads</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Warm-up</TableHead>
                     <TableHead>Numbers</TableHead>
                     <TableHead>Numbers summary</TableHead>
                     <TableHead className="text-right">Sent today</TableHead>
@@ -253,44 +252,38 @@ export default function PartnerDetail() {
                       const sentToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_today || 0), 0);
                       const sent7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_7d || 0), 0);
                       const sentAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_all || 0), 0);
-                      const lc = lifecycleBucket(bm?.status);
                       const summary = bmNums.slice(0, 3).map(n => n.display_name || `+${n.phone_number}`).join(", ")
                         + (bmNums.length > 3 ? ` +${bmNums.length - 3}` : "");
+                      const invalidateBm = () => {
+                        qc.invalidateQueries({ queryKey: ["admin", "partner-bms", id, bmIds] });
+                        qc.invalidateQueries({ queryKey: ["admin", "partner-numbers", id, bmIds] });
+                        qc.invalidateQueries({ queryKey: ["business-managers"] });
+                      };
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">
-                            {bm ? <Link to={`/admin/business-managers/${bm.id}`} className="hover:underline">{bm.name}</Link> : a.business_manager_id.slice(0,8)}
+                            {bm?.name || a.business_manager_id.slice(0,8)}
                             <div className="text-[10px] text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || ""}</div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
                           </TableCell>
                           <TableCell>
+                            {bm ? <BmStatusSelect bm={bm} onChanged={invalidateBm} /> : <Badge variant="outline">—</Badge>}
+                          </TableCell>
+                          <TableCell>
+                            {bm ? <BmWarmupCell bm={bm} onChanged={invalidateBm} /> : <span className="text-xs text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-center">
                             {bm ? (
-                              <VerificationSelect
+                              <AddNumbersToBmButton
                                 bmId={bm.id}
-                                value={(bm.verification_status as Verification) || "unverified"}
-                                onChanged={() => {
-                                  qc.invalidateQueries({ queryKey: ["admin", "partner-bms", id, bmIds] });
-                                  qc.invalidateQueries({ queryKey: ["business-managers"] });
-                                }}
+                                bmWorkspaceId={bm.workspace_id}
+                                count={bmNums.length}
+                                onAdded={invalidateBm}
                               />
-                            ) : (
-                              <Badge variant="outline">unverified</Badge>
-                            )}
+                            ) : bmNums.length}
                           </TableCell>
-                          <TableCell><Badge variant={lifecycleVariant(lc)}>{lc}</Badge></TableCell>
-                          <TableCell className="text-xs">
-                            {bm?.ads_running ? <Badge>ads running</Badge> : null}
-                            {lc === "warming_up" && (
-                              <div className="text-muted-foreground mt-0.5">
-                                {bm?.warmup_started_at ? `since ${format(new Date(bm.warmup_started_at), "MMM d")}` : "warm-up"}
-                                {bm?.warmup_target_date ? ` → ${bm.warmup_target_date}` : ""}
-                              </div>
-                            )}
-                            {!bm?.ads_running && lc !== "warming_up" && <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-center">{bmNums.length}</TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate" title={summary}>{summary || "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">{sentToday.toLocaleString()}</TableCell>
                           <TableCell className="text-right tabular-nums">{sent7d.toLocaleString()}</TableCell>
@@ -305,7 +298,7 @@ export default function PartnerDetail() {
                       );
                     })}
                     {!activeAssigns.length && (
-                      <TableRow><TableCell colSpan={14} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={13} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
