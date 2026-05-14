@@ -116,10 +116,27 @@ Deno.serve(async (req) => {
     .eq("status", "pending")
     .eq("event_type", "lead.first_reply")
     .limit(2000);
-  const backfillRows = (backfillRowsRaw || []).filter((r: any) => {
-    const src = (r.payload as any)?.source;
-    return src === "backfill_missed_first_reply" || src === "watchdog_backfill";
-  });
+  const backfillRows: any[] = [];
+  for (const r of backfillRowsRaw || []) {
+    const p = (r.payload as any) || {};
+    const src = p?.source;
+    if (src !== "backfill_missed_first_reply" && src !== "watchdog_backfill") continue;
+
+    if (!p?.force && p?.conversation_id) {
+      const { data: gate } = await supabase.rpc("should_notify_lead_reply", {
+        _conversation_id: p.conversation_id,
+        _reply_text: p?.last_message_text ?? null,
+      });
+      if (!gate) {
+        await supabase.from("slack_event_queue")
+          .update({ status: "skipped", processed_at: new Date().toISOString(), error: "guardrail: unqualified backfill" })
+          .eq("id", r.id);
+        continue;
+      }
+    }
+
+    backfillRows.push(r);
+  }
   if (backfillRows && backfillRows.length > 0) {
     type Group = { ws: any; channel: string | null; rows: any[] };
     const groups = new Map<string, Group>();
