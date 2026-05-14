@@ -762,7 +762,7 @@ export default function LaunchWizard() {
         if (error && (error as any).context && typeof (error as any).context.json === "function") {
           try {
             const body = await (error as any).context.json();
-            if (body && body.code === "preflight_warnings") {
+            if (body && (body.code === "preflight_warnings" || body.code === "audience_exceeds_capacity" || body.code === "would_defer_to_next_day")) {
               res = body;
               error = null as any;
             } else if (body && (body.error || body.message)) {
@@ -773,10 +773,17 @@ export default function LaunchWizard() {
         }
         const code = (res as any)?.code;
         const warnings = (res as any)?.warnings as string[] | undefined;
+        let confirmText: string | null = null;
         if (code === "preflight_warnings" && Array.isArray(warnings) && warnings.length > 0) {
-          const proceed = window.confirm(
-            `Launch warnings:\n\n${warnings.map((w) => `• ${w}`).join("\n")}\n\nLaunch anyway?`,
-          );
+          confirmText = `Launch warnings:\n\n${warnings.map((w) => `• ${w}`).join("\n")}\n\nLaunch anyway?`;
+        } else if (code === "audience_exceeds_capacity") {
+          const r: any = res;
+          confirmText = `Audience (${r.requested}) exceeds capacity (${r.capacity}) for ${r.numbers} number(s) × ${r.days} day(s) × ${r.per_number_quota}/day.\n\n${r.truncated} recipient(s) will be DROPPED.\n\n${r.hint}\n\nLaunch anyway with truncation?`;
+        } else if (code === "would_defer_to_next_day") {
+          confirmText = `Daily cap exceeded. Some recipients will roll to tomorrow:\n\n${(warnings ?? []).map((w) => `• ${w}`).join("\n")}\n\nLaunch anyway?`;
+        }
+        if (confirmText) {
+          const proceed = window.confirm(confirmText);
           if (!proceed) {
             for (const t of targets) results.push({ ok: false, numberId: t.numberId, error: "Cancelled by user", rowIds: allRowIds });
           } else {

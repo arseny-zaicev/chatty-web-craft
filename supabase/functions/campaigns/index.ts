@@ -422,6 +422,24 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }, 409);
   }
 
+  // Capacity-truncation guard: if the requested audience exceeds what the
+  // selected numbers × days × per-number-cap can deliver, refuse the launch
+  // unless explicitly forced. Without this, the silent slice(0, allocatedCapacity)
+  // drops thousands of recipients and the operator only finds out later.
+  if (truncatedCount > 0 && body.force !== true) {
+    return json({
+      error: "Audience exceeds capacity for the selected numbers and dates",
+      code: "audience_exceeds_capacity",
+      requested: audienceTotalRequested,
+      capacity: allocatedCapacity,
+      truncated: truncatedCount,
+      numbers: numberIds.length,
+      days: daysCount,
+      per_number_quota: perNumberQuota,
+      hint: `Add ${Math.ceil(truncatedCount / Math.max(1, perNumberQuota))} more day(s), or add more numbers, or split the audience.`,
+    }, 409);
+  }
+
   if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
 
 
@@ -565,11 +583,21 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }
 
     for (const [tz, list] of perTz) {
-      // Date sequence: ONLY operator-selected dates. No auto-extension. Capacity
-      // truncation upstream guarantees list.length fits within dates.length × cap.
-      const dates = scheduledDates.length > 0
+      // Date sequence: prefer operator-selected dates, but ALWAYS auto-extend
+      // forward day-by-day if the bucket can't fit in the selected window
+      // (e.g. relaunch wiped scheduled_dates, or capacity assumptions changed).
+      // Without this fallback, line 618's endUtc-clamp piles tail recipients
+      // into a single instant — they then either rate-limit out at Gupshup or
+      // never send because they're past the day's window. See incident
+      // 2026-05-13 SMB Owners (313 stuck at 05:00 UTC).
+      const baseDates = scheduledDates.length > 0
         ? [...scheduledDates].sort()
         : [todayKeyTz(tz)];
+      const neededDays = Math.max(1, Math.ceil(list.length / Math.max(1, perNumPerDayCap)));
+      const dates = baseDates.slice();
+      while (dates.length < neededDays) {
+        dates.push(nextDateStr(dates[dates.length - 1]));
+      }
 
       let cursor = 0;
       for (const date of dates) {
@@ -651,6 +679,11 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   // Promote draft -> scheduled/running. This single UPDATE fires the Slack
   // trigger with today_recipients_count, first_scheduled_at, recipient_country
   // already populated.
+  // Persist the actual date set used (which may have been auto-extended past
+  // the operator-selected dates when capacity required it). This keeps the
+  // day-rollover cron and the UI in sync with reality.
+  const actualDates = Array.from(new Set(rows.map((r: any) => String(r.scheduled_at).slice(0, 10)))).sort();
+
   const { error: promoteErr } = await admin
     .from("campaigns")
     .update({
@@ -658,6 +691,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       scheduled_start_at: firstScheduledAtIso,
       first_scheduled_at: firstScheduledAtIso,
       today_recipients_count: todayCount,
+      scheduled_dates: actualDates,
     })
     .eq("id", campaign.id);
   if (promoteErr) return json({ error: promoteErr.message }, 500);
