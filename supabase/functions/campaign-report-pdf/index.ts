@@ -45,10 +45,11 @@ Deno.serve(async (req) => {
 
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
-    .select("id, name, workspace_id, started_at, completed_at, created_at")
+    .select("id, name, workspace_id, status, scheduled_start_at, first_scheduled_at, created_at, updated_at")
     .eq("id", campaignId)
     .maybeSingle();
-  if (cErr || !campaign) return json({ error: cErr?.message || "campaign not found" }, 404);
+  if (cErr) return json({ error: cErr.message }, 500);
+  if (!campaign) return json({ error: "campaign not found or no access" }, 404);
 
   const [{ data: liveRows }, { data: insight }, { data: workspace }] = await Promise.all([
     supabase.rpc("campaign_live_counts", { p_campaign_ids: [campaignId] }),
@@ -86,8 +87,8 @@ Deno.serve(async (req) => {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...BRAND.inkSoft);
-  const startD = (campaign as any).started_at || (campaign as any).created_at;
-  const endD = (campaign as any).completed_at;
+  const startD = (campaign as any).first_scheduled_at || (campaign as any).scheduled_start_at || (campaign as any).created_at;
+  const endD = (campaign as any).status === "completed" ? (campaign as any).updated_at : null;
   if (startD) {
     const range = endD ? `${fmtDateDxb(startD)} - ${fmtDateDxb(endD)}` : `Started ${fmtDateDxb(startD)}`;
     doc.text(range, 40, y); y += 12;

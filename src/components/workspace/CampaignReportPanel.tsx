@@ -66,9 +66,14 @@ async function downloadReport(
   if (!jwt) throw new Error("Not signed in");
 
   const fn = kind === "csv" ? "campaign-report-export" : "campaign-report-pdf";
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}?campaign_id=${campaignId}`;
+  const functionsBaseUrl = import.meta.env.VITE_SUPABASE_URL
+    || `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`;
+  const url = `${functionsBaseUrl}/functions/v1/${fn}?campaign_id=${encodeURIComponent(campaignId)}`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${jwt}` } });
-  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+  if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
+    throw new Error(`Export failed: ${resp.status}${detail ? ` - ${detail}` : ""}`);
+  }
   const blob = await resp.blob();
   const a = document.createElement("a");
   const objUrl = URL.createObjectURL(blob);
