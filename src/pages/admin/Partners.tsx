@@ -173,6 +173,7 @@ export default function Partners() {
                     const bms = agg?.bmsByPartner.get(p.id);
                     const bmIds = bms ? Array.from(bms) : [];
                     const numCount = bmIds.reduce((s, id) => s + (agg?.numsPerBm.get(id) || 0), 0);
+                    const referredCount = numberAttr?.byRef.get(p.name.toLowerCase()) || 0;
                     const unpaid = agg?.unpaidByPartner.get(p.id) || 0;
                     const refName = partnerName(p.referrer_partner_id);
                     const pm = partnerMetrics?.get(p.id);
@@ -187,6 +188,11 @@ export default function Partners() {
                         </TableCell>
                         <TableCell>{bms?.size || 0}</TableCell>
                         <TableCell>{numCount}</TableCell>
+                        <TableCell className="tabular-nums">
+                          {referredCount > 0
+                            ? <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30">{referredCount}</Badge>
+                            : <span className="text-muted-foreground">-</span>}
+                        </TableCell>
                         <TableCell className="tabular-nums">{(pm?.sent_today ?? 0).toLocaleString()}</TableCell>
                         <TableCell className="tabular-nums text-muted-foreground">{(pm?.sent_alltime ?? 0).toLocaleString()}</TableCell>
                         <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
@@ -204,7 +210,7 @@ export default function Partners() {
                     );
                   })}
                   {!rows.length && (
-                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                       No partners.
                     </TableCell></TableRow>
                   )}
