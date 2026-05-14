@@ -305,6 +305,53 @@ export default function FleetAnalytics() {
           <KpiCard icon={<DollarSign className="w-4 h-4 text-amber-600" />} label="Revenue" value={fmtMoney(t.revenue)} sub={`delivered × client rate (${periodLabel})`} />
         </div>
 
+        {/* Fleet composition */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Fleet composition</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="text-muted-foreground mb-2">Counted in capacity ({data!.fleetBreakdown.counted}/{data!.fleetBreakdown.total})</div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {Object.entries(data!.fleetBreakdown.byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} variant="outline" className="text-[10px] capitalize">{k} {v}</Badge>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(data!.fleetBreakdown.byCountry).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} variant="secondary" className="text-[10px]">{k} {v}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground mb-2">Stock by country</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(data!.fleetBreakdown.stockByCountry).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} className="text-[10px] bg-amber-500/15 text-amber-700 border border-amber-500/30 hover:bg-amber-500/20">{k} {v}</Badge>
+                  ))}
+                  {Object.keys(data!.fleetBreakdown.stockByCountry).length === 0 && (
+                    <span className="text-muted-foreground italic">No numbers in stock.</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground mb-2">Excluded from capacity</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(data!.fleetBreakdown.excluded).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} variant="outline" className="text-[10px] capitalize bg-red-500/10 text-red-700 border-red-500/30">{k} {v}</Badge>
+                  ))}
+                  {Object.keys(data!.fleetBreakdown.excluded).length === 0 && (
+                    <span className="text-muted-foreground italic">None.</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-2">banned & restricted are not counted in capacity</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Hour heatmap */}
         <Card>
           <CardHeader className="pb-3">
