@@ -1025,8 +1025,9 @@ function AddNumberDrawer({
       setMessagingLimit(editing.messaging_limit || "");
       setWorkspaceId(editing.workspace_id ?? "__unassigned__");
       setUsage(editing.usage_type);
-      setProvidedBy(editing.provided_by || "");
+      setProvidedBy(editing.provided_by && editing.provided_by.toLowerCase() !== SELF_PROVIDER.toLowerCase() ? editing.provided_by : "");
       setAssignedRef(editing.assigned_ref || "");
+      setSourceKind(getAttribution(editing).kind === "own" ? "own" : "referred");
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
       setWebhookConnected(Boolean(editing.webhook_connected));
