@@ -1029,3 +1029,148 @@ function DeleteRunButton({
     </>
   );
 }
+
+// ===================== Inline BM editors (Partner detail) =====================
+
+const BM_STATUS_OPTIONS = ["ready", "warming_up", "verifying", "disabled", "active", "paused"] as const;
+
+function BmStatusSelect({ bm, onChanged }: { bm: any; onChanged: () => void }) {
+  const value = String(bm.status ?? "warming_up");
+  const m = useMutation({
+    mutationFn: async (next: string) => {
+      const patch: Record<string, unknown> = {
+        status: next,
+        last_warmup_action_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      if ((next === "warming_up" || next === "warming") && !bm.warmup_started_at) {
+        patch.warmup_started_at = new Date().toISOString();
+      }
+      const { error } = await supabase.from("business_managers").update(patch as any).eq("id", bm.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Status updated"); onChanged(); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  return (
+    <Select value={value} onValueChange={(v) => m.mutate(v)}>
+      <SelectTrigger className="h-7 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {BM_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+const WARMUP_STAGE_PRESETS = ["Day 1-3", "Day 4-7", "Week 2", "Week 3", "Ready"];
+
+function BmWarmupCell({ bm, onChanged }: { bm: any; onChanged: () => void }) {
+  const stage = bm.warmup_stage ?? "";
+  const nextDate = bm.next_warmup_run_date ?? "";
+  const m = useMutation({
+    mutationFn: async (patch: Record<string, unknown>) => {
+      const { error } = await supabase.from("business_managers")
+        .update({ ...patch, updated_at: new Date().toISOString() } as any).eq("id", bm.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { onChanged(); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  return (
+    <div className="flex flex-col gap-1 min-w-[140px]">
+      <Select
+        value={WARMUP_STAGE_PRESETS.includes(stage) ? stage : (stage ? "__custom__" : "")}
+        onValueChange={(v) => v !== "__custom__" && m.mutate({ warmup_stage: v || null })}
+      >
+        <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Stage" /></SelectTrigger>
+        <SelectContent>
+          {WARMUP_STAGE_PRESETS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          {stage && !WARMUP_STAGE_PRESETS.includes(stage) && <SelectItem value="__custom__">{stage}</SelectItem>}
+        </SelectContent>
+      </Select>
+      <Input
+        type="date"
+        className="h-7 text-xs"
+        defaultValue={nextDate}
+        onBlur={(e) => {
+          const v = e.target.value || null;
+          if (v !== (nextDate || null)) m.mutate({ next_warmup_run_date: v });
+        }}
+      />
+    </div>
+  );
+}
+
+function AddNumbersToBmButton({
+  bmId, bmWorkspaceId, count, onAdded,
+}: { bmId: string; bmWorkspaceId: string | null; count: number; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const { data: pool } = useQuery({
+    queryKey: ["admin", "bm-attach-pool", bmId, bmWorkspaceId],
+    enabled: open,
+    queryFn: async () => {
+      let q = supabase
+        .from("whatsapp_numbers")
+        .select("id, phone_number, display_name, status, workspace_id")
+        .is("business_manager_id", null);
+      if (bmWorkspaceId) q = q.eq("workspace_id", bmWorkspaceId);
+      const { data, error } = await q.order("display_name");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const attach = useMutation({
+    mutationFn: async () => {
+      if (!picked.length) return;
+      const patch: Record<string, unknown> = { business_manager_id: bmId };
+      if (bmWorkspaceId) patch.workspace_id = bmWorkspaceId;
+      const { error } = await supabase.from("whatsapp_numbers").update(patch as any).in("id", picked);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(`${picked.length} number(s) attached`);
+      setPicked([]); setOpen(false); onAdded();
+    },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs">
+          {count} <Plus className="w-3 h-3 ml-1" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[320px] p-2" align="end">
+        <div className="text-xs text-muted-foreground mb-2">
+          Unassigned numbers{bmWorkspaceId ? " in this workspace" : ""}
+        </div>
+        <div className="max-h-56 overflow-y-auto space-y-1">
+          {(pool ?? []).length === 0 && (
+            <div className="text-xs text-muted-foreground py-3 text-center">No numbers available</div>
+          )}
+          {(pool ?? []).map(n => (
+            <label key={n.id} className="flex items-center gap-2 text-xs hover:bg-muted/50 rounded px-1 py-0.5 cursor-pointer">
+              <Checkbox
+                checked={picked.includes(n.id)}
+                onCheckedChange={() => setPicked(p => p.includes(n.id) ? p.filter(x => x !== n.id) : [...p, n.id])}
+              />
+              <span className="font-mono">+{n.phone_number}</span>
+              <span className="text-muted-foreground truncate">{n.display_name || ""}</span>
+              <Badge variant="outline" className="ml-auto text-[10px]">{n.status}</Badge>
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 mt-2">
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button size="sm" onClick={() => attach.mutate()} disabled={!picked.length || attach.isPending}>
+            {attach.isPending ? "Attaching…" : `Attach (${picked.length})`}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
