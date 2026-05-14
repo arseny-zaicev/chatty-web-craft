@@ -1,7 +1,7 @@
 // Campaign report: tabs (Summary / Segments / Templates) + CSV export + AI insights.
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download, Sparkles, Loader2 } from "lucide-react";
+import { Download, Sparkles, Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,12 +56,17 @@ async function fetchLiveTotals(campaignIds: string[]): Promise<LiveTotals> {
   }), empty);
 }
 
-async function downloadCsv(campaignId: string, campaignName: string) {
+async function downloadReport(
+  campaignId: string,
+  campaignName: string,
+  kind: "csv" | "pdf",
+) {
   const { data: { session } } = await supabase.auth.getSession();
   const jwt = session?.access_token;
   if (!jwt) throw new Error("Not signed in");
 
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/campaign-report-export?campaign_id=${campaignId}`;
+  const fn = kind === "csv" ? "campaign-report-export" : "campaign-report-pdf";
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}?campaign_id=${campaignId}`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${jwt}` } });
   if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
   const blob = await resp.blob();
@@ -69,7 +74,7 @@ async function downloadCsv(campaignId: string, campaignName: string) {
   const objUrl = URL.createObjectURL(blob);
   const safe = campaignName.replace(/[^a-z0-9-_]+/gi, "_");
   a.href = objUrl;
-  a.download = `${safe}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${safe}-${new Date().toISOString().slice(0, 10)}.${kind}`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -122,7 +127,7 @@ export function CampaignReportPanel({
   campaignName: string;
 }) {
   const qc = useQueryClient();
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<null | "csv" | "pdf">(null);
 
   const { data: insight, isLoading: loadingInsight } = useQuery({
     queryKey: ["campaign-insight", primaryCampaignId],
@@ -154,14 +159,14 @@ export function CampaignReportPanel({
     },
   });
 
-  const handleDownload = async () => {
-    setDownloading(true);
+  const handleDownload = async (kind: "csv" | "pdf") => {
+    setDownloading(kind);
     try {
-      for (const id of campaignIds) await downloadCsv(id, campaignName);
+      for (const id of campaignIds) await downloadReport(id, campaignName, kind);
     } catch (e) {
       toast({ title: "Download failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   };
 
@@ -177,8 +182,12 @@ export function CampaignReportPanel({
           <div className="text-[11px] text-muted-foreground">AI summary, segment performance, full per-contact CSV.</div>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={handleDownload} disabled={downloading}>
-            {downloading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
+          <Button size="sm" variant="outline" onClick={() => handleDownload("pdf")} disabled={downloading !== null}>
+            {downloading === "pdf" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 mr-1.5" />}
+            PDF
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleDownload("csv")} disabled={downloading !== null}>
+            {downloading === "csv" ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
             CSV
           </Button>
           <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending}>
