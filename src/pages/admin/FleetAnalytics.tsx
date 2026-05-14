@@ -296,7 +296,7 @@ export default function FleetAnalytics() {
       <main className="container mx-auto px-4 py-6 space-y-6">
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
-          <KpiCard icon={<Gauge className="w-4 h-4 text-muted-foreground" />} label="Capacity" value={t.capacity.toLocaleString()} sub={`${t.activeNumbers} active × ${DAILY_CAP_PER_NUMBER} × ${period === "1" ? "1d" : period + "d"}`} />
+          <KpiCard icon={<Gauge className="w-4 h-4 text-muted-foreground" />} label="Capacity" value={t.capacity.toLocaleString()} sub={`${t.activeNumbers} numbers × daily limits × ${period === "1" ? "1d" : period + "d"}`} />
           <KpiCard icon={<Send className="w-4 h-4" />} label="Sent" value={t.sent.toLocaleString()} sub={`${pct(t.sent, t.capacity)}% of capacity`} />
           <KpiCard icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} label="Delivered" value={t.delivered.toLocaleString()} sub={`${pct(t.delivered, t.sent)}% of sent`} />
           <KpiCard icon={<AlertTriangle className="w-4 h-4 text-red-600" />} label="Failed" value={t.failed.toLocaleString()} sub={`${pct(t.failed, t.sent + t.failed)}% fail rate`} />
