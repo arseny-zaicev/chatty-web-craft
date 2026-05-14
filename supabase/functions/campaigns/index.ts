@@ -422,6 +422,24 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }, 409);
   }
 
+  // Capacity-truncation guard: if the requested audience exceeds what the
+  // selected numbers × days × per-number-cap can deliver, refuse the launch
+  // unless explicitly forced. Without this, the silent slice(0, allocatedCapacity)
+  // drops thousands of recipients and the operator only finds out later.
+  if (truncatedCount > 0 && body.force !== true) {
+    return json({
+      error: "Audience exceeds capacity for the selected numbers and dates",
+      code: "audience_exceeds_capacity",
+      requested: audienceTotalRequested,
+      capacity: allocatedCapacity,
+      truncated: truncatedCount,
+      numbers: numberIds.length,
+      days: daysCount,
+      per_number_quota: perNumberQuota,
+      hint: `Add ${Math.ceil(truncatedCount / Math.max(1, perNumberQuota))} more day(s), or add more numbers, or split the audience.`,
+    }, 409);
+  }
+
   if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
 
 
