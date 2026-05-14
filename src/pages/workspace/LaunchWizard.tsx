@@ -762,7 +762,7 @@ export default function LaunchWizard() {
         if (error && (error as any).context && typeof (error as any).context.json === "function") {
           try {
             const body = await (error as any).context.json();
-            if (body && body.code === "preflight_warnings") {
+            if (body && (body.code === "preflight_warnings" || body.code === "audience_exceeds_capacity" || body.code === "would_defer_to_next_day")) {
               res = body;
               error = null as any;
             } else if (body && (body.error || body.message)) {
