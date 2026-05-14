@@ -228,6 +228,7 @@ const fetchAnalytics = async (period: Period) => {
     topErrors,
     hourBuckets,
     campaigns: campaignRows,
+    fleetBreakdown,
   };
 };
 
