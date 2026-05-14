@@ -251,6 +251,9 @@ function PresetsSection({
     setNameTouched(false);
     setBatchName(buildBatchName("", ""));
     setCreatedBatchId(null);
+    setMultiMode(false);
+    setMultiAudiences("");
+    setCreatedBatches([]);
     // Pre-fill campaign_static fields with empty strings so operator sees inputs.
     const initial: StaticValues = {};
     for (const v of p.variables) if (v.kind === "campaign_static") initial[v.key] = "";
