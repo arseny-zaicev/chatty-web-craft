@@ -77,6 +77,25 @@ export default function Partners() {
     queryFn: () => fetchPartnerMetrics(partnerIds),
   });
 
+  // Referral attribution coming from whatsapp_numbers (Provided by / Ref / Own).
+  const { data: numberAttr } = useQuery({
+    queryKey: ["admin", "partners", "number-attribution"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("whatsapp_numbers")
+        .select("id, provided_by, assigned_ref");
+      if (error) throw error;
+      let own = 0;
+      const byRef = new Map<string, number>();
+      (data || []).forEach((n: any) => {
+        const a = getAttribution(n);
+        if (a.kind === "own") own++;
+        else byRef.set(a.ref.toLowerCase(), (byRef.get(a.ref.toLowerCase()) || 0) + 1);
+      });
+      return { own, byRef };
+    },
+  });
+
   const rows = useMemo(() => {
     return (partners || []).filter((p) => {
       if (refFilter === "with" && !p.referrer_partner_id) return false;
