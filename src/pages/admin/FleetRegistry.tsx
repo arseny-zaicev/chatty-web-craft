@@ -1007,6 +1007,7 @@ function AddNumberDrawer({
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
+    setSourceKind("own");
     setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
     setWebhookConnected(false);
   };
