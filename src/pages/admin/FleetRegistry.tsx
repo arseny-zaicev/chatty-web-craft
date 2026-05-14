@@ -1271,6 +1271,30 @@ function AddNumberDrawer({
             <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
           </Field>
 
+          <Field label="Business Manager">
+            <Select value={bmId} onValueChange={(v) => { setBmId(v); if (v !== "__new__") setBmNewName(""); }}>
+              <SelectTrigger><SelectValue placeholder="Select BM" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No BM (assign later)</SelectItem>
+                {bms.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+                <SelectItem value="__new__">+ Create new BM…</SelectItem>
+              </SelectContent>
+            </Select>
+            {bmId === "__new__" && (
+              <Input
+                className="mt-2"
+                value={bmNewName}
+                onChange={(e) => setBmNewName(e.target.value)}
+                placeholder="New BM name (e.g. Iskra Main BM)"
+              />
+            )}
+            <div className="text-[11px] text-muted-foreground italic mt-1">
+              Pick or create the BM here so the number is linked right away. Warmup dates and other BM details can be filled later in the Business Managers section.
+            </div>
+          </Field>
+
           <Field label="Allocate to client">
             <Select value={workspaceId} onValueChange={setWorkspaceId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
