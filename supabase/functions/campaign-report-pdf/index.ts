@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
     .select("id, name, workspace_id, status, scheduled_start_at, first_scheduled_at, created_at, updated_at")
     .eq("id", campaignId)
     .maybeSingle();
-  if (cErr || !campaign) return json({ error: cErr?.message || "campaign not found" }, 404);
+  if (cErr) return json({ error: cErr.message }, 500);
+  if (!campaign) return json({ error: "campaign not found or no access" }, 404);
 
   const [{ data: liveRows }, { data: insight }, { data: workspace }] = await Promise.all([
     supabase.rpc("campaign_live_counts", { p_campaign_ids: [campaignId] }),
