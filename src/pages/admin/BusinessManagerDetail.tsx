@@ -230,11 +230,15 @@ const BusinessManagerDetail = () => {
             </div>
           </CardHeader>
           <CardContent>
+            {sourceBreakdown && (
+              <div className="text-xs text-muted-foreground mb-3">Sources: {sourceBreakdown}</div>
+            )}
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Phone</TableHead>
                   <TableHead>Display name</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Messaging limit</TableHead>
                   <TableHead></TableHead>
@@ -242,11 +246,23 @@ const BusinessManagerDetail = () => {
               </TableHeader>
               <TableBody>
                 {data.linked.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No numbers attached yet</TableCell></TableRow>
-                ) : data.linked.map((n) => (
+                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No numbers attached yet</TableCell></TableRow>
+                ) : data.linked.map((n) => {
+                  const a = getAttribution(n);
+                  return (
                   <TableRow key={n.id}>
                     <TableCell className="font-mono text-sm">+{n.phone_number}</TableCell>
                     <TableCell>{n.display_name ?? "—"}</TableCell>
+                    <TableCell>
+                      {a.kind === "own" ? (
+                        <Badge variant="outline" className="text-[10px]">Own</Badge>
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 w-fit">Ref: {a.ref}</Badge>
+                          {a.providedBy && <span className="text-[10px] text-muted-foreground">via {a.providedBy}</span>}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell><Badge variant={statusVariant(n.status)}>{n.status}</Badge></TableCell>
                     <TableCell>{n.messaging_limit ?? "—"}</TableCell>
                     <TableCell className="text-right">
@@ -255,7 +271,8 @@ const BusinessManagerDetail = () => {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
             {attachOpen && (
