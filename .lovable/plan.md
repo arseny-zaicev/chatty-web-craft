@@ -1,53 +1,34 @@
-## Что делаем
+# Plan: Multi-number routing in Pipeline config
 
-В существующий диалог **"{Preset} - create batch"** (`WorkspaceData.tsx`, секция Ingestion presets) добавляем режим **"Multi-batch"**: вместо одного батча создаём сразу N штук, на каждый - свой Codex-промпт с уже впечатанным `batch_id`. UI и поля - как сейчас, просто появляется список аудиторий и переключатель сверху.
+## Что уже есть в коде (не трогаем)
+- `lead-dispatch` уже round-robin раскидывает входящие из Google Sheets лиды по всем выбранным номерам (`siblings[i % siblings.length]`).
+- В `PipelineConfigSheet.tsx` поле `Default sender numbers` (строка 647) — это уже мульти-выбор: каждый номер это toggle-pill, можно тапнуть несколько.
+- Те же номера остаются в общем пуле `whatsapp_numbers` и доступны в Launch Wizard для обычных рассылок (никакой эксклюзивности нет).
 
-## UI изменения (только в этом диалоге)
+**Скорее всего ты не видишь мульти-выбор потому что pill'ы выглядят как один select.** Делаем UX явным.
 
-Сверху, под `DialogDescription`:
+## Что меняем (только UI, `src/components/workspace/PipelineConfigSheet.tsx`)
 
-- Toggle: `Create multiple batches` (off by default = текущее поведение, ничего не ломаем)
-- Если on:
-  - Один общий блок: `Country (optional)`, `Campaign type`, `Template variant`, `Notes`, `Variables (same-for-everyone)` - всё как сейчас, эти значения шарятся между всеми батчами
-  - Убираем поле `Audience` и `Batch name` из общего блока
-  - Появляется список **"Audiences"**:
-    - Textarea `Paste audiences (one per line)` - быстрый ввод, или
-    - Список редактируемых строк: `Audience name` (каждая строка → отдельный батч)
-    - Кнопки `+ Add row`, `Remove` на строке
-    - Превью имени батча справа от каждой строки: `2026-05-14 | UK | {audience}` (та же `buildBatchName` что и сейчас)
-  - Лейбл submit-кнопки: `Create N batches`
+1. **Заголовок и подсказка** возле поля сделать однозначными:
+   - Label: `Sender numbers (round-robin routing)`
+   - Hint: `Tap to select multiple. Leads from Google Sheets are distributed across selected numbers in turn (lead 1 → A, lead 2 → B, lead 3 → C, lead 4 → A...). Numbers stay available for regular campaigns.`
 
-## Поведение submit (multi-batch)
+2. **Счётчик выбранных** рядом с label: `3 selected`. Кнопка `Select all ready` / `Clear`.
 
-В `submitBatch`:
+3. **Pill'ы** перерисовать как явные чекбокс-чипы: квадратик с галкой слева + название номера. Выбранные — primary, невыбранные — outline. Чтобы было видно, что это множественный выбор, а не сегмент-контрол.
 
-- Валидация: ≥1 непустая аудитория, все `staticValues` валидны (как сейчас), батч-нэймы уникальны (trim+lower)
-- Цикл по аудиториям → для каждой делаем тот же самый `insert` в `audience_batches` что и сейчас, с одинаковыми: `country`, `campaign_type`, `copy_profile`, `notes` (со staticHeader), `variable_schema`. Различаются только `name` и `audience`-часть имени.
-- Не атомарно: если одна вставка упала - остальные продолжаем, в конце показываем сводку (создано X из N, ошибки списком)
-- В state кладём `createdBatches: Array<{ id, name, audience }>` вместо одного `createdBatchId`
+4. **Превью распределения** под списком, когда выбрано ≥2 номера:
+   - `Round-robin order: A → B → C → A...`
+   - `Daily cap split: ~{cap/N} per number`
 
-## Step 2 экран после создания (multi-batch)
+5. **В списке pipelines** (`PipelinesView`) показать chip с количеством sender-номеров (`3 numbers`) вместо текущего отображения, чтобы было видно снаружи.
 
-Вместо одного промпта - аккордеон/список карточек по созданным батчам. На каждой:
+## Что НЕ меняем
+- Логика `lead-dispatch` остаётся как есть (round-robin уже работает).
+- БД, RLS, edge functions — без изменений.
+- Поле `default_sender_number_ids` уже массив — миграции не нужны.
+- Веса/пропорции (50/30/20) не вводим — ты выбрал равномерное распределение.
 
-- `{audience}` + `batch_id` (короткий моно)
-- Кнопка `Copy prompt` - копирует `buildPresetPrompt(creating, { workspaceName, workspaceId, batchId, staticValues })` для этого батча
-- Кнопка `Pull from my Supabase` - тот же edge-вызов `import-audience-from-personal` с этим `batch_id` (точно как сейчас)
-- Сверху одна доп.кнопка `Copy all prompts` - склеивает все промпты с разделителем `--- BATCH: {name} ---`, чтобы можно было скормить Codex одним заходом
-
-Single-batch путь (toggle off) - оставляем 1:1 как сейчас, ни логику, ни UI не трогаем.
-
-## Что НЕ трогаем
-
-- `audienceData.ts`, edge `import-audience-from-personal`, схему БД, `buildPresetPrompt`, `buildBatchName` - без изменений
-- Smart Upload, Launch Wizard, Campaigns, Reports - не трогаем
-- Pull-логика та же (per-batch), просто вызывается из карточки нужного батча
-
-## Acceptance
-
-1. Открываю `Marketing Basic - create batch`, включаю `Create multiple batches`.
-2. Вставляю 6 аудиторий: `UK Financial`, `UK Consulting`, `UK Marketing`, `UK Staffing`, `UK Coaching`, `UK Mixed`. Country = `UK`. Заполняю variables один раз.
-3. Жму `Create 6 batches` → в Data появляются 6 батчей `2026-05-14 | UK | UK Financial`, ..., `2026-05-14 | UK | UK Mixed`.
-4. Step 2: вижу 6 карточек с `batch_id` и `Copy prompt` на каждой + `Copy all prompts` сверху.
-5. Codex отрабатывает по каждому промпту → жму `Pull from my Supabase` на нужной карточке → 209/119/... строк импортируются ровно в свой батч.
-6. Toggle off → диалог работает абсолютно как сейчас.
+## Файлы
+- `src/components/workspace/PipelineConfigSheet.tsx` (UI блока Default sender numbers)
+- `src/components/workspace/PipelinesView.tsx` (chip с количеством номеров в строке pipeline)
