@@ -10,6 +10,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 import autoTable from "https://esm.sh/jspdf-autotable@3.8.2?deps=jspdf@2.5.1";
+import {
+  BRAND, BRAND_COPY, drawHeader, drawFooter,
+  fmtUsd, fmtRate, fmtDateRangeDxb,
+} from "../_shared/brand.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,10 +22,6 @@ const corsHeaders = {
 };
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-const fmtUsd = (n: number) =>
-  `$${(Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtRate = (n: number) => `$${Number(n || 0).toFixed(4)}`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
