@@ -107,7 +107,9 @@ const fetchAnalytics = async (period: Period) => {
 
   const numberRows = (numbers ?? []).map((n) => {
     const stats = perNumber.get(n.id) ?? newStats();
-    const cap = isActiveStatus(n.status) ? DAILY_CAP_PER_NUMBER * periodDays : 0;
+    const dailyLimit = Number((n as any).daily_send_limit) || DAILY_CAP_PER_NUMBER;
+    const counted = isCountedStatus(n.status);
+    const cap = counted ? dailyLimit * periodDays : 0;
     const rs = replyByNumber.get(n.id) ?? { sent_convos: 0, replied_convos: 0 };
     return {
       id: n.id,
@@ -117,6 +119,7 @@ const fetchAnalytics = async (period: Period) => {
       status: n.status,
       workspace_id: n.workspace_id,
       workspace_name: n.workspace_id ? (wsMap.get(n.workspace_id)?.name ?? "—") : "Unassigned",
+      country_code: normCountry((n as any).country_code),
       cap,
       sent_convos: rs.sent_convos,
       replied_convos: rs.replied_convos,
@@ -136,7 +139,7 @@ const fetchAnalytics = async (period: Period) => {
       perClient.set(n.workspace_id, agg);
     }
     agg.numbers += 1;
-    if (isActiveStatus(n.status)) agg.activeNumbers += 1;
+    if (isCountedStatus(n.status)) agg.activeNumbers += 1;
     agg.cap += n.cap;
     agg.sent += n.sent;
     agg.delivered += n.delivered;
