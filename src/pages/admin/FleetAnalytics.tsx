@@ -31,6 +31,15 @@ type NumberRow = {
   status: string;
   workspace_id: string | null;
   workspace_name: string;
+  country_code: string | null;
+};
+
+const EXCLUDED_STATUSES = new Set(["banned", "restricted", "blocked"]);
+const isCountedStatus = (s: string) => !EXCLUDED_STATUSES.has((s || "").toLowerCase());
+const normCountry = (c: string | null | undefined) => {
+  const v = (c || "").trim().toUpperCase();
+  if (!v || v === "--" || v === "-") return "Unknown";
+  return v;
 };
 
 type CampaignRow = {
