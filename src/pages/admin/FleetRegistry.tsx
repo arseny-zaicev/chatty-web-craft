@@ -1029,6 +1029,7 @@ function AddNumberDrawer({
     setSourceKind("own");
     setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
     setWebhookConnected(false);
+    setBmId("__none__"); setBmNewName("");
   };
 
   useEffect(() => {
