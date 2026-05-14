@@ -114,49 +114,52 @@ Deno.serve(async (req) => {
   // 4. PDF
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
-  let y = 48;
 
-  doc.setFont("helvetica", "bold"); doc.setFontSize(20);
-  doc.text("Manager payout statement", 40, y); y += 8;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120);
-  doc.text("Iskra · WhatsApp Outreach", 40, y + 12); y += 28;
+  let y = drawHeader(doc, {
+    title: "Manager payout statement",
+    subtitle: BRAND_COPY.managerSubtitle,
+  });
 
-  doc.setTextColor(20); doc.setFontSize(11); doc.setFont("helvetica", "bold");
-  doc.text(manager.name, 40, y); y += 14;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(90);
+  // Recipient block
+  doc.setTextColor(...BRAND.ink);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+  doc.text(manager.name, 40, y); y += 16;
+
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+  doc.setTextColor(...BRAND.inkSoft);
   if (manager.contact_email) { doc.text(manager.contact_email, 40, y); y += 11; }
-  doc.text(`Period: ${period_from} -> ${period_to}`, 40, y); y += 11;
-  doc.text(`Generated: ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`, 40, y); y += 11;
+  doc.text(`Period: ${fmtDateRangeDxb(period_from, period_to)}`, 40, y); y += 11;
   doc.text(`Team size: ${downlineRows.length} partner(s) + your own`, 40, y); y += 18;
 
   // Totals box
-  doc.setDrawColor(220); doc.setFillColor(248, 248, 245);
+  doc.setDrawColor(...BRAND.rule);
+  doc.setFillColor(...BRAND.cream);
   const cells: [string, string][] = [
     ["Total delivered", totalDelivered.toLocaleString()],
     ["Your own payout", fmtUsd(managerOwnPayout)],
     ["Team referral", fmtUsd(totalManagerPayout - managerOwnPayout)],
     ["Total due to you", fmtUsd(totalManagerPayout)],
   ];
-  doc.roundedRect(40, y, W - 80, 70, 6, 6, "FD");
+  doc.roundedRect(40, y, W - 80, 70, 8, 8, "FD");
   const cw = (W - 80) / cells.length;
   cells.forEach(([lbl, val], i) => {
     const x = 40 + i * cw + 12;
-    doc.setFont("helvetica", "normal"); doc.setTextColor(120); doc.setFontSize(8);
+    doc.setFont("helvetica", "normal"); doc.setTextColor(...BRAND.inkSoft); doc.setFontSize(8);
     doc.text(lbl, x, y + 22);
-    doc.setFont("helvetica", "bold"); doc.setTextColor(20); doc.setFontSize(13);
+    doc.setFont("helvetica", "bold"); doc.setTextColor(...BRAND.ink); doc.setFontSize(13);
     doc.text(val, x, y + 46);
   });
   y += 88;
 
   // Section A - your own
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(20);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(...BRAND.emeraldDark);
   doc.text("Your own numbers", 40, y); y += 8;
   autoTable(doc, {
     startY: y,
     head: [["Delivered", "Partner rate", "Your payout"]],
     body: [[managerOwnDelivered.toLocaleString(), fmtRate(managerOwnRate), fmtUsd(managerOwnPayout)]],
-    styles: { font: "helvetica", fontSize: 9 },
-    headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+    styles: { font: "helvetica", fontSize: 9, textColor: BRAND.ink as any },
+    headStyles: { fillColor: BRAND.emeraldDark as any, textColor: 255 },
     margin: { left: 40, right: 40 },
   });
   y = (doc as any).lastAutoTable.finalY + 18;
@@ -164,7 +167,7 @@ Deno.serve(async (req) => {
   // Section B - your team
   if (downlineRows.length) {
     if (y > 700) { doc.addPage(); y = 48; }
-    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(20);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(...BRAND.emeraldDark);
     doc.text("Your team", 40, y); y += 8;
     autoTable(doc, {
       startY: y,
@@ -172,24 +175,16 @@ Deno.serve(async (req) => {
       body: downlineRows
         .sort((a, b) => b.manager_payout - a.manager_payout)
         .map(r => [r.name, r.delivered.toLocaleString(), fmtRate(r.manager_rate), fmtUsd(r.manager_payout)]),
-      styles: { font: "helvetica", fontSize: 9 },
-      headStyles: { fillColor: [40, 40, 40], textColor: 255 },
+      styles: { font: "helvetica", fontSize: 9, textColor: BRAND.ink as any },
+      headStyles: { fillColor: BRAND.emerald as any, textColor: 255 },
       margin: { left: 40, right: 40 },
-      foot: [["Team total", "",
-        "",
-        fmtUsd(downlineRows.reduce((s, r) => s + r.manager_payout, 0)),
-      ]],
-      footStyles: { fillColor: [240, 240, 235], textColor: 20, fontStyle: "bold" },
+      foot: [["Team total", "", "", fmtUsd(downlineRows.reduce((s, r) => s + r.manager_payout, 0))]],
+      footStyles: { fillColor: BRAND.cream as any, textColor: BRAND.ink as any, fontStyle: "bold" },
     });
     y = (doc as any).lastAutoTable.finalY + 18;
   }
 
-  // Footer
-  if (y > 740) { doc.addPage(); y = 48; }
-  doc.setDrawColor(220); doc.line(40, y, W - 40, y); y += 14;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120);
-  doc.text(`Computed from raw provider delivery events between ${period_from} and ${period_to}.`, 40, y); y += 11;
-  doc.text(`Rates fixed per partner profile at the time of generation.`, 40, y);
+  drawFooter(doc, BRAND_COPY.earningsBasis);
 
   const pdfBytes = doc.output("arraybuffer") as ArrayBuffer;
 
