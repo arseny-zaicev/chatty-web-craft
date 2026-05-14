@@ -565,11 +565,21 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }
 
     for (const [tz, list] of perTz) {
-      // Date sequence: ONLY operator-selected dates. No auto-extension. Capacity
-      // truncation upstream guarantees list.length fits within dates.length × cap.
-      const dates = scheduledDates.length > 0
+      // Date sequence: prefer operator-selected dates, but ALWAYS auto-extend
+      // forward day-by-day if the bucket can't fit in the selected window
+      // (e.g. relaunch wiped scheduled_dates, or capacity assumptions changed).
+      // Without this fallback, line 618's endUtc-clamp piles tail recipients
+      // into a single instant — they then either rate-limit out at Gupshup or
+      // never send because they're past the day's window. See incident
+      // 2026-05-13 SMB Owners (313 stuck at 05:00 UTC).
+      const baseDates = scheduledDates.length > 0
         ? [...scheduledDates].sort()
         : [todayKeyTz(tz)];
+      const neededDays = Math.max(1, Math.ceil(list.length / Math.max(1, perNumPerDayCap)));
+      const dates = baseDates.slice();
+      while (dates.length < neededDays) {
+        dates.push(nextDateStr(dates[dates.length - 1]));
+      }
 
       let cursor = 0;
       for (const date of dates) {
