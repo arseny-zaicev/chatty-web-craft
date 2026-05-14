@@ -188,6 +188,8 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       quality_rating: (n.quality_rating as string) ?? null,
       last_health_sync_at: (n.last_health_sync_at as string) ?? null,
       last_health_sync_error: (n.last_health_sync_error as string) ?? null,
+      business_manager_id: (n.business_manager_id as string) ?? null,
+      bm_name: (n.bm_name as string) ?? null,
     };
   });
 
