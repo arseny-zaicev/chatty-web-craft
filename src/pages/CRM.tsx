@@ -635,6 +635,30 @@ const CRM = ({
                     <button onClick={() => setUnreadOnly((v) => !v)} className={pill(unreadOnly)}>
                       Unread{unreadCount > 0 && ` · ${unreadCount}`}
                     </button>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={async () => {
+                          const targets = conversations.filter((c) => (c.unread_count ?? 0) > 0);
+                          if (targets.length === 0) return;
+                          const prev = targets.map((c) => ({ id: c.id, unread_count: c.unread_count }));
+                          setConversations((cs) => cs.map((c) => ((c.unread_count ?? 0) > 0 ? { ...c, unread_count: 0 } : c)));
+                          try {
+                            await Promise.all(targets.map((c) => markConversationRead(c.id)));
+                            toast.success(`Marked ${targets.length} as read`);
+                          } catch {
+                            setConversations((cs) => cs.map((c) => {
+                              const p = prev.find((x) => x.id === c.id);
+                              return p ? { ...c, unread_count: p.unread_count } : c;
+                            }));
+                            toast.error("Failed to mark all as read");
+                          }
+                        }}
+                        className={pill(false)}
+                        title="Mark all conversations as read"
+                      >
+                        Mark all read
+                      </button>
+                    )}
                     <button onClick={() => setRepliedOnly((v) => !v)} className={pill(repliedOnly)}>
                       Replied{repliedCount > 0 && ` · ${repliedCount}`}
                     </button>
