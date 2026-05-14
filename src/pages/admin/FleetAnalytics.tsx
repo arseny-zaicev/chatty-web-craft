@@ -282,7 +282,7 @@ export default function FleetAnalytics() {
           <h1 className="font-display text-lg font-semibold flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />Fleet Analytics
           </h1>
-          <span className="text-xs text-muted-foreground hidden md:inline">Capacity baseline {DAILY_CAP_PER_NUMBER}/number/day - blocked numbers excluded</span>
+          <span className="text-xs text-muted-foreground hidden md:inline">Capacity = sum of per-number daily limits · banned & restricted excluded</span>
           <div className="ml-auto flex gap-1">
             {(["1", "7", "30", "90"] as Period[]).map((p) => (
               <Button key={p} size="sm" variant={period === p ? "default" : "outline"} onClick={() => setPeriod(p)}>
