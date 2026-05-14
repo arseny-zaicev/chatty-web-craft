@@ -644,8 +644,29 @@ export default function PipelineConfigSheet({
             </div>
 
             <div>
-              <Label className="text-xs">Default sender numbers</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs">Sender numbers (round-robin routing)</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">{senderIds.length} selected</span>
+                  <button
+                    type="button"
+                    className="text-[10px] text-primary hover:underline"
+                    onClick={() => {
+                      const ready = (numbers ?? []).filter((n) => blockersFor(n).length === 0).map((n) => n.id);
+                      setSenderIds(ready);
+                    }}
+                  >Select all ready</button>
+                  <button
+                    type="button"
+                    className="text-[10px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setSenderIds([])}
+                  >Clear</button>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Tap to select multiple. Leads from Google Sheets are distributed across selected numbers in turn (lead 1 → A, lead 2 → B, lead 3 → C, lead 4 → A...). Numbers stay available for regular campaigns.
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {(numbers ?? []).length === 0 && (
                   <span className="text-[11px] text-muted-foreground">No WhatsApp numbers in this workspace.</span>
                 )}
@@ -658,18 +679,36 @@ export default function PipelineConfigSheet({
                       key={n.id}
                       type="button"
                       onClick={() => setSenderIds((cur) => selected ? cur.filter((id) => id !== n.id) : [...cur, n.id])}
-                      className={`text-[11px] px-2 py-1 rounded-full border transition ${selected ? (blocked ? "bg-amber-500/20 text-amber-900 border-amber-500/50" : "bg-primary text-primary-foreground border-primary") : "bg-card border-border hover:border-primary/50"} ${blocked && !selected ? "opacity-60" : ""}`}
+                      className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md border transition ${selected ? (blocked ? "bg-amber-500/20 text-amber-900 border-amber-500/50" : "bg-primary text-primary-foreground border-primary") : "bg-card border-border hover:border-primary/50"} ${blocked && !selected ? "opacity-60" : ""}`}
                       title={blocked ? `Blocked: ${reasons.join(", ")}` : "Ready to send"}
                     >
-                      {n.display_name || n.phone_number}
-                      {blocked ? ` · ${reasons[0]}` : ""}
+                      <span className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border ${selected ? "bg-primary-foreground/20 border-primary-foreground/60" : "border-border bg-background"}`}>
+                        {selected && <Check className="w-2.5 h-2.5" />}
+                      </span>
+                      <span>{n.display_name || n.phone_number}</span>
+                      {blocked && <span className="opacity-80">· {reasons[0]}</span>}
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Tap to toggle. Numbers must be Active or Ready, with API key, webhook, and approved templates.
-              </p>
+              {senderIds.length >= 2 && (
+                <div className="mt-2 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-[10px] text-muted-foreground space-y-0.5">
+                  <div>
+                    <span className="text-foreground font-medium">Round-robin order:</span>{" "}
+                    {(numbers ?? [])
+                      .filter((n) => senderIds.includes(n.id))
+                      .map((n) => n.display_name || n.phone_number)
+                      .join(" → ")}
+                    {" → ..."}
+                  </div>
+                  {dailyCap && parseInt(dailyCap, 10) > 0 && (
+                    <div>
+                      <span className="text-foreground font-medium">Daily cap split:</span>{" "}
+                      ~{Math.floor(parseInt(dailyCap, 10) / senderIds.length)} per number
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-4 gap-2">

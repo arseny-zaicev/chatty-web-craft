@@ -222,6 +222,9 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                     <div className="text-xs text-muted-foreground">
                       {dealCount} deal{dealCount === 1 ? "" : "s"}
                       {sourceCount > 0 && <> · {sourceCount} source{sourceCount === 1 ? "" : "s"}</>}
+                      {(p.default_sender_number_ids?.length ?? 0) > 0 && (
+                        <> · {p.default_sender_number_ids.length} sender{p.default_sender_number_ids.length === 1 ? "" : "s"} (round-robin)</>
+                      )}
                       {p.auto_outreach_enabled && <> · auto first-touch</>}
                     </div>
                   </div>
