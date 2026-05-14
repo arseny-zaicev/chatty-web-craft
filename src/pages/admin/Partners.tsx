@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Plus, ArrowLeft, Search } from "lucide-react";
 import { toast } from "sonner";
 import { fetchPartnerMetrics } from "@/lib/metrics";
+import { getAttribution } from "@/lib/numberAttribution";
 
 type Partner = {
   id: string; name: string; contact_email: string | null; kind: string;
