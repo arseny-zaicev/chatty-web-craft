@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfMonth } from "date-fns";
@@ -198,7 +199,6 @@ export default function PartnerDetail() {
         <Tabs defaultValue="bms">
           <TabsList>
             <TabsTrigger value="bms">Business Managers</TabsTrigger>
-            <TabsTrigger value="numbers">Numbers</TabsTrigger>
             <TabsTrigger value="finance">Finance & Reports</TabsTrigger>
             <TabsTrigger value="payments">Payment History</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -231,9 +231,8 @@ export default function PartnerDetail() {
                   <TableHeader><TableRow>
                     <TableHead>BM</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead>Verification</TableHead>
-                    <TableHead>Lifecycle</TableHead>
-                    <TableHead>Warm-up / Ads</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Warm-up</TableHead>
                     <TableHead>Numbers</TableHead>
                     <TableHead>Numbers summary</TableHead>
                     <TableHead className="text-right">Sent today</TableHead>
@@ -254,44 +253,38 @@ export default function PartnerDetail() {
                       const sentToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_today || 0), 0);
                       const sent7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_7d || 0), 0);
                       const sentAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_all || 0), 0);
-                      const lc = lifecycleBucket(bm?.status);
                       const summary = bmNums.slice(0, 3).map(n => n.display_name || `+${n.phone_number}`).join(", ")
                         + (bmNums.length > 3 ? ` +${bmNums.length - 3}` : "");
+                      const invalidateBm = () => {
+                        qc.invalidateQueries({ queryKey: ["admin", "partner-bms", id, bmIds] });
+                        qc.invalidateQueries({ queryKey: ["admin", "partner-numbers", id, bmIds] });
+                        qc.invalidateQueries({ queryKey: ["business-managers"] });
+                      };
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">
-                            {bm ? <Link to={`/admin/business-managers/${bm.id}`} className="hover:underline">{bm.name}</Link> : a.business_manager_id.slice(0,8)}
+                            {bm?.name || a.business_manager_id.slice(0,8)}
                             <div className="text-[10px] text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || ""}</div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
                           </TableCell>
                           <TableCell>
+                            {bm ? <BmStatusSelect bm={bm} onChanged={invalidateBm} /> : <Badge variant="outline">—</Badge>}
+                          </TableCell>
+                          <TableCell>
+                            {bm ? <BmWarmupCell bm={bm} onChanged={invalidateBm} /> : <span className="text-xs text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-center">
                             {bm ? (
-                              <VerificationSelect
+                              <AddNumbersToBmButton
                                 bmId={bm.id}
-                                value={(bm.verification_status as Verification) || "unverified"}
-                                onChanged={() => {
-                                  qc.invalidateQueries({ queryKey: ["admin", "partner-bms", id, bmIds] });
-                                  qc.invalidateQueries({ queryKey: ["business-managers"] });
-                                }}
+                                bmWorkspaceId={bm.workspace_id}
+                                count={bmNums.length}
+                                onAdded={invalidateBm}
                               />
-                            ) : (
-                              <Badge variant="outline">unverified</Badge>
-                            )}
+                            ) : bmNums.length}
                           </TableCell>
-                          <TableCell><Badge variant={lifecycleVariant(lc)}>{lc}</Badge></TableCell>
-                          <TableCell className="text-xs">
-                            {bm?.ads_running ? <Badge>ads running</Badge> : null}
-                            {lc === "warming_up" && (
-                              <div className="text-muted-foreground mt-0.5">
-                                {bm?.warmup_started_at ? `since ${format(new Date(bm.warmup_started_at), "MMM d")}` : "warm-up"}
-                                {bm?.warmup_target_date ? ` → ${bm.warmup_target_date}` : ""}
-                              </div>
-                            )}
-                            {!bm?.ads_running && lc !== "warming_up" && <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-center">{bmNums.length}</TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate" title={summary}>{summary || "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">{sentToday.toLocaleString()}</TableCell>
                           <TableCell className="text-right tabular-nums">{sent7d.toLocaleString()}</TableCell>
@@ -306,49 +299,8 @@ export default function PartnerDetail() {
                       );
                     })}
                     {!activeAssigns.length && (
-                      <TableRow><TableCell colSpan={14} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={13} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
                     )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* NUMBERS (read-only summary) */}
-          <TabsContent value="numbers" className="pt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Linked numbers summary</CardTitle>
-                <p className="text-xs text-muted-foreground">Aggregated from linked BMs. Manage individual numbers in the BM detail page.</p>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader><TableRow>
-                    <TableHead>BM</TableHead>
-                    <TableHead>Workspace</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead>Warming</TableHead>
-                    <TableHead>Restricted</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {(bms || []).map(b => {
-                      const bmNums = (numbers || []).filter(n => n.business_manager_id === b.id);
-                      const wsIdSet = Array.from(new Set(bmNums.map(n => n.workspace_id).filter(Boolean)));
-                      return (
-                        <TableRow key={b.id}>
-                          <TableCell className="font-medium">{b.name}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{wsIdSet.map(wsName).join(", ") || "—"}</TableCell>
-                          <TableCell>{bmNums.length}</TableCell>
-                          <TableCell>{bmNums.filter(n => n.status === "active").length}</TableCell>
-                          <TableCell>{bmNums.filter(n => n.status === "warming").length}</TableCell>
-                          <TableCell>{bmNums.filter(n => n.status === "restricted" || n.status === "blocked" || n.status === "banned").length}</TableCell>
-                          <TableCell><Link to={`/admin/business-managers/${b.id}`}><Button variant="ghost" size="sm">Open BM</Button></Link></TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {!bms?.length && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No numbers</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -1075,5 +1027,150 @@ function DeleteRunButton({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// ===================== Inline BM editors (Partner detail) =====================
+
+const BM_STATUS_OPTIONS = ["ready", "warming_up", "verifying", "disabled", "active", "paused"] as const;
+
+function BmStatusSelect({ bm, onChanged }: { bm: any; onChanged: () => void }) {
+  const value = String(bm.status ?? "warming_up");
+  const m = useMutation({
+    mutationFn: async (next: string) => {
+      const patch: Record<string, unknown> = {
+        status: next,
+        last_warmup_action_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      if ((next === "warming_up" || next === "warming") && !bm.warmup_started_at) {
+        patch.warmup_started_at = new Date().toISOString();
+      }
+      const { error } = await supabase.from("business_managers").update(patch as any).eq("id", bm.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Status updated"); onChanged(); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  return (
+    <Select value={value} onValueChange={(v) => m.mutate(v)}>
+      <SelectTrigger className="h-7 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {BM_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+const WARMUP_STAGE_PRESETS = ["Day 1-3", "Day 4-7", "Week 2", "Week 3", "Ready"];
+
+function BmWarmupCell({ bm, onChanged }: { bm: any; onChanged: () => void }) {
+  const stage = bm.warmup_stage ?? "";
+  const nextDate = bm.next_warmup_run_date ?? "";
+  const m = useMutation({
+    mutationFn: async (patch: Record<string, unknown>) => {
+      const { error } = await supabase.from("business_managers")
+        .update({ ...patch, updated_at: new Date().toISOString() } as any).eq("id", bm.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { onChanged(); },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  return (
+    <div className="flex flex-col gap-1 min-w-[140px]">
+      <Select
+        value={WARMUP_STAGE_PRESETS.includes(stage) ? stage : (stage ? "__custom__" : "")}
+        onValueChange={(v) => v !== "__custom__" && m.mutate({ warmup_stage: v || null })}
+      >
+        <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Stage" /></SelectTrigger>
+        <SelectContent>
+          {WARMUP_STAGE_PRESETS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          {stage && !WARMUP_STAGE_PRESETS.includes(stage) && <SelectItem value="__custom__">{stage}</SelectItem>}
+        </SelectContent>
+      </Select>
+      <Input
+        type="date"
+        className="h-7 text-xs"
+        defaultValue={nextDate}
+        onBlur={(e) => {
+          const v = e.target.value || null;
+          if (v !== (nextDate || null)) m.mutate({ next_warmup_run_date: v });
+        }}
+      />
+    </div>
+  );
+}
+
+function AddNumbersToBmButton({
+  bmId, bmWorkspaceId, count, onAdded,
+}: { bmId: string; bmWorkspaceId: string | null; count: number; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const { data: pool } = useQuery({
+    queryKey: ["admin", "bm-attach-pool", bmId, bmWorkspaceId],
+    enabled: open,
+    queryFn: async () => {
+      let q = supabase
+        .from("whatsapp_numbers")
+        .select("id, phone_number, display_name, status, workspace_id")
+        .is("business_manager_id", null);
+      if (bmWorkspaceId) q = q.eq("workspace_id", bmWorkspaceId);
+      const { data, error } = await q.order("display_name");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const attach = useMutation({
+    mutationFn: async () => {
+      if (!picked.length) return;
+      const patch: Record<string, unknown> = { business_manager_id: bmId };
+      if (bmWorkspaceId) patch.workspace_id = bmWorkspaceId;
+      const { error } = await supabase.from("whatsapp_numbers").update(patch as any).in("id", picked);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(`${picked.length} number(s) attached`);
+      setPicked([]); setOpen(false); onAdded();
+    },
+    onError: e => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs">
+          {count} <Plus className="w-3 h-3 ml-1" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[320px] p-2" align="end">
+        <div className="text-xs text-muted-foreground mb-2">
+          Unassigned numbers{bmWorkspaceId ? " in this workspace" : ""}
+        </div>
+        <div className="max-h-56 overflow-y-auto space-y-1">
+          {(pool ?? []).length === 0 && (
+            <div className="text-xs text-muted-foreground py-3 text-center">No numbers available</div>
+          )}
+          {(pool ?? []).map(n => (
+            <label key={n.id} className="flex items-center gap-2 text-xs hover:bg-muted/50 rounded px-1 py-0.5 cursor-pointer">
+              <Checkbox
+                checked={picked.includes(n.id)}
+                onCheckedChange={() => setPicked(p => p.includes(n.id) ? p.filter(x => x !== n.id) : [...p, n.id])}
+              />
+              <span className="font-mono">+{n.phone_number}</span>
+              <span className="text-muted-foreground truncate">{n.display_name || ""}</span>
+              <Badge variant="outline" className="ml-auto text-[10px]">{n.status}</Badge>
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 mt-2">
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button size="sm" onClick={() => attach.mutate()} disabled={!picked.length || attach.isPending}>
+            {attach.isPending ? "Attaching…" : `Attach (${picked.length})`}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
