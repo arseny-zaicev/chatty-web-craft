@@ -1361,7 +1361,7 @@ function AddNumberDrawer({
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim())}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim()) || (bmId === "__new__" && !bmNewName.trim())}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
             Save
           </Button>
