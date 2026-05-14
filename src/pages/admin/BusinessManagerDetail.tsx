@@ -131,6 +131,21 @@ const BusinessManagerDetail = () => {
     };
   }, [data?.linked]);
 
+  const sourceBreakdown = useMemo(() => {
+    const nums = data?.linked ?? [];
+    let own = 0;
+    const byRef = new Map<string, number>();
+    for (const n of nums) {
+      const a = getAttribution(n);
+      if (a.kind === "own") own++;
+      else byRef.set(a.ref, (byRef.get(a.ref) || 0) + 1);
+    }
+    const parts: string[] = [];
+    if (own > 0) parts.push(`${own} Own`);
+    for (const [ref, count] of byRef) parts.push(`${count} via ${ref}`);
+    return parts.join(" · ");
+  }, [data?.linked]);
+
   if (isLoading || !data) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   }
