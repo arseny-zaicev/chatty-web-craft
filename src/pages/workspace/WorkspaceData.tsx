@@ -221,6 +221,11 @@ function PresetsSection({
   const [busy, setBusy] = useState(false);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [pulling, setPulling] = useState(false);
+  const [pullingId, setPullingId] = useState<string | null>(null);
+  // Multi-batch mode
+  const [multiMode, setMultiMode] = useState(false);
+  const [multiAudiences, setMultiAudiences] = useState<string>("");
+  const [createdBatches, setCreatedBatches] = useState<Array<{ id: string; name: string; audience: string }>>([]);
 
   const copy = async (text: string, label: string) => {
     try {
