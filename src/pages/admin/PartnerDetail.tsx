@@ -306,47 +306,6 @@ export default function PartnerDetail() {
             </Card>
           </TabsContent>
 
-          {/* NUMBERS (read-only summary) */}
-          <TabsContent value="numbers" className="pt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Linked numbers summary</CardTitle>
-                <p className="text-xs text-muted-foreground">Aggregated from linked BMs. Manage individual numbers in the BM detail page.</p>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader><TableRow>
-                    <TableHead>BM</TableHead>
-                    <TableHead>Workspace</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead>Warming</TableHead>
-                    <TableHead>Restricted</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {(bms || []).map(b => {
-                      const bmNums = (numbers || []).filter(n => n.business_manager_id === b.id);
-                      const wsIdSet = Array.from(new Set(bmNums.map(n => n.workspace_id).filter(Boolean)));
-                      return (
-                        <TableRow key={b.id}>
-                          <TableCell className="font-medium">{b.name}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{wsIdSet.map(wsName).join(", ") || "—"}</TableCell>
-                          <TableCell>{bmNums.length}</TableCell>
-                          <TableCell>{bmNums.filter(n => n.status === "active").length}</TableCell>
-                          <TableCell>{bmNums.filter(n => n.status === "warming").length}</TableCell>
-                          <TableCell>{bmNums.filter(n => n.status === "restricted" || n.status === "blocked" || n.status === "banned").length}</TableCell>
-                          <TableCell><Link to={`/admin/business-managers/${b.id}`}><Button variant="ghost" size="sm">Open BM</Button></Link></TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {!bms?.length && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No numbers</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* FINANCE */}
           <TabsContent value="finance" className="pt-4 space-y-4">
             <ManagerReportCard managerId={id!} />
