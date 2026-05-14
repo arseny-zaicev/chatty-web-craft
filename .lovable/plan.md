@@ -1,51 +1,47 @@
-## Цель
+Cleanup of the Partner detail page (`/admin/partners/:id`) so all BM management happens inline, plus a branding/stats audit of the payout PDFs.
 
-В Fleet Analytics общий объём (Capacity) должен учитывать все номера, кроме `banned` и `restricted`. Сейчас учитываются только номера со статусом `active` — `ready` и `stock` пропадают. Также добавить разбивку: сколько номеров в стоке и по каким странам.
+## 1. Linked Business Managers table - inline management
 
-## Текущее поведение (`src/pages/admin/FleetAnalytics.tsx`)
+File: `src/pages/admin/PartnerDetail.tsx` (Business Managers tab).
 
-- `isActiveStatus(s) = s === "active"` — только active попадают в capacity.
-- `cap = isActiveStatus ? 200 * periodDays : 0` — для ready/stock cap = 0, и они не считаются в общем объёме.
-- В шапке: «blocked numbers excluded», но фактически исключаются и stock/ready.
+- **Remove the Verification column** (drop `<VerificationSelect>` and the `Verification` header/cell). The `VerificationSelect` helper can stay defined or be removed; verification stays editable elsewhere only if you still want it - confirm in step 7 below.
+- **Lifecycle column → editable Status select.** Replace the read-only `<Badge>` with a `<Select>` bound to `business_managers.status`. Options: `ready`, `warming_up`, `verifying`, `disabled`, `active`, `paused` (the values already used by `BusinessManagerDetail`). On change: update `business_managers.status` (and set `warmup_started_at = now()` when switching into `warming_up` if it's null), then invalidate `partner-bms` + `business-managers`.
+- **Warm-up column → editable.** Inline `<Select>` for `warmup_stage` (free text or quick presets: "Day 1-3", "Day 4-7", "Week 2", "Ready") and a small date input for `next_warmup_run_date`. Persist to `business_managers`.
+- **New "Numbers" inline editor.** In the Numbers cell (which currently just shows count) add a small "+ Add" button that opens a popover/dialog listing unassigned `whatsapp_numbers` (no `business_manager_id`, optionally scoped to the BM's workspace if set). Selecting one or more numbers updates `whatsapp_numbers.business_manager_id = bm.id`. Reuse the same query the existing `CreateBMDialog` uses (`numbers-for-bm-create`). After mutation invalidate `partner-numbers` and `partner-bms`.
 
-В БД сейчас: 16 active, 3 ready, 9 stock, 1 banned, 1 restricted. Есть колонка `country_code` и `daily_send_limit` per number.
+## 2. Remove the standalone BM detail "complex" page from this flow
 
-## Изменения
+- **Stop linking to `/admin/business-managers/:id`** from the Partner detail BM table. Remove the `<Link to={...}>` wrapper around the BM name (keep it as plain text + meta id).
+- The route itself stays (it's still used from `BusinessManagers.tsx`), but partner-flow users never land on it.
 
-### 1. Логика подсчёта capacity
-- Заменить `isActiveStatus` на `isCountedStatus`: учитывать все статусы, кроме `banned` и `restricted`.
-- Использовать per-number `daily_send_limit` (fallback 200) вместо жёсткой константы — это точнее отражает реальный объём.
-- Добавить `country_code, daily_send_limit` в select `whatsapp_numbers`.
+## 3. Remove the "Numbers" tab
 
-### 2. Новая агрегация по статусу/стране
-В `fetchAnalytics` посчитать:
-```
-fleetBreakdown = {
-  counted: { total, byStatus: { active, ready, stock }, byCountry: { US, UK, IN, ... } },
-  excluded: { banned, restricted }
-}
-```
-Стоковая разбивка по странам отдельно: `stockByCountry: { US: 8, UK: 1 }`.
+- Delete the `<TabsTrigger value="numbers">` and the entire `<TabsContent value="numbers">` block. Default tab stays `bms`.
+- The aggregate counts already live in the top stat strip; the per-BM numbers list is now editable inline (step 1).
 
-### 3. UI
+## 4. Reports (Finance & Reports tab) - branding + correctness audit
 
-**KPI Capacity** — обновить sub-текст: вместо `X active × 200 × Nd` показывать `X numbers × daily limits × Nd · banned/restricted excluded`.
+Files to audit:
+- `supabase/functions/payout-report-pdf/index.ts`
+- `supabase/functions/manager-payout-report-pdf/index.ts`
+- `supabase/functions/_shared/brand.ts`
 
-**Новая карточка «Fleet composition»** (компактная, над «Per-client breakdown») с тремя колонками:
-- *Counted in capacity* — пилюли по статусам: `Active 16 · Ready 3 · Stock 9` и пилюли по странам: `US 21 · UK 4 · IN 1`.
-- *Stock by country* — `US 8 · UK 1` (отдельно подсвечено, т.к. это резерв).
-- *Excluded* — `Banned 1 · Restricted 1` с подписью «not counted in capacity».
+Actions:
+- Standardize header on the same Iskra brand block used elsewhere (`_shared/brand.ts`). `manager-payout-report-pdf` currently hard-codes `"Iskra · WhatsApp Outreach"` on line 122 - replace with the shared header helper so both PDFs match.
+- Sweep both files for: em-dashes (`—`) → short hyphens, "Base Reactivation" → "Database Reactivation", any "money-back"/refund copy (must be removed), and stray placeholder text.
+- Verify per-number stats in both PDFs match what the UI shows: confirm we aggregate from the same source as `number_live_stats` / `liveByNum` (sent today / 7d / all-time), not stale `whatsapp_numbers` counters. Fix any column whose totals don't reconcile against the top stat strip on the Partner detail page (`Sent today`, `Sent 7d`, `Sent all-time`).
+- Check that "Restricted" / "Blocked" counts in the PDF use the same status set as `PartnerDetail` (`restricted`, and `blocked || banned`).
 
-Шапку «Capacity baseline 200/number/day - blocked numbers excluded» заменить на «Capacity = sum of per-number daily limits · banned & restricted excluded».
+I'll list any discrepancies I find as I work and fix them in the same pass; no schema changes expected.
 
-### 4. Per-client таблица
-Колонка `Numbers` сейчас показывает `activeNumbers/numbers`. Поменять на `counted/total` (counted = не banned/restricted) для консистентности с новым capacity.
+## Out of scope
 
-## Файлы
+- No DB migrations.
+- No changes to `BusinessManagerDetail.tsx` itself, `FleetRegistry`, `FleetAnalytics`, or the global Business Managers list - only the Partner detail flow is simplified.
+- Verification field stays in the database; we're only removing it from this one table. Confirm if you want it removed from the BM detail page too.
 
-- `src/pages/admin/FleetAnalytics.tsx` — единственный файл изменений (логика + UI).
+## Question before I build
 
-## Вне scope
-
-- Изменения в БД, в других страницах (Fleet Registry, BM Detail).
-- Изменение определения «активного» номера в других местах кода.
+Two quick confirms:
+1. For status options in the inline Status select, OK to use `ready / warming_up / verifying / disabled / active / paused`? Or keep just the 4 lifecycle buckets (`ready / warming_up / verifying / disabled`)?
+2. When adding numbers inline, should I restrict the picker to numbers in the BM's workspace only, or show all unassigned numbers across workspaces (and infer/overwrite workspace from BM)?
