@@ -70,7 +70,7 @@ const fetchAnalytics = async (period: Period) => {
         .gte("received_at", sinceIso)
         .order("received_at", { ascending: false })
         .limit(50000),
-      supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, status, workspace_id"),
+      supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, status, workspace_id, country_code, daily_send_limit"),
       supabase.from("workspaces").select("id, name, delivered_rate_usd"),
       supabase.from("campaigns").select("id, name, status, total_recipients, sent_count, failed_count, created_at, workspace_id")
         .gte("created_at", sinceIso)
