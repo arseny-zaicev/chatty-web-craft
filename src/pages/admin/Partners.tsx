@@ -132,6 +132,23 @@ export default function Partners() {
           </Select>
         </div>
 
+        {numberAttr && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Number sources (from Fleet)</CardTitle></CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-2 text-xs">
+              <Badge variant="outline" className="text-[11px]">Own: {numberAttr.own}</Badge>
+              {Array.from(numberAttr.byRef.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(([ref, count]) => (
+                  <Badge key={ref} variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
+                    via {ref}: {count}
+                  </Badge>
+                ))}
+              {numberAttr.byRef.size === 0 && <span className="text-muted-foreground">No referred numbers yet.</span>}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader><CardTitle>All partners</CardTitle></CardHeader>
           <CardContent>
@@ -142,6 +159,7 @@ export default function Partners() {
                   <TableHead>Manager</TableHead>
                   <TableHead>BMs</TableHead>
                   <TableHead>Numbers</TableHead>
+                  <TableHead>Referred #</TableHead>
                   <TableHead>Sent today</TableHead>
                   <TableHead>Sent all-time</TableHead>
                   <TableHead>Partner rate</TableHead>
