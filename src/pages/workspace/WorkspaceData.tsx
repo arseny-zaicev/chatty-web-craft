@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   audienceKeys, fetchBatches, fetchBatchStats, fetchBatchRows,
@@ -220,6 +221,11 @@ function PresetsSection({
   const [busy, setBusy] = useState(false);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [pulling, setPulling] = useState(false);
+  const [pullingId, setPullingId] = useState<string | null>(null);
+  // Multi-batch mode
+  const [multiMode, setMultiMode] = useState(false);
+  const [multiAudiences, setMultiAudiences] = useState<string>("");
+  const [createdBatches, setCreatedBatches] = useState<Array<{ id: string; name: string; audience: string }>>([]);
 
   const copy = async (text: string, label: string) => {
     try {
@@ -245,6 +251,9 @@ function PresetsSection({
     setNameTouched(false);
     setBatchName(buildBatchName("", ""));
     setCreatedBatchId(null);
+    setMultiMode(false);
+    setMultiAudiences("");
+    setCreatedBatches([]);
     // Pre-fill campaign_static fields with empty strings so operator sees inputs.
     const initial: StaticValues = {};
     for (const v of p.variables) if (v.kind === "campaign_static") initial[v.key] = "";
@@ -283,34 +292,77 @@ function PresetsSection({
     setNameTouched(true);
   };
 
+  const parsedAudiences = useMemo(
+    () => multiAudiences.split("\n").map((s) => s.trim()).filter(Boolean),
+    [multiAudiences],
+  );
+
   const submitBatch = async () => {
-    if (!creating || !batchName.trim()) { toast.error("Batch name required"); return; }
+    if (!creating) return;
     if (!staticOk) { toast.error("Fill in every same-for-everyone variable below"); return; }
+
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) { toast.error("Not authenticated"); return; }
+
+    const staticHeader = Object.keys(staticValues).length > 0
+      ? `__static_values__=${JSON.stringify(staticValues)}\n`
+      : "";
+    const finalNotes = `${staticHeader}${batchNotes.trim()}`.trim() || null;
+
+    const baseRow = {
+      workspace_id: workspaceId,
+      user_id: u.user.id,
+      country: batchCountry.trim() || null,
+      campaign_type: creating.campaignType,
+      copy_profile: creating.id,
+      notes: finalNotes,
+      variable_schema: creating.variables.map((v) => v.key),
+      source_filename: null,
+      prep_profile_id: null,
+      is_launch_ready: false,
+      derived_variables_preview: [],
+      column_mapping: {},
+    };
+
+    if (multiMode) {
+      if (parsedAudiences.length === 0) { toast.error("Add at least one audience"); return; }
+      const names = parsedAudiences.map((a) => buildBatchName(batchCountry, a));
+      const dupe = names.find((n, i) => names.findIndex((m) => m.toLowerCase() === n.toLowerCase()) !== i);
+      if (dupe) { toast.error(`Duplicate batch name: ${dupe}`); return; }
+
+      setBusy(true);
+      const created: Array<{ id: string; name: string; audience: string }> = [];
+      const failed: Array<{ audience: string; reason: string }> = [];
+      try {
+        for (let i = 0; i < parsedAudiences.length; i++) {
+          const aud = parsedAudiences[i];
+          const name = names[i];
+          const { data, error } = await (supabase.from("audience_batches") as any)
+            .insert({ ...baseRow, name })
+            .select("id").single();
+          if (error || !data) {
+            failed.push({ audience: aud, reason: error?.message ?? "insert failed" });
+          } else {
+            created.push({ id: data.id, name, audience: aud });
+          }
+        }
+        setCreatedBatches(created);
+        if (created.length > 0) toast.success(`Created ${created.length} of ${parsedAudiences.length} batches`);
+        if (failed.length > 0) toast.error(`Failed: ${failed.map((f) => f.audience).join(", ")}`);
+        qc.invalidateQueries({ queryKey: audienceKeys.batches(workspaceId) });
+        qc.invalidateQueries({ queryKey: audienceKeys.stats(workspaceId) });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (!batchName.trim()) { toast.error("Batch name required"); return; }
     setBusy(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not authenticated");
-      // Persist staticValues so Launch QA can verify each row matches.
-      // Stored in notes field as a header line (no schema change needed).
-      const staticHeader = Object.keys(staticValues).length > 0
-        ? `__static_values__=${JSON.stringify(staticValues)}\n`
-        : "";
-      const finalNotes = `${staticHeader}${batchNotes.trim()}`.trim() || null;
-      const { data, error } = await (supabase.from("audience_batches") as any).insert({
-        workspace_id: workspaceId,
-        user_id: u.user.id,
-        name: batchName.trim(),
-        country: batchCountry.trim() || null,
-        campaign_type: creating.campaignType,
-        copy_profile: creating.id,
-        notes: finalNotes,
-        variable_schema: creating.variables.map((v) => v.key),
-        source_filename: null,
-        prep_profile_id: null,
-        is_launch_ready: false,
-        derived_variables_preview: [],
-        column_mapping: {},
-      }).select("id").single();
+      const { data, error } = await (supabase.from("audience_batches") as any)
+        .insert({ ...baseRow, name: batchName.trim() })
+        .select("id").single();
       if (error || !data) throw error ?? new Error("Failed to create batch");
       setCreatedBatchId(data.id);
       toast.success("Batch created - copy the prompt below");
@@ -320,6 +372,40 @@ function PresetsSection({
       toast.error(e instanceof Error ? e.message : "Failed to create batch");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const pullFromPersonal = async (batchId: string) => {
+    setPullingId(batchId);
+    setPulling(true);
+    const tid = toast.loading("Pulling rows from your Supabase... (can take 30-60s for big batches)");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-audience-from-personal`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ batch_id: batchId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      toast.dismiss(tid);
+      if (!res.ok) {
+        toast.error(`Pull failed: ${json?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      toast.success(`Imported ${json?.inserted ?? 0} rows from your Supabase`);
+      qc.invalidateQueries({ queryKey: audienceKeys.batches(workspaceId) });
+      qc.invalidateQueries({ queryKey: audienceKeys.stats(workspaceId) });
+    } catch (e: any) {
+      toast.dismiss(tid);
+      toast.error(`Pull failed: ${e?.message ?? String(e)}`);
+    } finally {
+      setPulling(false);
+      setPullingId(null);
     }
   };
 
@@ -385,32 +471,51 @@ function PresetsSection({
       </Dialog>
 
       {/* Create-batch dialog */}
-      <Dialog open={!!creating} onOpenChange={(o) => { if (!o) { setCreating(null); setCreatedBatchId(null); } }}>
+      <Dialog open={!!creating} onOpenChange={(o) => { if (!o) { setCreating(null); setCreatedBatchId(null); setCreatedBatches([]); } }}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{creating?.name} - create batch</DialogTitle>
+            <DialogTitle>{creating?.name} - create batch{multiMode ? "es" : ""}</DialogTitle>
             <DialogDescription>
-              Step 1: create the empty batch. Step 2: copy the generated prompt (with the batch_id baked in) and run it in Codex.
+              Step 1: create the empty batch{multiMode ? "es" : ""}. Step 2: copy the generated prompt{multiMode ? "s" : ""} (with the batch_id baked in) and run {multiMode ? "them" : "it"} in Codex.
             </DialogDescription>
           </DialogHeader>
           {creating && (
             <div className="space-y-3">
+              {/* Multi-batch toggle */}
+              <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 p-3">
+                <div>
+                  <div className="text-sm font-medium">Create multiple batches</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    One audience per line. Same country, variables and notes shared across all.
+                  </div>
+                </div>
+                <Switch
+                  checked={multiMode}
+                  onCheckedChange={setMultiMode}
+                  disabled={!!createdBatchId || createdBatches.length > 0}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-muted-foreground">Country (optional)</label>
-                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE, US, ALL" disabled={!!createdBatchId} />
+                  <Input value={batchCountry} onChange={(e) => onCountryChange(e.target.value)} placeholder="e.g. AE, US, ALL" disabled={!!createdBatchId || createdBatches.length > 0} />
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Audience *</label>
-                  <Input value={batchAudience} onChange={(e) => onAudienceChange(e.target.value)} placeholder="e.g. cold leads Q2, no-shows, churned" disabled={!!createdBatchId} />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground flex items-center justify-between">
-                    <span>Batch name *</span>
-                    <span className="text-[10px] text-muted-foreground/70">format: DATE | COUNTRY | AUDIENCE (auto-fills from fields above)</span>
-                  </label>
-                  <Input value={batchName} onChange={(e) => onBatchNameChange(e.target.value)} disabled={!!createdBatchId} />
-                </div>
+                {!multiMode && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Audience *</label>
+                    <Input value={batchAudience} onChange={(e) => onAudienceChange(e.target.value)} placeholder="e.g. cold leads Q2, no-shows, churned" disabled={!!createdBatchId} />
+                  </div>
+                )}
+                {!multiMode && (
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground flex items-center justify-between">
+                      <span>Batch name *</span>
+                      <span className="text-[10px] text-muted-foreground/70">format: DATE | COUNTRY | AUDIENCE (auto-fills from fields above)</span>
+                    </label>
+                    <Input value={batchName} onChange={(e) => onBatchNameChange(e.target.value)} disabled={!!createdBatchId} />
+                  </div>
+                )}
                 <div>
                   <label className="text-xs text-muted-foreground">Campaign type</label>
                   <Input value={creating.campaignType} disabled />
@@ -421,13 +526,35 @@ function PresetsSection({
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-muted-foreground">Notes (optional)</label>
-                  <Textarea rows={2} value={batchNotes} onChange={(e) => setBatchNotes(e.target.value)} disabled={!!createdBatchId} />
+                  <Textarea rows={2} value={batchNotes} onChange={(e) => setBatchNotes(e.target.value)} disabled={!!createdBatchId || createdBatches.length > 0} />
                 </div>
               </div>
 
+              {multiMode && createdBatches.length === 0 && (
+                <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+                  <label className="text-xs font-medium flex items-center justify-between">
+                    <span>Audiences * (one per line)</span>
+                    <span className="text-[10px] text-muted-foreground/70">{parsedAudiences.length} batch{parsedAudiences.length === 1 ? "" : "es"} will be created</span>
+                  </label>
+                  <Textarea
+                    rows={6}
+                    placeholder={"UK Financial\nUK Consulting\nUK Marketing\nUK Staffing"}
+                    value={multiAudiences}
+                    onChange={(e) => setMultiAudiences(e.target.value)}
+                  />
+                  {parsedAudiences.length > 0 && (
+                    <div className="text-[11px] text-muted-foreground space-y-0.5 max-h-40 overflow-y-auto">
+                      {parsedAudiences.map((a) => (
+                        <div key={a} className="font-mono">→ {buildBatchName(batchCountry, a)}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Variable explainer + campaign_static inputs */}
               <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
-                <div className="text-xs font-medium">Variables</div>
+                <div className="text-xs font-medium">Variables{multiMode ? " (shared across all batches)" : ""}</div>
                 <pre className="text-[11px] bg-background/50 border border-border rounded-md p-2 whitespace-pre-wrap font-mono text-muted-foreground">{VARIABLE_KIND_EXPLAINER}</pre>
                 <div className="space-y-2">
                   {creating.variables.map((v) => {
@@ -453,7 +580,7 @@ function PresetsSection({
                           placeholder={`Paste exact ${v.key} text from Materials, e.g.\n${v.example}`}
                           value={staticValues[v.key] ?? ""}
                           onChange={(e) => setStaticValues((prev) => ({ ...prev, [v.key]: e.target.value }))}
-                          disabled={!!createdBatchId}
+                          disabled={!!createdBatchId || createdBatches.length > 0}
                           className={issue ? "border-amber-500" : ""}
                         />
                         {issue && (
@@ -467,17 +594,20 @@ function PresetsSection({
                 </div>
               </div>
 
-              {!createdBatchId && (
+              {!createdBatchId && createdBatches.length === 0 && (
                 <DialogFooter>
                   <Button variant="ghost" onClick={() => setCreating(null)}>Cancel</Button>
-                  <Button onClick={submitBatch} disabled={busy || !batchName.trim() || !staticOk}>
+                  <Button
+                    onClick={submitBatch}
+                    disabled={busy || !staticOk || (multiMode ? parsedAudiences.length === 0 : !batchName.trim())}
+                  >
                     {busy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Database className="w-4 h-4 mr-1" />}
-                    Create batch
+                    {multiMode ? `Create ${parsedAudiences.length || ""} batch${parsedAudiences.length === 1 ? "" : "es"}`.trim() : "Create batch"}
                   </Button>
                 </DialogFooter>
               )}
 
-              {createdBatchId && (
+              {createdBatchId && !multiMode && (
                 <>
                   <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -491,39 +621,7 @@ function PresetsSection({
                   </div>
                   <DialogFooter>
                     <Button variant="ghost" disabled={pulling} onClick={() => { setCreating(null); setCreatedBatchId(null); }}>Done</Button>
-                    <Button variant="outline" disabled={pulling || !createdBatchId} onClick={async () => {
-                      if (!createdBatchId) return;
-                      setPulling(true);
-                      const tid = toast.loading("Pulling rows from your Supabase... (can take 30-60s for big batches)");
-                      try {
-                        // Direct fetch so we can read the JSON error body (functions.invoke hides it).
-                        const { data: { session } } = await supabase.auth.getSession();
-                        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-audience-from-personal`;
-                        const res = await fetch(url, {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                            "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                          },
-                          body: JSON.stringify({ batch_id: createdBatchId }),
-                        });
-                        const json = await res.json().catch(() => ({}));
-                        toast.dismiss(tid);
-                        if (!res.ok) {
-                          toast.error(`Pull failed: ${json?.error ?? `HTTP ${res.status}`}`);
-                          return;
-                        }
-                        toast.success(`Imported ${json?.inserted ?? 0} rows from your Supabase`);
-                        qc.invalidateQueries({ queryKey: audienceKeys.batches(workspaceId) });
-                        qc.invalidateQueries({ queryKey: audienceKeys.stats(workspaceId) });
-                      } catch (e: any) {
-                        toast.dismiss(tid);
-                        toast.error(`Pull failed: ${e?.message ?? String(e)}`);
-                      } finally {
-                        setPulling(false);
-                      }
-                    }}>
+                    <Button variant="outline" disabled={pulling || !createdBatchId} onClick={() => pullFromPersonal(createdBatchId)}>
                       {pulling
                         ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Pulling...</>
                         : <><Database className="w-3.5 h-3.5 mr-1" /> Pull from my Supabase</>}
@@ -531,6 +629,52 @@ function PresetsSection({
                     <Button disabled={pulling} onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: createdBatchId, staticValues }), `${creating.name} prompt`)}>
                       <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
                     </Button>
+                  </DialogFooter>
+                </>
+              )}
+
+              {multiMode && createdBatches.length > 0 && (
+                <>
+                  <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Created {createdBatches.length} batch{createdBatches.length === 1 ? "" : "es"}. Copy each prompt to Codex, then pull rows back.
+                  </div>
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="outline" onClick={() => {
+                      const all = createdBatches.map((b) =>
+                        `--- BATCH: ${b.name} (${b.id}) ---\n` +
+                        buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: b.id, staticValues })
+                      ).join("\n\n");
+                      copy(all, `All ${createdBatches.length} prompts`);
+                    }}>
+                      <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy all prompts
+                    </Button>
+                  </div>
+                  <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                    {createdBatches.map((b) => (
+                      <div key={b.id} className="rounded-md border border-border bg-background/40 p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium truncate">{b.name}</div>
+                            <code className="text-[10px] font-mono text-muted-foreground">{b.id}</code>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            <Button size="sm" variant="outline" disabled={pulling}
+                              onClick={() => copy(buildPresetPrompt(creating, { workspaceName, workspaceId, batchId: b.id, staticValues }), `${b.name} prompt`)}>
+                              <ClipboardCopy className="w-3.5 h-3.5 mr-1" /> Copy prompt
+                            </Button>
+                            <Button size="sm" disabled={pulling} onClick={() => pullFromPersonal(b.id)}>
+                              {pullingId === b.id
+                                ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Pulling...</>
+                                : <><Database className="w-3.5 h-3.5 mr-1" /> Pull</>}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" disabled={pulling} onClick={() => { setCreating(null); setCreatedBatches([]); }}>Done</Button>
                   </DialogFooter>
                 </>
               )}
