@@ -1,47 +1,53 @@
-Cleanup of the Partner detail page (`/admin/partners/:id`) so all BM management happens inline, plus a branding/stats audit of the payout PDFs.
+## Что делаем
 
-## 1. Linked Business Managers table - inline management
+В существующий диалог **"{Preset} - create batch"** (`WorkspaceData.tsx`, секция Ingestion presets) добавляем режим **"Multi-batch"**: вместо одного батча создаём сразу N штук, на каждый - свой Codex-промпт с уже впечатанным `batch_id`. UI и поля - как сейчас, просто появляется список аудиторий и переключатель сверху.
 
-File: `src/pages/admin/PartnerDetail.tsx` (Business Managers tab).
+## UI изменения (только в этом диалоге)
 
-- **Remove the Verification column** (drop `<VerificationSelect>` and the `Verification` header/cell). The `VerificationSelect` helper can stay defined or be removed; verification stays editable elsewhere only if you still want it - confirm in step 7 below.
-- **Lifecycle column → editable Status select.** Replace the read-only `<Badge>` with a `<Select>` bound to `business_managers.status`. Options: `ready`, `warming_up`, `verifying`, `disabled`, `active`, `paused` (the values already used by `BusinessManagerDetail`). On change: update `business_managers.status` (and set `warmup_started_at = now()` when switching into `warming_up` if it's null), then invalidate `partner-bms` + `business-managers`.
-- **Warm-up column → editable.** Inline `<Select>` for `warmup_stage` (free text or quick presets: "Day 1-3", "Day 4-7", "Week 2", "Ready") and a small date input for `next_warmup_run_date`. Persist to `business_managers`.
-- **New "Numbers" inline editor.** In the Numbers cell (which currently just shows count) add a small "+ Add" button that opens a popover/dialog listing unassigned `whatsapp_numbers` (no `business_manager_id`, optionally scoped to the BM's workspace if set). Selecting one or more numbers updates `whatsapp_numbers.business_manager_id = bm.id`. Reuse the same query the existing `CreateBMDialog` uses (`numbers-for-bm-create`). After mutation invalidate `partner-numbers` and `partner-bms`.
+Сверху, под `DialogDescription`:
 
-## 2. Remove the standalone BM detail "complex" page from this flow
+- Toggle: `Create multiple batches` (off by default = текущее поведение, ничего не ломаем)
+- Если on:
+  - Один общий блок: `Country (optional)`, `Campaign type`, `Template variant`, `Notes`, `Variables (same-for-everyone)` - всё как сейчас, эти значения шарятся между всеми батчами
+  - Убираем поле `Audience` и `Batch name` из общего блока
+  - Появляется список **"Audiences"**:
+    - Textarea `Paste audiences (one per line)` - быстрый ввод, или
+    - Список редактируемых строк: `Audience name` (каждая строка → отдельный батч)
+    - Кнопки `+ Add row`, `Remove` на строке
+    - Превью имени батча справа от каждой строки: `2026-05-14 | UK | {audience}` (та же `buildBatchName` что и сейчас)
+  - Лейбл submit-кнопки: `Create N batches`
 
-- **Stop linking to `/admin/business-managers/:id`** from the Partner detail BM table. Remove the `<Link to={...}>` wrapper around the BM name (keep it as plain text + meta id).
-- The route itself stays (it's still used from `BusinessManagers.tsx`), but partner-flow users never land on it.
+## Поведение submit (multi-batch)
 
-## 3. Remove the "Numbers" tab
+В `submitBatch`:
 
-- Delete the `<TabsTrigger value="numbers">` and the entire `<TabsContent value="numbers">` block. Default tab stays `bms`.
-- The aggregate counts already live in the top stat strip; the per-BM numbers list is now editable inline (step 1).
+- Валидация: ≥1 непустая аудитория, все `staticValues` валидны (как сейчас), батч-нэймы уникальны (trim+lower)
+- Цикл по аудиториям → для каждой делаем тот же самый `insert` в `audience_batches` что и сейчас, с одинаковыми: `country`, `campaign_type`, `copy_profile`, `notes` (со staticHeader), `variable_schema`. Различаются только `name` и `audience`-часть имени.
+- Не атомарно: если одна вставка упала - остальные продолжаем, в конце показываем сводку (создано X из N, ошибки списком)
+- В state кладём `createdBatches: Array<{ id, name, audience }>` вместо одного `createdBatchId`
 
-## 4. Reports (Finance & Reports tab) - branding + correctness audit
+## Step 2 экран после создания (multi-batch)
 
-Files to audit:
-- `supabase/functions/payout-report-pdf/index.ts`
-- `supabase/functions/manager-payout-report-pdf/index.ts`
-- `supabase/functions/_shared/brand.ts`
+Вместо одного промпта - аккордеон/список карточек по созданным батчам. На каждой:
 
-Actions:
-- Standardize header on the same Iskra brand block used elsewhere (`_shared/brand.ts`). `manager-payout-report-pdf` currently hard-codes `"Iskra · WhatsApp Outreach"` on line 122 - replace with the shared header helper so both PDFs match.
-- Sweep both files for: em-dashes (`—`) → short hyphens, "Base Reactivation" → "Database Reactivation", any "money-back"/refund copy (must be removed), and stray placeholder text.
-- Verify per-number stats in both PDFs match what the UI shows: confirm we aggregate from the same source as `number_live_stats` / `liveByNum` (sent today / 7d / all-time), not stale `whatsapp_numbers` counters. Fix any column whose totals don't reconcile against the top stat strip on the Partner detail page (`Sent today`, `Sent 7d`, `Sent all-time`).
-- Check that "Restricted" / "Blocked" counts in the PDF use the same status set as `PartnerDetail` (`restricted`, and `blocked || banned`).
+- `{audience}` + `batch_id` (короткий моно)
+- Кнопка `Copy prompt` - копирует `buildPresetPrompt(creating, { workspaceName, workspaceId, batchId, staticValues })` для этого батча
+- Кнопка `Pull from my Supabase` - тот же edge-вызов `import-audience-from-personal` с этим `batch_id` (точно как сейчас)
+- Сверху одна доп.кнопка `Copy all prompts` - склеивает все промпты с разделителем `--- BATCH: {name} ---`, чтобы можно было скормить Codex одним заходом
 
-I'll list any discrepancies I find as I work and fix them in the same pass; no schema changes expected.
+Single-batch путь (toggle off) - оставляем 1:1 как сейчас, ни логику, ни UI не трогаем.
 
-## Out of scope
+## Что НЕ трогаем
 
-- No DB migrations.
-- No changes to `BusinessManagerDetail.tsx` itself, `FleetRegistry`, `FleetAnalytics`, or the global Business Managers list - only the Partner detail flow is simplified.
-- Verification field stays in the database; we're only removing it from this one table. Confirm if you want it removed from the BM detail page too.
+- `audienceData.ts`, edge `import-audience-from-personal`, схему БД, `buildPresetPrompt`, `buildBatchName` - без изменений
+- Smart Upload, Launch Wizard, Campaigns, Reports - не трогаем
+- Pull-логика та же (per-batch), просто вызывается из карточки нужного батча
 
-## Question before I build
+## Acceptance
 
-Two quick confirms:
-1. For status options in the inline Status select, OK to use `ready / warming_up / verifying / disabled / active / paused`? Or keep just the 4 lifecycle buckets (`ready / warming_up / verifying / disabled`)?
-2. When adding numbers inline, should I restrict the picker to numbers in the BM's workspace only, or show all unassigned numbers across workspaces (and infer/overwrite workspace from BM)?
+1. Открываю `Marketing Basic - create batch`, включаю `Create multiple batches`.
+2. Вставляю 6 аудиторий: `UK Financial`, `UK Consulting`, `UK Marketing`, `UK Staffing`, `UK Coaching`, `UK Mixed`. Country = `UK`. Заполняю variables один раз.
+3. Жму `Create 6 batches` → в Data появляются 6 батчей `2026-05-14 | UK | UK Financial`, ..., `2026-05-14 | UK | UK Mixed`.
+4. Step 2: вижу 6 карточек с `batch_id` и `Copy prompt` на каждой + `Copy all prompts` сверху.
+5. Codex отрабатывает по каждому промпту → жму `Pull from my Supabase` на нужной карточке → 209/119/... строк импортируются ровно в свой батч.
+6. Toggle off → диалог работает абсолютно как сейчас.
