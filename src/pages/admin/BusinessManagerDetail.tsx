@@ -31,6 +31,8 @@ type WhatsAppNumber = {
   messaging_limit: string | null;
   business_manager_id: string | null;
   workspace_id: string | null;
+  provided_by: string | null;
+  assigned_ref: string | null;
 };
 
 const fetchBm = async (id: string) => {
