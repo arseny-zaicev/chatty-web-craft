@@ -808,7 +808,7 @@ function TruncCell({ value, max = 140 }: { value: string | null; max?: number })
 function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
-  const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
+  const attribution = getAttribution(r);
   return (
     <TableRow className="h-12 [&>td]:align-middle [&>td]:whitespace-nowrap [&>td]:py-0 [&>td]:h-12 [&>td]:leading-none">
       <TableCell className="font-mono text-xs whitespace-nowrap">
