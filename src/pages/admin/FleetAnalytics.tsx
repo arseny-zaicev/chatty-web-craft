@@ -173,7 +173,24 @@ const fetchAnalytics = async (period: Period) => {
   }
 
   const totalCap = numberRows.reduce((s, n) => s + n.cap, 0);
-  const activeNumbers = numberRows.filter((n) => isActiveStatus(n.status)).length;
+  const activeNumbers = numberRows.filter((n) => isCountedStatus(n.status)).length;
+
+  // Fleet composition breakdown
+  const byStatus: Record<string, number> = {};
+  const byCountryCounted: Record<string, number> = {};
+  const stockByCountry: Record<string, number> = {};
+  const excluded: Record<string, number> = {};
+  for (const n of numberRows) {
+    const st = (n.status || "unknown").toLowerCase();
+    if (isCountedStatus(n.status)) {
+      byStatus[st] = (byStatus[st] ?? 0) + 1;
+      byCountryCounted[n.country_code] = (byCountryCounted[n.country_code] ?? 0) + 1;
+      if (st === "stock") stockByCountry[n.country_code] = (stockByCountry[n.country_code] ?? 0) + 1;
+    } else {
+      excluded[st] = (excluded[st] ?? 0) + 1;
+    }
+  }
+  const fleetBreakdown = { byStatus, byCountry: byCountryCounted, stockByCountry, excluded, total: numberRows.length, counted: activeNumbers };
 
   // Top errors
   const errorMap = new Map<string, number>();
