@@ -67,6 +67,8 @@ type Row = {
   quality_rating: string | null;
   last_health_sync_at: string | null;
   last_health_sync_error: string | null;
+  business_manager_id: string | null;
+  bm_name: string | null;
 };
 
 type ActiveCampaign = {
