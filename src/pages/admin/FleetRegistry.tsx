@@ -1088,6 +1088,36 @@ function AddNumberDrawer({
         dnPatch.display_name_checked_at = new Date().toISOString();
       }
 
+      // Resolve Business Manager: pick existing, create new, or none.
+      let resolvedBmId: string | null = null;
+      let resolvedBmName: string | null = null;
+      if (bmId === "__new__") {
+        const newName = bmNewName.trim();
+        if (!newName) throw new Error("Enter a Business Manager name or pick an existing one");
+        // Reuse if a BM with this name already exists for this workspace (or globally if unassigned).
+        const existingBm = bms.find(
+          (b) => b.name.toLowerCase() === newName.toLowerCase()
+            && (b.workspace_id ?? null) === (targetWs ?? null)
+        );
+        if (existingBm) {
+          resolvedBmId = existingBm.id;
+          resolvedBmName = existingBm.name;
+        } else {
+          const { data: bmIns, error: bmErr } = await supabase
+            .from("business_managers")
+            .insert({ name: newName, workspace_id: targetWs, created_by: auth.user.id, status: "warming" })
+            .select("id, name")
+            .single();
+          if (bmErr) throw bmErr;
+          resolvedBmId = bmIns.id;
+          resolvedBmName = bmIns.name;
+        }
+      } else if (bmId !== "__none__") {
+        const found = bms.find((b) => b.id === bmId);
+        resolvedBmId = bmId;
+        resolvedBmName = found?.name ?? null;
+      }
+
       const payload = {
         phone_number: cleanPhone,
         label: appName || null,
@@ -1102,6 +1132,8 @@ function AddNumberDrawer({
         assigned_ref: sourceKind === "own" ? null : (assignedRef.trim() || null),
         usage_type: usage,
         webhook_connected: webhookConnected,
+        business_manager_id: resolvedBmId,
+        bm_name: resolvedBmName,
         ...dnPatch,
       };
 
