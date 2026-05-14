@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, ArrowLeft, Building2, Plus, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { getAttribution } from "@/lib/numberAttribution";
 
 const STATUSES = ["warming", "active", "paused", "restricted", "blocked", "retired"] as const;
 
@@ -30,6 +31,8 @@ type WhatsAppNumber = {
   messaging_limit: string | null;
   business_manager_id: string | null;
   workspace_id: string | null;
+  provided_by: string | null;
+  assigned_ref: string | null;
 };
 
 const fetchBm = async (id: string) => {
@@ -37,8 +40,8 @@ const fetchBm = async (id: string) => {
   if (error) throw error;
   if (!bm) throw new Error("Not found");
   const [{ data: linked }, { data: pool }, { data: events }, { data: ws }] = await Promise.all([
-    supabase.from("whatsapp_numbers").select("id, phone_number, display_name, status, messaging_limit, business_manager_id, workspace_id").eq("business_manager_id", id),
-    supabase.from("whatsapp_numbers").select("id, phone_number, display_name, status, messaging_limit, business_manager_id, workspace_id").eq("workspace_id", bm.workspace_id).is("business_manager_id", null),
+    supabase.from("whatsapp_numbers").select("id, phone_number, display_name, status, messaging_limit, business_manager_id, workspace_id, provided_by, assigned_ref").eq("business_manager_id", id),
+    supabase.from("whatsapp_numbers").select("id, phone_number, display_name, status, messaging_limit, business_manager_id, workspace_id, provided_by, assigned_ref").eq("workspace_id", bm.workspace_id).is("business_manager_id", null),
     supabase.from("business_manager_warmup_events").select("*").eq("business_manager_id", id).order("created_at", { ascending: false }).limit(50),
     supabase.from("workspaces").select("id, name").eq("id", bm.workspace_id).maybeSingle(),
   ]);
@@ -128,6 +131,21 @@ const BusinessManagerDetail = () => {
     };
   }, [data?.linked]);
 
+  const sourceBreakdown = useMemo(() => {
+    const nums = data?.linked ?? [];
+    let own = 0;
+    const byRef = new Map<string, number>();
+    for (const n of nums) {
+      const a = getAttribution(n);
+      if (a.kind === "own") own++;
+      else byRef.set(a.ref, (byRef.get(a.ref) || 0) + 1);
+    }
+    const parts: string[] = [];
+    if (own > 0) parts.push(`${own} Own`);
+    for (const [ref, count] of byRef) parts.push(`${count} via ${ref}`);
+    return parts.join(" · ");
+  }, [data?.linked]);
+
   if (isLoading || !data) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   }
@@ -212,11 +230,15 @@ const BusinessManagerDetail = () => {
             </div>
           </CardHeader>
           <CardContent>
+            {sourceBreakdown && (
+              <div className="text-xs text-muted-foreground mb-3">Sources: {sourceBreakdown}</div>
+            )}
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Phone</TableHead>
                   <TableHead>Display name</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Messaging limit</TableHead>
                   <TableHead></TableHead>
@@ -224,11 +246,23 @@ const BusinessManagerDetail = () => {
               </TableHeader>
               <TableBody>
                 {data.linked.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No numbers attached yet</TableCell></TableRow>
-                ) : data.linked.map((n) => (
+                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No numbers attached yet</TableCell></TableRow>
+                ) : data.linked.map((n) => {
+                  const a = getAttribution(n);
+                  return (
                   <TableRow key={n.id}>
                     <TableCell className="font-mono text-sm">+{n.phone_number}</TableCell>
                     <TableCell>{n.display_name ?? "—"}</TableCell>
+                    <TableCell>
+                      {a.kind === "own" ? (
+                        <Badge variant="outline" className="text-[10px]">Own</Badge>
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 w-fit">Ref: {a.ref}</Badge>
+                          {a.providedBy && <span className="text-[10px] text-muted-foreground">via {a.providedBy}</span>}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell><Badge variant={statusVariant(n.status)}>{n.status}</Badge></TableCell>
                     <TableCell>{n.messaging_limit ?? "—"}</TableCell>
                     <TableCell className="text-right">
@@ -237,7 +271,8 @@ const BusinessManagerDetail = () => {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
             {attachOpen && (

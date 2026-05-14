@@ -18,6 +18,7 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { geoFromPhone } from "@/lib/launchData";
 import FleetTemplatesHealth from "@/components/admin/FleetTemplatesHealth";
+import { getAttribution, SELF_PROVIDER } from "@/lib/numberAttribution";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 
@@ -807,7 +808,7 @@ function TruncCell({ value, max = 140 }: { value: string | null; max?: number })
 function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatch, onRecheck, recheckingId, hideClientCol }: { r: Row; workspaces: WS[]; hideClientCol?: boolean } & RowActions) {
   const auth = r.provider_api_key && r.provider_app_id ? "ready" : "missing";
   const wh = r.webhook_connected ? "connected" : "missing";
-  const providedBy = [r.provided_by, r.assigned_ref ? `Ref ${r.assigned_ref}` : null].filter(Boolean).join(" | ") || r.partner_source;
+  const attribution = getAttribution(r);
   return (
     <TableRow className="h-12 [&>td]:align-middle [&>td]:whitespace-nowrap [&>td]:py-0 [&>td]:h-12 [&>td]:leading-none">
       <TableCell className="font-mono text-xs whitespace-nowrap">
@@ -857,7 +858,16 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
           : <span className="text-xs text-muted-foreground">—</span>}
       </TableCell>
       <TableCell className="text-xs">{r.usage_type}</TableCell>
-      <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
+      <TableCell className="text-xs">
+        {attribution.kind === "own" ? (
+          <Badge variant="outline" className="text-[10px]">Own</Badge>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 w-fit">Ref: {attribution.ref}</Badge>
+            {attribution.providedBy && <span className="text-[10px] text-muted-foreground">via {attribution.providedBy}</span>}
+          </div>
+        )}
+      </TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
       <TableCell>
         <div className="flex flex-col gap-0.5">
@@ -970,6 +980,7 @@ function AddNumberDrawer({
   const [messagingLimit, setMessagingLimit] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("__unassigned__");
   const [usage, setUsage] = useState<Usage>("both");
+  const [sourceKind, setSourceKind] = useState<"own" | "referred">("own");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("stock");
@@ -996,6 +1007,7 @@ function AddNumberDrawer({
     setPhone(""); setAppName(""); setDisplayName(""); setProfileAvatar("");
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
+    setSourceKind("own");
     setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
     setWebhookConnected(false);
   };
@@ -1013,8 +1025,9 @@ function AddNumberDrawer({
       setMessagingLimit(editing.messaging_limit || "");
       setWorkspaceId(editing.workspace_id ?? "__unassigned__");
       setUsage(editing.usage_type);
-      setProvidedBy(editing.provided_by || "");
+      setProvidedBy(editing.provided_by && editing.provided_by.toLowerCase() !== SELF_PROVIDER.toLowerCase() ? editing.provided_by : "");
       setAssignedRef(editing.assigned_ref || "");
+      setSourceKind(getAttribution(editing).kind === "own" ? "own" : "referred");
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
       setWebhookConnected(Boolean(editing.webhook_connected));
@@ -1063,8 +1076,8 @@ function AddNumberDrawer({
         provider_waba_id: wabaId || null,
         profile_avatar: profileAvatar || null,
         messaging_limit: messagingLimit || null,
-        provided_by: providedBy || null,
-        assigned_ref: assignedRef || null,
+        provided_by: sourceKind === "own" ? SELF_PROVIDER : (providedBy.trim() || null),
+        assigned_ref: sourceKind === "own" ? null : (assignedRef.trim() || null),
         usage_type: usage,
         webhook_connected: webhookConnected,
         ...dnPatch,
@@ -1246,19 +1259,31 @@ function AddNumberDrawer({
             </Select>
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Provided by">
-              <Input value={providedBy} onChange={(e) => setProvidedBy(e.target.value)} placeholder="Kartik" />
-            </Field>
-            <Field label="Ref">
-              <Input value={assignedRef} onChange={(e) => setAssignedRef(e.target.value)} placeholder="Nitish" />
-            </Field>
-          </div>
+          <Field label="Source">
+            <Select value={sourceKind} onValueChange={(v) => setSourceKind(v as "own" | "referred")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="own">Own account (no referral)</SelectItem>
+                <SelectItem value="referred">Referred by partner</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {sourceKind === "referred" && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Provided by">
+                <Input value={providedBy} onChange={(e) => setProvidedBy(e.target.value)} placeholder="Kartik" />
+              </Field>
+              <Field label="Ref (required)">
+                <Input value={assignedRef} onChange={(e) => setAssignedRef(e.target.value)} placeholder="Nitish" />
+              </Field>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim())}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
             Save
           </Button>

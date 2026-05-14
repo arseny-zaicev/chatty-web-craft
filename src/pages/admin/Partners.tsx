@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Plus, ArrowLeft, Search } from "lucide-react";
 import { toast } from "sonner";
 import { fetchPartnerMetrics } from "@/lib/metrics";
+import { getAttribution } from "@/lib/numberAttribution";
 
 type Partner = {
   id: string; name: string; contact_email: string | null; kind: string;
@@ -76,6 +77,25 @@ export default function Partners() {
     queryFn: () => fetchPartnerMetrics(partnerIds),
   });
 
+  // Referral attribution coming from whatsapp_numbers (Provided by / Ref / Own).
+  const { data: numberAttr } = useQuery({
+    queryKey: ["admin", "partners", "number-attribution"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("whatsapp_numbers")
+        .select("id, provided_by, assigned_ref");
+      if (error) throw error;
+      let own = 0;
+      const byRef = new Map<string, number>();
+      (data || []).forEach((n: any) => {
+        const a = getAttribution(n);
+        if (a.kind === "own") own++;
+        else byRef.set(a.ref.toLowerCase(), (byRef.get(a.ref.toLowerCase()) || 0) + 1);
+      });
+      return { own, byRef };
+    },
+  });
+
   const rows = useMemo(() => {
     return (partners || []).filter((p) => {
       if (refFilter === "with" && !p.referrer_partner_id) return false;
@@ -112,6 +132,23 @@ export default function Partners() {
           </Select>
         </div>
 
+        {numberAttr && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Number sources (from Fleet)</CardTitle></CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-2 text-xs">
+              <Badge variant="outline" className="text-[11px]">Own: {numberAttr.own}</Badge>
+              {Array.from(numberAttr.byRef.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(([ref, count]) => (
+                  <Badge key={ref} variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
+                    via {ref}: {count}
+                  </Badge>
+                ))}
+              {numberAttr.byRef.size === 0 && <span className="text-muted-foreground">No referred numbers yet.</span>}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader><CardTitle>All partners</CardTitle></CardHeader>
           <CardContent>
@@ -122,6 +159,7 @@ export default function Partners() {
                   <TableHead>Manager</TableHead>
                   <TableHead>BMs</TableHead>
                   <TableHead>Numbers</TableHead>
+                  <TableHead>Referred #</TableHead>
                   <TableHead>Sent today</TableHead>
                   <TableHead>Sent all-time</TableHead>
                   <TableHead>Partner rate</TableHead>
@@ -135,6 +173,7 @@ export default function Partners() {
                     const bms = agg?.bmsByPartner.get(p.id);
                     const bmIds = bms ? Array.from(bms) : [];
                     const numCount = bmIds.reduce((s, id) => s + (agg?.numsPerBm.get(id) || 0), 0);
+                    const referredCount = numberAttr?.byRef.get(p.name.toLowerCase()) || 0;
                     const unpaid = agg?.unpaidByPartner.get(p.id) || 0;
                     const refName = partnerName(p.referrer_partner_id);
                     const pm = partnerMetrics?.get(p.id);
@@ -149,6 +188,11 @@ export default function Partners() {
                         </TableCell>
                         <TableCell>{bms?.size || 0}</TableCell>
                         <TableCell>{numCount}</TableCell>
+                        <TableCell className="tabular-nums">
+                          {referredCount > 0
+                            ? <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30">{referredCount}</Badge>
+                            : <span className="text-muted-foreground">-</span>}
+                        </TableCell>
                         <TableCell className="tabular-nums">{(pm?.sent_today ?? 0).toLocaleString()}</TableCell>
                         <TableCell className="tabular-nums text-muted-foreground">{(pm?.sent_alltime ?? 0).toLocaleString()}</TableCell>
                         <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
@@ -166,7 +210,7 @@ export default function Partners() {
                     );
                   })}
                   {!rows.length && (
-                    <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                       No partners.
                     </TableCell></TableRow>
                   )}
