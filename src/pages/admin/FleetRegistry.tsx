@@ -980,6 +980,7 @@ function AddNumberDrawer({
   const [messagingLimit, setMessagingLimit] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("__unassigned__");
   const [usage, setUsage] = useState<Usage>("both");
+  const [sourceKind, setSourceKind] = useState<"own" | "referred">("own");
   const [providedBy, setProvidedBy] = useState("");
   const [assignedRef, setAssignedRef] = useState("");
   const [status, setStatus] = useState<Status>("stock");
