@@ -292,34 +292,77 @@ function PresetsSection({
     setNameTouched(true);
   };
 
+  const parsedAudiences = useMemo(
+    () => multiAudiences.split("\n").map((s) => s.trim()).filter(Boolean),
+    [multiAudiences],
+  );
+
   const submitBatch = async () => {
-    if (!creating || !batchName.trim()) { toast.error("Batch name required"); return; }
+    if (!creating) return;
     if (!staticOk) { toast.error("Fill in every same-for-everyone variable below"); return; }
+
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) { toast.error("Not authenticated"); return; }
+
+    const staticHeader = Object.keys(staticValues).length > 0
+      ? `__static_values__=${JSON.stringify(staticValues)}\n`
+      : "";
+    const finalNotes = `${staticHeader}${batchNotes.trim()}`.trim() || null;
+
+    const baseRow = {
+      workspace_id: workspaceId,
+      user_id: u.user.id,
+      country: batchCountry.trim() || null,
+      campaign_type: creating.campaignType,
+      copy_profile: creating.id,
+      notes: finalNotes,
+      variable_schema: creating.variables.map((v) => v.key),
+      source_filename: null,
+      prep_profile_id: null,
+      is_launch_ready: false,
+      derived_variables_preview: [],
+      column_mapping: {},
+    };
+
+    if (multiMode) {
+      if (parsedAudiences.length === 0) { toast.error("Add at least one audience"); return; }
+      const names = parsedAudiences.map((a) => buildBatchName(batchCountry, a));
+      const dupe = names.find((n, i) => names.findIndex((m) => m.toLowerCase() === n.toLowerCase()) !== i);
+      if (dupe) { toast.error(`Duplicate batch name: ${dupe}`); return; }
+
+      setBusy(true);
+      const created: Array<{ id: string; name: string; audience: string }> = [];
+      const failed: Array<{ audience: string; reason: string }> = [];
+      try {
+        for (let i = 0; i < parsedAudiences.length; i++) {
+          const aud = parsedAudiences[i];
+          const name = names[i];
+          const { data, error } = await (supabase.from("audience_batches") as any)
+            .insert({ ...baseRow, name })
+            .select("id").single();
+          if (error || !data) {
+            failed.push({ audience: aud, reason: error?.message ?? "insert failed" });
+          } else {
+            created.push({ id: data.id, name, audience: aud });
+          }
+        }
+        setCreatedBatches(created);
+        if (created.length > 0) toast.success(`Created ${created.length} of ${parsedAudiences.length} batches`);
+        if (failed.length > 0) toast.error(`Failed: ${failed.map((f) => f.audience).join(", ")}`);
+        qc.invalidateQueries({ queryKey: audienceKeys.batches(workspaceId) });
+        qc.invalidateQueries({ queryKey: audienceKeys.stats(workspaceId) });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (!batchName.trim()) { toast.error("Batch name required"); return; }
     setBusy(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not authenticated");
-      // Persist staticValues so Launch QA can verify each row matches.
-      // Stored in notes field as a header line (no schema change needed).
-      const staticHeader = Object.keys(staticValues).length > 0
-        ? `__static_values__=${JSON.stringify(staticValues)}\n`
-        : "";
-      const finalNotes = `${staticHeader}${batchNotes.trim()}`.trim() || null;
-      const { data, error } = await (supabase.from("audience_batches") as any).insert({
-        workspace_id: workspaceId,
-        user_id: u.user.id,
-        name: batchName.trim(),
-        country: batchCountry.trim() || null,
-        campaign_type: creating.campaignType,
-        copy_profile: creating.id,
-        notes: finalNotes,
-        variable_schema: creating.variables.map((v) => v.key),
-        source_filename: null,
-        prep_profile_id: null,
-        is_launch_ready: false,
-        derived_variables_preview: [],
-        column_mapping: {},
-      }).select("id").single();
+      const { data, error } = await (supabase.from("audience_batches") as any)
+        .insert({ ...baseRow, name: batchName.trim() })
+        .select("id").single();
       if (error || !data) throw error ?? new Error("Failed to create batch");
       setCreatedBatchId(data.id);
       toast.success("Batch created - copy the prompt below");
@@ -329,6 +372,40 @@ function PresetsSection({
       toast.error(e instanceof Error ? e.message : "Failed to create batch");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const pullFromPersonal = async (batchId: string) => {
+    setPullingId(batchId);
+    setPulling(true);
+    const tid = toast.loading("Pulling rows from your Supabase... (can take 30-60s for big batches)");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/import-audience-from-personal`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ batch_id: batchId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      toast.dismiss(tid);
+      if (!res.ok) {
+        toast.error(`Pull failed: ${json?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      toast.success(`Imported ${json?.inserted ?? 0} rows from your Supabase`);
+      qc.invalidateQueries({ queryKey: audienceKeys.batches(workspaceId) });
+      qc.invalidateQueries({ queryKey: audienceKeys.stats(workspaceId) });
+    } catch (e: any) {
+      toast.dismiss(tid);
+      toast.error(`Pull failed: ${e?.message ?? String(e)}`);
+    } finally {
+      setPulling(false);
+      setPullingId(null);
     }
   };
 
