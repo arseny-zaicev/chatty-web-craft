@@ -31,6 +31,15 @@ type NumberRow = {
   status: string;
   workspace_id: string | null;
   workspace_name: string;
+  country_code: string | null;
+};
+
+const EXCLUDED_STATUSES = new Set(["banned", "restricted", "blocked"]);
+const isCountedStatus = (s: string) => !EXCLUDED_STATUSES.has((s || "").toLowerCase());
+const normCountry = (c: string | null | undefined) => {
+  const v = (c || "").trim().toUpperCase();
+  if (!v || v === "--" || v === "-") return "Unknown";
+  return v;
 };
 
 type CampaignRow = {
@@ -48,7 +57,7 @@ type CampaignRow = {
 type Stats = { sent: number; delivered: number; read: number; failed: number; lastSent: string | null };
 const newStats = (): Stats => ({ sent: 0, delivered: 0, read: 0, failed: 0, lastSent: null });
 
-const isActiveStatus = (s: string) => s === "active";
+
 
 const fetchAnalytics = async (period: Period) => {
   const periodDays = parseInt(period);
@@ -61,7 +70,7 @@ const fetchAnalytics = async (period: Period) => {
         .gte("received_at", sinceIso)
         .order("received_at", { ascending: false })
         .limit(50000),
-      supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, status, workspace_id"),
+      supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, status, workspace_id, country_code, daily_send_limit"),
       supabase.from("workspaces").select("id, name, delivered_rate_usd"),
       supabase.from("campaigns").select("id, name, status, total_recipients, sent_count, failed_count, created_at, workspace_id")
         .gte("created_at", sinceIso)
@@ -98,7 +107,9 @@ const fetchAnalytics = async (period: Period) => {
 
   const numberRows = (numbers ?? []).map((n) => {
     const stats = perNumber.get(n.id) ?? newStats();
-    const cap = isActiveStatus(n.status) ? DAILY_CAP_PER_NUMBER * periodDays : 0;
+    const dailyLimit = Number((n as any).daily_send_limit) || DAILY_CAP_PER_NUMBER;
+    const counted = isCountedStatus(n.status);
+    const cap = counted ? dailyLimit * periodDays : 0;
     const rs = replyByNumber.get(n.id) ?? { sent_convos: 0, replied_convos: 0 };
     return {
       id: n.id,
@@ -108,6 +119,7 @@ const fetchAnalytics = async (period: Period) => {
       status: n.status,
       workspace_id: n.workspace_id,
       workspace_name: n.workspace_id ? (wsMap.get(n.workspace_id)?.name ?? "—") : "Unassigned",
+      country_code: normCountry((n as any).country_code),
       cap,
       sent_convos: rs.sent_convos,
       replied_convos: rs.replied_convos,
@@ -127,7 +139,7 @@ const fetchAnalytics = async (period: Period) => {
       perClient.set(n.workspace_id, agg);
     }
     agg.numbers += 1;
-    if (isActiveStatus(n.status)) agg.activeNumbers += 1;
+    if (isCountedStatus(n.status)) agg.activeNumbers += 1;
     agg.cap += n.cap;
     agg.sent += n.sent;
     agg.delivered += n.delivered;
@@ -161,7 +173,24 @@ const fetchAnalytics = async (period: Period) => {
   }
 
   const totalCap = numberRows.reduce((s, n) => s + n.cap, 0);
-  const activeNumbers = numberRows.filter((n) => isActiveStatus(n.status)).length;
+  const activeNumbers = numberRows.filter((n) => isCountedStatus(n.status)).length;
+
+  // Fleet composition breakdown
+  const byStatus: Record<string, number> = {};
+  const byCountryCounted: Record<string, number> = {};
+  const stockByCountry: Record<string, number> = {};
+  const excluded: Record<string, number> = {};
+  for (const n of numberRows) {
+    const st = (n.status || "unknown").toLowerCase();
+    if (isCountedStatus(n.status)) {
+      byStatus[st] = (byStatus[st] ?? 0) + 1;
+      byCountryCounted[n.country_code] = (byCountryCounted[n.country_code] ?? 0) + 1;
+      if (st === "stock") stockByCountry[n.country_code] = (stockByCountry[n.country_code] ?? 0) + 1;
+    } else {
+      excluded[st] = (excluded[st] ?? 0) + 1;
+    }
+  }
+  const fleetBreakdown = { byStatus, byCountry: byCountryCounted, stockByCountry, excluded, total: numberRows.length, counted: activeNumbers };
 
   // Top errors
   const errorMap = new Map<string, number>();
@@ -199,6 +228,7 @@ const fetchAnalytics = async (period: Period) => {
     topErrors,
     hourBuckets,
     campaigns: campaignRows,
+    fleetBreakdown,
   };
 };
 
@@ -252,7 +282,7 @@ export default function FleetAnalytics() {
           <h1 className="font-display text-lg font-semibold flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />Fleet Analytics
           </h1>
-          <span className="text-xs text-muted-foreground hidden md:inline">Capacity baseline {DAILY_CAP_PER_NUMBER}/number/day - blocked numbers excluded</span>
+          <span className="text-xs text-muted-foreground hidden md:inline">Capacity = sum of per-number daily limits · banned & restricted excluded</span>
           <div className="ml-auto flex gap-1">
             {(["1", "7", "30", "90"] as Period[]).map((p) => (
               <Button key={p} size="sm" variant={period === p ? "default" : "outline"} onClick={() => setPeriod(p)}>
@@ -266,7 +296,7 @@ export default function FleetAnalytics() {
       <main className="container mx-auto px-4 py-6 space-y-6">
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
-          <KpiCard icon={<Gauge className="w-4 h-4 text-muted-foreground" />} label="Capacity" value={t.capacity.toLocaleString()} sub={`${t.activeNumbers} active × ${DAILY_CAP_PER_NUMBER} × ${period === "1" ? "1d" : period + "d"}`} />
+          <KpiCard icon={<Gauge className="w-4 h-4 text-muted-foreground" />} label="Capacity" value={t.capacity.toLocaleString()} sub={`${t.activeNumbers} numbers × daily limits × ${period === "1" ? "1d" : period + "d"}`} />
           <KpiCard icon={<Send className="w-4 h-4" />} label="Sent" value={t.sent.toLocaleString()} sub={`${pct(t.sent, t.capacity)}% of capacity`} />
           <KpiCard icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />} label="Delivered" value={t.delivered.toLocaleString()} sub={`${pct(t.delivered, t.sent)}% of sent`} />
           <KpiCard icon={<AlertTriangle className="w-4 h-4 text-red-600" />} label="Failed" value={t.failed.toLocaleString()} sub={`${pct(t.failed, t.sent + t.failed)}% fail rate`} />
@@ -274,6 +304,53 @@ export default function FleetAnalytics() {
           <KpiCard icon={<Reply className="w-4 h-4 text-violet-600" />} label="Reply rate" value={t.sent_convos > 0 ? `${pct(t.replied_convos, t.sent_convos)}%` : "—"} sub={`${t.replied_convos.toLocaleString()} of ${t.sent_convos.toLocaleString()} chats`} />
           <KpiCard icon={<DollarSign className="w-4 h-4 text-amber-600" />} label="Revenue" value={fmtMoney(t.revenue)} sub={`delivered × client rate (${periodLabel})`} />
         </div>
+
+        {/* Fleet composition */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Fleet composition</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="text-muted-foreground mb-2">Counted in capacity ({data!.fleetBreakdown.counted}/{data!.fleetBreakdown.total})</div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {Object.entries(data!.fleetBreakdown.byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} variant="outline" className="text-[10px] capitalize">{k} {v}</Badge>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(data!.fleetBreakdown.byCountry).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} variant="secondary" className="text-[10px]">{k} {v}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground mb-2">Stock by country</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(data!.fleetBreakdown.stockByCountry).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} className="text-[10px] bg-amber-500/15 text-amber-700 border border-amber-500/30 hover:bg-amber-500/20">{k} {v}</Badge>
+                  ))}
+                  {Object.keys(data!.fleetBreakdown.stockByCountry).length === 0 && (
+                    <span className="text-muted-foreground italic">No numbers in stock.</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-muted-foreground mb-2">Excluded from capacity</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(data!.fleetBreakdown.excluded).sort((a,b)=>b[1]-a[1]).map(([k,v]) => (
+                    <Badge key={k} variant="outline" className="text-[10px] capitalize bg-red-500/10 text-red-700 border-red-500/30">{k} {v}</Badge>
+                  ))}
+                  {Object.keys(data!.fleetBreakdown.excluded).length === 0 && (
+                    <span className="text-muted-foreground italic">None.</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-2">banned & restricted are not counted in capacity</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Hour heatmap */}
         <Card>
