@@ -1259,19 +1259,31 @@ function AddNumberDrawer({
             </Select>
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Provided by">
-              <Input value={providedBy} onChange={(e) => setProvidedBy(e.target.value)} placeholder="Kartik" />
-            </Field>
-            <Field label="Ref">
-              <Input value={assignedRef} onChange={(e) => setAssignedRef(e.target.value)} placeholder="Nitish" />
-            </Field>
-          </div>
+          <Field label="Source">
+            <Select value={sourceKind} onValueChange={(v) => setSourceKind(v as "own" | "referred")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="own">Own account (no referral)</SelectItem>
+                <SelectItem value="referred">Referred by partner</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {sourceKind === "referred" && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Provided by">
+                <Input value={providedBy} onChange={(e) => setProvidedBy(e.target.value)} placeholder="Kartik" />
+              </Field>
+              <Field label="Ref (required)">
+                <Input value={assignedRef} onChange={(e) => setAssignedRef(e.target.value)} placeholder="Nitish" />
+              </Field>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim())}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
             Save
           </Button>
