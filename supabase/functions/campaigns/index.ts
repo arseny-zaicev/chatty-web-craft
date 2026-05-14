@@ -661,6 +661,11 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   // Promote draft -> scheduled/running. This single UPDATE fires the Slack
   // trigger with today_recipients_count, first_scheduled_at, recipient_country
   // already populated.
+  // Persist the actual date set used (which may have been auto-extended past
+  // the operator-selected dates when capacity required it). This keeps the
+  // day-rollover cron and the UI in sync with reality.
+  const actualDates = Array.from(new Set(rows.map((r: any) => String(r.scheduled_at).slice(0, 10)))).sort();
+
   const { error: promoteErr } = await admin
     .from("campaigns")
     .update({
@@ -668,6 +673,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       scheduled_start_at: firstScheduledAtIso,
       first_scheduled_at: firstScheduledAtIso,
       today_recipients_count: todayCount,
+      scheduled_dates: actualDates,
     })
     .eq("id", campaign.id);
   if (promoteErr) return json({ error: promoteErr.message }, 500);
