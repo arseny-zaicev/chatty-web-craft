@@ -198,7 +198,6 @@ export default function PartnerDetail() {
         <Tabs defaultValue="bms">
           <TabsList>
             <TabsTrigger value="bms">Business Managers</TabsTrigger>
-            <TabsTrigger value="numbers">Numbers</TabsTrigger>
             <TabsTrigger value="finance">Finance & Reports</TabsTrigger>
             <TabsTrigger value="payments">Payment History</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
