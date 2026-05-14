@@ -57,7 +57,7 @@ type CampaignRow = {
 type Stats = { sent: number; delivered: number; read: number; failed: number; lastSent: string | null };
 const newStats = (): Stats => ({ sent: 0, delivered: 0, read: 0, failed: 0, lastSent: null });
 
-const isActiveStatus = (s: string) => s === "active";
+
 
 const fetchAnalytics = async (period: Period) => {
   const periodDays = parseInt(period);
