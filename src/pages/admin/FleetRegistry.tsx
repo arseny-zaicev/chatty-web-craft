@@ -858,7 +858,16 @@ function FleetRowView({ r, workspaces, onReassign, onEdit, onDelete, onQuickPatc
           : <span className="text-xs text-muted-foreground">—</span>}
       </TableCell>
       <TableCell className="text-xs">{r.usage_type}</TableCell>
-      <TableCell className="text-xs">{providedBy ?? <span className="text-muted-foreground">—</span>}</TableCell>
+      <TableCell className="text-xs">
+        {attribution.kind === "own" ? (
+          <Badge variant="outline" className="text-[10px]">Own</Badge>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30 w-fit">Ref: {attribution.ref}</Badge>
+            {attribution.providedBy && <span className="text-[10px] text-muted-foreground">via {attribution.providedBy}</span>}
+          </div>
+        )}
+      </TableCell>
       <TableCell className="text-xs">{r.country_code ?? geoFromPhone(r.phone_number) ?? "—"}</TableCell>
       <TableCell>
         <div className="flex flex-col gap-0.5">
