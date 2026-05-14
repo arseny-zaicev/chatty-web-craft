@@ -67,6 +67,8 @@ type Row = {
   quality_rating: string | null;
   last_health_sync_at: string | null;
   last_health_sync_error: string | null;
+  business_manager_id: string | null;
+  bm_name: string | null;
 };
 
 type ActiveCampaign = {
@@ -186,6 +188,8 @@ const fetchFleet = async (): Promise<{ rows: Row[]; workspaces: WS[] }> => {
       quality_rating: (n.quality_rating as string) ?? null,
       last_health_sync_at: (n.last_health_sync_at as string) ?? null,
       last_health_sync_error: (n.last_health_sync_error as string) ?? null,
+      business_manager_id: (n.business_manager_id as string) ?? null,
+      bm_name: (n.bm_name as string) ?? null,
     };
   });
 
@@ -986,6 +990,21 @@ function AddNumberDrawer({
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
+  const [bmId, setBmId] = useState<string>("__none__"); // "__none__" | "__new__" | uuid
+  const [bmNewName, setBmNewName] = useState<string>("");
+
+  const bmsQuery = useQuery({
+    queryKey: ["fleet-bms"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("business_managers")
+        .select("id, name, workspace_id")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; workspace_id: string | null }>;
+    },
+  });
+  const bms = bmsQuery.data ?? [];
 
   const dupPhone = useMemo(() => {
     const clean = phone.replace(/[^\d]/g, "");
@@ -1010,6 +1029,7 @@ function AddNumberDrawer({
     setSourceKind("own");
     setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
     setWebhookConnected(false);
+    setBmId("__none__"); setBmNewName("");
   };
 
   useEffect(() => {
@@ -1031,6 +1051,8 @@ function AddNumberDrawer({
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
       setWebhookConnected(Boolean(editing.webhook_connected));
+      setBmId(editing.business_manager_id ?? "__none__");
+      setBmNewName("");
     } else {
       reset();
     }
@@ -1066,6 +1088,36 @@ function AddNumberDrawer({
         dnPatch.display_name_checked_at = new Date().toISOString();
       }
 
+      // Resolve Business Manager: pick existing, create new, or none.
+      let resolvedBmId: string | null = null;
+      let resolvedBmName: string | null = null;
+      if (bmId === "__new__") {
+        const newName = bmNewName.trim();
+        if (!newName) throw new Error("Enter a Business Manager name or pick an existing one");
+        // Reuse if a BM with this name already exists for this workspace (or globally if unassigned).
+        const existingBm = bms.find(
+          (b) => b.name.toLowerCase() === newName.toLowerCase()
+            && (b.workspace_id ?? null) === (targetWs ?? null)
+        );
+        if (existingBm) {
+          resolvedBmId = existingBm.id;
+          resolvedBmName = existingBm.name;
+        } else {
+          const { data: bmIns, error: bmErr } = await supabase
+            .from("business_managers")
+            .insert({ name: newName, workspace_id: targetWs, created_by: auth.user.id, status: "warming" })
+            .select("id, name")
+            .single();
+          if (bmErr) throw bmErr;
+          resolvedBmId = bmIns.id;
+          resolvedBmName = bmIns.name;
+        }
+      } else if (bmId !== "__none__") {
+        const found = bms.find((b) => b.id === bmId);
+        resolvedBmId = bmId;
+        resolvedBmName = found?.name ?? null;
+      }
+
       const payload = {
         phone_number: cleanPhone,
         label: appName || null,
@@ -1080,6 +1132,8 @@ function AddNumberDrawer({
         assigned_ref: sourceKind === "own" ? null : (assignedRef.trim() || null),
         usage_type: usage,
         webhook_connected: webhookConnected,
+        business_manager_id: resolvedBmId,
+        bm_name: resolvedBmName,
         ...dnPatch,
       };
 
@@ -1217,6 +1271,30 @@ function AddNumberDrawer({
             <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
           </Field>
 
+          <Field label="Business Manager">
+            <Select value={bmId} onValueChange={(v) => { setBmId(v); if (v !== "__new__") setBmNewName(""); }}>
+              <SelectTrigger><SelectValue placeholder="Select BM" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No BM (assign later)</SelectItem>
+                {bms.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+                <SelectItem value="__new__">+ Create new BM…</SelectItem>
+              </SelectContent>
+            </Select>
+            {bmId === "__new__" && (
+              <Input
+                className="mt-2"
+                value={bmNewName}
+                onChange={(e) => setBmNewName(e.target.value)}
+                placeholder="New BM name (e.g. Iskra Main BM)"
+              />
+            )}
+            <div className="text-[11px] text-muted-foreground italic mt-1">
+              Pick or create the BM here so the number is linked right away. Warmup dates and other BM details can be filled later in the Business Managers section.
+            </div>
+          </Field>
+
           <Field label="Allocate to client">
             <Select value={workspaceId} onValueChange={setWorkspaceId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1283,7 +1361,7 @@ function AddNumberDrawer({
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim())}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim()) || (bmId === "__new__" && !bmNewName.trim())}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
             Save
           </Button>
