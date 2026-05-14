@@ -990,6 +990,21 @@ function AddNumberDrawer({
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
+  const [bmId, setBmId] = useState<string>("__none__"); // "__none__" | "__new__" | uuid
+  const [bmNewName, setBmNewName] = useState<string>("");
+
+  const bmsQuery = useQuery({
+    queryKey: ["fleet-bms"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("business_managers")
+        .select("id, name, workspace_id")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; workspace_id: string | null }>;
+    },
+  });
+  const bms = bmsQuery.data ?? [];
 
   const dupPhone = useMemo(() => {
     const clean = phone.replace(/[^\d]/g, "");
