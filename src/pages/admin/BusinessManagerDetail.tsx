@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, ArrowLeft, Building2, Plus, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { getAttribution } from "@/lib/numberAttribution";
 
 const STATUSES = ["warming", "active", "paused", "restricted", "blocked", "retired"] as const;
 
