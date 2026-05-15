@@ -443,7 +443,7 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={() => invite.mutate()} disabled={!email.trim() || invite.isPending}>
+            <Button onClick={() => invite.mutate({})} disabled={!email.trim() || invite.isPending}>
               {invite.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Send invite
             </Button>
           </DialogFooter>
