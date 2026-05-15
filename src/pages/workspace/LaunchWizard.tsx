@@ -752,6 +752,9 @@ export default function LaunchWizard() {
           respect_recipient_tz: respectTz,
           pipeline_id: pipelineId || null,
           per_number_quota: perNumberQuota,
+          dispatch_mode: isMarketing ? "marketing_instant" : "paced",
+          max_inflight_per_number: 5,
+          max_inflight_per_campaign: 50,
         },
       });
 

@@ -411,6 +411,47 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_dispatch_events: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json | null
+          reason: string | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          reason?: string | null
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          reason?: string | null
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_dispatch_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_insights: {
         Row: {
           campaign_id: string
@@ -562,15 +603,25 @@ export type Database = {
           created_at: string
           delay_max_seconds: number
           delay_min_seconds: number
+          dispatch_mode: string
           failed_count: number
           first_scheduled_at: string | null
           id: string
+          kill_switch_at: string | null
+          kill_switch_by: string | null
+          kill_switch_reason: string | null
           kind: string
           last_day_completed_date: string | null
+          max_inflight_per_campaign: number
+          max_inflight_per_number: number
           name: string
           parent_campaign_id: string | null
           per_number_quota: number
           pipeline_id: string | null
+          prepared_at: string | null
+          prepared_expires_at: string | null
+          prepared_report: Json | null
+          prepared_signature: string | null
           recipient_country: string | null
           recurrence: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at: string | null
@@ -596,15 +647,25 @@ export type Database = {
           created_at?: string
           delay_max_seconds?: number
           delay_min_seconds?: number
+          dispatch_mode?: string
           failed_count?: number
           first_scheduled_at?: string | null
           id?: string
+          kill_switch_at?: string | null
+          kill_switch_by?: string | null
+          kill_switch_reason?: string | null
           kind?: string
           last_day_completed_date?: string | null
+          max_inflight_per_campaign?: number
+          max_inflight_per_number?: number
           name: string
           parent_campaign_id?: string | null
           per_number_quota?: number
           pipeline_id?: string | null
+          prepared_at?: string | null
+          prepared_expires_at?: string | null
+          prepared_report?: Json | null
+          prepared_signature?: string | null
           recipient_country?: string | null
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
@@ -630,15 +691,25 @@ export type Database = {
           created_at?: string
           delay_max_seconds?: number
           delay_min_seconds?: number
+          dispatch_mode?: string
           failed_count?: number
           first_scheduled_at?: string | null
           id?: string
+          kill_switch_at?: string | null
+          kill_switch_by?: string | null
+          kill_switch_reason?: string | null
           kind?: string
           last_day_completed_date?: string | null
+          max_inflight_per_campaign?: number
+          max_inflight_per_number?: number
           name?: string
           parent_campaign_id?: string | null
           per_number_quota?: number
           pipeline_id?: string | null
+          prepared_at?: string | null
+          prepared_expires_at?: string | null
+          prepared_report?: Json | null
+          prepared_signature?: string | null
           recipient_country?: string | null
           recurrence?: Database["public"]["Enums"]["campaign_recurrence"]
           recurrence_end_at?: string | null
@@ -2051,6 +2122,48 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_backoff: {
+        Row: {
+          attempt_count: number
+          last_error: string | null
+          last_status: number | null
+          retry_after: string
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          last_error?: string | null
+          last_status?: number | null
+          retry_after: string
+          updated_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          attempt_count?: number
+          last_error?: string | null
+          last_status?: number | null
+          retry_after?: string
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_backoff_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_number_usage_summary"
+            referencedColumns: ["number_id"]
+          },
+          {
+            foreignKeyName: "provider_backoff_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roadmap_items: {
         Row: {
           created_at: string
@@ -2274,6 +2387,27 @@ export type Database = {
         }
         Relationships: []
       }
+      system_flags: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       system_heartbeats: {
         Row: {
           last_run_at: string
@@ -2473,6 +2607,8 @@ export type Database = {
           messaging_limit: string | null
           notes: string | null
           partner_source: string | null
+          paused_at: string | null
+          paused_reason: string | null
           phone_number: string
           profile_avatar: string | null
           provided_by: string | null
@@ -2511,6 +2647,8 @@ export type Database = {
           messaging_limit?: string | null
           notes?: string | null
           partner_source?: string | null
+          paused_at?: string | null
+          paused_reason?: string | null
           phone_number: string
           profile_avatar?: string | null
           provided_by?: string | null
@@ -2549,6 +2687,8 @@ export type Database = {
           messaging_limit?: string | null
           notes?: string | null
           partner_source?: string | null
+          paused_at?: string | null
+          paused_reason?: string | null
           phone_number?: string
           profile_avatar?: string | null
           provided_by?: string | null

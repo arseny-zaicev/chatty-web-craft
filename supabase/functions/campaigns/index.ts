@@ -306,9 +306,44 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const scheduledDates: string[] = Array.isArray(body.scheduled_dates) ? body.scheduled_dates.filter((d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
   const windowStart: string = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : "09:00";
   const windowEnd: string = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : "18:00";
-  const isBlastLaunch = minDelay === 0 && maxDelay === 0;
+  const dispatchMode: "paced" | "marketing_instant" =
+    body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
+  // marketing_instant implies blast scheduling regardless of incoming delays.
+  const isBlastLaunch = dispatchMode === "marketing_instant" || (minDelay === 0 && maxDelay === 0);
+  const maxInflightPerNumber = Math.max(1, Math.min(50, Math.floor(Number(body.max_inflight_per_number ?? 5))));
+  const maxInflightPerCampaign = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
   const respectTz: boolean = body.respect_recipient_tz !== false;
   const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
+
+  // Snapshot enforcement: if a prepared snapshot exists for this campaign id, validate freshness.
+  // Standalone launch (no campaign_id) goes through fresh allocation below.
+  const reuseCampaignId: string | null =
+    typeof body.campaign_id === "string" && uuidRegex.test(body.campaign_id) ? body.campaign_id : null;
+  if (reuseCampaignId) {
+    const { data: existing } = await admin
+      .from("campaigns")
+      .select("prepared_at, prepared_expires_at, prepared_signature, kill_switch_at, dispatch_mode")
+      .eq("id", reuseCampaignId)
+      .maybeSingle();
+    if (existing) {
+      if (existing.kill_switch_at) {
+        return json({ error: "Kill switch is engaged for this campaign", code: "kill_switch_on" }, 409);
+      }
+      if (!existing.prepared_at || !existing.prepared_expires_at) {
+        return json({ error: "Snapshot not prepared. Call action=prepare first.", code: "must_prepare" }, 409);
+      }
+      if (new Date(existing.prepared_expires_at).getTime() < Date.now()) {
+        return json({ error: "Prepared snapshot expired. Re-prepare.", code: "stale_snapshot", must_reprepare: true }, 409);
+      }
+    }
+  }
+  // Global instant kill switch.
+  if (dispatchMode === "marketing_instant") {
+    const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
+    if (flag && flag.value === false) {
+      return json({ error: "Marketing instant mode is globally disabled", code: "instant_mode_disabled" }, 409);
+    }
+  }
 
   if (!name || rawNumbers.length === 0) {
     return json({ error: "Campaign name and at least one number+template are required" }, 400);
@@ -506,6 +541,9 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       per_number_quota: perNumberQuota,
       allocated_capacity: allocatedCapacity,
       audience_total: audienceTotalRequested,
+      dispatch_mode: dispatchMode,
+      max_inflight_per_number: maxInflightPerNumber,
+      max_inflight_per_campaign: maxInflightPerCampaign,
     })
     .select("id")
     .single();
@@ -612,13 +650,19 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
         const earliest = Math.max(startUtc, Date.now() + 5_000);
         const span = Math.max(60_000, endUtc - earliest);
         if (isBlastLaunch) {
+          // marketing_instant: every recipient scheduled at the local-window start
+          // (or now if window is open). NO 1s/recipient stagger — backpressure (per-number
+          // and per-campaign inflight caps + provider backoff) controls the actual rate.
+          // Note: this is per-recipient TZ — recipients in different timezones get
+          // different scheduled_at values aligned to their own local window.
           const blastStart = Math.max(startUtc, Date.now());
+          const instantNoStagger = dispatchMode === "marketing_instant";
           for (let i = 0; i < slice.length; i++) {
             rows.push(tagRow({
               ...slice[i],
               user_id: ownerId, workspace_id: wsId,
               campaign_id: campaign.id, status: "scheduled",
-              scheduled_at: new Date(blastStart + i * 1000).toISOString(),
+              scheduled_at: new Date(instantNoStagger ? blastStart : blastStart + i * 1000).toISOString(),
             }));
           }
         } else if (schedulerKind === "poisson") {
@@ -1068,13 +1112,47 @@ async function processQueue(admin: any) {
 
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, delay_min_seconds, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id, category))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, delay_min_seconds, dispatch_mode, kill_switch_at, max_inflight_per_number, max_inflight_per_campaign, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name, paused_at, paused_reason), message_templates(id, name, language, body, variables, provider_template_id, category))")
     .eq("status", "scheduled")
     .lte("scheduled_at", horizonIso)
     .eq("campaigns.status", "running")
+    .is("campaigns.kill_switch_at", null)
     .order("scheduled_at", { ascending: true })
     .limit(perTickLimit);
   if (error) return json({ error: error.message }, 500);
+
+  // Pre-load provider backoff state for all numbers in this tick.
+  const tickNumIds = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
+  const backoffByNum = new Map<string, number>(); // number_id -> retry_after epoch ms
+  if (tickNumIds.length > 0) {
+    const { data: backoffRows } = await admin
+      .from("provider_backoff")
+      .select("whatsapp_number_id, retry_after")
+      .in("whatsapp_number_id", tickNumIds);
+    for (const b of backoffRows ?? []) {
+      backoffByNum.set(b.whatsapp_number_id, new Date(b.retry_after).getTime());
+    }
+  }
+
+  // Global instant kill switch.
+  let instantGloballyDisabled = false;
+  try {
+    const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
+    if (flag && flag.value === false) instantGloballyDisabled = true;
+  } catch (_) { /* best effort */ }
+
+  const logEvent = async (rec: any, eventType: string, reason: string, payload: any = {}) => {
+    try {
+      await admin.from("campaign_dispatch_events").insert({
+        campaign_id: rec.campaign_id,
+        workspace_id: rec.workspace_id ?? null,
+        whatsapp_number_id: rec.whatsapp_number_id ?? null,
+        event_type: eventType,
+        reason,
+        payload,
+      });
+    } catch (_) { /* best effort */ }
+  };
 
   // Resolve per-recipient number/template overrides (multi-number campaigns).
   // recipient.whatsapp_number_id is the assigned number; variables.__tpl_id is its template id.
@@ -1222,17 +1300,64 @@ async function processQueue(admin: any) {
 
   // Hard pacing per WhatsApp number: utility templates throttled to >=60s;
   // marketing blasts run at the configured floor of 1 message/sec per number.
+  // marketing_instant: floor is 0 — backpressure (inflight caps + provider backoff)
+  // is the brake instead.
   const lastSentMs = new Map<string, number>();
+  // Inflight counters for backpressure (per-number and per-campaign in this tick).
+  const inflightByNum = new Map<string, number>();
+  const inflightByCampaign = new Map<string, number>();
+  const incInflight = (nid: string | null, cid: string) => {
+    if (nid) inflightByNum.set(nid, (inflightByNum.get(nid) ?? 0) + 1);
+    inflightByCampaign.set(cid, (inflightByCampaign.get(cid) ?? 0) + 1);
+  };
+  const decInflight = (nid: string | null, cid: string) => {
+    if (nid) inflightByNum.set(nid, Math.max(0, (inflightByNum.get(nid) ?? 0) - 1));
+    inflightByCampaign.set(cid, Math.max(0, (inflightByCampaign.get(cid) ?? 0) - 1));
+  };
 
   for (const recipient of due ?? []) {
       const cState = getCanary(recipient.campaign_id);
       if (cState.aborted) continue;
 
+      const camp = recipient.campaigns ?? {};
+      const isInstant = camp.dispatch_mode === "marketing_instant";
+
+      // Skip if global instant kill switch is engaged.
+      if (isInstant && instantGloballyDisabled) {
+        await logEvent(recipient, "skipped", "instant_mode_disabled");
+        continue;
+      }
+      // Skip if this sender is paused.
+      const numRow = camp.whatsapp_numbers ?? null;
+      if (numRow?.paused_at) {
+        await logEvent(recipient, "idle", "sender_paused", { paused_reason: numRow.paused_reason });
+        continue;
+      }
+      // Skip if provider backoff is active for this number.
+      const recNumIdEarly = recipient.whatsapp_number_id;
+      const backoffUntil = recNumIdEarly ? backoffByNum.get(recNumIdEarly) : undefined;
+      if (backoffUntil && backoffUntil > Date.now()) {
+        await logEvent(recipient, "idle", "provider_backoff", { retry_after: new Date(backoffUntil).toISOString() });
+        continue;
+      }
+      // Backpressure: per-number and per-campaign inflight caps.
+      const capInflightNum = Math.max(1, Number(camp.max_inflight_per_number ?? 5));
+      const capInflightCamp = Math.max(1, Number(camp.max_inflight_per_campaign ?? 50));
+      if (recNumIdEarly && (inflightByNum.get(recNumIdEarly) ?? 0) >= capInflightNum) {
+        await logEvent(recipient, "idle", "inflight_per_number_cap", { cap: capInflightNum });
+        continue;
+      }
+      if ((inflightByCampaign.get(recipient.campaign_id) ?? 0) >= capInflightCamp) {
+        await logEvent(recipient, "idle", "inflight_per_campaign_cap", { cap: capInflightCamp });
+        continue;
+      }
+
       const targetMs = new Date(recipient.scheduled_at).getTime();
       const nowMs = Date.now();
       const waitMs = targetMs - nowMs;
       const remainingBudget = TICK_BUDGET_MS - (nowMs - tickStartedAt);
-      if (waitMs > 0 && remainingBudget > 0) {
+      // Instant mode: do NOT wait — push immediately. Otherwise honor scheduled_at.
+      if (!isInstant && waitMs > 0 && remainingBudget > 0) {
         await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
       }
       if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
@@ -1296,7 +1421,8 @@ async function processQueue(admin: any) {
       const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
       const isUtility = tplCategory === "utility" || tplCategory === "authentication";
       const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
-      const floor = isUtility ? 60 : 1;
+      // marketing_instant: floor 0 (backpressure controls rate). Otherwise 1s/60s.
+      const floor = isInstant ? 0 : (isUtility ? 60 : 1);
       const minGapMs = Math.max(floor, configuredMin) * 1000;
       const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
       let lastMs = lastSentMs.get(pacingKey) ?? 0;
@@ -1330,10 +1456,12 @@ async function processQueue(admin: any) {
         .maybeSingle();
       if (!locked) continue;
       lastSentMs.set(pacingKey, Date.now());
+      incInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
 
 
       try {
         const gsBody = await sendTemplate(admin, recipient);
+        decInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
         const providerId = gsBody.messageId || null;
         const tpl = recipient.campaigns?.message_templates;
         const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
@@ -1377,6 +1505,7 @@ async function processQueue(admin: any) {
           sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
         }
       } catch (err) {
+        decInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
         sentMu.incFail();
         const msg = err instanceof Error ? err.message : "Send failed";
         await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
@@ -1384,6 +1513,36 @@ async function processQueue(admin: any) {
         cState.fail += 1;
         const code = extractErrorCode(msg);
         cState.codes.set(code, (cState.codes.get(code) ?? 0) + 1);
+
+        // Provider 429 / 5xx -> exponential per-number backoff so the next tick
+        // skips this number until retry_after.
+        const httpMatch = msg.match(/"http_status":(\d{3})/);
+        const httpStatus = httpMatch ? parseInt(httpMatch[1], 10) : 0;
+        if (recipient.whatsapp_number_id && (httpStatus === 429 || httpStatus >= 500)) {
+          try {
+            const retryAfterMatch = msg.match(/retry[_-]?after[":\s]+(\d+)/i);
+            const baseSec = retryAfterMatch ? Math.min(600, parseInt(retryAfterMatch[1], 10)) : 30;
+            // Bump attempt count and apply exponential factor (cap 10 minutes).
+            const { data: existing } = await admin
+              .from("provider_backoff")
+              .select("attempt_count")
+              .eq("whatsapp_number_id", recipient.whatsapp_number_id)
+              .maybeSingle();
+            const attempt = Math.min(8, (existing?.attempt_count ?? 0) + 1);
+            const delaySec = Math.min(600, baseSec * Math.pow(2, attempt - 1));
+            const retryAfter = new Date(Date.now() + delaySec * 1000).toISOString();
+            await admin.from("provider_backoff").upsert({
+              whatsapp_number_id: recipient.whatsapp_number_id,
+              retry_after: retryAfter,
+              last_status: httpStatus,
+              last_error: msg.slice(0, 500),
+              attempt_count: attempt,
+              updated_at: new Date().toISOString(),
+            });
+            backoffByNum.set(recipient.whatsapp_number_id, new Date(retryAfter).getTime());
+            await logEvent(recipient, "error", httpStatus === 429 ? "provider_429" : "provider_5xx", { http_status: httpStatus, retry_after: retryAfter });
+          } catch (_) { /* best effort */ }
+        }
 
         // Per-number restriction detection (fires immediate Slack via DB trigger).
         if (recipient.whatsapp_number_id && RESTRICTION_CODES.has(code)) {
@@ -1880,6 +2039,9 @@ serve(async (req) => {
 
     if (action === "launch") return await launchCampaign(admin, auth.user.id, body);
     if (action === "blast") return await blastCampaign(admin, auth.user.id, body);
+    if (action === "prepare") return await prepareCampaign(admin, auth.user.id, body);
+    if (action === "kill_switch") return await killSwitch(admin, auth.user.id, body);
+    if (action === "runtime_status") return await runtimeStatus(admin, auth.user.id, body);
     if (action === "upsert_template") return await upsertTemplate(admin, auth.user.id, body);
     if (action === "sync_templates") return await syncTemplates(admin, auth.user.id, body);
     if (action === "sync_templates_all") return await syncTemplatesAll(admin, auth.user.id, body);
@@ -1895,3 +2057,296 @@ serve(async (req) => {
     return json({ error: msg }, 500);
   }
 });
+
+// ===== Marketing Instant: prepare snapshot, kill switch, runtime status =====
+
+async function computeSnapshotSignature(input: {
+  numberIds: string[];
+  templateIds: string[];
+  audienceCount: number;
+  windowStart: string;
+  windowEnd: string;
+  perNumberQuota: number;
+  maxInflightPerNumber: number;
+  maxInflightPerCampaign: number;
+}): Promise<string> {
+  const sorted = {
+    n: [...input.numberIds].sort(),
+    t: [...input.templateIds].sort(),
+    a: input.audienceCount,
+    ws: input.windowStart,
+    we: input.windowEnd,
+    q: input.perNumberQuota,
+    in: input.maxInflightPerNumber,
+    ic: input.maxInflightPerCampaign,
+  };
+  const txt = JSON.stringify(sorted);
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
+  return "sha256:" + Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Build a prepared snapshot for a campaign. Operator must call this before launch
+// for marketing_instant; the launch endpoint enforces freshness + signature match.
+async function prepareCampaign(admin: any, requesterId: string, body: any) {
+  const numbers: Array<{ number_id: string; template_id: string }> =
+    Array.isArray(body.numbers) ? body.numbers
+      .map((n: any) => ({ number_id: String(n?.number_id || ""), template_id: String(n?.template_id || "") }))
+      .filter((n: any) => uuidRegex.test(n.number_id) && uuidRegex.test(n.template_id))
+      : [];
+  const audienceCount = Math.max(0, Math.floor(Number(body.audience_count ?? 0)));
+  const dispatchMode: "paced" | "marketing_instant" =
+    body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
+  const perNumberQuota = Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota ?? 200))));
+  const maxInflightPerNumber = Math.max(1, Math.min(50, Math.floor(Number(body.max_inflight_per_number ?? 5))));
+  const maxInflightPerCampaign = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
+  const windowStart: string = typeof body.window_start === "string" ? body.window_start : "09:00";
+  const windowEnd: string = typeof body.window_end === "string" ? body.window_end : "18:00";
+  const reuseCampaignId: string | null =
+    typeof body.campaign_id === "string" && uuidRegex.test(body.campaign_id) ? body.campaign_id : null;
+
+  if (numbers.length === 0) return json({ error: "At least one number+template required" }, 400);
+  if (audienceCount <= 0) return json({ error: "audience_count required" }, 400);
+
+  const numberIds = [...new Set(numbers.map((n) => n.number_id))];
+  const templateIds = [...new Set(numbers.map((n) => n.template_id))];
+
+  const { data: numberRows } = await admin
+    .from("whatsapp_numbers")
+    .select("id, user_id, workspace_id, phone_number, status, webhook_connected, paused_at, paused_reason, daily_send_limit, provider_app_id, provider_api_key")
+    .in("id", numberIds);
+  if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "Number not found" }, 404);
+  const ownerId = numberRows[0].user_id;
+  if (!(await canAccessUser(admin, requesterId, ownerId))) return json({ error: "Forbidden" }, 403);
+
+  const { data: templateRows } = await admin
+    .from("message_templates")
+    .select("id, name, status, body, variables")
+    .in("id", templateIds);
+  if (!templateRows || templateRows.length !== templateIds.length) return json({ error: "Template not found" }, 404);
+
+  const { data: backoffRows } = await admin
+    .from("provider_backoff")
+    .select("whatsapp_number_id, retry_after")
+    .in("whatsapp_number_id", numberIds);
+  const backoffMap = new Map<string, string>();
+  for (const b of backoffRows ?? []) backoffMap.set(b.whatsapp_number_id, b.retry_after);
+
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+
+  // Allocate audience round-robin (capped per-number).
+  const allocByNum = new Map<string, number>();
+  for (const nid of numberIds) allocByNum.set(nid, 0);
+  let remaining = audienceCount;
+  while (remaining > 0) {
+    let placedThisRound = false;
+    for (const nid of numberIds) {
+      const cur = allocByNum.get(nid) ?? 0;
+      const nrow: any = numberRows.find((n: any) => n.id === nid);
+      const cap = Math.max(0, Math.min(perNumberQuota, Number(nrow?.daily_send_limit ?? 200)));
+      if (cur < cap) {
+        allocByNum.set(nid, cur + 1);
+        remaining--;
+        placedThisRound = true;
+        if (remaining === 0) break;
+      }
+    }
+    if (!placedThisRound) break;
+  }
+  if (remaining > 0) {
+    warnings.push(`Capacity is ${audienceCount - remaining} but audience is ${audienceCount}. Add more numbers, raise per-number cap, or split.`);
+  }
+
+  const numbersOut = numberRows.map((n: any) => {
+    const allocation = allocByNum.get(n.id) ?? 0;
+    if (n.webhook_connected === false) blockers.push(`Number ${n.phone_number}: webhook not connected — replies would be lost.`);
+    if (n.status === "banned" || n.status === "restricted") blockers.push(`Number ${n.phone_number} is ${n.status}.`);
+    if (n.paused_at) blockers.push(`Number ${n.phone_number} is paused: ${n.paused_reason ?? "no reason"}.`);
+    if (!n.provider_api_key) blockers.push(`Number ${n.phone_number}: no provider API key.`);
+    if (allocation === 0) blockers.push(`Number ${n.phone_number} got zero allocation — remove it from the pool or raise its daily cap.`);
+    return {
+      id: n.id,
+      phone: n.phone_number,
+      status: n.status,
+      webhook_connected: n.webhook_connected,
+      allocation,
+      daily_cap: Number(n.daily_send_limit ?? 200),
+      backoff_until: backoffMap.get(n.id) ?? null,
+    };
+  });
+
+  for (const t of templateRows) {
+    if (t.status !== "approved") blockers.push(`Template "${t.name}" is ${t.status}, not approved.`);
+  }
+
+  // Global instant kill switch.
+  if (dispatchMode === "marketing_instant") {
+    const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
+    if (flag && flag.value === false) blockers.push("Marketing Instant mode is globally disabled (kill switch).");
+  }
+
+  const signature = await computeSnapshotSignature({
+    numberIds, templateIds, audienceCount, windowStart, windowEnd,
+    perNumberQuota, maxInflightPerNumber, maxInflightPerCampaign,
+  });
+
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const report = {
+    signature,
+    expires_at: expiresAt,
+    dispatch_mode: dispatchMode,
+    numbers: numbersOut,
+    templates: templateRows.map((t: any) => ({ id: t.id, name: t.name, status: t.status })),
+    audience: { total: audienceCount, allocated: audienceCount - remaining },
+    caps: {
+      per_number_inflight: maxInflightPerNumber,
+      per_campaign_inflight: maxInflightPerCampaign,
+      per_number_daily: perNumberQuota,
+    },
+    window: { start: windowStart, end: windowEnd, per_recipient_tz: body.respect_recipient_tz !== false },
+    blockers,
+    warnings,
+    notice: dispatchMode === "marketing_instant"
+      ? "Instant mode sends each recipient immediately when their LOCAL window opens. Recipients in different timezones do not all send at the same global second."
+      : null,
+  };
+
+  if (reuseCampaignId) {
+    await admin.from("campaigns").update({
+      prepared_at: new Date().toISOString(),
+      prepared_expires_at: expiresAt,
+      prepared_signature: signature,
+      prepared_report: report,
+    }).eq("id", reuseCampaignId);
+  }
+
+  return json({ ok: blockers.length === 0, signature, expires_at: expiresAt, blockers, warnings, snapshot: report });
+}
+
+// Engage / release a kill switch. scope: campaign | sender | instant_mode_global.
+async function killSwitch(admin: any, requesterId: string, body: any) {
+  const scope = String(body.scope || "campaign");
+  const reason = String(body.reason || "manual").slice(0, 500);
+  const release = body.release === true;
+
+  if (scope === "campaign") {
+    const id = String(body.campaign_id || "");
+    if (!uuidRegex.test(id)) return json({ error: "campaign_id required" }, 400);
+    const { data: c } = await admin.from("campaigns").select("id, user_id, workspace_id").eq("id", id).maybeSingle();
+    if (!c) return json({ error: "Not found" }, 404);
+    if (!(await canAccessUser(admin, requesterId, c.user_id))) return json({ error: "Forbidden" }, 403);
+    await admin.from("campaigns").update({
+      kill_switch_at: release ? null : new Date().toISOString(),
+      kill_switch_by: release ? null : requesterId,
+      kill_switch_reason: release ? null : reason,
+      status: release ? "running" : "paused",
+    }).eq("id", id);
+    await admin.from("campaign_dispatch_events").insert({
+      campaign_id: id, workspace_id: c.workspace_id,
+      event_type: release ? "kill_switch_released" : "killed",
+      reason, payload: { by: requesterId },
+    });
+    return json({ ok: true });
+  }
+
+  if (scope === "sender") {
+    const id = String(body.whatsapp_number_id || "");
+    if (!uuidRegex.test(id)) return json({ error: "whatsapp_number_id required" }, 400);
+    const { data: n } = await admin.from("whatsapp_numbers").select("id, user_id").eq("id", id).maybeSingle();
+    if (!n) return json({ error: "Not found" }, 404);
+    if (!(await canAccessUser(admin, requesterId, n.user_id))) return json({ error: "Forbidden" }, 403);
+    await admin.from("whatsapp_numbers").update({
+      paused_at: release ? null : new Date().toISOString(),
+      paused_reason: release ? null : reason,
+    }).eq("id", id);
+    return json({ ok: true });
+  }
+
+  if (scope === "instant_mode_global") {
+    const { data: isAdminRow } = await admin.rpc("is_admin", { _user_id: requesterId });
+    if (!isAdminRow) return json({ error: "Admin only" }, 403);
+    await admin.from("system_flags").upsert({
+      key: "marketing_instant_enabled",
+      value: release ? true : false,
+      updated_by: requesterId,
+      updated_at: new Date().toISOString(),
+    });
+    return json({ ok: true });
+  }
+
+  return json({ error: "Unknown scope" }, 400);
+}
+
+// Live runtime status for the operator UI.
+async function runtimeStatus(admin: any, requesterId: string, body: any) {
+  const id = String(body.campaign_id || "");
+  if (!uuidRegex.test(id)) return json({ error: "campaign_id required" }, 400);
+  const { data: c } = await admin.from("campaigns")
+    .select("id, user_id, workspace_id, status, dispatch_mode, kill_switch_at, kill_switch_reason, prepared_at, prepared_expires_at, prepared_signature, prepared_report, max_inflight_per_number, max_inflight_per_campaign")
+    .eq("id", id).maybeSingle();
+  if (!c) return json({ error: "Not found" }, 404);
+  if (!(await canAccessUser(admin, requesterId, c.user_id))) return json({ error: "Forbidden" }, 403);
+
+  const sinceIso = new Date(Date.now() - 60_000).toISOString();
+  const fiveMinIso = new Date(Date.now() - 5 * 60_000).toISOString();
+
+  const { data: recents } = await admin
+    .from("campaign_recipients")
+    .select("whatsapp_number_id, status, sent_at")
+    .eq("campaign_id", id)
+    .gte("sent_at", sinceIso)
+    .not("sent_at", "is", null)
+    .limit(2000);
+  const sentLast60 = (recents ?? []).length;
+  const activeSenders = new Set((recents ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean));
+
+  const { data: events } = await admin
+    .from("campaign_dispatch_events")
+    .select("whatsapp_number_id, event_type, reason, created_at")
+    .eq("campaign_id", id)
+    .gte("created_at", fiveMinIso)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  const idleByNum = new Map<string, { reason: string; at: string }>();
+  for (const e of events ?? []) {
+    const nid = (e as any).whatsapp_number_id;
+    if (!nid || idleByNum.has(nid) || activeSenders.has(nid)) continue;
+    idleByNum.set(nid, { reason: e.reason ?? e.event_type, at: e.created_at });
+  }
+
+  // Pool participation alert: window open + < 50% selected senders sent in last 5 min.
+  const selected = (c.prepared_report as any)?.numbers?.map((n: any) => n.id) ?? [];
+  const { data: recentByNum } = await admin
+    .from("campaign_recipients")
+    .select("whatsapp_number_id")
+    .eq("campaign_id", id)
+    .gte("sent_at", fiveMinIso)
+    .not("sent_at", "is", null)
+    .limit(5000);
+  const activeRecent = new Set((recentByNum ?? []).map((r: any) => r.whatsapp_number_id));
+  const idle = selected.filter((n: string) => !activeRecent.has(n));
+  const poolAlert = c.status === "running" && selected.length > 0 && activeRecent.size * 2 < selected.length;
+
+  return json({
+    ok: true,
+    campaign: {
+      id: c.id,
+      status: c.status,
+      dispatch_mode: c.dispatch_mode,
+      kill_switch: c.kill_switch_at ? { at: c.kill_switch_at, reason: c.kill_switch_reason } : null,
+      snapshot: c.prepared_at
+        ? { prepared_at: c.prepared_at, expires_at: c.prepared_expires_at, signature: c.prepared_signature, fresh: new Date(c.prepared_expires_at).getTime() > Date.now() }
+        : null,
+      caps: { per_number: c.max_inflight_per_number, per_campaign: c.max_inflight_per_campaign },
+    },
+    runtime: {
+      sent_last_60s: sentLast60,
+      rate_per_min: sentLast60,
+      active_senders: [...activeSenders],
+      idle_senders: [...idleByNum.entries()].map(([id, v]) => ({ id, reason: v.reason, at: v.at })),
+      pool_participation_alert: poolAlert,
+      idle_pool_members: idle,
+    },
+  });
+}
