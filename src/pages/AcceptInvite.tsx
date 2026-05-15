@@ -16,15 +16,20 @@ export default function AcceptInvite() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [email, setEmail] = useState<string | null>(null);
+  const [authFlow, setAuthFlow] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const navigate = useNavigate();
+  const isExistingUserInvite = authFlow === "magiclink";
 
   useEffect(() => {
     // Supabase places the invite token in the URL hash and signs the user in automatically.
     let mounted = true;
 
     const init = async () => {
+      const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const type = params.get("type");
+      if (type) setAuthFlow(type);
       const { data: { session } } = await supabase.auth.getSession();
       if (!mounted) return;
       if (session?.user) {
@@ -46,6 +51,9 @@ export default function AcceptInvite() {
     // Listen first to catch hash-based session establishment
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user && !ready) {
+        const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const type = params.get("type");
+        if (type) setAuthFlow(type);
         setEmail(session.user.email ?? null);
         setReady(true);
       }
@@ -63,17 +71,19 @@ export default function AcceptInvite() {
     e.preventDefault();
     const fn = firstName.trim();
     const ln = lastName.trim();
-    if (!fn || !ln) return toast.error("Enter your first and last name");
+    if (!isExistingUserInvite && (!fn || !ln)) return toast.error("Enter your first and last name");
     if (fn.length > 60 || ln.length > 60) return toast.error("Name is too long");
-    if (password.length < 8) return toast.error("Password must be at least 8 characters");
-    if (password !== confirm) return toast.error("Passwords do not match");
+    if (!isExistingUserInvite && password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!isExistingUserInvite && password !== confirm) return toast.error("Passwords do not match");
 
     setLoading(true);
-    const fullName = `${fn} ${ln}`;
-    const { data: userData, error: updErr } = await supabase.auth.updateUser({
-      password,
-      data: { full_name: fullName, first_name: fn, last_name: ln },
-    });
+    const fullName = `${fn} ${ln}`.trim();
+    const updatePayload: Parameters<typeof supabase.auth.updateUser>[0] = {};
+    if (!isExistingUserInvite) updatePayload.password = password;
+    if (fullName) updatePayload.data = { full_name: fullName, first_name: fn, last_name: ln };
+    const { data: userData, error: updErr } = Object.keys(updatePayload).length > 0
+      ? await supabase.auth.updateUser(updatePayload)
+      : await supabase.auth.getUser();
     if (updErr) {
       setLoading(false);
       return toast.error(updErr.message);
@@ -82,24 +92,41 @@ export default function AcceptInvite() {
     const uid = userData.user?.id;
     if (uid) {
       // Upsert profile (handle_new_user trigger already created a row, so update it)
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .upsert({ user_id: uid, full_name: fullName }, { onConflict: "user_id" });
-      if (profErr) console.warn("profile upsert", profErr);
+      if (fullName) {
+        const { error: profErr } = await supabase
+          .from("profiles")
+          .upsert({ user_id: uid, full_name: fullName }, { onConflict: "user_id" });
+        if (profErr) console.warn("profile upsert", profErr);
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const invitedWorkspaceId = urlParams.get("wid");
+      if (invitedWorkspaceId) {
+        const { error: joinErr } = await supabase.functions.invoke("invite-workspace-member", {
+          body: { workspace_id: invitedWorkspaceId, action: "accept" },
+        });
+        if (joinErr) console.warn("workspace join", joinErr);
+      }
     }
 
     toast.success("Welcome aboard");
 
     // Route to first available workspace, otherwise portal
-    const { data: ws } = await supabase
-      .from("workspaces")
-      .select("slug")
-      .eq("is_active", true)
-      .order("name")
-      .limit(1);
+    const urlParams = new URLSearchParams(window.location.search);
+    const invitedSlug = urlParams.get("ws");
+    const invitedWorkspaceId = urlParams.get("wid");
+    const { data: ws } = invitedWorkspaceId
+      ? await supabase.from("workspaces").select("slug").eq("id", invitedWorkspaceId).limit(1)
+      : await supabase
+          .from("workspaces")
+          .select("slug")
+          .eq("is_active", true)
+          .order("name")
+          .limit(1);
     setLoading(false);
-    if (ws && ws.length > 0) {
-      navigate(`/ws/${ws[0].slug}/overview`, { replace: true });
+    const targetSlug = ws?.[0]?.slug ?? invitedSlug;
+    if (targetSlug) {
+      navigate(`/ws/${targetSlug}/overview`, { replace: true });
     } else {
       navigate("/portal-auth", { replace: true });
     }
@@ -117,7 +144,9 @@ export default function AcceptInvite() {
           <CardTitle>Welcome to Iskra</CardTitle>
           <CardDescription>
             {email
-              ? <>Finish setting up your account for <span className="font-medium text-foreground">{email}</span>. Your name will appear on chats you reply to.</>
+              ? isExistingUserInvite
+                ? <>Confirm access for <span className="font-medium text-foreground">{email}</span> and continue to the workspace.</>
+                : <>Finish setting up your account for <span className="font-medium text-foreground">{email}</span>. Your name will appear on chats you reply to.</>
               : "Verifying your invitation…"}
           </CardDescription>
         </CardHeader>
@@ -126,24 +155,28 @@ export default function AcceptInvite() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="fn">First name</Label>
-                <Input id="fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required disabled={!ready} maxLength={60} />
+                <Input id="fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required={!isExistingUserInvite} disabled={!ready} maxLength={60} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ln">Last name</Label>
-                <Input id="ln" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required disabled={!ready} maxLength={60} />
+                <Input id="ln" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required={!isExistingUserInvite} disabled={!ready} maxLength={60} />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pw">Set a password</Label>
-              <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required disabled={!ready} placeholder="At least 8 characters" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pw2">Confirm password</Label>
-              <Input id="pw2" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required disabled={!ready} />
-            </div>
+            {!isExistingUserInvite && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pw">Set a password</Label>
+                  <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required disabled={!ready} placeholder="At least 8 characters" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pw2">Confirm password</Label>
+                  <Input id="pw2" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required disabled={!ready} />
+                </div>
+              </>
+            )}
             <Button type="submit" className="w-full" disabled={loading || !ready}>
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Activate account
+              {isExistingUserInvite ? "Continue to workspace" : "Activate account"}
             </Button>
           </form>
         </CardContent>

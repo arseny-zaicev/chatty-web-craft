@@ -17,8 +17,8 @@ const corsHeaders = {
 }
 
 const EMAIL_SUBJECTS: Record<string, string> = {
-  signup: 'Confirm your email',
-  invite: "You've been invited",
+  signup: 'Confirm your ISKRA email',
+  invite: "You've been invited to ISKRA",
   magiclink: 'Your login link',
   recovery: 'Reset your password',
   email_change: 'Confirm your new email',
@@ -36,7 +36,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "chatty-web-craft"
+const SITE_NAME = "ISKRA"
 const SENDER_DOMAIN = "notify.iskra.ae"
 const ROOT_DOMAIN = "iskra.ae"
 const FROM_DOMAIN = "notify.iskra.ae" // Domain shown in From address (may be root or sender subdomain)
@@ -46,7 +46,7 @@ const FROM_DOMAIN = "notify.iskra.ae" // Domain shown in From address (may be ro
 // The sample email uses a fixed placeholder (RFC 6761 .test TLD) so the Go backend
 // can always find-and-replace it with the actual recipient when sending test emails,
 // even if the project's domain has changed since the template was scaffolded.
-const SAMPLE_PROJECT_URL = "https://chatty-web-craft.lovable.app"
+const SAMPLE_PROJECT_URL = "https://iskra.ae"
 const SAMPLE_EMAIL = "user@example.test"
 const SAMPLE_DATA: Record<string, object> = {
   signup: {
@@ -88,6 +88,28 @@ function normalizeLogoUrl(value?: string | null): string | undefined {
   if (/^https?:\/\//i.test(raw)) return raw
   const domain = raw.replace(/^www\./i, '').replace(/\/.*$/, '')
   return domain.includes('.') ? `https://logo.clearbit.com/${domain}` : undefined
+}
+
+function getWorkspaceInviteRedirect(rawUrl?: string | null): URL | null {
+  if (!rawUrl) return null
+  const candidates: string[] = [rawUrl]
+  try {
+    const authUrl = new URL(rawUrl)
+    const redirect = authUrl.searchParams.get('redirect_to') || authUrl.searchParams.get('redirectTo')
+    if (redirect) candidates.unshift(redirect)
+  } catch (_) {
+    // Ignore malformed URLs - the normal template flow will handle them.
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate)
+      if (url.pathname.replace(/\/$/, '') === '/accept-invite') return url
+    } catch (_) {
+      // Continue to the next candidate.
+    }
+  }
+  return null
 }
 
 // Preview endpoint handler - returns rendered HTML without sending email
@@ -217,11 +239,15 @@ async function handleWebhook(req: Request): Promise<Response> {
   // The email action type is in payload.data.action_type (e.g., "signup", "recovery")
   // payload.type is the hook event type ("auth")
   const emailType = payload.data.action_type
-  console.log('Received auth event', { emailType, email: payload.data.email, run_id })
+  const inviteRedirect = getWorkspaceInviteRedirect(payload.data.url)
+  const effectiveEmailType = inviteRedirect && ['invite', 'recovery', 'magiclink'].includes(emailType)
+    ? 'invite'
+    : emailType
+  console.log('Received auth event', { emailType, effectiveEmailType, email: payload.data.email, run_id })
 
-  const EmailTemplate = EMAIL_TEMPLATES[emailType]
+  const EmailTemplate = EMAIL_TEMPLATES[effectiveEmailType]
   if (!EmailTemplate) {
-    console.error('Unknown email type', { emailType, run_id })
+    console.error('Unknown email type', { emailType, effectiveEmailType, run_id })
     return new Response(
       JSON.stringify({ error: `Unknown email type: ${emailType}` }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -240,28 +266,24 @@ async function handleWebhook(req: Request): Promise<Response> {
     newEmail: payload.data.new_email,
   }
 
-  // Co-branding for invite emails: extract workspace slug from redirect_to and look up its brand
-  if (emailType === 'invite' && payload.data.url) {
+  // Co-branding for invite emails: extract workspace slug from redirect_to and look up its brand.
+  // Recovery/magic-link events that point at /accept-invite are rendered as invitations.
+  if (effectiveEmailType === 'invite' && inviteRedirect) {
     try {
-      const u = new URL(payload.data.url)
-      const redirect = u.searchParams.get('redirect_to')
-      if (redirect) {
-        const ru = new URL(redirect)
-        const slug = ru.searchParams.get('ws')
-        if (slug) {
-          const sb = createClient(
-            Deno.env.get('SUPABASE_URL')!,
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-          )
-          const { data: wsRow } = await sb
-            .from('workspaces')
-            .select('name, logo_url')
-            .eq('slug', slug)
-            .maybeSingle()
-          if (wsRow?.name) {
-            templateProps.partnerName = wsRow.name
-            templateProps.partnerLogoUrl = normalizeLogoUrl(wsRow.logo_url)
-          }
+      const slug = inviteRedirect.searchParams.get('ws')
+      if (slug) {
+        const sb = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        )
+        const { data: wsRow } = await sb
+          .from('workspaces')
+          .select('name, logo_url')
+          .eq('slug', slug)
+          .maybeSingle()
+        if (wsRow?.name) {
+          templateProps.partnerName = wsRow.name
+          templateProps.partnerLogoUrl = normalizeLogoUrl(wsRow.logo_url)
         }
       }
     } catch (e) {
@@ -286,7 +308,7 @@ async function handleWebhook(req: Request): Promise<Response> {
   // Log pending BEFORE enqueue so we have a record even if enqueue crashes
   await supabase.from('email_send_log').insert({
     message_id: messageId,
-    template_name: emailType,
+    template_name: effectiveEmailType,
     recipient_email: payload.data.email,
     status: 'pending',
   })
@@ -299,11 +321,11 @@ async function handleWebhook(req: Request): Promise<Response> {
       to: payload.data.email,
       from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
       sender_domain: SENDER_DOMAIN,
-      subject: EMAIL_SUBJECTS[emailType] || 'Notification',
+      subject: EMAIL_SUBJECTS[effectiveEmailType] || 'Notification',
       html,
       text,
       purpose: 'transactional',
-      label: emailType,
+      label: effectiveEmailType,
       queued_at: new Date().toISOString(),
     },
   })
@@ -312,7 +334,7 @@ async function handleWebhook(req: Request): Promise<Response> {
     console.error('Failed to enqueue auth email', { error: enqueueError, run_id, emailType })
     await supabase.from('email_send_log').insert({
       message_id: messageId,
-      template_name: emailType,
+      template_name: effectiveEmailType,
       recipient_email: payload.data.email,
       status: 'failed',
       error_message: 'Failed to enqueue email',
@@ -323,7 +345,7 @@ async function handleWebhook(req: Request): Promise<Response> {
     })
   }
 
-  console.log('Auth email enqueued', { emailType, email: payload.data.email, run_id })
+  console.log('Auth email enqueued', { emailType, effectiveEmailType, email: payload.data.email, run_id })
 
   return new Response(
     JSON.stringify({ success: true, queued: true }),
