@@ -2039,6 +2039,9 @@ serve(async (req) => {
 
     if (action === "launch") return await launchCampaign(admin, auth.user.id, body);
     if (action === "blast") return await blastCampaign(admin, auth.user.id, body);
+    if (action === "prepare") return await prepareCampaign(admin, auth.user.id, body);
+    if (action === "kill_switch") return await killSwitch(admin, auth.user.id, body);
+    if (action === "runtime_status") return await runtimeStatus(admin, auth.user.id, body);
     if (action === "upsert_template") return await upsertTemplate(admin, auth.user.id, body);
     if (action === "sync_templates") return await syncTemplates(admin, auth.user.id, body);
     if (action === "sync_templates_all") return await syncTemplatesAll(admin, auth.user.id, body);
