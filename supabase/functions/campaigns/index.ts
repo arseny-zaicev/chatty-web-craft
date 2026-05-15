@@ -541,6 +541,9 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       per_number_quota: perNumberQuota,
       allocated_capacity: allocatedCapacity,
       audience_total: audienceTotalRequested,
+      dispatch_mode: dispatchMode,
+      max_inflight_per_number: maxInflightPerNumber,
+      max_inflight_per_campaign: maxInflightPerCampaign,
     })
     .select("id")
     .single();
