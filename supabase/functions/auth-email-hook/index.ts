@@ -17,8 +17,8 @@ const corsHeaders = {
 }
 
 const EMAIL_SUBJECTS: Record<string, string> = {
-  signup: 'Confirm your email',
-  invite: "You've been invited",
+  signup: 'Confirm your ISKRA email',
+  invite: "You've been invited to ISKRA",
   magiclink: 'Your login link',
   recovery: 'Reset your password',
   email_change: 'Confirm your new email',
@@ -36,7 +36,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "chatty-web-craft"
+const SITE_NAME = "ISKRA"
 const SENDER_DOMAIN = "notify.iskra.ae"
 const ROOT_DOMAIN = "iskra.ae"
 const FROM_DOMAIN = "notify.iskra.ae" // Domain shown in From address (may be root or sender subdomain)
@@ -46,7 +46,7 @@ const FROM_DOMAIN = "notify.iskra.ae" // Domain shown in From address (may be ro
 // The sample email uses a fixed placeholder (RFC 6761 .test TLD) so the Go backend
 // can always find-and-replace it with the actual recipient when sending test emails,
 // even if the project's domain has changed since the template was scaffolded.
-const SAMPLE_PROJECT_URL = "https://chatty-web-craft.lovable.app"
+const SAMPLE_PROJECT_URL = "https://iskra.ae"
 const SAMPLE_EMAIL = "user@example.test"
 const SAMPLE_DATA: Record<string, object> = {
   signup: {
