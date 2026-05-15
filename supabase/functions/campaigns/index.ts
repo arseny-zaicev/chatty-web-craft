@@ -2057,3 +2057,296 @@ serve(async (req) => {
     return json({ error: msg }, 500);
   }
 });
+
+// ===== Marketing Instant: prepare snapshot, kill switch, runtime status =====
+
+async function computeSnapshotSignature(input: {
+  numberIds: string[];
+  templateIds: string[];
+  audienceCount: number;
+  windowStart: string;
+  windowEnd: string;
+  perNumberQuota: number;
+  maxInflightPerNumber: number;
+  maxInflightPerCampaign: number;
+}): Promise<string> {
+  const sorted = {
+    n: [...input.numberIds].sort(),
+    t: [...input.templateIds].sort(),
+    a: input.audienceCount,
+    ws: input.windowStart,
+    we: input.windowEnd,
+    q: input.perNumberQuota,
+    in: input.maxInflightPerNumber,
+    ic: input.maxInflightPerCampaign,
+  };
+  const txt = JSON.stringify(sorted);
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
+  return "sha256:" + Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Build a prepared snapshot for a campaign. Operator must call this before launch
+// for marketing_instant; the launch endpoint enforces freshness + signature match.
+async function prepareCampaign(admin: any, requesterId: string, body: any) {
+  const numbers: Array<{ number_id: string; template_id: string }> =
+    Array.isArray(body.numbers) ? body.numbers
+      .map((n: any) => ({ number_id: String(n?.number_id || ""), template_id: String(n?.template_id || "") }))
+      .filter((n: any) => uuidRegex.test(n.number_id) && uuidRegex.test(n.template_id))
+      : [];
+  const audienceCount = Math.max(0, Math.floor(Number(body.audience_count ?? 0)));
+  const dispatchMode: "paced" | "marketing_instant" =
+    body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
+  const perNumberQuota = Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota ?? 200))));
+  const maxInflightPerNumber = Math.max(1, Math.min(50, Math.floor(Number(body.max_inflight_per_number ?? 5))));
+  const maxInflightPerCampaign = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
+  const windowStart: string = typeof body.window_start === "string" ? body.window_start : "09:00";
+  const windowEnd: string = typeof body.window_end === "string" ? body.window_end : "18:00";
+  const reuseCampaignId: string | null =
+    typeof body.campaign_id === "string" && uuidRegex.test(body.campaign_id) ? body.campaign_id : null;
+
+  if (numbers.length === 0) return json({ error: "At least one number+template required" }, 400);
+  if (audienceCount <= 0) return json({ error: "audience_count required" }, 400);
+
+  const numberIds = [...new Set(numbers.map((n) => n.number_id))];
+  const templateIds = [...new Set(numbers.map((n) => n.template_id))];
+
+  const { data: numberRows } = await admin
+    .from("whatsapp_numbers")
+    .select("id, user_id, workspace_id, phone_number, status, webhook_connected, paused_at, paused_reason, daily_send_limit, provider_app_id, provider_api_key")
+    .in("id", numberIds);
+  if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "Number not found" }, 404);
+  const ownerId = numberRows[0].user_id;
+  if (!(await canAccessUser(admin, requesterId, ownerId))) return json({ error: "Forbidden" }, 403);
+
+  const { data: templateRows } = await admin
+    .from("message_templates")
+    .select("id, name, status, body, variables")
+    .in("id", templateIds);
+  if (!templateRows || templateRows.length !== templateIds.length) return json({ error: "Template not found" }, 404);
+
+  const { data: backoffRows } = await admin
+    .from("provider_backoff")
+    .select("whatsapp_number_id, retry_after")
+    .in("whatsapp_number_id", numberIds);
+  const backoffMap = new Map<string, string>();
+  for (const b of backoffRows ?? []) backoffMap.set(b.whatsapp_number_id, b.retry_after);
+
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+
+  // Allocate audience round-robin (capped per-number).
+  const allocByNum = new Map<string, number>();
+  for (const nid of numberIds) allocByNum.set(nid, 0);
+  let remaining = audienceCount;
+  while (remaining > 0) {
+    let placedThisRound = false;
+    for (const nid of numberIds) {
+      const cur = allocByNum.get(nid) ?? 0;
+      const nrow: any = numberRows.find((n: any) => n.id === nid);
+      const cap = Math.max(0, Math.min(perNumberQuota, Number(nrow?.daily_send_limit ?? 200)));
+      if (cur < cap) {
+        allocByNum.set(nid, cur + 1);
+        remaining--;
+        placedThisRound = true;
+        if (remaining === 0) break;
+      }
+    }
+    if (!placedThisRound) break;
+  }
+  if (remaining > 0) {
+    warnings.push(`Capacity is ${audienceCount - remaining} but audience is ${audienceCount}. Add more numbers, raise per-number cap, or split.`);
+  }
+
+  const numbersOut = numberRows.map((n: any) => {
+    const allocation = allocByNum.get(n.id) ?? 0;
+    if (n.webhook_connected === false) blockers.push(`Number ${n.phone_number}: webhook not connected — replies would be lost.`);
+    if (n.status === "banned" || n.status === "restricted") blockers.push(`Number ${n.phone_number} is ${n.status}.`);
+    if (n.paused_at) blockers.push(`Number ${n.phone_number} is paused: ${n.paused_reason ?? "no reason"}.`);
+    if (!n.provider_api_key) blockers.push(`Number ${n.phone_number}: no provider API key.`);
+    if (allocation === 0) blockers.push(`Number ${n.phone_number} got zero allocation — remove it from the pool or raise its daily cap.`);
+    return {
+      id: n.id,
+      phone: n.phone_number,
+      status: n.status,
+      webhook_connected: n.webhook_connected,
+      allocation,
+      daily_cap: Number(n.daily_send_limit ?? 200),
+      backoff_until: backoffMap.get(n.id) ?? null,
+    };
+  });
+
+  for (const t of templateRows) {
+    if (t.status !== "approved") blockers.push(`Template "${t.name}" is ${t.status}, not approved.`);
+  }
+
+  // Global instant kill switch.
+  if (dispatchMode === "marketing_instant") {
+    const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
+    if (flag && flag.value === false) blockers.push("Marketing Instant mode is globally disabled (kill switch).");
+  }
+
+  const signature = await computeSnapshotSignature({
+    numberIds, templateIds, audienceCount, windowStart, windowEnd,
+    perNumberQuota, maxInflightPerNumber, maxInflightPerCampaign,
+  });
+
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const report = {
+    signature,
+    expires_at: expiresAt,
+    dispatch_mode: dispatchMode,
+    numbers: numbersOut,
+    templates: templateRows.map((t: any) => ({ id: t.id, name: t.name, status: t.status })),
+    audience: { total: audienceCount, allocated: audienceCount - remaining },
+    caps: {
+      per_number_inflight: maxInflightPerNumber,
+      per_campaign_inflight: maxInflightPerCampaign,
+      per_number_daily: perNumberQuota,
+    },
+    window: { start: windowStart, end: windowEnd, per_recipient_tz: body.respect_recipient_tz !== false },
+    blockers,
+    warnings,
+    notice: dispatchMode === "marketing_instant"
+      ? "Instant mode sends each recipient immediately when their LOCAL window opens. Recipients in different timezones do not all send at the same global second."
+      : null,
+  };
+
+  if (reuseCampaignId) {
+    await admin.from("campaigns").update({
+      prepared_at: new Date().toISOString(),
+      prepared_expires_at: expiresAt,
+      prepared_signature: signature,
+      prepared_report: report,
+    }).eq("id", reuseCampaignId);
+  }
+
+  return json({ ok: blockers.length === 0, signature, expires_at: expiresAt, blockers, warnings, snapshot: report });
+}
+
+// Engage / release a kill switch. scope: campaign | sender | instant_mode_global.
+async function killSwitch(admin: any, requesterId: string, body: any) {
+  const scope = String(body.scope || "campaign");
+  const reason = String(body.reason || "manual").slice(0, 500);
+  const release = body.release === true;
+
+  if (scope === "campaign") {
+    const id = String(body.campaign_id || "");
+    if (!uuidRegex.test(id)) return json({ error: "campaign_id required" }, 400);
+    const { data: c } = await admin.from("campaigns").select("id, user_id, workspace_id").eq("id", id).maybeSingle();
+    if (!c) return json({ error: "Not found" }, 404);
+    if (!(await canAccessUser(admin, requesterId, c.user_id))) return json({ error: "Forbidden" }, 403);
+    await admin.from("campaigns").update({
+      kill_switch_at: release ? null : new Date().toISOString(),
+      kill_switch_by: release ? null : requesterId,
+      kill_switch_reason: release ? null : reason,
+      status: release ? "running" : "paused",
+    }).eq("id", id);
+    await admin.from("campaign_dispatch_events").insert({
+      campaign_id: id, workspace_id: c.workspace_id,
+      event_type: release ? "kill_switch_released" : "killed",
+      reason, payload: { by: requesterId },
+    });
+    return json({ ok: true });
+  }
+
+  if (scope === "sender") {
+    const id = String(body.whatsapp_number_id || "");
+    if (!uuidRegex.test(id)) return json({ error: "whatsapp_number_id required" }, 400);
+    const { data: n } = await admin.from("whatsapp_numbers").select("id, user_id").eq("id", id).maybeSingle();
+    if (!n) return json({ error: "Not found" }, 404);
+    if (!(await canAccessUser(admin, requesterId, n.user_id))) return json({ error: "Forbidden" }, 403);
+    await admin.from("whatsapp_numbers").update({
+      paused_at: release ? null : new Date().toISOString(),
+      paused_reason: release ? null : reason,
+    }).eq("id", id);
+    return json({ ok: true });
+  }
+
+  if (scope === "instant_mode_global") {
+    const { data: isAdminRow } = await admin.rpc("is_admin", { _user_id: requesterId });
+    if (!isAdminRow) return json({ error: "Admin only" }, 403);
+    await admin.from("system_flags").upsert({
+      key: "marketing_instant_enabled",
+      value: release ? true : false,
+      updated_by: requesterId,
+      updated_at: new Date().toISOString(),
+    });
+    return json({ ok: true });
+  }
+
+  return json({ error: "Unknown scope" }, 400);
+}
+
+// Live runtime status for the operator UI.
+async function runtimeStatus(admin: any, requesterId: string, body: any) {
+  const id = String(body.campaign_id || "");
+  if (!uuidRegex.test(id)) return json({ error: "campaign_id required" }, 400);
+  const { data: c } = await admin.from("campaigns")
+    .select("id, user_id, workspace_id, status, dispatch_mode, kill_switch_at, kill_switch_reason, prepared_at, prepared_expires_at, prepared_signature, prepared_report, max_inflight_per_number, max_inflight_per_campaign")
+    .eq("id", id).maybeSingle();
+  if (!c) return json({ error: "Not found" }, 404);
+  if (!(await canAccessUser(admin, requesterId, c.user_id))) return json({ error: "Forbidden" }, 403);
+
+  const sinceIso = new Date(Date.now() - 60_000).toISOString();
+  const fiveMinIso = new Date(Date.now() - 5 * 60_000).toISOString();
+
+  const { data: recents } = await admin
+    .from("campaign_recipients")
+    .select("whatsapp_number_id, status, sent_at")
+    .eq("campaign_id", id)
+    .gte("sent_at", sinceIso)
+    .not("sent_at", "is", null)
+    .limit(2000);
+  const sentLast60 = (recents ?? []).length;
+  const activeSenders = new Set((recents ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean));
+
+  const { data: events } = await admin
+    .from("campaign_dispatch_events")
+    .select("whatsapp_number_id, event_type, reason, created_at")
+    .eq("campaign_id", id)
+    .gte("created_at", fiveMinIso)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  const idleByNum = new Map<string, { reason: string; at: string }>();
+  for (const e of events ?? []) {
+    const nid = (e as any).whatsapp_number_id;
+    if (!nid || idleByNum.has(nid) || activeSenders.has(nid)) continue;
+    idleByNum.set(nid, { reason: e.reason ?? e.event_type, at: e.created_at });
+  }
+
+  // Pool participation alert: window open + < 50% selected senders sent in last 5 min.
+  const selected = (c.prepared_report as any)?.numbers?.map((n: any) => n.id) ?? [];
+  const { data: recentByNum } = await admin
+    .from("campaign_recipients")
+    .select("whatsapp_number_id")
+    .eq("campaign_id", id)
+    .gte("sent_at", fiveMinIso)
+    .not("sent_at", "is", null)
+    .limit(5000);
+  const activeRecent = new Set((recentByNum ?? []).map((r: any) => r.whatsapp_number_id));
+  const idle = selected.filter((n: string) => !activeRecent.has(n));
+  const poolAlert = c.status === "running" && selected.length > 0 && activeRecent.size * 2 < selected.length;
+
+  return json({
+    ok: true,
+    campaign: {
+      id: c.id,
+      status: c.status,
+      dispatch_mode: c.dispatch_mode,
+      kill_switch: c.kill_switch_at ? { at: c.kill_switch_at, reason: c.kill_switch_reason } : null,
+      snapshot: c.prepared_at
+        ? { prepared_at: c.prepared_at, expires_at: c.prepared_expires_at, signature: c.prepared_signature, fresh: new Date(c.prepared_expires_at).getTime() > Date.now() }
+        : null,
+      caps: { per_number: c.max_inflight_per_number, per_campaign: c.max_inflight_per_campaign },
+    },
+    runtime: {
+      sent_last_60s: sentLast60,
+      rate_per_min: sentLast60,
+      active_senders: [...activeSenders],
+      idle_senders: [...idleByNum.entries()].map(([id, v]) => ({ id, reason: v.reason, at: v.at })),
+      pool_participation_alert: poolAlert,
+      idle_pool_members: idle,
+    },
+  });
+}
