@@ -2097,8 +2097,8 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   const dispatchMode: "paced" | "marketing_instant" =
     body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
   const perNumberQuota = Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota ?? 200))));
-  const maxInflightPerNumber = Math.max(1, Math.min(50, Math.floor(Number(body.max_inflight_per_number ?? 5))));
-  const maxInflightPerCampaign = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
+  const maxInflightPerNumber = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_number ?? 5))));
+  const maxInflightPerCampaign = Math.max(1, Math.min(5000, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
   const windowStart: string = typeof body.window_start === "string" ? body.window_start : "09:00";
   const windowEnd: string = typeof body.window_end === "string" ? body.window_end : "18:00";
   const reuseCampaignId: string | null =
