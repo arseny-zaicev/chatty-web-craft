@@ -33,6 +33,7 @@ Deno.serve(async (req) => {
     const workspace_id: string | undefined = body.workspace_id;
     const email: string | undefined = body.email?.trim().toLowerCase();
     const role: string = body.role === "client" ? "client" : "manager";
+    const targetEmail = email ?? "";
 
     if (!workspace_id) {
       return json({ error: "workspace_id required" }, 400);
@@ -95,7 +96,7 @@ Deno.serve(async (req) => {
     const anonClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
     const sendMagicInvite = async (reason: "existing_user" | "resend") => {
       const { error } = await anonClient.auth.signInWithOtp({
-        email,
+        email: targetEmail,
         options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
       });
       if (error) {
@@ -111,7 +112,7 @@ Deno.serve(async (req) => {
     // The recovery mechanism is internal only; auth-email-hook renders it as a
     // workspace invitation for /accept-invite links.
     const sendRecoveryInvite = async (reason: "invite_fallback") => {
-      const { error } = await anonClient.auth.resetPasswordForEmail(email, { redirectTo });
+      const { error } = await anonClient.auth.resetPasswordForEmail(targetEmail, { redirectTo });
       if (error) {
         console.error("resetPasswordForEmail failed", { email, reason, redirectTo, error: error.message });
         return { ok: false, error: error.message, reason };
