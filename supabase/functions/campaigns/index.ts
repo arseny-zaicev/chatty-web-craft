@@ -343,6 +343,16 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     if (flag && flag.value === false) {
       return json({ error: "Marketing instant mode is globally disabled", code: "instant_mode_disabled" }, 409);
     }
+    // marketing_instant requires a prepared snapshot. Fresh launches (no
+    // reuseCampaignId) cannot run instantly — they must go through prepare
+    // first so the operator sees blockers/warnings and the snapshot signature
+    // is locked. (Paced mode is unchanged.)
+    if (!reuseCampaignId) {
+      return json({
+        error: "marketing_instant requires a prepared campaign. Call action=prepare first, then action=launch with the campaign_id.",
+        code: "must_prepare",
+      }, 409);
+    }
   }
 
   if (!name || rawNumbers.length === 0) {
@@ -1298,281 +1308,315 @@ async function processQueue(admin: any) {
     console.warn(`[number_auto_restricted] number=${numId} code=${code} failures_5min=${total} sample="${sampleMsg.slice(0, 200)}"`);
   };
 
-  // Hard pacing per WhatsApp number: utility templates throttled to >=60s;
-  // marketing blasts run at the configured floor of 1 message/sec per number.
-  // marketing_instant: floor is 0 — backpressure (inflight caps + provider backoff)
-  // is the brake instead.
+  // ============= Per-number pacing state (shared by workers) =============
+  // For paced/utility we serialize within a number using `lastSentMs`. For
+  // marketing_instant the floor is 0 and parallelism is bounded by the
+  // worker-pool size (= max_inflight_per_number).
   const lastSentMs = new Map<string, number>();
-  // Inflight counters for backpressure (per-number and per-campaign in this tick).
-  const inflightByNum = new Map<string, number>();
-  const inflightByCampaign = new Map<string, number>();
-  const incInflight = (nid: string | null, cid: string) => {
-    if (nid) inflightByNum.set(nid, (inflightByNum.get(nid) ?? 0) + 1);
-    inflightByCampaign.set(cid, (inflightByCampaign.get(cid) ?? 0) + 1);
+
+  // Pre-warm `lastSentMs` per number with one query each (avoids a per-recipient
+  // round-trip inside processOne).
+  for (const numId of numIdsInTick) {
+    const { data: lastRow } = await admin
+      .from("campaign_recipients")
+      .select("sent_at")
+      .eq("whatsapp_number_id", numId)
+      .not("sent_at", "is", null)
+      .order("sent_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastRow?.sent_at) lastSentMs.set(numId, new Date(lastRow.sent_at).getTime());
+  }
+
+  // ============= Per-campaign semaphore (max_inflight_per_campaign) =============
+  type CampSem = { inflight: number; max: number; waiters: Array<() => void> };
+  const campSem = new Map<string, CampSem>();
+  const acquireCampSlot = async (cid: string, max: number): Promise<void> => {
+    let s = campSem.get(cid);
+    if (!s) { s = { inflight: 0, max, waiters: [] }; campSem.set(cid, s); }
+    s.max = Math.max(s.max, max); // grow if a different recipient asks for higher
+    if (s.inflight < s.max) { s.inflight++; return; }
+    await new Promise<void>((res) => s!.waiters.push(res));
+    s.inflight++;
   };
-  const decInflight = (nid: string | null, cid: string) => {
-    if (nid) inflightByNum.set(nid, Math.max(0, (inflightByNum.get(nid) ?? 0) - 1));
-    inflightByCampaign.set(cid, Math.max(0, (inflightByCampaign.get(cid) ?? 0) - 1));
+  const releaseCampSlot = (cid: string) => {
+    const s = campSem.get(cid);
+    if (!s) return;
+    s.inflight = Math.max(0, s.inflight - 1);
+    const next = s.waiters.shift();
+    if (next) next();
   };
 
-  for (const recipient of due ?? []) {
-      const cState = getCanary(recipient.campaign_id);
-      if (cState.aborted) continue;
+  // ============= Process one recipient (used by all workers) =============
+  // Returns true if a send was attempted (success or failure), false if skipped.
+  const processOneRecipient = async (recipient: any): Promise<void> => {
+    const cState = getCanary(recipient.campaign_id);
+    if (cState.aborted) return;
 
-      const camp = recipient.campaigns ?? {};
-      const isInstant = camp.dispatch_mode === "marketing_instant";
+    const camp = recipient.campaigns ?? {};
+    const isInstant = camp.dispatch_mode === "marketing_instant";
 
-      // Skip if global instant kill switch is engaged.
-      if (isInstant && instantGloballyDisabled) {
-        await logEvent(recipient, "skipped", "instant_mode_disabled");
-        continue;
-      }
-      // Skip if this sender is paused.
-      const numRow = camp.whatsapp_numbers ?? null;
-      if (numRow?.paused_at) {
-        await logEvent(recipient, "idle", "sender_paused", { paused_reason: numRow.paused_reason });
-        continue;
-      }
-      // Skip if provider backoff is active for this number.
-      const recNumIdEarly = recipient.whatsapp_number_id;
-      const backoffUntil = recNumIdEarly ? backoffByNum.get(recNumIdEarly) : undefined;
-      if (backoffUntil && backoffUntil > Date.now()) {
-        await logEvent(recipient, "idle", "provider_backoff", { retry_after: new Date(backoffUntil).toISOString() });
-        continue;
-      }
-      // Backpressure: per-number and per-campaign inflight caps.
-      const capInflightNum = Math.max(1, Number(camp.max_inflight_per_number ?? 5));
-      const capInflightCamp = Math.max(1, Number(camp.max_inflight_per_campaign ?? 50));
-      if (recNumIdEarly && (inflightByNum.get(recNumIdEarly) ?? 0) >= capInflightNum) {
-        await logEvent(recipient, "idle", "inflight_per_number_cap", { cap: capInflightNum });
-        continue;
-      }
-      if ((inflightByCampaign.get(recipient.campaign_id) ?? 0) >= capInflightCamp) {
-        await logEvent(recipient, "idle", "inflight_per_campaign_cap", { cap: capInflightCamp });
-        continue;
-      }
+    if (isInstant && instantGloballyDisabled) {
+      await logEvent(recipient, "skipped", "instant_mode_disabled");
+      return;
+    }
+    const numRow = camp.whatsapp_numbers ?? null;
+    if (numRow?.paused_at) {
+      await logEvent(recipient, "idle", "sender_paused", { paused_reason: numRow.paused_reason });
+      return;
+    }
+    const recNumIdEarly = recipient.whatsapp_number_id;
+    const backoffUntil = recNumIdEarly ? backoffByNum.get(recNumIdEarly) : undefined;
+    if (backoffUntil && backoffUntil > Date.now()) {
+      await logEvent(recipient, "idle", "provider_backoff", { retry_after: new Date(backoffUntil).toISOString() });
+      return;
+    }
 
-      const targetMs = new Date(recipient.scheduled_at).getTime();
-      const nowMs = Date.now();
-      const waitMs = targetMs - nowMs;
-      const remainingBudget = TICK_BUDGET_MS - (nowMs - tickStartedAt);
-      // Instant mode: do NOT wait — push immediately. Otherwise honor scheduled_at.
-      if (!isInstant && waitMs > 0 && remainingBudget > 0) {
-        await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
-      }
-      if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
+    // Honor scheduled_at for paced mode. Instant mode pushes immediately.
+    const targetMs = new Date(recipient.scheduled_at).getTime();
+    const waitMs = targetMs - Date.now();
+    const remainingBudget = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
+    if (!isInstant && waitMs > 0 && remainingBudget > 0) {
+      await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
+    }
+    if (Date.now() - tickStartedAt > TICK_BUDGET_MS) return;
 
-      // Per-number daily cap safety net. If this number has already sent its
-      // daily_send_limit today (Dubai TZ), bump this recipient to tomorrow at
-      // 09:00 Dubai and skip. Prevents silent overshoot if anything bypassed
-      // the launch-time capacity truncation.
-      const recNumId = recipient.whatsapp_number_id;
-      if (recNumId && dailyLimitByNum.has(recNumId)) {
-        const cap = dailyLimitByNum.get(recNumId)!;
-        const sentNow = sentTodayByNum.get(recNumId) ?? 0;
-        if (sentNow >= cap) {
-          // Bump 24h forward, snapped to 09:00 Dubai of the next day.
-          const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
-          const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(next);
-          const bumpedIso = new Date(`${dubaiDate}T09:00:00+04:00`).toISOString();
-          await admin
-            .from("campaign_recipients")
-            .update({ scheduled_at: bumpedIso })
-            .eq("id", recipient.id)
-            .eq("status", "scheduled");
-          // Refresh campaigns.first_scheduled_at + today_recipients_count so cards
-          // stop saying "today X @ HH:MM" when reality is "tomorrow 09:00".
-          try {
-            const { data: minRow } = await admin
-              .from("campaign_recipients")
-              .select("scheduled_at")
-              .eq("campaign_id", recipient.campaign_id)
-              .eq("status", "scheduled")
-              .is("sent_at", null)
-              .order("scheduled_at", { ascending: true })
-              .limit(1)
-              .maybeSingle();
-            const todayStartIso = (() => {
-              const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
-              return new Date(`${k}T00:00:00+04:00`).toISOString();
-            })();
-            const tomorrowStartIso = (() => {
-              const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
-              return new Date(`${k}T00:00:00+04:00`).toISOString();
-            })();
-            const { count: todayLeft } = await admin
-              .from("campaign_recipients")
-              .select("id", { count: "exact", head: true })
-              .eq("campaign_id", recipient.campaign_id)
-              .gte("scheduled_at", todayStartIso)
-              .lt("scheduled_at", tomorrowStartIso);
-            await admin.from("campaigns").update({
-              first_scheduled_at: minRow?.scheduled_at ?? bumpedIso,
-              today_recipients_count: todayLeft ?? 0,
-            }).eq("id", recipient.campaign_id);
-          } catch (_) { /* best-effort */ }
-          console.warn(`[cap_reached] number=${recNumId} sent_today=${sentNow} cap=${cap} -> bumped recipient=${recipient.id} to ${bumpedIso}`);
-          continue;
-        }
-      }
-
-
-      // Pacing guard: enforce the gap from the previous send on this WhatsApp number.
-      const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
-      const isUtility = tplCategory === "utility" || tplCategory === "authentication";
-      const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
-      // marketing_instant: floor 0 (backpressure controls rate). Otherwise 1s/60s.
-      const floor = isInstant ? 0 : (isUtility ? 60 : 1);
-      const minGapMs = Math.max(floor, configuredMin) * 1000;
-      const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
-      let lastMs = lastSentMs.get(pacingKey) ?? 0;
-      if (!lastMs) {
-        const { data: lastRecipient } = await admin
+    // Daily-cap safety net (Dubai TZ). Bumps to tomorrow 09:00 if cap reached.
+    const recNumId = recipient.whatsapp_number_id;
+    if (recNumId && dailyLimitByNum.has(recNumId)) {
+      const cap = dailyLimitByNum.get(recNumId)!;
+      const sentNow = sentTodayByNum.get(recNumId) ?? 0;
+      if (sentNow >= cap) {
+        const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(next);
+        const bumpedIso = new Date(`${dubaiDate}T09:00:00+04:00`).toISOString();
+        await admin
           .from("campaign_recipients")
-          .select("sent_at")
-          .eq("whatsapp_number_id", pacingKey)
-          .not("sent_at", "is", null)
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        lastMs = lastRecipient?.sent_at ? new Date(lastRecipient.sent_at).getTime() : 0;
+          .update({ scheduled_at: bumpedIso })
+          .eq("id", recipient.id)
+          .eq("status", "scheduled");
+        try {
+          const { data: minRow } = await admin
+            .from("campaign_recipients")
+            .select("scheduled_at")
+            .eq("campaign_id", recipient.campaign_id)
+            .eq("status", "scheduled")
+            .is("sent_at", null)
+            .order("scheduled_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          const todayStartIso = (() => {
+            const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+            return new Date(`${k}T00:00:00+04:00`).toISOString();
+          })();
+          const tomorrowStartIso = (() => {
+            const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
+            return new Date(`${k}T00:00:00+04:00`).toISOString();
+          })();
+          const { count: todayLeft } = await admin
+            .from("campaign_recipients")
+            .select("id", { count: "exact", head: true })
+            .eq("campaign_id", recipient.campaign_id)
+            .gte("scheduled_at", todayStartIso)
+            .lt("scheduled_at", tomorrowStartIso);
+          await admin.from("campaigns").update({
+            first_scheduled_at: minRow?.scheduled_at ?? bumpedIso,
+            today_recipients_count: todayLeft ?? 0,
+          }).eq("id", recipient.campaign_id);
+        } catch (_) { /* best-effort */ }
+        await logEvent(recipient, "idle", "daily_cap_reached", { cap, sent_today: sentNow });
+        return;
       }
+    }
+
+    // Pacing floor — only meaningful for paced/utility (instant => floor 0).
+    const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
+    const isUtility = tplCategory === "utility" || tplCategory === "authentication";
+    const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
+    const floor = isInstant ? 0 : (isUtility ? 60 : 1);
+    const minGapMs = Math.max(floor, configuredMin) * 1000;
+    const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
+    if (minGapMs > 0) {
+      const lastMs = lastSentMs.get(pacingKey) ?? 0;
       if (lastMs) {
         const since = Date.now() - lastMs;
         if (since < minGapMs) {
           const extra = minGapMs - since;
           const budgetLeft = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
-          if (extra > budgetLeft) break; // try next tick
+          if (extra > budgetLeft) return; // try next tick
           await new Promise((r) => setTimeout(r, extra));
         }
       }
+    }
 
-      const { data: locked } = await admin
-        .from("campaign_recipients")
-        .update({ status: "sending" })
-        .eq("id", recipient.id)
-        .eq("status", "scheduled")
-        .select("id")
-        .maybeSingle();
-      if (!locked) continue;
-      lastSentMs.set(pacingKey, Date.now());
-      incInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
+    // Atomic claim.
+    const { data: locked } = await admin
+      .from("campaign_recipients")
+      .update({ status: "sending" })
+      .eq("id", recipient.id)
+      .eq("status", "scheduled")
+      .select("id")
+      .maybeSingle();
+    if (!locked) return;
+    lastSentMs.set(pacingKey, Date.now());
 
+    try {
+      const gsBody = await sendTemplate(admin, recipient);
+      const providerId = gsBody.messageId || null;
+      const tpl = recipient.campaigns?.message_templates;
+      const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
+      const renderedBody = renderTemplateBody(tpl?.body, variableNames, recipient.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
+      const sentAt = new Date().toISOString();
 
-      try {
-        const gsBody = await sendTemplate(admin, recipient);
-        decInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
-        const providerId = gsBody.messageId || null;
-        const tpl = recipient.campaigns?.message_templates;
-        const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
-        const renderedBody = renderTemplateBody(tpl?.body, variableNames, recipient.variables) || `[Template] ${tpl?.name ?? ""}`.trim();
-        const sentAt = new Date().toISOString();
+      const conversationId = await ensureCampaignConversation(admin, recipient);
 
-        const conversationId = await ensureCampaignConversation(admin, recipient);
+      await admin.from("campaign_recipients").update({
+        status: "sent",
+        sent_at: sentAt,
+        provider_message_id: providerId,
+        conversation_id: conversationId,
+      }).eq("id", recipient.id);
 
-        await admin.from("campaign_recipients").update({
-          status: "sent",
-          sent_at: sentAt,
-          provider_message_id: providerId,
+      if (conversationId) {
+        await admin.from("messages").insert({
+          user_id: recipient.user_id,
           conversation_id: conversationId,
-        }).eq("id", recipient.id);
+          direction: "outbound",
+          body: renderedBody,
+          status: "sent",
+          provider_message_id: providerId,
+          metadata: {
+            campaign_id: recipient.campaign_id,
+            campaign_recipient_id: recipient.id,
+            template_id: tpl?.id ?? null,
+            template_name: tpl?.name ?? null,
+            source: "campaign_opener",
+            gupshup_response: gsBody,
+          },
+        });
+        await admin.from("conversations").update({
+          last_message_text: renderedBody.slice(0, 500),
+          last_message_at: sentAt,
+        }).eq("id", conversationId);
+      }
+      cState.ok += 1;
+      sentMu.inc();
+      if (recipient.whatsapp_number_id) {
+        sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
+      }
+    } catch (err) {
+      sentMu.incFail();
+      const msg = err instanceof Error ? err.message : "Send failed";
+      await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
 
-        if (conversationId) {
-          await admin.from("messages").insert({
-            user_id: recipient.user_id,
-            conversation_id: conversationId,
-            direction: "outbound",
-            body: renderedBody,
-            status: "sent",
-            provider_message_id: providerId,
-            metadata: {
-              campaign_id: recipient.campaign_id,
-              campaign_recipient_id: recipient.id,
-              template_id: tpl?.id ?? null,
-              template_name: tpl?.name ?? null,
-              source: "campaign_opener",
-              gupshup_response: gsBody,
-            },
+      cState.fail += 1;
+      const code = extractErrorCode(msg);
+      cState.codes.set(code, (cState.codes.get(code) ?? 0) + 1);
+
+      const httpMatch = msg.match(/"http_status":(\d{3})/);
+      const httpStatus = httpMatch ? parseInt(httpMatch[1], 10) : 0;
+      if (recipient.whatsapp_number_id && (httpStatus === 429 || httpStatus >= 500)) {
+        try {
+          const retryAfterMatch = msg.match(/retry[_-]?after[":\s]+(\d+)/i);
+          const baseSec = retryAfterMatch ? Math.min(600, parseInt(retryAfterMatch[1], 10)) : 30;
+          const { data: existing } = await admin
+            .from("provider_backoff")
+            .select("attempt_count")
+            .eq("whatsapp_number_id", recipient.whatsapp_number_id)
+            .maybeSingle();
+          const attempt = Math.min(8, (existing?.attempt_count ?? 0) + 1);
+          const delaySec = Math.min(600, baseSec * Math.pow(2, attempt - 1));
+          const retryAfter = new Date(Date.now() + delaySec * 1000).toISOString();
+          await admin.from("provider_backoff").upsert({
+            whatsapp_number_id: recipient.whatsapp_number_id,
+            retry_after: retryAfter,
+            last_status: httpStatus,
+            last_error: msg.slice(0, 500),
+            attempt_count: attempt,
+            updated_at: new Date().toISOString(),
           });
-          await admin.from("conversations").update({
-            last_message_text: renderedBody.slice(0, 500),
-            last_message_at: sentAt,
-          }).eq("id", conversationId);
-        }
-        cState.ok += 1;
-        sentMu.inc();
-        if (recipient.whatsapp_number_id) {
-          sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
-        }
-      } catch (err) {
-        decInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
-        sentMu.incFail();
-        const msg = err instanceof Error ? err.message : "Send failed";
-        await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
+          backoffByNum.set(recipient.whatsapp_number_id, new Date(retryAfter).getTime());
+          await logEvent(recipient, "error", httpStatus === 429 ? "provider_429" : "provider_5xx", { http_status: httpStatus, retry_after: retryAfter });
+        } catch (_) { /* best effort */ }
+      }
 
-        cState.fail += 1;
-        const code = extractErrorCode(msg);
-        cState.codes.set(code, (cState.codes.get(code) ?? 0) + 1);
+      if (recipient.whatsapp_number_id && RESTRICTION_CODES.has(code)) {
+        await maybeFlipNumberRestricted(recipient.whatsapp_number_id, msg, code);
+      }
 
-        // Provider 429 / 5xx -> exponential per-number backoff so the next tick
-        // skips this number until retry_after.
-        const httpMatch = msg.match(/"http_status":(\d{3})/);
-        const httpStatus = httpMatch ? parseInt(httpMatch[1], 10) : 0;
-        if (recipient.whatsapp_number_id && (httpStatus === 429 || httpStatus >= 500)) {
+      if (!cState.aborted && cState.fail >= 3 && cState.ok === 0) {
+        const top = [...cState.codes.entries()].sort((a, b) => b[1] - a[1])[0];
+        if (top && top[1] === cState.fail) {
+          cState.aborted = true;
           try {
-            const retryAfterMatch = msg.match(/retry[_-]?after[":\s]+(\d+)/i);
-            const baseSec = retryAfterMatch ? Math.min(600, parseInt(retryAfterMatch[1], 10)) : 30;
-            // Bump attempt count and apply exponential factor (cap 10 minutes).
-            const { data: existing } = await admin
-              .from("provider_backoff")
-              .select("attempt_count")
-              .eq("whatsapp_number_id", recipient.whatsapp_number_id)
-              .maybeSingle();
-            const attempt = Math.min(8, (existing?.attempt_count ?? 0) + 1);
-            const delaySec = Math.min(600, baseSec * Math.pow(2, attempt - 1));
-            const retryAfter = new Date(Date.now() + delaySec * 1000).toISOString();
-            await admin.from("provider_backoff").upsert({
-              whatsapp_number_id: recipient.whatsapp_number_id,
-              retry_after: retryAfter,
-              last_status: httpStatus,
-              last_error: msg.slice(0, 500),
-              attempt_count: attempt,
-              updated_at: new Date().toISOString(),
+            await admin.from("campaigns").update({ status: "failed" }).eq("id", recipient.campaign_id);
+            await admin.from("slack_event_queue").insert({
+              event_type: "campaign_failed",
+              workspace_id: recipient.workspace_id,
+              payload: {
+                campaign_id: recipient.campaign_id,
+                reason: "canary_uniform_failure",
+                error_code: top[0],
+                failures: cState.fail,
+                sample_error: msg.slice(0, 400),
+              },
             });
-            backoffByNum.set(recipient.whatsapp_number_id, new Date(retryAfter).getTime());
-            await logEvent(recipient, "error", httpStatus === 429 ? "provider_429" : "provider_5xx", { http_status: httpStatus, retry_after: retryAfter });
-          } catch (_) { /* best effort */ }
-        }
-
-        // Per-number restriction detection (fires immediate Slack via DB trigger).
-        if (recipient.whatsapp_number_id && RESTRICTION_CODES.has(code)) {
-          await maybeFlipNumberRestricted(recipient.whatsapp_number_id, msg, code);
-        }
-
-        if (!cState.aborted && cState.fail >= 3 && cState.ok === 0) {
-          const top = [...cState.codes.entries()].sort((a, b) => b[1] - a[1])[0];
-          if (top && top[1] === cState.fail) {
-            cState.aborted = true;
-            try {
-              await admin.from("campaigns").update({ status: "failed" }).eq("id", recipient.campaign_id);
-              await admin.from("slack_event_queue").insert({
-                event_type: "campaign_failed",
-                workspace_id: recipient.workspace_id,
-                payload: {
-                  campaign_id: recipient.campaign_id,
-                  reason: "canary_uniform_failure",
-                  error_code: top[0],
-                  failures: cState.fail,
-                  sample_error: msg.slice(0, 400),
-                },
-              });
-            } catch (abortErr) {
-              console.error("canary abort failed", abortErr);
-            }
+          } catch (abortErr) {
+            console.error("canary abort failed", abortErr);
           }
         }
       }
+    }
+  };
+
+  // ============= Bounded-concurrency worker pool =============
+  // Recipients are grouped by sender number. Each group runs N workers, where
+  // N = max_inflight_per_number for that group's campaign (1 if paced/utility,
+  // since the per-number floor would serialize them anyway). A per-campaign
+  // semaphore enforces max_inflight_per_campaign across all groups.
+  const byNumber = new Map<string, any[]>();
+  for (const r of due ?? []) {
+    const key = r.whatsapp_number_id || `__nonum__${r.campaign_id}`;
+    let arr = byNumber.get(key);
+    if (!arr) { arr = []; byNumber.set(key, arr); }
+    arr.push(r);
   }
+
+  const groupTasks: Promise<void>[] = [];
+  for (const [, recipients] of byNumber) {
+    const first = recipients[0];
+    const camp = first.campaigns ?? {};
+    const isInstant = camp.dispatch_mode === "marketing_instant";
+    const tplCategory = String(first.campaigns?.message_templates?.category || "marketing").toLowerCase();
+    const isUtility = tplCategory === "utility" || tplCategory === "authentication";
+    const perNumberFloor = isInstant ? 0 : (isUtility ? 60 : 1);
+    const perNumberCap = Math.max(1, Number(camp.max_inflight_per_number ?? 5));
+    // Paced/utility floor>0 forces serialization within a number.
+    const parallel = perNumberFloor > 0 ? 1 : Math.min(perNumberCap, recipients.length);
+
+    let cursor = 0;
+    const workers: Promise<void>[] = [];
+    for (let w = 0; w < parallel; w++) {
+      workers.push((async () => {
+        while (true) {
+          if (Date.now() - tickStartedAt > TICK_BUDGET_MS) return;
+          const r = recipients[cursor++];
+          if (!r) return;
+          const cState = getCanary(r.campaign_id);
+          if (cState.aborted) continue;
+          const campMax = Math.max(1, Number(r.campaigns?.max_inflight_per_campaign ?? 50));
+          await acquireCampSlot(r.campaign_id, campMax);
+          try {
+            await processOneRecipient(r);
+          } finally {
+            releaseCampSlot(r.campaign_id);
+          }
+        }
+      })());
+    }
+    groupTasks.push(Promise.all(workers).then(() => {}));
+  }
+  await Promise.all(groupTasks);
 
 
   const campaignIds = [...new Set((due ?? []).map((r: any) => r.campaign_id))];
