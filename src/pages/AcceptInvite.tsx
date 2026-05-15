@@ -16,6 +16,7 @@ export default function AcceptInvite() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [email, setEmail] = useState<string | null>(null);
+  const [authFlow, setAuthFlow] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const navigate = useNavigate();
@@ -25,6 +26,9 @@ export default function AcceptInvite() {
     let mounted = true;
 
     const init = async () => {
+      const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const type = params.get("type");
+      if (type) setAuthFlow(type);
       const { data: { session } } = await supabase.auth.getSession();
       if (!mounted) return;
       if (session?.user) {
@@ -46,6 +50,9 @@ export default function AcceptInvite() {
     // Listen first to catch hash-based session establishment
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user && !ready) {
+        const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const type = params.get("type");
+        if (type) setAuthFlow(type);
         setEmail(session.user.email ?? null);
         setReady(true);
       }
@@ -61,19 +68,22 @@ export default function AcceptInvite() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isExistingUserInvite = authFlow === "magiclink";
     const fn = firstName.trim();
     const ln = lastName.trim();
-    if (!fn || !ln) return toast.error("Enter your first and last name");
+    if (!isExistingUserInvite && (!fn || !ln)) return toast.error("Enter your first and last name");
     if (fn.length > 60 || ln.length > 60) return toast.error("Name is too long");
-    if (password.length < 8) return toast.error("Password must be at least 8 characters");
-    if (password !== confirm) return toast.error("Passwords do not match");
+    if (!isExistingUserInvite && password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!isExistingUserInvite && password !== confirm) return toast.error("Passwords do not match");
 
     setLoading(true);
-    const fullName = `${fn} ${ln}`;
-    const { data: userData, error: updErr } = await supabase.auth.updateUser({
-      password,
-      data: { full_name: fullName, first_name: fn, last_name: ln },
-    });
+    const fullName = `${fn} ${ln}`.trim();
+    const updatePayload: Parameters<typeof supabase.auth.updateUser>[0] = {};
+    if (!isExistingUserInvite) updatePayload.password = password;
+    if (fullName) updatePayload.data = { full_name: fullName, first_name: fn, last_name: ln };
+    const { data: userData, error: updErr } = Object.keys(updatePayload).length > 0
+      ? await supabase.auth.updateUser(updatePayload)
+      : await supabase.auth.getUser();
     if (updErr) {
       setLoading(false);
       return toast.error(updErr.message);
@@ -82,24 +92,43 @@ export default function AcceptInvite() {
     const uid = userData.user?.id;
     if (uid) {
       // Upsert profile (handle_new_user trigger already created a row, so update it)
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .upsert({ user_id: uid, full_name: fullName }, { onConflict: "user_id" });
-      if (profErr) console.warn("profile upsert", profErr);
+      if (fullName) {
+        const { error: profErr } = await supabase
+          .from("profiles")
+          .upsert({ user_id: uid, full_name: fullName }, { onConflict: "user_id" });
+        if (profErr) console.warn("profile upsert", profErr);
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const invitedWorkspaceId = urlParams.get("wid");
+      if (invitedWorkspaceId) {
+        const { error: joinErr } = await supabase
+          .from("workspace_members")
+          .update({ joined_at: new Date().toISOString() })
+          .eq("workspace_id", invitedWorkspaceId)
+          .eq("user_id", uid);
+        if (joinErr) console.warn("workspace join", joinErr);
+      }
     }
 
     toast.success("Welcome aboard");
 
     // Route to first available workspace, otherwise portal
-    const { data: ws } = await supabase
-      .from("workspaces")
-      .select("slug")
-      .eq("is_active", true)
-      .order("name")
-      .limit(1);
+    const urlParams = new URLSearchParams(window.location.search);
+    const invitedSlug = urlParams.get("ws");
+    const invitedWorkspaceId = urlParams.get("wid");
+    const { data: ws } = invitedWorkspaceId
+      ? await supabase.from("workspaces").select("slug").eq("id", invitedWorkspaceId).limit(1)
+      : await supabase
+          .from("workspaces")
+          .select("slug")
+          .eq("is_active", true)
+          .order("name")
+          .limit(1);
     setLoading(false);
-    if (ws && ws.length > 0) {
-      navigate(`/ws/${ws[0].slug}/overview`, { replace: true });
+    const targetSlug = ws?.[0]?.slug ?? invitedSlug;
+    if (targetSlug) {
+      navigate(`/ws/${targetSlug}/overview`, { replace: true });
     } else {
       navigate("/portal-auth", { replace: true });
     }
