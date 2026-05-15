@@ -661,6 +661,8 @@ function CampaignDetail({
         primaryCampaignId={campaignIds[0]}
         campaignName={group.displayName}
       />
+
+      {campaignIds[0] && <CampaignRuntimePanel campaignId={campaignIds[0]} />}
     </div>
   );
 }
