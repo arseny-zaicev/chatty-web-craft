@@ -1300,17 +1300,64 @@ async function processQueue(admin: any) {
 
   // Hard pacing per WhatsApp number: utility templates throttled to >=60s;
   // marketing blasts run at the configured floor of 1 message/sec per number.
+  // marketing_instant: floor is 0 — backpressure (inflight caps + provider backoff)
+  // is the brake instead.
   const lastSentMs = new Map<string, number>();
+  // Inflight counters for backpressure (per-number and per-campaign in this tick).
+  const inflightByNum = new Map<string, number>();
+  const inflightByCampaign = new Map<string, number>();
+  const incInflight = (nid: string | null, cid: string) => {
+    if (nid) inflightByNum.set(nid, (inflightByNum.get(nid) ?? 0) + 1);
+    inflightByCampaign.set(cid, (inflightByCampaign.get(cid) ?? 0) + 1);
+  };
+  const decInflight = (nid: string | null, cid: string) => {
+    if (nid) inflightByNum.set(nid, Math.max(0, (inflightByNum.get(nid) ?? 0) - 1));
+    inflightByCampaign.set(cid, Math.max(0, (inflightByCampaign.get(cid) ?? 0) - 1));
+  };
 
   for (const recipient of due ?? []) {
       const cState = getCanary(recipient.campaign_id);
       if (cState.aborted) continue;
 
+      const camp = recipient.campaigns ?? {};
+      const isInstant = camp.dispatch_mode === "marketing_instant";
+
+      // Skip if global instant kill switch is engaged.
+      if (isInstant && instantGloballyDisabled) {
+        await logEvent(recipient, "skipped", "instant_mode_disabled");
+        continue;
+      }
+      // Skip if this sender is paused.
+      const numRow = camp.whatsapp_numbers ?? null;
+      if (numRow?.paused_at) {
+        await logEvent(recipient, "idle", "sender_paused", { paused_reason: numRow.paused_reason });
+        continue;
+      }
+      // Skip if provider backoff is active for this number.
+      const recNumIdEarly = recipient.whatsapp_number_id;
+      const backoffUntil = recNumIdEarly ? backoffByNum.get(recNumIdEarly) : undefined;
+      if (backoffUntil && backoffUntil > Date.now()) {
+        await logEvent(recipient, "idle", "provider_backoff", { retry_after: new Date(backoffUntil).toISOString() });
+        continue;
+      }
+      // Backpressure: per-number and per-campaign inflight caps.
+      const capInflightNum = Math.max(1, Number(camp.max_inflight_per_number ?? 5));
+      const capInflightCamp = Math.max(1, Number(camp.max_inflight_per_campaign ?? 50));
+      if (recNumIdEarly && (inflightByNum.get(recNumIdEarly) ?? 0) >= capInflightNum) {
+        await logEvent(recipient, "idle", "inflight_per_number_cap", { cap: capInflightNum });
+        continue;
+      }
+      if ((inflightByCampaign.get(recipient.campaign_id) ?? 0) >= capInflightCamp) {
+        await logEvent(recipient, "idle", "inflight_per_campaign_cap", { cap: capInflightCamp });
+        continue;
+      }
+
       const targetMs = new Date(recipient.scheduled_at).getTime();
       const nowMs = Date.now();
       const waitMs = targetMs - nowMs;
       const remainingBudget = TICK_BUDGET_MS - (nowMs - tickStartedAt);
-      if (waitMs > 0 && remainingBudget > 0) {
+      // Instant mode: do NOT wait — push immediately. Otherwise honor scheduled_at.
+      if (!isInstant && waitMs > 0 && remainingBudget > 0) {
         await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
       }
       if (Date.now() - tickStartedAt > TICK_BUDGET_MS) break;
