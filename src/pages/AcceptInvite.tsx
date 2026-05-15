@@ -102,11 +102,9 @@ export default function AcceptInvite() {
       const urlParams = new URLSearchParams(window.location.search);
       const invitedWorkspaceId = urlParams.get("wid");
       if (invitedWorkspaceId) {
-        const { error: joinErr } = await supabase
-          .from("workspace_members")
-          .update({ joined_at: new Date().toISOString() })
-          .eq("workspace_id", invitedWorkspaceId)
-          .eq("user_id", uid);
+        const { error: joinErr } = await supabase.functions.invoke("invite-workspace-member", {
+          body: { workspace_id: invitedWorkspaceId, action: "accept" },
+        });
         if (joinErr) console.warn("workspace join", joinErr);
       }
     }
