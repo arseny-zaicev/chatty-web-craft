@@ -29,15 +29,39 @@ Deno.serve(async (req) => {
     if (userErr || !caller) return json({ error: "Not authenticated" }, 401);
 
     const body = await req.json().catch(() => ({}));
+    const action: string = body.action === "accept" ? "accept" : body.action === "resend" ? "resend" : "invite";
     const workspace_id: string | undefined = body.workspace_id;
     const email: string | undefined = body.email?.trim().toLowerCase();
     const role: string = body.role === "client" ? "client" : "manager";
 
-    if (!workspace_id || !email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      return json({ error: "workspace_id and valid email required" }, 400);
+    if (!workspace_id) {
+      return json({ error: "workspace_id required" }, 400);
+    }
+
+    if (action !== "accept" && (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))) {
+      return json({ error: "valid email required" }, 400);
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
+
+    if (action === "accept") {
+      const { data: membership, error: memErr } = await admin
+        .from("workspace_members")
+        .select("id, joined_at")
+        .eq("workspace_id", workspace_id)
+        .eq("user_id", caller.id)
+        .maybeSingle();
+      if (memErr) return json({ error: memErr.message }, 500);
+      if (!membership) return json({ error: "Invite membership not found" }, 404);
+      if (!membership.joined_at) {
+        const { error: joinErr } = await admin
+          .from("workspace_members")
+          .update({ joined_at: new Date().toISOString() })
+          .eq("id", membership.id);
+        if (joinErr) return json({ error: joinErr.message }, 500);
+      }
+      return json({ ok: true, joined: true });
+    }
 
     // Authorize: caller must be admin OR workspace owner
     const { data: ws } = await admin
@@ -101,7 +125,7 @@ Deno.serve(async (req) => {
       invitedUserId = existing.id;
       // Existing user (e.g. previously created via fallback or re-invite) -
       // make sure they actually receive an actionable email.
-      const magicInvite = await sendMagicInvite(body.action === "resend" ? "resend" : "existing_user");
+      const magicInvite = await sendMagicInvite(action === "resend" ? "resend" : "existing_user");
       if (!magicInvite.ok) return json({ error: `Invite email could not be sent: ${magicInvite.error}`, code: "email_delivery_request_failed" }, 502);
     } else {
       const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
