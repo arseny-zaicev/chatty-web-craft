@@ -1757,6 +1757,19 @@ export default function LaunchWizard() {
               </div>
             </div>
           )}
+          {isMarketing && resolution.ok.length > 0 && recipients.length > 0 && (
+            <DispatchControlPanel
+              prepareInput={{
+                numbers: resolution.ok.map((t) => ({ number_id: t.numberId, template_id: t.template.id })),
+                audience_count: Math.min(recipients.length, capacity),
+                window_start: windowStart,
+                window_end: windowEnd,
+                per_number_quota: perNumberQuota,
+                respect_recipient_tz: respectTz,
+              }}
+              onSnapshotChange={setDispatchState}
+            />
+          )}
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
