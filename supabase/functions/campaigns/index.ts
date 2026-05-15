@@ -1421,7 +1421,8 @@ async function processQueue(admin: any) {
       const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
       const isUtility = tplCategory === "utility" || tplCategory === "authentication";
       const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
-      const floor = isUtility ? 60 : 1;
+      // marketing_instant: floor 0 (backpressure controls rate). Otherwise 1s/60s.
+      const floor = isInstant ? 0 : (isUtility ? 60 : 1);
       const minGapMs = Math.max(floor, configuredMin) * 1000;
       const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
       let lastMs = lastSentMs.get(pacingKey) ?? 0;
