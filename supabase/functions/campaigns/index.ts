@@ -310,8 +310,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
   // marketing_instant implies blast scheduling regardless of incoming delays.
   const isBlastLaunch = dispatchMode === "marketing_instant" || (minDelay === 0 && maxDelay === 0);
-  const maxInflightPerNumber = Math.max(1, Math.min(50, Math.floor(Number(body.max_inflight_per_number ?? 5))));
-  const maxInflightPerCampaign = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
+  const maxInflightPerNumber = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_number ?? 5))));
+  const maxInflightPerCampaign = Math.max(1, Math.min(5000, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
   const respectTz: boolean = body.respect_recipient_tz !== false;
   const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
 
