@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 import { friendlySenderLabel } from "@/lib/crmData";
+import DispatchControlPanel, { type DispatchMode } from "@/components/workspace/DispatchControlPanel";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
 
@@ -123,6 +124,13 @@ export default function LaunchWizard() {
   }, [pipelines, pipelineId]);
   const [showCreatePipeline, setShowCreatePipeline] = useState(false);
   const [newPipelineName, setNewPipelineName] = useState("");
+  const [dispatchState, setDispatchState] = useState<{ mode: DispatchMode; maxInflightPerNumber: number; maxInflightPerCampaign: number; ok: boolean; signature: string | null }>({
+    mode: "marketing_instant",
+    maxInflightPerNumber: 5,
+    maxInflightPerCampaign: 50,
+    ok: false,
+    signature: null,
+  });
   const [newPipelineColor, setNewPipelineColor] = useState("#6366f1");
   const [creatingPipeline, setCreatingPipeline] = useState(false);
   const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
@@ -752,9 +760,9 @@ export default function LaunchWizard() {
           respect_recipient_tz: respectTz,
           pipeline_id: pipelineId || null,
           per_number_quota: perNumberQuota,
-          dispatch_mode: isMarketing ? "marketing_instant" : "paced",
-          max_inflight_per_number: 5,
-          max_inflight_per_campaign: 50,
+          dispatch_mode: isMarketing ? dispatchState.mode : "paced",
+          max_inflight_per_number: dispatchState.maxInflightPerNumber,
+          max_inflight_per_campaign: dispatchState.maxInflightPerCampaign,
         },
       });
 
@@ -1748,6 +1756,19 @@ export default function LaunchWizard() {
                 </ul>
               </div>
             </div>
+          )}
+          {isMarketing && resolution.ok.length > 0 && recipients.length > 0 && (
+            <DispatchControlPanel
+              prepareInput={{
+                numbers: resolution.ok.map((t) => ({ number_id: t.numberId, template_id: t.template.id })),
+                audience_count: Math.min(recipients.length, capacity),
+                window_start: windowStart,
+                window_end: windowEnd,
+                per_number_quota: perNumberQuota,
+                respect_recipient_tz: respectTz,
+              }}
+              onSnapshotChange={setDispatchState}
+            />
           )}
           <Button
             className="w-full"
