@@ -10,6 +10,9 @@ import { toast } from "sonner";
 
 export type DispatchMode = "paced" | "marketing_instant";
 
+const INFLIGHT_NUMBER_MAX = 500;
+const INFLIGHT_CAMPAIGN_MAX = 5000;
+
 export interface PrepareInput {
   campaign_id?: string | null;
   numbers: Array<{ number_id: string; template_id: string }>;
@@ -164,14 +167,58 @@ export default function DispatchControlPanel({ prepareInput, onSnapshotChange }:
         </RadioGroup>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="text-xs text-muted-foreground">Max inflight / number</Label>
-          <Input type="number" min={1} max={50} value={maxInflightPerNumber} onChange={(e) => setMaxInflightPerNumber(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          <span className="text-[11px] text-muted-foreground self-center mr-1">Presets:</span>
+          {[
+            { label: "1 fast", n: 200, c: 200 },
+            { label: "2 fast", n: 200, c: 400 },
+            { label: "5 fast", n: 200, c: 1000 },
+            { label: "7 fast", n: 200, c: 1400 },
+          ].map((p) => (
+            <Button
+              key={p.label}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => { setMaxInflightPerNumber(p.n); setMaxInflightPerCampaign(p.c); }}
+            >
+              {p.label} - {p.n}/{p.c}
+            </Button>
+          ))}
         </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Max inflight / campaign</Label>
-          <Input type="number" min={1} max={500} value={maxInflightPerCampaign} onChange={(e) => setMaxInflightPerCampaign(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Max inflight / number (1-{INFLIGHT_NUMBER_MAX})</Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={INFLIGHT_NUMBER_MAX}
+              value={maxInflightPerNumber}
+              onChange={(e) => setMaxInflightPerNumber(e.target.value === "" ? 1 : Math.max(1, Math.floor(Number(e.target.value))))}
+              onBlur={(e) => { const v = Math.max(1, Math.min(INFLIGHT_NUMBER_MAX, Math.floor(Number(e.target.value) || 1))); setMaxInflightPerNumber(v); }}
+            />
+            {maxInflightPerNumber > INFLIGHT_NUMBER_MAX && (
+              <div className="text-[11px] text-rose-600 mt-0.5">Above backend max ({INFLIGHT_NUMBER_MAX}) - will be clamped on save.</div>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Max inflight / campaign (1-{INFLIGHT_CAMPAIGN_MAX})</Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={INFLIGHT_CAMPAIGN_MAX}
+              value={maxInflightPerCampaign}
+              onChange={(e) => setMaxInflightPerCampaign(e.target.value === "" ? 1 : Math.max(1, Math.floor(Number(e.target.value))))}
+              onBlur={(e) => { const v = Math.max(1, Math.min(INFLIGHT_CAMPAIGN_MAX, Math.floor(Number(e.target.value) || 1))); setMaxInflightPerCampaign(v); }}
+            />
+            {maxInflightPerCampaign > INFLIGHT_CAMPAIGN_MAX && (
+              <div className="text-[11px] text-rose-600 mt-0.5">Above backend max ({INFLIGHT_CAMPAIGN_MAX}) - will be clamped on save.</div>
+            )}
+          </div>
         </div>
       </div>
 
