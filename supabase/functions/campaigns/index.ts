@@ -306,9 +306,44 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const scheduledDates: string[] = Array.isArray(body.scheduled_dates) ? body.scheduled_dates.filter((d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
   const windowStart: string = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : "09:00";
   const windowEnd: string = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : "18:00";
-  const isBlastLaunch = minDelay === 0 && maxDelay === 0;
+  const dispatchMode: "paced" | "marketing_instant" =
+    body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
+  // marketing_instant implies blast scheduling regardless of incoming delays.
+  const isBlastLaunch = dispatchMode === "marketing_instant" || (minDelay === 0 && maxDelay === 0);
+  const maxInflightPerNumber = Math.max(1, Math.min(50, Math.floor(Number(body.max_inflight_per_number ?? 5))));
+  const maxInflightPerCampaign = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
   const respectTz: boolean = body.respect_recipient_tz !== false;
   const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
+
+  // Snapshot enforcement: if a prepared snapshot exists for this campaign id, validate freshness.
+  // Standalone launch (no campaign_id) goes through fresh allocation below.
+  const reuseCampaignId: string | null =
+    typeof body.campaign_id === "string" && uuidRegex.test(body.campaign_id) ? body.campaign_id : null;
+  if (reuseCampaignId) {
+    const { data: existing } = await admin
+      .from("campaigns")
+      .select("prepared_at, prepared_expires_at, prepared_signature, kill_switch_at, dispatch_mode")
+      .eq("id", reuseCampaignId)
+      .maybeSingle();
+    if (existing) {
+      if (existing.kill_switch_at) {
+        return json({ error: "Kill switch is engaged for this campaign", code: "kill_switch_on" }, 409);
+      }
+      if (!existing.prepared_at || !existing.prepared_expires_at) {
+        return json({ error: "Snapshot not prepared. Call action=prepare first.", code: "must_prepare" }, 409);
+      }
+      if (new Date(existing.prepared_expires_at).getTime() < Date.now()) {
+        return json({ error: "Prepared snapshot expired. Re-prepare.", code: "stale_snapshot", must_reprepare: true }, 409);
+      }
+    }
+  }
+  // Global instant kill switch.
+  if (dispatchMode === "marketing_instant") {
+    const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
+    if (flag && flag.value === false) {
+      return json({ error: "Marketing instant mode is globally disabled", code: "instant_mode_disabled" }, 409);
+    }
+  }
 
   if (!name || rawNumbers.length === 0) {
     return json({ error: "Campaign name and at least one number+template are required" }, 400);
