@@ -20,6 +20,7 @@ export default function AcceptInvite() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const navigate = useNavigate();
+  const isExistingUserInvite = authFlow === "magiclink";
 
   useEffect(() => {
     // Supabase places the invite token in the URL hash and signs the user in automatically.
@@ -68,7 +69,6 @@ export default function AcceptInvite() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isExistingUserInvite = authFlow === "magiclink";
     const fn = firstName.trim();
     const ln = lastName.trim();
     if (!isExistingUserInvite && (!fn || !ln)) return toast.error("Enter your first and last name");
@@ -146,7 +146,9 @@ export default function AcceptInvite() {
           <CardTitle>Welcome to Iskra</CardTitle>
           <CardDescription>
             {email
-              ? <>Finish setting up your account for <span className="font-medium text-foreground">{email}</span>. Your name will appear on chats you reply to.</>
+              ? isExistingUserInvite
+                ? <>Confirm access for <span className="font-medium text-foreground">{email}</span> and continue to the workspace.</>
+                : <>Finish setting up your account for <span className="font-medium text-foreground">{email}</span>. Your name will appear on chats you reply to.</>
               : "Verifying your invitation…"}
           </CardDescription>
         </CardHeader>
@@ -155,24 +157,28 @@ export default function AcceptInvite() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="fn">First name</Label>
-                <Input id="fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required disabled={!ready} maxLength={60} />
+                <Input id="fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required={!isExistingUserInvite} disabled={!ready} maxLength={60} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ln">Last name</Label>
-                <Input id="ln" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required disabled={!ready} maxLength={60} />
+                <Input id="ln" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required={!isExistingUserInvite} disabled={!ready} maxLength={60} />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pw">Set a password</Label>
-              <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required disabled={!ready} placeholder="At least 8 characters" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pw2">Confirm password</Label>
-              <Input id="pw2" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required disabled={!ready} />
-            </div>
+            {!isExistingUserInvite && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pw">Set a password</Label>
+                  <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required disabled={!ready} placeholder="At least 8 characters" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pw2">Confirm password</Label>
+                  <Input id="pw2" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required disabled={!ready} />
+                </div>
+              </>
+            )}
             <Button type="submit" className="w-full" disabled={loading || !ready}>
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Activate account
+              {isExistingUserInvite ? "Continue to workspace" : "Activate account"}
             </Button>
           </form>
         </CardContent>
