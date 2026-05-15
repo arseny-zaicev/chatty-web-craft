@@ -1112,13 +1112,47 @@ async function processQueue(admin: any) {
 
   const { data: due, error } = await admin
     .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, delay_min_seconds, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name), message_templates(id, name, language, body, variables, provider_template_id, category))")
+    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, delay_min_seconds, dispatch_mode, kill_switch_at, max_inflight_per_number, max_inflight_per_campaign, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name, paused_at, paused_reason), message_templates(id, name, language, body, variables, provider_template_id, category))")
     .eq("status", "scheduled")
     .lte("scheduled_at", horizonIso)
     .eq("campaigns.status", "running")
+    .is("campaigns.kill_switch_at", null)
     .order("scheduled_at", { ascending: true })
     .limit(perTickLimit);
   if (error) return json({ error: error.message }, 500);
+
+  // Pre-load provider backoff state for all numbers in this tick.
+  const tickNumIds = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
+  const backoffByNum = new Map<string, number>(); // number_id -> retry_after epoch ms
+  if (tickNumIds.length > 0) {
+    const { data: backoffRows } = await admin
+      .from("provider_backoff")
+      .select("whatsapp_number_id, retry_after")
+      .in("whatsapp_number_id", tickNumIds);
+    for (const b of backoffRows ?? []) {
+      backoffByNum.set(b.whatsapp_number_id, new Date(b.retry_after).getTime());
+    }
+  }
+
+  // Global instant kill switch.
+  let instantGloballyDisabled = false;
+  try {
+    const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
+    if (flag && flag.value === false) instantGloballyDisabled = true;
+  } catch (_) { /* best effort */ }
+
+  const logEvent = async (rec: any, eventType: string, reason: string, payload: any = {}) => {
+    try {
+      await admin.from("campaign_dispatch_events").insert({
+        campaign_id: rec.campaign_id,
+        workspace_id: rec.workspace_id ?? null,
+        whatsapp_number_id: rec.whatsapp_number_id ?? null,
+        event_type: eventType,
+        reason,
+        payload,
+      });
+    } catch (_) { /* best effort */ }
+  };
 
   // Resolve per-recipient number/template overrides (multi-number campaigns).
   // recipient.whatsapp_number_id is the assigned number; variables.__tpl_id is its template id.
