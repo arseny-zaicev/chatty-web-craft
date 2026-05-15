@@ -1456,10 +1456,12 @@ async function processQueue(admin: any) {
         .maybeSingle();
       if (!locked) continue;
       lastSentMs.set(pacingKey, Date.now());
+      incInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
 
 
       try {
         const gsBody = await sendTemplate(admin, recipient);
+        decInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
         const providerId = gsBody.messageId || null;
         const tpl = recipient.campaigns?.message_templates;
         const variableNames: string[] = Array.isArray(tpl?.variables) ? tpl.variables : [];
