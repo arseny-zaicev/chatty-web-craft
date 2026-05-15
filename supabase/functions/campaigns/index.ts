@@ -1505,6 +1505,7 @@ async function processQueue(admin: any) {
           sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
         }
       } catch (err) {
+        decInflight(recipient.whatsapp_number_id ?? null, recipient.campaign_id);
         sentMu.incFail();
         const msg = err instanceof Error ? err.message : "Send failed";
         await admin.from("campaign_recipients").update({ status: "failed", error_message: msg }).eq("id", recipient.id);
@@ -1512,6 +1513,36 @@ async function processQueue(admin: any) {
         cState.fail += 1;
         const code = extractErrorCode(msg);
         cState.codes.set(code, (cState.codes.get(code) ?? 0) + 1);
+
+        // Provider 429 / 5xx -> exponential per-number backoff so the next tick
+        // skips this number until retry_after.
+        const httpMatch = msg.match(/"http_status":(\d{3})/);
+        const httpStatus = httpMatch ? parseInt(httpMatch[1], 10) : 0;
+        if (recipient.whatsapp_number_id && (httpStatus === 429 || httpStatus >= 500)) {
+          try {
+            const retryAfterMatch = msg.match(/retry[_-]?after[":\s]+(\d+)/i);
+            const baseSec = retryAfterMatch ? Math.min(600, parseInt(retryAfterMatch[1], 10)) : 30;
+            // Bump attempt count and apply exponential factor (cap 10 minutes).
+            const { data: existing } = await admin
+              .from("provider_backoff")
+              .select("attempt_count")
+              .eq("whatsapp_number_id", recipient.whatsapp_number_id)
+              .maybeSingle();
+            const attempt = Math.min(8, (existing?.attempt_count ?? 0) + 1);
+            const delaySec = Math.min(600, baseSec * Math.pow(2, attempt - 1));
+            const retryAfter = new Date(Date.now() + delaySec * 1000).toISOString();
+            await admin.from("provider_backoff").upsert({
+              whatsapp_number_id: recipient.whatsapp_number_id,
+              retry_after: retryAfter,
+              last_status: httpStatus,
+              last_error: msg.slice(0, 500),
+              attempt_count: attempt,
+              updated_at: new Date().toISOString(),
+            });
+            backoffByNum.set(recipient.whatsapp_number_id, new Date(retryAfter).getTime());
+            await logEvent(recipient, "error", httpStatus === 429 ? "provider_429" : "provider_5xx", { http_status: httpStatus, retry_after: retryAfter });
+          } catch (_) { /* best effort */ }
+        }
 
         // Per-number restriction detection (fires immediate Slack via DB trigger).
         if (recipient.whatsapp_number_id && RESTRICTION_CODES.has(code)) {
