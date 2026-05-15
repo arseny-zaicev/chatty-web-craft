@@ -10,6 +10,9 @@ import { toast } from "sonner";
 
 export type DispatchMode = "paced" | "marketing_instant";
 
+const INFLIGHT_NUMBER_MAX = 500;
+const INFLIGHT_CAMPAIGN_MAX = 5000;
+
 export interface PrepareInput {
   campaign_id?: string | null;
   numbers: Array<{ number_id: string; template_id: string }>;
