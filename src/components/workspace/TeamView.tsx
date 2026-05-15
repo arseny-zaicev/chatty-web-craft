@@ -101,9 +101,11 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
   });
 
   const invite = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (override?: { email?: string; role?: "manager" | "client"; resend?: boolean }) => {
+      const targetEmail = (override?.email ?? email).trim().toLowerCase();
+      const targetRole = override?.role ?? role;
       const { data, error } = await supabase.functions.invoke("invite-workspace-member", {
-        body: { workspace_id: workspaceId, email: email.trim(), role },
+        body: { workspace_id: workspaceId, email: targetEmail, role: targetRole, action: override?.resend ? "resend" : "invite" },
       });
       if (error) throw error;
       if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
@@ -111,9 +113,11 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
     },
     onSuccess: (data) => {
       const invited = (data as { invited?: boolean })?.invited;
-      toast.success(invited ? "Invitation email sent" : "Member added");
-      setEmail("");
-      setOpen(false);
+      toast.success(invited ? "Invitation email sent" : "Member added - no email was requested");
+      if (open) {
+        setEmail("");
+        setOpen(false);
+      }
       qc.invalidateQueries({ queryKey: membersKey(workspaceId) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to invite"),
@@ -329,6 +333,20 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     {activeLabel} active · {m.sessions_30d ?? 0} {m.sessions_30d === 1 ? "session" : "sessions"} (30d)
                   </span>
                 </div>
+                {!m.joined_at && m.email && (
+                  <div className="pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      onClick={() => invite.mutate({ email: m.email!, role: m.role === "manager" ? "manager" : "client", resend: true })}
+                      disabled={invite.isPending}
+                    >
+                      {invite.isPending ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Mail className="w-3 h-3 mr-1.5" />}
+                      Resend invite
+                    </Button>
+                  </div>
+                )}
                 {m.role === "client" && (
                   <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mt-1">
                     <BarChart3 className="w-3 h-3" />
