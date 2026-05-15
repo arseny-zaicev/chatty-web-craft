@@ -343,6 +343,16 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     if (flag && flag.value === false) {
       return json({ error: "Marketing instant mode is globally disabled", code: "instant_mode_disabled" }, 409);
     }
+    // marketing_instant requires a prepared snapshot. Fresh launches (no
+    // reuseCampaignId) cannot run instantly — they must go through prepare
+    // first so the operator sees blockers/warnings and the snapshot signature
+    // is locked. (Paced mode is unchanged.)
+    if (!reuseCampaignId) {
+      return json({
+        error: "marketing_instant requires a prepared campaign. Call action=prepare first, then action=launch with the campaign_id.",
+        code: "must_prepare",
+      }, 409);
+    }
   }
 
   if (!name || rawNumbers.length === 0) {
