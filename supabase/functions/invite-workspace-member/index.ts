@@ -64,18 +64,36 @@ Deno.serve(async (req) => {
     inviteUrl.searchParams.set("wid", ws.id);
     const redirectTo = inviteUrl.toString();
 
-    // Helper: send a recovery email via the public auth API (works for any
-    // existing user, and is also our reliable fallback when inviteUserByEmail
-    // is rate-limited or the user already exists).
+    // Helper: send a workspace invitation to an existing auth user without
+    // presenting it as a password reset. The auth email hook renders this
+    // magic-link event with the invite template whenever redirectTo points at
+    // /accept-invite.
     const anonClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
-    const sendRecovery = async (reason: "existing_user" | "invite_fallback" | "resend") => {
+    const sendMagicInvite = async (reason: "existing_user" | "resend") => {
+      const { error } = await anonClient.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
+      });
+      if (error) {
+        console.error("signInWithOtp invite failed", { email, reason, redirectTo, error: error.message });
+        return { ok: false, error: error.message, reason };
+      }
+      invited = true;
+      console.log("Magic-link workspace invite email requested", { email, reason, redirectTo });
+      return { ok: true, reason };
+    };
+
+    // Fallback for newly-created users when inviteUserByEmail cannot be used.
+    // The recovery mechanism is internal only; auth-email-hook renders it as a
+    // workspace invitation for /accept-invite links.
+    const sendRecoveryInvite = async (reason: "invite_fallback") => {
       const { error } = await anonClient.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) {
         console.error("resetPasswordForEmail failed", { email, reason, redirectTo, error: error.message });
         return { ok: false, error: error.message, reason };
       }
       invited = true;
-      console.log("Recovery invite email requested", { email, reason, redirectTo });
+      console.log("Recovery-backed workspace invite email requested", { email, reason, redirectTo });
       return { ok: true, reason };
     };
 
@@ -83,8 +101,8 @@ Deno.serve(async (req) => {
       invitedUserId = existing.id;
       // Existing user (e.g. previously created via fallback or re-invite) -
       // make sure they actually receive an actionable email.
-      const recovery = await sendRecovery(body.action === "resend" ? "resend" : "existing_user");
-      if (!recovery.ok) return json({ error: `Invite email could not be sent: ${recovery.error}`, code: "email_delivery_request_failed" }, 502);
+      const magicInvite = await sendMagicInvite(body.action === "resend" ? "resend" : "existing_user");
+      if (!magicInvite.ok) return json({ error: `Invite email could not be sent: ${magicInvite.error}`, code: "email_delivery_request_failed" }, 502);
     } else {
       const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
         redirectTo,
@@ -103,7 +121,7 @@ Deno.serve(async (req) => {
           return json({ error: createErr?.message ?? "Could not create user" }, 500);
         }
         invitedUserId = created.user.id;
-        const recovery = await sendRecovery("invite_fallback");
+        const recovery = await sendRecoveryInvite("invite_fallback");
         if (!recovery.ok) return json({ error: `Invite email could not be sent: ${recovery.error}`, code: "email_delivery_request_failed", user_id: invitedUserId }, 502);
       } else {
         invitedUserId = invite.user.id;
