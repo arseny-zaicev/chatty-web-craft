@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
       const magicInvite = await sendMagicInvite(action === "resend" ? "resend" : "existing_user");
       if (!magicInvite.ok) return json({ error: `Invite email could not be sent: ${magicInvite.error}`, code: "email_delivery_request_failed" }, 502);
     } else {
-      const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
+      const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(targetEmail, {
         redirectTo,
       });
       if (inviteErr || !invite?.user) {
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
         // recovery email so they can set their own password.
         const tempPassword = crypto.randomUUID() + "Aa1!";
         const { data: created, error: createErr } = await admin.auth.admin.createUser({
-          email,
+          email: targetEmail,
           password: tempPassword,
           email_confirm: true,
         });
