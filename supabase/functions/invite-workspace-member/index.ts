@@ -68,17 +68,23 @@ Deno.serve(async (req) => {
     // existing user, and is also our reliable fallback when inviteUserByEmail
     // is rate-limited or the user already exists).
     const anonClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
-    const sendRecovery = async () => {
+    const sendRecovery = async (reason: "existing_user" | "invite_fallback" | "resend") => {
       const { error } = await anonClient.auth.resetPasswordForEmail(email, { redirectTo });
-      if (error) console.warn("resetPasswordForEmail failed", error);
-      else invited = true;
+      if (error) {
+        console.error("resetPasswordForEmail failed", { email, reason, redirectTo, error: error.message });
+        return { ok: false, error: error.message, reason };
+      }
+      invited = true;
+      console.log("Recovery invite email requested", { email, reason, redirectTo });
+      return { ok: true, reason };
     };
 
     if (existing) {
       invitedUserId = existing.id;
       // Existing user (e.g. previously created via fallback or re-invite) -
       // make sure they actually receive an actionable email.
-      await sendRecovery();
+      const recovery = await sendRecovery(body.action === "resend" ? "resend" : "existing_user");
+      if (!recovery.ok) return json({ error: `Invite email could not be sent: ${recovery.error}`, code: "email_delivery_request_failed" }, 502);
     } else {
       const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
         redirectTo,
@@ -97,10 +103,12 @@ Deno.serve(async (req) => {
           return json({ error: createErr?.message ?? "Could not create user" }, 500);
         }
         invitedUserId = created.user.id;
-        await sendRecovery();
+        const recovery = await sendRecovery("invite_fallback");
+        if (!recovery.ok) return json({ error: `Invite email could not be sent: ${recovery.error}`, code: "email_delivery_request_failed", user_id: invitedUserId }, 502);
       } else {
         invitedUserId = invite.user.id;
         invited = true;
+        console.log("Auth invite email requested", { email, redirectTo });
       }
     }
 
@@ -131,7 +139,7 @@ Deno.serve(async (req) => {
       if (insErr) return json({ error: insErr.message }, 500);
     }
 
-    return json({ ok: true, user_id: invitedUserId, invited, workspace: ws.slug, role });
+    return json({ ok: true, user_id: invitedUserId, invited, workspace: ws.slug, role, email_requested: invited });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
