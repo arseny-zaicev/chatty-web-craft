@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 import { friendlySenderLabel } from "@/lib/crmData";
+import DispatchControlPanel, { type DispatchMode } from "@/components/workspace/DispatchControlPanel";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
 
