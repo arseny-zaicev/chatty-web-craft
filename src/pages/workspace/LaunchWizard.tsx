@@ -124,6 +124,13 @@ export default function LaunchWizard() {
   }, [pipelines, pipelineId]);
   const [showCreatePipeline, setShowCreatePipeline] = useState(false);
   const [newPipelineName, setNewPipelineName] = useState("");
+  const [dispatchState, setDispatchState] = useState<{ mode: DispatchMode; maxInflightPerNumber: number; maxInflightPerCampaign: number; ok: boolean; signature: string | null }>({
+    mode: "marketing_instant",
+    maxInflightPerNumber: 5,
+    maxInflightPerCampaign: 50,
+    ok: false,
+    signature: null,
+  });
   const [newPipelineColor, setNewPipelineColor] = useState("#6366f1");
   const [creatingPipeline, setCreatingPipeline] = useState(false);
   const [pipelineConfigOpen, setPipelineConfigOpen] = useState(false);
