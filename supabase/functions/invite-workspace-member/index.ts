@@ -58,19 +58,35 @@ Deno.serve(async (req) => {
     const existing = list?.users.find((u) => u.email?.toLowerCase() === email);
     let invited = false;
 
+    const APP_BASE_URL = Deno.env.get("APP_BASE_URL") || "https://iskra.ae";
+    const inviteUrl = new URL(`${APP_BASE_URL.replace(/\/$/, "")}/accept-invite`);
+    inviteUrl.searchParams.set("ws", ws.slug ?? "");
+    inviteUrl.searchParams.set("wid", ws.id);
+    const redirectTo = inviteUrl.toString();
+
+    // Helper: send a recovery email via the public auth API (works for any
+    // existing user, and is also our reliable fallback when inviteUserByEmail
+    // is rate-limited or the user already exists).
+    const anonClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+    const sendRecovery = async () => {
+      const { error } = await anonClient.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) console.warn("resetPasswordForEmail failed", error);
+      else invited = true;
+    };
+
     if (existing) {
       invitedUserId = existing.id;
+      // Existing user (e.g. previously created via fallback or re-invite) -
+      // make sure they actually receive an actionable email.
+      await sendRecovery();
     } else {
-      const APP_BASE_URL = Deno.env.get("APP_BASE_URL") || "https://iskra.ae";
-      const inviteUrl = new URL(`${APP_BASE_URL.replace(/\/$/, "")}/accept-invite`);
-      inviteUrl.searchParams.set("ws", ws.slug ?? "");
-      inviteUrl.searchParams.set("wid", ws.id);
-      const redirectTo = inviteUrl.toString();
       const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
         redirectTo,
       });
       if (inviteErr || !invite?.user) {
-        // Fallback: create a user with a random password
+        console.warn("inviteUserByEmail failed, falling back to createUser", inviteErr?.message);
+        // Fallback: create a user with a random password, then trigger a
+        // recovery email so they can set their own password.
         const tempPassword = crypto.randomUUID() + "Aa1!";
         const { data: created, error: createErr } = await admin.auth.admin.createUser({
           email,
@@ -81,6 +97,7 @@ Deno.serve(async (req) => {
           return json({ error: createErr?.message ?? "Could not create user" }, 500);
         }
         invitedUserId = created.user.id;
+        await sendRecovery();
       } else {
         invitedUserId = invite.user.id;
         invited = true;
