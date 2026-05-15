@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
 import { groupCampaigns, type CampaignRow, type CampaignGroup } from "@/lib/campaigns";
 import { CampaignReportPanel } from "@/components/workspace/CampaignReportPanel";
+import CampaignRuntimePanel from "@/components/workspace/CampaignRuntimePanel";
 import { tzInfo, dateKeyInTz, todayKeyInTz, shortDateInTz, timeInTz } from "@/lib/timezones";
 import { toast } from "sonner";
 
