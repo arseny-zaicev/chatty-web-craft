@@ -530,8 +530,15 @@ export default function PipelineConfigSheet({
                       <Button
                         size="sm"
                         variant="default"
-                        disabled={!isReady || syncingId === s.id}
-                        onClick={() => syncSource(s)}
+                        disabled={syncingId === s.id}
+                        onClick={() => {
+                          if (!isReady) {
+                            setEditingId(s.id);
+                            toast.error("Add a Google Sheet URL and phone column before syncing");
+                            return;
+                          }
+                          syncSource(s);
+                        }}
                       >
                         {syncingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Sync now"}
                       </Button>
@@ -545,6 +552,17 @@ export default function PipelineConfigSheet({
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
+
+                  {isSheet && !isReady && !editing && (
+                    <div className="rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] px-2 py-1.5 flex items-start gap-1.5 border border-amber-500/30">
+                      <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <div className="font-medium">Not configured</div>
+                        <div>Paste the Google Sheet URL and confirm the phone column before this source can sync.</div>
+                      </div>
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => setEditingId(s.id)}>Configure</Button>
+                    </div>
+                  )}
 
                   {s.last_error && (
                     <div className="rounded bg-destructive/10 text-destructive text-[11px] px-2 py-1 flex items-start gap-1">
