@@ -359,7 +359,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
       whatsapp_number_id: sib.whatsapp_number_id,
       contact_phone: lead.phone,
       contact_name: lead.name,
-      variables: buildVariables(tpl as any, lead),
+      variables: buildVariables(sib.tpl as any, lead),
       status: "scheduled",
       scheduled_at: new Date(cur).toISOString(),
     });
