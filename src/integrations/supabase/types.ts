@@ -2002,6 +2002,54 @@ export type Database = {
           },
         ]
       }
+      pipeline_follow_ups: {
+        Row: {
+          campaign_recipient_id: string | null
+          cancelled_reason: string | null
+          conversation_id: string
+          created_at: string
+          first_touch_recipient_id: string | null
+          id: string
+          lead_import_id: string | null
+          pipeline_id: string
+          scheduled_at: string
+          status: string
+          updated_at: string
+          whatsapp_number_id: string
+          workspace_id: string
+        }
+        Insert: {
+          campaign_recipient_id?: string | null
+          cancelled_reason?: string | null
+          conversation_id: string
+          created_at?: string
+          first_touch_recipient_id?: string | null
+          id?: string
+          lead_import_id?: string | null
+          pipeline_id: string
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+          whatsapp_number_id: string
+          workspace_id: string
+        }
+        Update: {
+          campaign_recipient_id?: string | null
+          cancelled_reason?: string | null
+          conversation_id?: string
+          created_at?: string
+          first_touch_recipient_id?: string | null
+          id?: string
+          lead_import_id?: string | null
+          pipeline_id?: string
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+          whatsapp_number_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       pipeline_stages: {
         Row: {
           color: string
@@ -2048,7 +2096,15 @@ export type Database = {
           created_at: string
           daily_cap: number | null
           default_sender_number_ids: string[]
+          first_touch_template_group_id: string | null
           first_touch_template_id: string | null
+          follow_up_curfew_end: string
+          follow_up_delay_minutes: number
+          follow_up_enabled: boolean
+          follow_up_resume_at: string
+          follow_up_template_group_id: string | null
+          follow_up_template_id: string | null
+          follow_up_timezone: string
           id: string
           is_default: boolean
           name: string
@@ -2065,7 +2121,15 @@ export type Database = {
           created_at?: string
           daily_cap?: number | null
           default_sender_number_ids?: string[]
+          first_touch_template_group_id?: string | null
           first_touch_template_id?: string | null
+          follow_up_curfew_end?: string
+          follow_up_delay_minutes?: number
+          follow_up_enabled?: boolean
+          follow_up_resume_at?: string
+          follow_up_template_group_id?: string | null
+          follow_up_template_id?: string | null
+          follow_up_timezone?: string
           id?: string
           is_default?: boolean
           name: string
@@ -2082,7 +2146,15 @@ export type Database = {
           created_at?: string
           daily_cap?: number | null
           default_sender_number_ids?: string[]
+          first_touch_template_group_id?: string | null
           first_touch_template_id?: string | null
+          follow_up_curfew_end?: string
+          follow_up_delay_minutes?: number
+          follow_up_enabled?: boolean
+          follow_up_resume_at?: string
+          follow_up_template_group_id?: string | null
+          follow_up_template_id?: string | null
+          follow_up_timezone?: string
           id?: string
           is_default?: boolean
           name?: string
@@ -2093,7 +2165,22 @@ export type Database = {
           user_id?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pipelines_first_touch_template_group_id_fkey"
+            columns: ["first_touch_template_group_id"]
+            isOneToOne: false
+            referencedRelation: "template_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipelines_follow_up_template_group_id_fkey"
+            columns: ["follow_up_template_group_id"]
+            isOneToOne: false
+            referencedRelation: "template_groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
