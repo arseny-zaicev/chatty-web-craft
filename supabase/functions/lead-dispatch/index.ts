@@ -61,10 +61,16 @@ type Pipeline = {
   id: string; user_id: string; workspace_id: string; name: string;
   auto_outreach_enabled: boolean;
   first_touch_template_id: string | null;
+  first_touch_template_group_id: string | null;
   default_sender_number_ids: string[];
   sending_window: { start?: string; end?: string; timezone?: string } | null;
   daily_cap: number | null;
   slack_channel_id: string | null;
+  follow_up_enabled: boolean;
+  follow_up_delay_minutes: number;
+  follow_up_curfew_end: string;       // 'HH:MM' or 'HH:MM:SS'
+  follow_up_resume_at: string;        // 'HH:MM' or 'HH:MM:SS'
+  follow_up_timezone: string;
 };
 type Lead = {
   id: string; pipeline_id: string; workspace_id: string; phone: string; name: string | null;
