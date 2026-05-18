@@ -61,10 +61,16 @@ type Pipeline = {
   id: string; user_id: string; workspace_id: string; name: string;
   auto_outreach_enabled: boolean;
   first_touch_template_id: string | null;
+  first_touch_template_group_id: string | null;
   default_sender_number_ids: string[];
   sending_window: { start?: string; end?: string; timezone?: string } | null;
   daily_cap: number | null;
   slack_channel_id: string | null;
+  follow_up_enabled: boolean;
+  follow_up_delay_minutes: number;
+  follow_up_curfew_end: string;       // 'HH:MM' or 'HH:MM:SS'
+  follow_up_resume_at: string;        // 'HH:MM' or 'HH:MM:SS'
+  follow_up_timezone: string;
 };
 type Lead = {
   id: string; pipeline_id: string; workspace_id: string; phone: string; name: string | null;
@@ -116,32 +122,85 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return blocked(admin, pipeline, "missing_slack_channel", null);
   }
 
-  // Resolve template
-  if (!pipeline.first_touch_template_id) {
+  // Resolve template(s).
+  // Supports two modes:
+  //   (a) single first_touch_template_id -> every sender uses that exact template
+  //       (only senders that own it can dispatch).
+  //   (b) first_touch_template_group_id  -> map each sender to its approved variant
+  //       (template with status=approved and name in group.template_names).
+  type Tpl = { id: string; status: string; whatsapp_number_id: string; user_id: string; variables: any; body: string | null; name: string };
+  const templateForNumber = new Map<string, Tpl>();
+
+  if (pipeline.first_touch_template_group_id) {
+    const { data: group } = await admin
+      .from("template_groups")
+      .select("id, template_names")
+      .eq("id", pipeline.first_touch_template_group_id)
+      .maybeSingle();
+    const names = (group as any)?.template_names as string[] | undefined;
+    if (!names || names.length === 0) {
+      return blocked(admin, pipeline, "no_template_in_group", null);
+    }
+    const { data: variants } = await admin
+      .from("message_templates")
+      .select("id, status, whatsapp_number_id, user_id, variables, body, name")
+      .eq("workspace_id", pipeline.workspace_id)
+      .in("name", names)
+      .eq("status", "approved");
+    for (const v of (variants ?? []) as Tpl[]) {
+      // Keep the first approved variant per number (template_names usually unique).
+      if (!templateForNumber.has(v.whatsapp_number_id)) templateForNumber.set(v.whatsapp_number_id, v);
+    }
+    if (templateForNumber.size === 0) {
+      return blocked(admin, pipeline, "template_group_no_approved_variants", null);
+    }
+  } else if (pipeline.first_touch_template_id) {
+    const { data: tpl } = await admin
+      .from("message_templates")
+      .select("id, status, whatsapp_number_id, user_id, variables, body, name")
+      .eq("id", pipeline.first_touch_template_id)
+      .maybeSingle();
+    if (!tpl || (tpl as any).status !== "approved") {
+      return blocked(admin, pipeline, "template_not_approved", null);
+    }
+    templateForNumber.set((tpl as any).whatsapp_number_id, tpl as Tpl);
+  } else {
     return blocked(admin, pipeline, "no_template", null);
   }
-  const { data: tpl } = await admin
-    .from("message_templates")
-    .select("id, status, whatsapp_number_id, user_id, variables, body")
-    .eq("id", pipeline.first_touch_template_id)
-    .maybeSingle();
-  if (!tpl || tpl.status !== "approved") {
-    return blocked(admin, pipeline, "template_not_approved", null);
-  }
 
-  // Resolve sender numbers (active only)
+  // Resolve sender numbers (active only) intersected with senders that own an approved variant.
   const senderIds = (pipeline.default_sender_number_ids || []).filter(Boolean);
   if (senderIds.length === 0) {
     return blocked(admin, pipeline, "no_sender_numbers", null);
   }
-  const { data: numbers } = await admin
+  const { data: numbersRaw } = await admin
     .from("whatsapp_numbers")
     .select("id, phone_number, display_name, status, user_id, is_active")
     .in("id", senderIds)
     .in("status", ["active", "ready"])
     .eq("is_active", true);
-  if (!numbers || numbers.length === 0) {
+  if (!numbersRaw || numbersRaw.length === 0) {
     return blocked(admin, pipeline, "no_active_sender", null);
+  }
+  // Silent-skip senders that lack an approved variant in the resolved set.
+  // This makes "only 1 of 3 numbers has approval" a no-op rollout instead of a block.
+  const skippedForTemplate = (numbersRaw as any[])
+    .filter((n) => !templateForNumber.has(n.id))
+    .map((n) => n.display_name || n.phone_number);
+  const numbers = (numbersRaw as any[]).filter((n) => templateForNumber.has(n.id));
+  if (numbers.length === 0) {
+    return blocked(admin, pipeline, "template_not_approved_on_any_selected_sender", null);
+  }
+  if (skippedForTemplate.length) {
+    // Best-effort audit log; ignore failure (table has SELECT-only RLS for members, service role inserts ok).
+    await admin.from("campaign_dispatch_events").insert({
+      campaign_id: null,
+      workspace_id: pipeline.workspace_id,
+      whatsapp_number_id: null,
+      event_type: "sender_skipped",
+      reason: "template_not_approved",
+      payload: { pipeline_id: pipeline.id, senders: skippedForTemplate },
+    }).then(() => {}, () => {});
   }
 
   // Daily cap check (per pipeline, per UTC day)
@@ -172,7 +231,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     .is("campaign_recipient_id", null)
     .order("imported_at", { ascending: true })
     .limit(claimLimit);
-  console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads?.length ?? 0}`);
+  console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads?.length ?? 0} senders_ready=${numbers.length} senders_skipped=${skippedForTemplate.length}`);
   if (!leads || leads.length === 0) return { processed: 0 };
 
   // Hard duplicate guard: if this phone already has an ACTIVE first-touch
@@ -206,13 +265,15 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
   (leads as any).length = 0;
   for (const l of filteredLeads) (leads as any).push(l);
 
-  // Get-or-create today's first-touch rolling campaigns (one per sender number)
+  // Get-or-create today's first-touch rolling campaigns (one per sender number).
+  // Each sibling carries its own per-number template_id from the resolved map.
   const today = dayKey(Date.now(), tz);
   const baseName = `First touch · ${pipeline.name} · ${today}`;
-  type Sib = { campaign_id: string; whatsapp_number_id: string; user_id: string; phone: string };
+  type Sib = { campaign_id: string; whatsapp_number_id: string; user_id: string; phone: string; tpl: Tpl };
   const siblings: Sib[] = [];
 
   for (const n of numbers) {
+    const tplForN = templateForNumber.get(n.id)!;
     const sibName = numbers.length > 1
       ? `${baseName} :: ${n.display_name || n.phone_number}`
       : baseName;
@@ -234,7 +295,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
           user_id: n.user_id,
           workspace_id: ws,
           whatsapp_number_id: n.id,
-          template_id: tpl.id,
+          template_id: tplForN.id,
           name: sibName,
           status: "running",
           kind: "first_touch",
@@ -253,7 +314,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
       if (error || !created) continue;
       campaignId = created.id;
     }
-    siblings.push({ campaign_id: campaignId, whatsapp_number_id: n.id, user_id: n.user_id, phone: n.phone_number });
+    siblings.push({ campaign_id: campaignId, whatsapp_number_id: n.id, user_id: n.user_id, phone: n.phone_number, tpl: tplForN });
   }
   if (siblings.length === 0) {
     return blocked(admin, pipeline, "campaign_create_failed", null);
@@ -298,7 +359,7 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
       whatsapp_number_id: sib.whatsapp_number_id,
       contact_phone: lead.phone,
       contact_name: lead.name,
-      variables: buildVariables(tpl as any, lead),
+      variables: buildVariables(sib.tpl as any, lead),
       status: "scheduled",
       scheduled_at: new Date(cur).toISOString(),
     });
