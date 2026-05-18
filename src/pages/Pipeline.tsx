@@ -508,6 +508,22 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                         const c = d.conversation_id ? convById.get(d.conversation_id) : null;
                         return c?.assigned_user_id ? memberById.get(c.assigned_user_id) ?? null : null;
                       }}
+                      onRename={async (newName: string) => {
+                        const name = newName.trim();
+                        if (!name || name === stage.name) return;
+                        const prev = stages;
+                        setStages((s) => s.map((x) => (x.id === stage.id ? { ...x, name } : x)));
+                        const { error } = await supabase
+                          .from("pipeline_stages")
+                          .update({ name })
+                          .eq("id", stage.id);
+                        if (error) {
+                          setStages(prev);
+                          toast.error(error.message);
+                        } else {
+                          toast.success("Stage renamed");
+                        }
+                      }}
                     />
                   );
                 })}
