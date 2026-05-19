@@ -65,6 +65,28 @@ async function handleInbound(payload: Record<string, unknown>) {
     return;
   }
 
+  // Idempotency: Gupshup retries inbound webhook delivery aggressively (especially
+  // for quick_reply buttons). If we've already stored this provider_message_id,
+  // skip the whole pipeline — otherwise we'd double-bump unread_count, re-link
+  // recipients, re-notify Slack, etc.
+  const earlyProviderMessageId = (inner.id as string) ?? null;
+  if (earlyProviderMessageId) {
+    const { data: dupExisting } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("provider_message_id", earlyProviderMessageId)
+      .eq("direction", "inbound")
+      .limit(1)
+      .maybeSingle();
+    if (dupExisting) {
+      console.log("Skipping duplicate inbound webhook (provider_message_id already stored)", {
+        provider_message_id: earlyProviderMessageId,
+        existing_message_id: dupExisting.id,
+      });
+      return;
+    }
+  }
+
   // Deterministic match order:
   //   1. provider_app_id == Gupshup app name (the only stable, unique identifier we control)
   //   2. phone_number == webhook destination (when provider_app_id is missing on the row)

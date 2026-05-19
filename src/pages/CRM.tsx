@@ -367,9 +367,34 @@ const CRM = ({
           ? [...prev.slice(0, idx), incoming, ...prev.slice(idx + 1)]
           : [incoming, ...prev];
       });
+
+      // Fallback: if the active conversation's last_message_at advanced beyond
+      // what we've loaded in the chat (realtime message INSERT was dropped, RLS
+      // filtered it, channel was disconnected, etc.), refetch the message list
+      // so the missing bubble shows up.
+      if (
+        (payload.eventType === "INSERT" || payload.eventType === "UPDATE") &&
+        activeId &&
+        (payload.new as Conversation)?.id === activeId
+      ) {
+        const newLastAt = (payload.new as Conversation)?.last_message_at;
+        if (newLastAt) {
+          setMessages((prevMsgs) => {
+            const lastLoaded = prevMsgs.length > 0 ? prevMsgs[prevMsgs.length - 1].created_at : null;
+            if (!lastLoaded || new Date(newLastAt).getTime() > new Date(lastLoaded).getTime()) {
+              // Out-of-band refetch; React state update is async but safe.
+              fetchConversationMessages(activeId)
+                .then((data) => setMessages(data as Message[]))
+                .catch(() => {});
+            }
+            return prevMsgs;
+          });
+        }
+      }
     },
-    [workspaceId],
+    [workspaceId, activeId],
   );
+
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -391,6 +416,26 @@ const CRM = ({
       cancelled = true;
     };
   }, [activeId]);
+
+  // Refetch messages when the tab regains focus — covers cases where the realtime
+  // socket was suspended (backgrounded tab, network blip) and an INSERT was missed.
+  useEffect(() => {
+    if (!activeId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchConversationMessages(activeId)
+          .then((data) => setMessages(data as Message[]))
+          .catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [activeId]);
+
 
   // Realtime messages for active conversation - INSERT for new messages, UPDATE for status changes (sent -> failed, etc.)
   useRealtimeTable<Message>(
