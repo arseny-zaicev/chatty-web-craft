@@ -1154,38 +1154,48 @@ export default function PipelineConfigSheet({
               <Switch checked={followUpEnabled} onCheckedChange={setFollowUpEnabled} />
             </label>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-[10px] text-muted-foreground">Single template</Label>
-                <Select
-                  value={followUpTemplateId || "none"}
-                  onValueChange={(v) => { setFollowUpTemplateId(v === "none" ? "" : v); if (v !== "none") setFollowUpGroupId(""); }}
-                  disabled={Boolean(followUpGroupId)}
-                >
-                  <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {(templates ?? []).map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[10px] text-muted-foreground">Template group (shared pool)</Label>
-                <Select
-                  value={followUpGroupId || "none"}
-                  onValueChange={(v) => { setFollowUpGroupId(v === "none" ? "" : v); if (v !== "none") setFollowUpTemplateId(""); }}
-                >
-                  <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {(templateGroups ?? []).map((g) => (
-                      <SelectItem key={g.id} value={g.id}>{g.name} ({g.template_names.length})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <Label className="text-xs">Follow-up template</Label>
+              <Select
+                value={followUpGroupId ? `group:${followUpGroupId}` : (followUpTemplateId ? `tpl:${followUpTemplateId}` : "none")}
+                onValueChange={(v) => {
+                  if (v === "none") { setFollowUpTemplateId(""); setFollowUpGroupId(""); return; }
+                  if (v.startsWith("group:")) { setFollowUpGroupId(v.slice(6)); setFollowUpTemplateId(""); }
+                  else { setFollowUpTemplateId(v.slice(4)); setFollowUpGroupId(""); }
+                }}
+              >
+                <SelectTrigger className="h-9"><SelectValue placeholder="Pick a template or group…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {(templateGroups ?? []).length > 0 && (
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">Groups (multi-sender)</div>
+                  )}
+                  {(templateGroups ?? []).map((g) => (
+                    <SelectItem key={`fg-${g.id}`} value={`group:${g.id}`}>
+                      <span className="inline-flex items-center gap-2">
+                        <Layers className="w-3 h-3 text-primary" />
+                        <span>{g.name}</span>
+                        <span className="text-[10px] text-muted-foreground">({g.template_names.length} variants · group)</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                  {(templates ?? []).length > 0 && (
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">Single templates</div>
+                  )}
+                  {(templates ?? []).map((t) => {
+                    const sender = t.whatsapp_number_id ? senderLabelById.get(t.whatsapp_number_id) : null;
+                    return (
+                      <SelectItem key={`ft-${t.id}`} value={`tpl:${t.id}`}>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="font-mono text-xs">{t.name}</span>
+                          {sender && <span className="text-[10px] text-muted-foreground">— {sender}</span>}
+                          {!sender && <span className="text-[10px] text-amber-600">— no sender</span>}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             {followUpGroupId && wsId && (() => {
               const g = (templateGroups ?? []).find((x) => x.id === followUpGroupId);
