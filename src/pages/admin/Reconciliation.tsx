@@ -136,14 +136,33 @@ export default function Reconciliation() {
     },
   });
 
+  const overlappingRunsQ = useQuery({
+    queryKey: ["recon-overlapping-runs", from, to],
+    queryFn: async () => {
+      // Payout runs whose [period_from, period_to] overlaps the [from, to] Dubai-local window
+      const { data, error } = await supabase
+        .from("payout_runs")
+        .select("id, partner_id, role, status, period_from, period_to, total_payout_usd, auto_generated")
+        .lte("period_from", to)
+        .gte("period_to", from)
+        .order("period_from", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const refreshAll = () => {
     summaryQ.refetch();
     dailyQ.refetch();
     orphansQ.refetch();
+    overlappingRunsQ.refetch();
   };
 
   const s = summaryQ.data;
   const drifty = (dailyQ.data || []).filter(r => r.drift_sent !== 0).length;
+  const driftyRun = s && (Math.abs(s.drift_pct) > 1 || s.orphan_count > 50);
+  const overlappingRuns = overlappingRunsQ.data || [];
 
   return (
     <div className="min-h-screen bg-background p-6">
