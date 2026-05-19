@@ -11,6 +11,7 @@
 // or a single object with the same shape.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { normalizePhone } from "../_shared/phone.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -26,23 +27,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-function normalizePhone(raw: unknown, defaultCountryCode?: string | null): string | null {
-  if (raw == null) return null;
-  let s = String(raw).trim();
-  if (!s) return null;
-  if (/<\s*test\s+lead/i.test(s)) return null;
-  s = s.replace(/^\s*(p|P|П|tel|phone|whatsapp|wa)\s*[:：]\s*/i, "");
-  s = s.replace(/[^\d+]/g, "");
-  if (!s) return null;
-  let digits = s.startsWith("+") ? s.slice(1) : s;
-  const cc = (defaultCountryCode || "").replace(/\D/g, "");
-  if (cc && !digits.startsWith(cc) && digits.length >= 7 && digits.length <= 10) {
-    digits = cc + digits;
-  }
-  if (digits.length < 7 || digits.length > 16) return null;
-  return digits;
-}
 
 type LeadInput = {
   phone?: unknown;
