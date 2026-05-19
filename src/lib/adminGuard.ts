@@ -1,9 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 export const ADMIN_EMAIL = "arseny@iskra.ae";
 
 export type AdminGuardResult =
-  | { state: "ok" }
+  | { state: "ok"; user: User }
   | { state: "redirect"; to: string; reason?: string };
 
 /**
@@ -41,7 +42,7 @@ export async function evaluateAdminAccess(): Promise<AdminGuardResult> {
     if (!verifiedTotp) return { state: "redirect", to: "/admin/mfa-setup" };
     if (aalRes.data?.currentLevel !== "aal2") return { state: "redirect", to: "/admin/mfa-verify" };
 
-    return { state: "ok" };
+    return { state: "ok", user: session.user };
   } catch (err) {
     console.error("[adminGuard] auth check failed/timed out", err);
     return { state: "redirect", to: "/admin-auth", reason: "auth-unavailable" };
