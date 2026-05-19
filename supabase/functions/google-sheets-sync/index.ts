@@ -241,37 +241,57 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
 
     let accepted = 0;
     let rejected = 0;
+    let invalidCount = 0;
+    let ambiguousCount = 0;
+    let testLeadCount = 0;
+    let duplicateCount = 0;
+    let crossPipelineDuplicateCount = 0;
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
     const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
+
+    // Cache resolved owning-pipeline names so we don't lookup the same name
+    // 200 times for a Sheet that's full of duplicates of the other pipeline.
+    const pipelineNameCache = new Map<string, string>();
+    pipelineNameCache.set(source.pipeline_id, "");
+    const ownerName = async (pid: string): Promise<string> => {
+      if (pipelineNameCache.has(pid)) return pipelineNameCache.get(pid)!;
+      const { data } = await admin.from("pipelines").select("name").eq("id", pid).maybeSingle();
+      const n = (data as any)?.name ?? pid;
+      pipelineNameCache.set(pid, n);
+      return n;
+    };
 
     // 3. Validate + dedupe + import
     for (let i = 0; i < newRows.length; i++) {
       const sheetRowNumber = startIdx + i + 1; // 1-based
       const row = newRows[i] ?? [];
       const phoneRaw = row[phoneIdx];
-      const phone = normalizePhone(phoneRaw, defaultCC);
       const nameRawCell = nameIdx >= 0 ? row[nameIdx] : null;
       const name = nameRawCell && !isTestLeadValue(nameRawCell)
         ? String(nameRawCell).slice(0, 200) : null;
       const externalId = `row-${sheetRowNumber}`;
-      const payload: Record<string, unknown> = { _sheet_row: sheetRowNumber };
+      const payload: Record<string, unknown> = {
+        _sheet_row: sheetRowNumber,
+        _phone_raw: phoneRaw == null ? "" : String(phoneRaw),
+      };
       headers.forEach((h, idx) => {
         if (h && row[idx] != null && row[idx] !== "") payload[h] = row[idx];
       });
 
       lastProcessedRow = sheetRowNumber;
 
-      // Skip Meta test-lead rows entirely (do not pollute lead_imports as invalid)
+      // Skip Meta test-lead rows entirely
       if (isTestLeadValue(phoneRaw) || isTestLeadValue(nameRawCell)) {
         rejected++;
+        testLeadCount++;
         await admin.from("lead_imports").insert({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
           source_connection_id: source.id,
           external_id: externalId,
-          phone: String(phoneRaw ?? ""),
+          phone: String(phoneRaw ?? "").slice(0, 32),
           name,
           payload,
           status: "invalid",
@@ -280,31 +300,46 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         continue;
       }
 
-      if (!phone) {
+      const phoneResult = normalizePhone(phoneRaw, defaultCC);
+      if (!phoneResult.ok) {
         rejected++;
+        if (phoneResult.status === "ambiguous") ambiguousCount++;
+        else invalidCount++;
         await admin.from("lead_imports").insert({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
           source_connection_id: source.id,
           external_id: externalId,
-          phone: String(phoneRaw ?? ""),
+          phone: String(phoneRaw ?? "").slice(0, 32),
           name,
           payload,
           status: "invalid",
-          error: "Invalid phone",
+          error: phoneResult.reason,
         });
         continue;
       }
+      const phone = phoneResult.phone;
 
+      // Owning-pipeline rule: a conversation sticks to the pipeline that
+      // created it. If the same phone re-appears via a source wired to a
+      // DIFFERENT pipeline, we record a duplicate row pointing at the existing
+      // conversation and surface "owned by <pipeline>" so the operator can see
+      // why it was not first-touched again.
       const { data: existingConv } = await admin
         .from("conversations")
-        .select("id")
+        .select("id, pipeline_id")
         .eq("workspace_id", source.workspace_id)
         .eq("contact_phone", phone)
         .maybeSingle();
       if (existingConv) {
         rejected++;
+        duplicateCount++;
+        let errMsg: string | null = null;
+        if (existingConv.pipeline_id && existingConv.pipeline_id !== source.pipeline_id) {
+          crossPipelineDuplicateCount++;
+          errMsg = `phone owned by pipeline ${await ownerName(existingConv.pipeline_id)}`;
+        }
         await admin.from("lead_imports").insert({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
@@ -316,20 +351,26 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
           payload,
           conversation_id: existingConv.id,
           status: "duplicate",
+          error: errMsg,
         });
         continue;
       }
 
-      // Also dedupe against earlier lead_imports in the same workspace (avoid re-importing on re-sync without conversation yet)
+      // Per-pipeline lead_imports dedupe (avoid re-importing the same phone
+      // twice into the SAME pipeline on a re-sync before the conversation
+      // exists). Scope is intentionally per-pipeline now — the old
+      // workspace-wide check leaked across Warm/Reactivation pipelines.
       const { data: existingLead } = await admin
         .from("lead_imports")
         .select("id")
         .eq("workspace_id", source.workspace_id)
+        .eq("pipeline_id", source.pipeline_id)
         .eq("phone", phone)
         .limit(1)
         .maybeSingle();
       if (existingLead) {
         rejected++;
+        duplicateCount++;
         await admin.from("lead_imports").insert({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
@@ -357,6 +398,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       });
       if (impErr) {
         rejected++;
+        invalidCount++;
         continue;
       }
       accepted++;
@@ -396,6 +438,11 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         total: newRows.length,
         accepted,
         rejected,
+        invalid: invalidCount,
+        ambiguous: ambiguousCount,
+        duplicate: duplicateCount,
+        cross_pipeline_duplicate: crossPipelineDuplicateCount,
+        skipped_test_lead: testLeadCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
     });
@@ -408,6 +455,11 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       total: newRows.length,
       accepted,
       rejected,
+      invalid: invalidCount,
+      ambiguous: ambiguousCount,
+      duplicate: duplicateCount,
+      cross_pipeline_duplicate: crossPipelineDuplicateCount,
+      skipped_test_lead: testLeadCount,
       last_synced_row: lastProcessedRow,
     };
   } catch (e) {
