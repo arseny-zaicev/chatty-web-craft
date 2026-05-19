@@ -167,6 +167,24 @@ Deno.serve(async (req) => {
       .eq("user_id", invitedUserId)
       .maybeSingle();
 
+    // Default permission set for newly invited members.
+    // `manager` label seeds the full toolkit; everyone else gets a safe
+    // inbox + pipeline + quick-replies-use baseline. Owners can fine-tune
+    // each permission afterwards from the Team settings UI.
+    const defaultPerms = role === "manager"
+      ? {
+          perm_overview: true, perm_inbox: true, perm_pipeline: true,
+          perm_campaigns_view: true, perm_quick_replies_use: true,
+          perm_quick_replies_manage: true, perm_settings: true,
+          perm_data: true, perm_materials: true, perm_launch: true,
+        }
+      : {
+          perm_overview: false, perm_inbox: true, perm_pipeline: true,
+          perm_campaigns_view: false, perm_quick_replies_use: true,
+          perm_quick_replies_manage: false, perm_settings: false,
+          perm_data: false, perm_materials: false, perm_launch: false,
+        };
+
     if (existingMem) {
       await admin.from("workspace_members").update({ role }).eq("id", existingMem.id);
     } else {
@@ -178,6 +196,7 @@ Deno.serve(async (req) => {
           role,
           invited_at: nowIso,
           joined_at: null,
+          ...defaultPerms,
         });
       if (insErr) return json({ error: insErr.message }, 500);
     }
