@@ -76,6 +76,8 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const defaultPipeline = pipelines.find((p) => p.is_default) ?? pipelines[0] ?? null;
   const selectedPipelineId =
     (urlPipeline && pipelines.some((p) => p.id === urlPipeline)) ? urlPipeline : defaultPipeline?.id ?? null;
+  const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId) ?? null;
+  const failedStageId = (selectedPipeline as unknown as { failed_stage_id?: string | null } | null)?.failed_stage_id ?? null;
   // Sync URL to default once pipelines load
   useEffect(() => {
     if (!urlPipeline && defaultPipeline) {
