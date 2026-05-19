@@ -362,18 +362,32 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     </Button>
                   </div>
                 )}
-                {m.role === "client" && (
-                  <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mt-1">
-                    <BarChart3 className="w-3 h-3" />
-                    <span>Can view Overview & Campaigns</span>
-                    <Switch
-                      checked={m.can_view_stats}
-                      onCheckedChange={(v) => toggleStats.mutate({ id: m.id, value: v })}
-                      disabled={toggleStats.isPending}
-                    />
-                  </label>
-                )}
-                {m.role === "client" && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition mt-1" type="button">
+                      <Shield className="w-3 h-3" />
+                      Permissions ({Object.values(m.permissions ?? {}).filter(Boolean).length}/{PERM_KEYS.length})
+                      <Pencil className="w-3 h-3 opacity-60" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-3 space-y-2" align="start">
+                    <div className="text-xs font-medium">Section access</div>
+                    <p className="text-[10px] text-muted-foreground">Toggle exactly what {displayName} can see and do.</p>
+                    <div className="divide-y divide-border">
+                      {PERM_KEYS.map((k) => (
+                        <label key={k} className="flex items-center justify-between gap-2 py-1.5 cursor-pointer">
+                          <span className="text-xs">{PERM_LABELS[k]}</span>
+                          <Switch
+                            checked={Boolean(m.permissions?.[k])}
+                            onCheckedChange={(v) => togglePerm.mutate({ id: m.id, key: k, value: v })}
+                            disabled={togglePerm.isPending}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {(m.role === "client" || (m.allowed_pipeline_ids?.length ?? 0) > 0) && (
                   <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1 flex-wrap">
                     <Layers className="w-3 h-3" />
                     <span>
