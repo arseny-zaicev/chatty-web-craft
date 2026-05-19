@@ -1232,7 +1232,7 @@ export default function PipelineConfigSheet({
               <div>
                 <div className="text-sm font-medium">Auto follow-up</div>
                 <div className="text-[11px] text-muted-foreground">
-                  After a first-touch is sent, schedule a single follow-up unless the lead replies or the deal is closed.
+                  Sends one follow-up only to leads who haven't replied and whose deal isn't Won/Lost. Auto-cancels on reply, block, or close.
                 </div>
               </div>
               <Switch checked={followUpEnabled} onCheckedChange={setFollowUpEnabled} />
