@@ -163,12 +163,15 @@ export default function WorkspaceOverview() {
 
       {/* Quick links */}
       {canManage && (
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Resources</CardTitle></CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <div className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /><span>Website, booking link and offer summary live in <Link to={`/ws/${slug}/library`} className="text-primary underline">Library</Link>.</span><ExternalLink className="w-3.5 h-3.5" /></div>
-          </CardContent>
-        </Card>
+        <>
+          <MessageIntegrityPanel workspaceId={workspace.id} />
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-base">Resources</CardTitle></CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              <div className="flex items-center gap-2"><Globe className="w-3.5 h-3.5" /><span>Website, booking link and offer summary live in <Link to={`/ws/${slug}/library`} className="text-primary underline">Library</Link>.</span><ExternalLink className="w-3.5 h-3.5" /></div>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
