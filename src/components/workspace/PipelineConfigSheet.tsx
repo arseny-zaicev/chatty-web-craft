@@ -487,7 +487,7 @@ export default function PipelineConfigSheet({
         name: String(s.name ?? "Stage").slice(0, 80),
         color: typeof s.color === "string" && /^#[0-9a-f]{3,8}$/i.test(s.color) ? s.color : "#64748b",
         position: basePos + i,
-        stage_type: ["open", "won", "lost"].includes(String(s.stage_type)) ? s.stage_type : "open",
+        stage_type: (["open", "won", "lost"].includes(String(s.stage_type)) ? s.stage_type : "open") as "open" | "won" | "lost",
       }));
       const { error } = await supabase.from("pipeline_stages").insert(rows);
       if (error) { toast.error(error.message); return; }
