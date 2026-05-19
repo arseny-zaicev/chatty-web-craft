@@ -275,12 +275,23 @@ Deno.serve(async (req) => {
           totals: { total: totalSum, sent: sentSum, failed: failedSum },
           parts, payload: evPayload,
         });
-        const clientMsg = buildCampaignGroupBlocks({
-          event: ev.event_type, ws, audience: "client", baseName: base,
-          campaignId: String(evPayload.campaign_id),
-          totals: { total: totalSum, sent: sentSum, failed: failedSum },
-          parts, payload: evPayload,
-        });
+        // Client channels only receive the end-of-day digest. Lifecycle noise
+        // (launched / scheduled / paused / resumed / completed / cancelled /
+        // failed) stays in OPS — clients don't need a ping for every batch we
+        // approve and send during the day.
+        const CLIENT_VISIBLE_CAMPAIGN_EVENTS = new Set<string>([
+          "campaign_day_completed",
+        ]);
+        const shouldNotifyClient = CLIENT_VISIBLE_CAMPAIGN_EVENTS.has(ev.event_type);
+
+        const clientMsg = shouldNotifyClient
+          ? buildCampaignGroupBlocks({
+              event: ev.event_type, ws, audience: "client", baseName: base,
+              campaignId: String(evPayload.campaign_id),
+              totals: { total: totalSum, sent: sentSum, failed: failedSum },
+              parts, payload: evPayload,
+            })
+          : null;
 
         const postErrors: string[] = [];
         let anyOk = false;
@@ -288,7 +299,7 @@ Deno.serve(async (req) => {
           try { await postSlack(OPS_CAMPAIGNS, opsMsg); anyOk = true; }
           catch (e) { postErrors.push(`ops: ${e instanceof Error ? e.message : String(e)}`); }
         }
-        if (workspaceChannel) {
+        if (workspaceChannel && clientMsg) {
           try { await postSlack(workspaceChannel, clientMsg); anyOk = true; }
           catch (e) { postErrors.push(`client(${workspaceChannel}): ${e instanceof Error ? e.message : String(e)}`); }
         }
