@@ -79,7 +79,7 @@ async function moveToDlq(
   }
 }
 
-Deno.serve(cronGuard("process-email-queue", async (req) => {
+Deno.serve(cronGuard({ jobName: "process-email-queue", lock: true }, async (req) => {
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')

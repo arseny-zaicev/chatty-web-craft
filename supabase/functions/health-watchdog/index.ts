@@ -23,7 +23,7 @@ const HEARTBEAT_MAX_AGE_MIN: Record<string, number> = {
 };
 const INBOUND_SILENCE_MIN = 90; // widened to avoid off-peak false positives
 
-Deno.serve(cronGuard("health-watchdog", async (req) => {
+Deno.serve(cronGuard({ jobName: "health-watchdog", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(

@@ -20,7 +20,7 @@ function isAllowed(url: string): boolean {
   }
 }
 
-Deno.serve(cronGuard("dispatch-pipeline-webhooks", async (req) => {
+Deno.serve(cronGuard({ jobName: "dispatch-pipeline-webhooks", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const admin = createClient(

@@ -69,7 +69,7 @@ async function classify(messages: { direction: string; body: string | null }[]):
   }
 }
 
-Deno.serve(cronGuard("classify-replies", async (req) => {
+Deno.serve(cronGuard({ jobName: "classify-replies", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const admin = createClient(

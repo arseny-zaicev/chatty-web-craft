@@ -94,7 +94,7 @@ async function syncOne(admin: any, source: any): Promise<Record<string, unknown>
   return await runSync(admin, source);
 }
 
-Deno.serve(cronGuard("google-sheets-sync", async (req) => {
+Deno.serve(cronGuard({ jobName: "google-sheets-sync", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 

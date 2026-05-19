@@ -26,7 +26,7 @@ type Stage = { id: string; name: string; pipeline_id: string; stage_type: string
 
 const MAX_CARDS_PER_RULE = 500;
 
-Deno.serve(cronGuard("automation-time-watchdog", async (req) => {
+Deno.serve(cronGuard({ jobName: "automation-time-watchdog", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });

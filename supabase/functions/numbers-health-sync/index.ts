@@ -111,7 +111,7 @@ async function fetchAppHealth(appId: string, perKey: string | null): Promise<{
   return { status, messagingLimit, quality, displayNameStatus, raw: merged };
 }
 
-Deno.serve(cronGuard("numbers-health-sync", async (req) => {
+Deno.serve(cronGuard({ jobName: "numbers-health-sync", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(

@@ -188,7 +188,7 @@ function parseWabaId(text: string): string | null {
   return m ? m[1] : null;
 }
 
-Deno.serve(cronGuard("gupshup-mail-poll", async (req) => {
+Deno.serve(cronGuard({ jobName: "gupshup-mail-poll", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   if (!LOVABLE_API_KEY || !GMAIL_KEY) {
