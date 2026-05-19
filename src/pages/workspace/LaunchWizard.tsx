@@ -1787,6 +1787,14 @@ export default function LaunchWizard() {
                     </div>
                   </div>
                 )}
+                {hollowVars.length > 0 && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <b>Mapping is hollow.</b> {hollowVars.map((v) => `{${v}}`).join(", ")} {hollowVars.length === 1 ? "is" : "are"} mapped to a column but ALL sampled rows have it empty in both <code className="font-mono">payload</code> and <code className="font-mono">derived_payload</code>. The launch will render "Hey there there". Re-prepare the audience (or re-pull from personal Supabase) so the column actually has data.
+                    </div>
+                  </div>
+                )}
                 {previewSamples.map((s, i) => (
                   <div key={i} className="rounded-md border border-border bg-card/30 p-3">
                     <div className="flex items-center justify-between mb-1.5">
