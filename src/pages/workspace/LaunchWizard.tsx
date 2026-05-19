@@ -690,6 +690,27 @@ export default function LaunchWizard() {
   // Back-compat alias kept for the UI block below.
   const staticQaIssues = staticQaWarnings;
 
+  // Hollow mapping: variable is mapped to a column but EVERY sampled DB row
+  // resolves to empty -> the wizard says "mapped" but the launch will fall
+  // back to "there". Block before that becomes "Hey there there".
+  const hollowVars = useMemo(() => {
+    if (audienceSource !== "database") return [] as string[];
+    const rows = sampleDbRowsQ.data ?? [];
+    if (rows.length === 0) return [];
+    const out: string[] = [];
+    for (const v of variableNames) {
+      const src = mapping[v];
+      if (!src || src.startsWith("__static:")) continue;
+      const allEmpty = rows.every((r) => {
+        const fromPayload = String((r.payload as any)?.[src] ?? "").trim();
+        const fromDerived = String((r.derived_payload as any)?.[src] ?? "").trim();
+        return !fromPayload && !fromDerived;
+      });
+      if (allEmpty) out.push(v);
+    }
+    return out;
+  }, [audienceSource, variableNames, mapping, sampleDbRowsQ.data]);
+
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
     if (!activeLogical) return [] as Array<{ phone: string; body: string; missing: string[] }>;
