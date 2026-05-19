@@ -215,10 +215,29 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
   });
 
   const stageById = new Map(stages.map((s) => [s.id, s]));
-  const triggerLabel = (t: TriggerKind) =>
-    t === "inbound_any" ? "Any inbound reply" : t === "inbound_keyword" ? "Keyword in reply" : t === "follow_up_sent" ? "Follow-up sent" : "Button click";
+  const triggerLabel = (t: TriggerKind) => {
+    switch (t) {
+      case "inbound_any": return "Any inbound reply";
+      case "inbound_keyword": return "Keyword in reply";
+      case "follow_up_sent": return "Follow-up sent";
+      case "button_click": return "Button click";
+      case "time_no_inbound": return "No reply for";
+      case "time_in_stage": return "Stuck in stage for";
+      case "conversation_assigned": return "Chat assigned to a setter";
+      case "conversation_claimed_self": return "Setter claimed chat themself";
+    }
+  };
+
+  const formatDelay = (mins: number) => {
+    if (mins % 1440 === 0) return `${mins / 1440}d`;
+    if (mins % 60 === 0) return `${mins / 60}h`;
+    return `${mins}m`;
+  };
 
   const formatValue = (r: Automation) => {
+    if (r.trigger === "time_no_inbound" || r.trigger === "time_in_stage") {
+      return r.delay_minutes ? formatDelay(r.delay_minutes) : null;
+    }
     if (!r.trigger_value) return null;
     if (r.trigger === "inbound_keyword") {
       const parts = r.trigger_value.split("|");
@@ -226,6 +245,11 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
       return `${parts.slice(0, 3).map((p) => `"${p}"`).join(", ")} +${parts.length - 3} more`;
     }
     return `"${r.trigger_value}"`;
+  };
+
+  const formatSourceStage = (r: Automation) => {
+    if (!r.source_stage_id) return null;
+    return stageById.get(r.source_stage_id)?.name ?? null;
   };
 
   return (
