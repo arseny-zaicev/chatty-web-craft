@@ -301,13 +301,8 @@ serve(async (req) => {
       raw: { gupshup_response: gsBody, http_status: gsRes.status },
     });
 
-    await admin
-      .from("conversations")
-      .update({
-        last_message_text: text,
-        last_message_at: new Date().toISOString(),
-      })
-      .eq("id", conv.id);
+    // last_message_text / last_message_at are derived from `messages` via the
+    // trg_conversations_sync_preview_ins trigger — no manual write here.
 
     return new Response(
       JSON.stringify({ ok: true, message_id: inserted?.id, provider_message_id: providerMessageId, debug }),
