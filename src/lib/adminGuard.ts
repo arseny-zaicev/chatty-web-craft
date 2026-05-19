@@ -21,13 +21,18 @@ export async function evaluateAdminAccess(): Promise<AdminGuardResult> {
   }
 
   // Run MFA factor + AAL checks in parallel — they're independent network calls.
-  const [{ data: factors }, { data: aal }] = await Promise.all([
+  const [factorsRes, aalRes] = await Promise.all([
     supabase.auth.mfa.listFactors(),
     supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
   ]);
-  const verifiedTotp = factors?.totp?.find((f) => f.status === "verified");
+  // If the Auth API is degraded (network / 5xx), do NOT fall through to "needs setup" —
+  // that path would enroll a duplicate TOTP factor. Surface the failure instead.
+  if (factorsRes.error || aalRes.error) {
+    return { state: "redirect", to: "/admin-auth", reason: "auth-unavailable" };
+  }
+  const verifiedTotp = factorsRes.data?.totp?.find((f) => f.status === "verified");
   if (!verifiedTotp) return { state: "redirect", to: "/admin/mfa-setup" };
-  if (aal?.currentLevel !== "aal2") return { state: "redirect", to: "/admin/mfa-verify" };
+  if (aalRes.data?.currentLevel !== "aal2") return { state: "redirect", to: "/admin/mfa-verify" };
 
   return { state: "ok" };
 }
