@@ -349,6 +349,7 @@ async function handleInbound(payload: Record<string, unknown>) {
     .eq("user_id", number.user_id)
     .eq("is_active", true);
   if (number.workspace_id) autoQuery = autoQuery.eq("workspace_id", number.workspace_id);
+  if (conversationPipelineId) autoQuery = autoQuery.eq("pipeline_id", conversationPipelineId);
   const { data: automations } = await autoQuery;
 
   let movedToStageId: string | null = null;
