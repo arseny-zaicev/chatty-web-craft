@@ -172,7 +172,7 @@ Deno.serve(cronGuard("google-sheets-sync", async (req) => {
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
-});
+}));
 
 async function runSync(admin: any, source: any): Promise<Record<string, unknown>> {
   try {
@@ -533,7 +533,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         name_unusable: nameUnusableCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
-    }));
+    });
 
     return {
       ok: true,
