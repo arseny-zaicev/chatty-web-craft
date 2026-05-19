@@ -220,20 +220,91 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     return blocked(admin, pipeline, "daily_cap_reached", null);
   }
 
+  // Resolve active source connections for this pipeline. We use them for both
+  // (a) filtering legacy NULL-source leads out of Sheets-only pipelines, and
+  // (b) re-validating each lead's phone with the source's default country code.
+  const { data: activeSources } = await admin
+    .from("source_connections")
+    .select("id, kind, config")
+    .eq("pipeline_id", pipeline.id)
+    .eq("status", "active");
+  const activeSourceIds = new Set<string>((activeSources ?? []).map((s: any) => s.id));
+  const sourceCcById = new Map<string, string | null>(
+    (activeSources ?? []).map((s: any) => [s.id, (s.config?.default_country_code ?? null) as string | null]),
+  );
+  // Legacy leads (source_connection_id IS NULL) are only allowed if the pipeline
+  // has at least one non-sheet active source (webhook/api/manual). For pure
+  // Google-Sheets pipelines, NULL-source leads are orphans from a disconnected
+  // sheet and must not be sent.
+  const allowNullSource = (activeSources ?? []).some((s: any) =>
+    s.kind && !String(s.kind).toLowerCase().includes("sheet")
+  );
+
   // Claim pending OR awaiting_manual leads that DO NOT yet have a recipient.
   // The campaign_recipient_id guard prevents the cron from re-queuing the same
   // lead every minute when an earlier update missed.
   const claimLimit = Math.min(200, availableCapacity);
-  const { data: leads } = await admin
+  const { data: leadsRaw } = await admin
     .from("lead_imports")
-    .select("id, pipeline_id, workspace_id, phone, name, status, payload, campaign_recipient_id")
+    .select("id, pipeline_id, workspace_id, phone, name, status, payload, campaign_recipient_id, source_connection_id")
     .eq("pipeline_id", pipeline.id)
     .in("status", ["pending", "awaiting_manual"])
     .is("campaign_recipient_id", null)
     .order("imported_at", { ascending: true })
     .limit(claimLimit);
-  console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads?.length ?? 0} senders_ready=${numbers.length} senders_skipped=${skippedForTemplate.length}`);
+
+  // Partition into (orphans by source) and (eligible). Mark orphans as skipped
+  // in one batch so they stop blocking daily_cap accounting.
+  const orphanIds: string[] = [];
+  const eligible: any[] = [];
+  for (const l of (leadsRaw ?? []) as any[]) {
+    if (l.source_connection_id == null) {
+      if (allowNullSource) eligible.push(l); else orphanIds.push(l.id);
+    } else if (activeSourceIds.has(l.source_connection_id)) {
+      eligible.push(l);
+    } else {
+      orphanIds.push(l.id);
+    }
+  }
+  if (orphanIds.length) {
+    await admin
+      .from("lead_imports")
+      .update({ status: "skipped", error: "orphaned_source: connection was disconnected or replaced" })
+      .in("id", orphanIds)
+      .in("status", ["pending", "awaiting_manual"]);
+    console.log(`[lead-dispatch] pipeline=${pipeline.id} orphans_skipped=${orphanIds.length}`);
+  }
+
+  // Re-validate phone (catches legacy rows imported before normalizer was strict,
+  // e.g. 10-digit Thai numbers without a country code).
+  const invalidIds: string[] = [];
+  const valid: any[] = [];
+  for (const l of eligible) {
+    const cc = l.source_connection_id ? sourceCcById.get(l.source_connection_id) : null;
+    const r = normalizePhone(l.phone, cc ?? undefined);
+    if (!r.ok || r.phone !== String(l.phone)) {
+      if (!r.ok) {
+        invalidIds.push(l.id);
+        continue;
+      }
+      // Normalizer would have produced a different canonical form -> stored value is suspicious.
+      // Trust normalizer; update phone on the row so we send to the correct number.
+      l.phone = r.phone;
+    }
+    valid.push(l);
+  }
+  if (invalidIds.length) {
+    await admin
+      .from("lead_imports")
+      .update({ status: "invalid", error: "phone_revalidation_failed" })
+      .in("id", invalidIds)
+      .in("status", ["pending", "awaiting_manual"]);
+    console.log(`[lead-dispatch] pipeline=${pipeline.id} invalid_phones=${invalidIds.length}`);
+  }
+  const leads = valid;
+  console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads.length} senders_ready=${numbers.length} senders_skipped=${skippedForTemplate.length}`);
   if (!leads || leads.length === 0) return { processed: 0 };
+
 
   // Hard duplicate guard: if this phone already has an ACTIVE first-touch
   // recipient in this pipeline (pending/scheduled/sent/replied), skip the lead.
