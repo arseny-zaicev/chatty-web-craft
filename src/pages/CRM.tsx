@@ -948,7 +948,7 @@ const CRM = ({
                       onClick={() =>
                         active.unread_count > 0 ? markRead(active) : markUnread(active)
                       }
-                      title={active.unread_count > 0 ? "Mark as read" : "Mark as unread"}
+                      title={active.unread_count > 0 ? "Mark as read" : "Mark for follow-up (resurface in Unread filter)"}
                       className="h-8 w-8 shrink-0"
                     >
                       <CheckCheck className="w-4 h-4" />
