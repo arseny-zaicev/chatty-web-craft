@@ -1041,26 +1041,31 @@ const DealCard = ({
           ${Number(deal.amount).toLocaleString()}
         </div>
       )}
-      {(convId || phone) && (
-        <div className="mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-          {convId && onOpenChat && (
-            <button
-              onClick={openChat}
-              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
-              title="Open chat"
-            >
-              <MessageSquare className="w-3 h-3" /> Chat
-            </button>
+      {(convId || phone || isFailedStage) && (
+        <div className="mt-2 flex items-center gap-1 flex-wrap">
+          {isFailedStage && (
+            <RetryLeadButton dealId={deal.id} initialPhone={phone} />
           )}
-          {phone && (
-            <button
-              onClick={copyPhone}
-              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
-              title="Copy phone"
-            >
-              <Copy className="w-3 h-3" /> Copy
-            </button>
-          )}
+          <div className={`flex items-center gap-1 ${isFailedStage ? "" : "opacity-0 group-hover:opacity-100"} transition`}>
+            {convId && onOpenChat && (
+              <button
+                onClick={openChat}
+                className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+                title="Open chat"
+              >
+                <MessageSquare className="w-3 h-3" /> Chat
+              </button>
+            )}
+            {phone && (
+              <button
+                onClick={copyPhone}
+                className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+                title="Copy phone"
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
