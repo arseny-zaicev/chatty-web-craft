@@ -390,21 +390,27 @@ const CRM = ({
     };
   }, [activeId]);
 
-  // Realtime messages for active conversation
+  // Realtime messages for active conversation - INSERT for new messages, UPDATE for status changes (sent -> failed, etc.)
   useRealtimeTable<Message>(
     {
       channel: `crm-messages-${activeId ?? "none"}`,
       table: "messages",
-      event: "INSERT",
+      event: "*",
       filter: activeId ? `conversation_id=eq.${activeId}` : undefined,
       enabled: !!activeId,
     },
     (payload) => {
-      const newMsg = payload.new as Message;
-      setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+      if (payload.eventType === "INSERT") {
+        const newMsg = payload.new as Message;
+        setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+      } else if (payload.eventType === "UPDATE") {
+        const updated = payload.new as Message;
+        setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+      }
     },
     [activeId],
   );
+
 
 
   useEffect(() => {
