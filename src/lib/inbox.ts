@@ -2,15 +2,22 @@
 // touching `supabase.from("conversations")` directly.
 
 import { supabase } from "@/integrations/supabase/client";
+import { logError } from "@/lib/logger";
+
+function check(scope: string, err: unknown, ctx?: Record<string, unknown>) {
+  if (!err) return;
+  logError(`inbox.${scope}`, err, ctx);
+  throw err;
+}
 
 export async function setConversationStarred(id: string, starred: boolean) {
   const { error } = await supabase.from("conversations").update({ is_starred: starred }).eq("id", id);
-  if (error) throw error;
+  check("setConversationStarred", error, { id, starred });
 }
 
 export async function setConversationPinned(id: string, pinnedAt: string | null) {
   const { error } = await supabase.from("conversations").update({ pinned_at: pinnedAt }).eq("id", id);
-  if (error) throw error;
+  check("setConversationPinned", error, { id, pinnedAt });
 }
 
 export async function markConversationUnread(id: string, currentUnread: number) {
@@ -18,12 +25,12 @@ export async function markConversationUnread(id: string, currentUnread: number) 
     .from("conversations")
     .update({ unread_count: Math.max(1, currentUnread) })
     .eq("id", id);
-  if (error) throw error;
+  check("markConversationUnread", error, { id });
 }
 
 export async function markConversationRead(id: string) {
   const { error } = await supabase.from("conversations").update({ unread_count: 0 }).eq("id", id);
-  if (error) throw error;
+  check("markConversationRead", error, { id });
 }
 
 /** Mark `userId` as the active responder on a conversation right now. */
@@ -32,7 +39,7 @@ export async function touchResponder(conversationId: string, userId: string) {
     .from("conversations")
     .update({ active_responder_id: userId, active_responder_at: new Date().toISOString() })
     .eq("id", conversationId);
-  if (error) throw error;
+  check("touchResponder", error, { conversationId, userId });
 }
 
 /**
@@ -47,7 +54,7 @@ export async function fetchConversationMessages(conversationId: string, limit = 
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) throw error;
+  check("fetchConversationMessages", error, { conversationId });
   return (data ?? []).slice().reverse();
 }
 
@@ -83,6 +90,6 @@ export async function searchConversations(opts: {
   ors.push(`last_message_text.ilike.%${safe}%`);
   req = req.or(ors.join(","));
   const { data, error } = await req;
-  if (error) throw error;
+  check("searchConversations", error, { workspaceId: opts.workspaceId, queryLen: q.length });
   return data ?? [];
 }
