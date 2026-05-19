@@ -21,9 +21,12 @@ import {
   updatePipeline,
   deletePipeline,
   setDefaultPipeline,
+  duplicatePipeline,
 } from "@/lib/pipelines";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspaceAccess } from "@/lib/workspaceRole";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Copy } from "lucide-react";
 
 const COLOR_PRESETS = [
   "#6366f1", "#3b82f6", "#10b981", "#f59e0b",
