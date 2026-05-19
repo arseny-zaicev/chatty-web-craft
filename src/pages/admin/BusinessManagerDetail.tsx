@@ -95,7 +95,9 @@ const BusinessManagerDetail = () => {
 
   const attach = useMutation({
     mutationFn: async (numberId: string) => {
-      const { error } = await supabase.from("whatsapp_numbers").update({ business_manager_id: id }).eq("id", numberId);
+      const patch: Record<string, unknown> = { business_manager_id: id };
+      if (data?.bm?.workspace_id) patch.workspace_id = data.bm.workspace_id;
+      const { error } = await supabase.from("whatsapp_numbers").update(patch as any).eq("id", numberId);
       if (error) throw error;
       await logEvent("number_added", { whatsapp_number_id: numberId });
     },
