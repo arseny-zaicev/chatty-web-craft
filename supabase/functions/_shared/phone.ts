@@ -51,15 +51,15 @@ export function normalizePhone(
   // Trunk-zero handling: a leading '0' is a national trunk prefix in many
   // countries (DE, AT, FR, UK, ...). If we have a defaultCountryCode and the
   // user did NOT write an explicit '+', strip the leading 0 and prepend cc.
-  if (!hasPlus && cc && digits.startsWith("0")) {
+  if (!treatAsInternational && cc && digits.startsWith("0")) {
     const national = digits.replace(/^0+/, "");
     if (national.length >= 6 && national.length <= 12) {
       digits = cc + national;
     }
-  } else if (!hasPlus && cc && !digits.startsWith(cc) && digits.length >= 7 && digits.length <= 10) {
+  } else if (!treatAsInternational && cc && !digits.startsWith(cc) && digits.length >= 7 && digits.length <= 10) {
     // Looks like a bare local mobile (7-10 digits) and a default CC is set.
     digits = cc + digits;
-  } else if (!hasPlus && !cc && digits.length >= 7 && digits.length <= 10) {
+  } else if (!treatAsInternational && !cc && digits.length >= 7 && digits.length <= 10) {
     // Bare local-length number with no default CC available -> ambiguous.
     return {
       ok: false,
