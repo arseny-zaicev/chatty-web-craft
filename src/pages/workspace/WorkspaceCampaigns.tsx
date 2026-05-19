@@ -176,10 +176,10 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const { data: liveCountsByCampaign } = useQuery({
     queryKey: ["campaigns", "live-counts", workspaceId, allCampaignIds.slice().sort().join(",")],
     queryFn: async () => {
-      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
+      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
       const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: allCampaignIds });
-      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
-      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
+      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
       for (const r of data as any[]) {
         m.set(r.campaign_id, {
           replied: Number(r.replied ?? 0),
@@ -187,6 +187,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
           positive: Number(r.positive ?? 0),
           warm: Number(r.warm ?? 0),
           sent: Number(r.sent ?? 0),
+          delivered: Number(r.delivered_count ?? 0),
         });
       }
       return m;
@@ -197,14 +198,14 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   });
 
   const groupLiveCounts = useMemo(() => {
-    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
+    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
     for (const g of groups) {
-      let replied = 0, tagged = 0, positive = 0, warm = 0, sent = 0;
+      let replied = 0, tagged = 0, positive = 0, warm = 0, sent = 0, delivered = 0;
       for (const c of g.campaigns) {
         const v = liveCountsByCampaign?.get(c.id);
-        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; sent += v.sent; }
+        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; sent += v.sent; delivered += v.delivered; }
       }
-      out.set(g.key, { replied, tagged, positive, warm, sent });
+      out.set(g.key, { replied, tagged, positive, warm, sent, delivered });
     }
     return out;
   }, [groups, liveCountsByCampaign]);
