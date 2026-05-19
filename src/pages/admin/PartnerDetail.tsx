@@ -239,9 +239,9 @@ export default function PartnerDetail() {
                     <TableHead>Warm-up</TableHead>
                     <TableHead>Numbers</TableHead>
                     <TableHead>Numbers summary</TableHead>
-                    <TableHead className="text-right">Sent today</TableHead>
-                    <TableHead className="text-right">Sent 7d</TableHead>
-                    <TableHead className="text-right">Sent all</TableHead>
+                    <TableHead className="text-right">Deliv / Sent today</TableHead>
+                    <TableHead className="text-right">Deliv / Sent 7d</TableHead>
+                    <TableHead className="text-right">Deliv / Sent all</TableHead>
                     <TableHead className="text-right">Restricted</TableHead>
                     <TableHead className="text-right">Blocked</TableHead>
                     <TableHead className="text-right">Clients</TableHead>
