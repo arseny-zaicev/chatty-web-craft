@@ -71,6 +71,7 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
   const source = stripToDigits(String(inner.source ?? sender.phone ?? payload.source ?? ""));
   if (!source) {
     console.warn("Missing source", { destination, source });
+    await markRaw(rawId, { processing_status: "skipped", processed_at: new Date().toISOString(), error_message: "missing source" });
     return;
   }
 
@@ -92,6 +93,7 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
         provider_message_id: earlyProviderMessageId,
         existing_message_id: dupExisting.id,
       });
+      await markRaw(rawId, { processing_status: "skipped", processed_at: new Date().toISOString(), message_id: dupExisting.id, error_message: "duplicate provider_message_id" });
       return;
     }
   }
