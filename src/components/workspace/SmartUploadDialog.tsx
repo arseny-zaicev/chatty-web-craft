@@ -155,6 +155,12 @@ export function SmartUploadDialog({
         return;
       }
       const r = json as AnalyzeResult;
+      // Per-batch isolation: if operator picked a reuse-source batch, that batch's
+      // static values OVERRIDE the AI-detected ones for this new batch. Each batch
+      // still keeps its own snapshot in audience_batches.notes (no shared cache).
+      if (Object.keys(reuseStatic).length > 0) {
+        r.static_values = { ...r.static_values, ...reuseStatic };
+      }
       setResult(r);
       setName(r.suggested_name);
       const top = Object.entries(r.country_distribution ?? {}).sort((a, b) => b[1] - a[1])[0];
