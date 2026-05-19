@@ -184,12 +184,24 @@ export function buildPresetPrompt(
 
   return `You are preparing a WhatsApp audience batch for the "${ctx.workspaceName}" workspace.
 
+===========================================================================
+INSERT TARGET — READ THIS FIRST
+  Personal Supabase project (NOT Lovable Cloud):
+    project ref:  ${PERSONAL_SUPABASE_PROJECT_REF}
+    project url:  ${PERSONAL_SUPABASE_URL}
+    table:        public.audience_rows
+    workspace_id: ${ctx.workspaceId}
+    batch_id:     ${ctx.batchId ?? "<MISSING — create the batch first from the Data page, then re-copy this prompt>"}
+  DO NOT insert into the Lovable Cloud project (xglfamaaotmwulglwcui).
+  Use the batch_id above as-is. Do NOT create a new batch.
+===========================================================================
+
 PRESET: ${preset.name}
 Campaign type: ${preset.campaignType}
 ${preset.blurb}
 
 GOAL
-Take the raw rows the operator gives you and produce a clean, validated dataset for direct insertion into public.audience_rows. Do NOT ask follow-up questions. Use the rules below as-is.
+Take the raw rows the operator gives you and produce a clean, validated dataset for direct insertion into public.audience_rows on the PERSONAL Supabase project above (ref ${PERSONAL_SUPABASE_PROJECT_REF}). Do NOT ask follow-up questions. Use the rules below as-is.
 
 REQUIRED SOURCE FIELDS (must be present)
   ${preset.requiredSourceFields.join(", ")}
