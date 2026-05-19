@@ -192,12 +192,14 @@ async function handleInbound(payload: Record<string, unknown>) {
   let conversationId: string;
   if (existing) {
     conversationId = existing.id;
+    // NOTE: last_message_text / last_message_at are derived columns maintained by
+    // the trg_conversations_sync_preview_ins trigger on `messages` insert.
+    // Do not write them here — the trigger guarantees the inbox preview always
+    // matches a real row in the thread.
     await supabase
       .from("conversations")
       .update({
         contact_name: contactName,
-        last_message_text: body ?? `[${messageType}]`,
-        last_message_at: new Date().toISOString(),
         unread_count: (existing.unread_count ?? 0) + 1,
       })
       .eq("id", conversationId);
@@ -217,6 +219,8 @@ async function handleInbound(payload: Record<string, unknown>) {
       .maybeSingle();
     inferredPipelineId = (rec as any)?.campaigns?.pipeline_id ?? null;
 
+    // last_message_text / last_message_at intentionally omitted — trigger fills
+    // them from the inbound `messages` insert below.
     const { data: created, error } = await supabase
       .from("conversations")
       .insert({
@@ -226,8 +230,6 @@ async function handleInbound(payload: Record<string, unknown>) {
         contact_phone: source,
         contact_name: contactName,
         pipeline_id: inferredPipelineId,
-        last_message_text: body ?? `[${messageType}]`,
-        last_message_at: new Date().toISOString(),
         unread_count: 1,
       })
       .select("id")
