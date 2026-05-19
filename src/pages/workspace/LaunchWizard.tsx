@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Loader2, Play, RefreshCw, Rocket, Users, FileText, Phone, Clock, Zap, Timer,
   Upload, MessagesSquare, Bookmark, Eye, AlertTriangle, Save, Trash2, Database, Layers,
+  CheckCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -1894,16 +1895,25 @@ export default function LaunchWizard() {
               onSnapshotChange={setDispatchState}
             />
           )}
+          {isMarketing && dispatchState.ok && dispatchState.signature && (
+            <div className="text-xs rounded-md border border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400 px-2.5 py-2 flex items-start gap-2">
+              <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium">Prepared snapshot valid ✓</div>
+                <div className="opacity-80 mt-0.5">Dispatch snapshot is fresh and will be used for launch.</div>
+              </div>
+            </div>
+          )}
           <div className={`text-xs rounded-md border px-2.5 py-2 flex items-start gap-2 ${snapshotValid ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400"}`}>
             <div className="flex-1">
               <div className="font-medium">
-                {snapshotValid ? "Snapshot reviewed ✓" : "Snapshot not yet confirmed"}
+                {snapshotValid ? "Review confirmed ✓" : "Manual review not yet confirmed"}
               </div>
               <div className="opacity-80 mt-0.5">
                 Fingerprint <code className="font-mono">{snapshotFingerprint}</code>.{" "}
                 {snapshotValid
                   ? "Batch, template, senders and mapping unchanged since you confirmed — no re-prepare needed regardless of how long you wait to launch."
-                  : "Click 'Mark snapshot reviewed' once the inputs look right. Editing any of them invalidates the snapshot."}
+                  : "This is only your manual review tick, separate from the prepared dispatch snapshot above. Click 'Mark reviewed' once the preview looks right."}
               </div>
             </div>
             {!snapshotValid && (
