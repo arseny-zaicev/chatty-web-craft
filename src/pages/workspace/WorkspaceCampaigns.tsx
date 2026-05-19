@@ -254,7 +254,21 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                 >
                   {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate text-sm">{g.displayName}</div>
+                    <div className="font-medium truncate text-sm flex items-center gap-2">
+                      <span className="truncate">{g.displayName}</span>
+                      {template?.category && (
+                        <span
+                          className={`shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+                            String(template.category).toLowerCase() === "marketing"
+                              ? "border-amber-500/40 text-amber-600 bg-amber-500/10"
+                              : "border-emerald-500/40 text-emerald-600 bg-emerald-500/10"
+                          }`}
+                          title={`Template category: ${template.category}`}
+                        >
+                          {String(template.category)}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground truncate">
                       {headerSubtitle(g)}
                     </div>
