@@ -1,86 +1,69 @@
-# Чтобы такого больше не было: фиксим рассинхрон Inbox-превью
+## Цель
+Дать тебе в workspace кнопку "Reconcile messages (24h)", которая без затрат токенов сверяет webhook-аудит с реальным состоянием БД, находит пропавшие сообщения, и автоматически их восстанавливает.
 
-## Что произошло
+## Что покрывается
 
-В списке чатов под "Oscar Velasquez" показывался текст (в момент скриншота - email `Oscar.velasquez@dispapeles.com`, позже - `"Mañana en este horario esta bien"`), которого **физически нет в треде сообщений** этого разговора.
+**Входящие (inbound)** — клиент написал, но в чате не появилось:
+- Источник истины: `whatsapp_message_events` где `event_type = 'inbound_message_received'` (мы уже логируем сырой payload в прошлом фиксе)
+- Сверка: для каждого такого события проверяем что есть соответствующий `inbound_message_persisted` ИЛИ запись в `messages` с тем же `provider_message_id`
+- Если нет — восстанавливаем из `raw` payload (создаём conversation если нужно + insert в messages)
 
-Проверил БД:
-- `conversations.last_message_text` = `"Mañana en este horario esta bien"` @ `16:16:41`
-- Последнее реальное сообщение в `messages` для этого диалога - `16:13:31`
-- Поиск этого текста по всей таблице `messages` - **0 совпадений**
+**Исходящие (outbound)** — отправили клиенту, но статус застрял:
+- Источник: `campaign_recipients` со `status='pending'`/`'sending'` старше 1 часа, и `messages` direction=outbound без финального статуса (delivered/read/failed) старше 1 часа
+- Сверка: смотрим в `whatsapp_message_events` есть ли status-updates от Gupshup (delivered/read/failed) по этому `provider_message_id`
+- Если есть — синхронизируем статус в `messages` и `campaign_recipients`
+- Если за 24ч вообще ничего не пришло — помечаем как `failed` с пометкой "no_status_update"
 
-То есть колонка `last_message_text` живёт отдельной жизнью от реальных сообщений.
+## Где живёт UI
 
-## Корневая причина
+Новая вкладка/секция в `WorkspaceOverview` (либо отдельный `WorkspaceSettings` блок) под названием **"Message Integrity"**:
 
-`last_message_text` / `last_message_at` пишутся вручную **в трёх разных местах**, каждое - своим путём, без транзакции с insert в `messages`:
-
-1. `supabase/functions/whatsapp-webhook/index.ts` - 3 точки (входящие: строки 199, 229, 545). Update в `conversations` идёт **до** insert в `messages`, ошибка insert не проверяется.
-2. `supabase/functions/send-whatsapp/index.ts:307` - исходящие через UI.
-3. Кампании (campaigns / send pipelines) - пишут свой текст шаблона.
-
-Любой сбой между "обновили превью" и "вставили message" (RLS, дубль провайдер-id, ретрай вебхука, отправка на чужой номер, тестовый payload) → превью показывает фантомный текст, которого в треде нет. Точно такая же дыра позволяет показать email-черновик / placeholder / fallback `[text]` без реальной строки.
-
-## План фикса
-
-### 1. Сделать `last_message_text` производным полем (single source of truth)
-
-Миграция:
-
-- Триггер `AFTER INSERT ON public.messages` (и `AFTER UPDATE OF body` на всякий) обновляет родительскую `conversations`:
-  - `last_message_text = NEW.body` (или `'[' || media_type || ']'` если body пустой)
-  - `last_message_at = NEW.created_at`
-  - для inbound: `unread_count = unread_count + 1`, `last_inbound_at = NEW.created_at`
-- Триггер `AFTER DELETE ON public.messages` пересчитывает превью из оставшихся сообщений (или ставит NULL).
-- Опционально: `REVOKE UPDATE (last_message_text, last_message_at) ON public.conversations FROM authenticated, anon` - чтобы клиент физически не мог писать в эти поля.
-
-### 2. Удалить все ручные апдейты `last_message_text` / `last_message_at`
-
-- `supabase/functions/whatsapp-webhook/index.ts` - убрать поля из 3 update/insert блоков (создание диалога оставляем, но без превью - его проставит триггер первого message).
-- `supabase/functions/send-whatsapp/index.ts` - убрать update после insert.
-- Проверить campaigns / reply-watchdog / slack-dispatch - не должны писать в эти колонки.
-
-### 3. Не считать диалог "поступившим", пока message не вставлен
-
-В webhook порядок меняем на: **сначала** insert в `messages` (с проверкой ошибки), и только если успешно - триггер сам обновит conversations. Если insert падает → диалог остаётся без фантомного превью + лог ошибки.
-
-### 4. Бэкфилл
-
-Одноразовый UPDATE: для каждого `conversation_id` взять `body` и `created_at` последнего реального сообщения и записать в `last_message_text` / `last_message_at`. Где сообщений нет - выставить NULL. Это сразу очистит существующие фантомы (включая случаи "Mañana...", где-то email и т.п.).
-
-### 5. Защита от регрессий
-
-- DB-инвариант (CHECK или вьюшка-монитор) + edge function `inbox-integrity-check` (раз в час): считает диалоги, у которых `last_message_text` не равен body последнего message. В норме - 0. Шлём в Slack-канал ops при >0.
-- Простой unit-тест миграции: insert message → проверка conversations.last_message_text.
-
-## Что НЕ трогаем
-
-- UI инбокса (`src/pages/CRM.tsx:789`) - читает то же поле, после фикса будет всегда корректно.
-- `unread_count` логику кампаний/реалтайма - отдельная тема, в этот план не входит.
-
-## Технические детали (для разработчика)
-
-Файлы:
-- новая миграция `supabase/migrations/<ts>_conversations_preview_trigger.sql`
-- `supabase/functions/whatsapp-webhook/index.ts` (3 места)
-- `supabase/functions/send-whatsapp/index.ts` (1 место)
-- бэкфилл-SQL разовый в той же миграции
-- (опц.) новая edge `supabase/functions/inbox-integrity-check/index.ts` + cron
-
-Псевдо-SQL триггера:
-
-```sql
-create or replace function public.tg_conversations_sync_preview()
-returns trigger language plpgsql security definer set search_path=public as $$
-begin
-  update public.conversations
-     set last_message_text = coalesce(NEW.body, '[' || coalesce(NEW.media_type,'media') || ']'),
-         last_message_at   = NEW.created_at,
-         last_inbound_at   = case when NEW.direction='inbound' then NEW.created_at else last_inbound_at end,
-         unread_count      = case when NEW.direction='inbound' then coalesce(unread_count,0)+1 else unread_count end
-   where id = NEW.conversation_id;
-  return NEW;
-end$$;
+```text
+┌─ Message Integrity (last 24h) ────────────────────┐
+│  Last check: 2 min ago     [Run check now] btn    │
+│                                                    │
+│  Inbound:   142 received → 142 persisted   OK     │
+│  Outbound:  890 sent     → 887 confirmed   3 ⚠   │
+│                                                    │
+│  ⚠ 3 issues found:                                 │
+│   • +57 313 588 5956  inbound  missing in chat   │
+│     [Restore]                                      │
+│   • +52 ...           outbound  no status 26h    │
+│     [Mark failed]                                  │
+│                                                    │
+│  [Auto-fix all] [Last 7 days ▾]                   │
+└────────────────────────────────────────────────────┘
 ```
 
-После approve - применяю миграцию, чищу edge-функции, запускаю бэкфилл, и фантомы пропадают навсегда.
+## Edge function: `reconcile-messages`
+
+Параметры: `workspace_id`, `hours` (default 24), `auto_fix` (bool).
+
+Flow:
+1. Auth: текущий юзер должен быть workspace manager (RLS уже покрывает).
+2. Найти все номера workspace → `whatsapp_numbers.id[]`.
+3. **Inbound pass:**
+   - Select `whatsapp_message_events` где `event_type='inbound_message_received'` и `whatsapp_number_id IN (...)` и `created_at > now() - hours`.
+   - Для каждого: проверить наличие `messages` row с тем же `provider_message_id` (из `raw.payload.id`).
+   - Missing → если `auto_fix`: вставить conversation + message из raw, залогировать `inbound_message_recovered` event.
+4. **Outbound pass:**
+   - Select `messages` direction=outbound, status IN ('sent','queued'), `created_at < now() - 1h`.
+   - Для каждого: в `whatsapp_message_events` искать события `message-event` с тем же `provider_message_id` и type=delivered/read/failed.
+   - Если есть → update status. Если нет за 24ч → mark failed.
+5. Вернуть JSON: `{ inbound: {checked, missing, recovered}, outbound: {checked, stuck, synced, failed}, issues: [...] }`.
+
+**Никаких внешних API не зовём.** Только postgres. Токены = 0.
+
+## Опциональный cron
+Раз в час дёргать `reconcile-messages` со всеми workspace_id автоматически и при `missing > 0` слать алерт в существующий Slack dispatcher (отдельный event type `integrity_alert`).
+
+## Файлы
+- `supabase/functions/reconcile-messages/index.ts` — новая edge function
+- `src/components/workspace/MessageIntegrityPanel.tsx` — UI компонент с кнопкой и списком issues
+- `src/pages/workspace/WorkspaceOverview.tsx` — встроить панель
+- (опционально) cron job через `supabase--insert` + `pg_cron`
+
+## Что НЕ делаем
+- Не звоним в Gupshup API (это стоило бы токены/лимиты)
+- Не трогаем outbound текст — только статусы
+- Не удаляем ничего; только insert/update восстановленных записей
