@@ -1853,6 +1853,24 @@ export default function LaunchWizard() {
               onSnapshotChange={setDispatchState}
             />
           )}
+          <div className={`text-xs rounded-md border px-2.5 py-2 flex items-start gap-2 ${snapshotValid ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400"}`}>
+            <div className="flex-1">
+              <div className="font-medium">
+                {snapshotValid ? "Snapshot reviewed ✓" : "Snapshot not yet confirmed"}
+              </div>
+              <div className="opacity-80 mt-0.5">
+                Fingerprint <code className="font-mono">{snapshotFingerprint}</code>.{" "}
+                {snapshotValid
+                  ? "Batch, template, senders and mapping unchanged since you confirmed — no re-prepare needed regardless of how long you wait to launch."
+                  : "Click 'Mark snapshot reviewed' once the inputs look right. Editing any of them invalidates the snapshot."}
+              </div>
+            </div>
+            {!snapshotValid && (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" onClick={confirmSnapshot}>
+                Mark reviewed
+              </Button>
+            )}
+          </div>
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
