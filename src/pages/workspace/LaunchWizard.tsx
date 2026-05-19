@@ -691,6 +691,22 @@ export default function LaunchWizard() {
   // Back-compat alias kept for the UI block below.
   const staticQaIssues = staticQaWarnings;
 
+  // Name fallback keys for the first variable (idx 0). If a row has nothing
+  // for the mapped source but has e.g. payload.first_name, use that. This
+  // matches what the import edge function backfills and prevents the launch
+  // from rendering "Hey there there" just because derived_payload was empty.
+  const NAME_KEYS = ["first_name", "firstname", "given_name", "givenname", "name", "fullname", "full_name"];
+  const pickNameFromPayload = (payload: any): string => {
+    if (!payload || typeof payload !== "object") return "";
+    const lc: Record<string, any> = {};
+    for (const k of Object.keys(payload)) lc[k.toLowerCase()] = payload[k];
+    for (const k of NAME_KEYS) {
+      const v = String(lc[k] ?? "").trim();
+      if (v) return v.split(/\s+/)[0];
+    }
+    return "";
+  };
+
   // Hollow mapping: variable is mapped to a column but EVERY sampled DB row
   // resolves to empty -> the wizard says "mapped" but the launch will fall
   // back to "there". Block before that becomes "Hey there there".
@@ -699,13 +715,16 @@ export default function LaunchWizard() {
     const rows = sampleDbRowsQ.data ?? [];
     if (rows.length === 0) return [];
     const out: string[] = [];
-    for (const v of variableNames) {
+    for (let i = 0; i < variableNames.length; i++) {
+      const v = variableNames[i];
       const src = mapping[v];
       if (!src || src.startsWith("__static:")) continue;
       const allEmpty = rows.every((r) => {
         const fromPayload = String((r.payload as any)?.[src] ?? "").trim();
         const fromDerived = String((r.derived_payload as any)?.[src] ?? "").trim();
-        return !fromPayload && !fromDerived;
+        if (fromPayload || fromDerived) return false;
+        if (i === 0 && pickNameFromPayload(r.payload)) return false;
+        return true;
       });
       if (allEmpty) out.push(v);
     }
