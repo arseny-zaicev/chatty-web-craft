@@ -40,7 +40,7 @@ export async function touchResponder(conversationId: string, userId: string) {
  * We fetch in descending order with a hard limit, then reverse for chronological display,
  * so opening a long-running thread no longer pulls thousands of rows.
  */
-export async function fetchConversationMessages(conversationId: string, limit = 50) {
+export async function fetchConversationMessages(conversationId: string, limit = 500) {
   const { data, error } = await supabase
     .from("messages")
     .select("id, direction, body, media_url, status, created_at, sent_by_user_id")
