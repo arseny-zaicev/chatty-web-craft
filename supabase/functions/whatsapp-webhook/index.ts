@@ -50,7 +50,16 @@ async function phoneMatchesRecentPipelineCountry(pipelineId: string | null, phon
   return prefixes.length === 0 || prefixes.some((prefix) => phone.startsWith(prefix));
 }
 
-async function handleInbound(payload: Record<string, unknown>) {
+async function markRaw(rawId: string | null, patch: Record<string, unknown>) {
+  if (!rawId) return;
+  try {
+    await supabase.from("whatsapp_webhook_raw").update(patch).eq("id", rawId);
+  } catch (e) {
+    console.error("Failed to update whatsapp_webhook_raw", rawId, e);
+  }
+}
+
+async function handleInbound(payload: Record<string, unknown>, rawId: string | null = null) {
   console.log("Inbound payload:", JSON.stringify(payload));
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
   const sender = (inner.sender ?? {}) as Record<string, unknown>;
