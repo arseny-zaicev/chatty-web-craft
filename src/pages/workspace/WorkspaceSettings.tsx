@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Settings as SettingsIcon, Phone, FileText, Wrench, Users, Sparkles, KanbanSquare } from "lucide-react";
+import { Settings as SettingsIcon, Phone, FileText, Wrench, Users, Sparkles, KanbanSquare, UserCog } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NumbersInventory from "@/components/workspace/NumbersInventory";
 import TemplatesView from "@/components/workspace/TemplatesView";
 import TeamView from "@/components/workspace/TeamView";
+import SettersView from "@/components/workspace/SettersView";
 import BrandEditor from "@/components/workspace/BrandEditor";
 import PipelinesView from "@/components/workspace/PipelinesView";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
-type Tab = "team" | "brand" | "pipelines" | "numbers" | "templates" | "debug";
+type Tab = "team" | "setters" | "brand" | "pipelines" | "numbers" | "templates" | "debug";
 
 export default function WorkspaceSettings() {
   const { workspace } = useOutletContext<WorkspaceContext>();
