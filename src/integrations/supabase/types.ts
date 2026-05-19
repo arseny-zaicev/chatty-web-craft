@@ -3071,6 +3071,8 @@ export type Database = {
           perm_quick_replies_manage: boolean
           perm_quick_replies_use: boolean
           perm_settings: boolean
+          perm_stats: boolean
+          perm_stats_all: boolean
           role: string
           user_id: string
           workspace_id: string
@@ -3092,6 +3094,8 @@ export type Database = {
           perm_quick_replies_manage?: boolean
           perm_quick_replies_use?: boolean
           perm_settings?: boolean
+          perm_stats?: boolean
+          perm_stats_all?: boolean
           role?: string
           user_id: string
           workspace_id: string
@@ -3113,6 +3117,8 @@ export type Database = {
           perm_quick_replies_manage?: boolean
           perm_quick_replies_use?: boolean
           perm_settings?: boolean
+          perm_stats?: boolean
+          perm_stats_all?: boolean
           role?: string
           user_id?: string
           workspace_id?: string

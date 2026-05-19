@@ -1,69 +1,44 @@
-## Цель
-Дать тебе в workspace кнопку "Reconcile messages (24h)", которая без затрат токенов сверяет webhook-аудит с реальным состоянием БД, находит пропавшие сообщения, и автоматически их восстанавливает.
+## Проблема
+Сейчас в Section access нет тумблера **Stats**: страница Stats гейтится по `perm_inbox`, поэтому любой у кого есть Inbox получает Stats автоматически. Также нельзя дать сеттеру право видеть **всех** — он всегда видит только себя, full-team scope открыт только менеджерам/owner/admin.
 
-## Что покрывается
+## Что добавляем
+Два новых permission-флага:
+- `perm_stats` - может вообще видеть раздел Stats. По умолчанию свою личную статистику.
+- `perm_stats_all` - может переключаться в режим "Team" и видеть всю команду. Без `perm_stats` бесполезен (тумблер серый).
 
-**Входящие (inbound)** — клиент написал, но в чате не появилось:
-- Источник истины: `whatsapp_message_events` где `event_type = 'inbound_message_received'` (мы уже логируем сырой payload в прошлом фиксе)
-- Сверка: для каждого такого события проверяем что есть соответствующий `inbound_message_persisted` ИЛИ запись в `messages` с тем же `provider_message_id`
-- Если нет — восстанавливаем из `raw` payload (создаём conversation если нужно + insert в messages)
+## Миграция БД
+```sql
+ALTER TABLE workspace_members
+  ADD COLUMN perm_stats boolean NOT NULL DEFAULT false,
+  ADD COLUMN perm_stats_all boolean NOT NULL DEFAULT false;
 
-**Исходящие (outbound)** — отправили клиенту, но статус застрял:
-- Источник: `campaign_recipients` со `status='pending'`/`'sending'` старше 1 часа, и `messages` direction=outbound без финального статуса (delivered/read/failed) старше 1 часа
-- Сверка: смотрим в `whatsapp_message_events` есть ли status-updates от Gupshup (delivered/read/failed) по этому `provider_message_id`
-- Если есть — синхронизируем статус в `messages` и `campaign_recipients`
-- Если за 24ч вообще ничего не пришло — помечаем как `failed` с пометкой "no_status_update"
+-- Backfill: всем существующим менеджерам и тем у кого perm_settings - даём оба
+UPDATE workspace_members
+  SET perm_stats = true, perm_stats_all = true
+  WHERE perm_settings = true OR role = 'manager';
 
-## Где живёт UI
-
-Новая вкладка/секция в `WorkspaceOverview` (либо отдельный `WorkspaceSettings` блок) под названием **"Message Integrity"**:
-
-```text
-┌─ Message Integrity (last 24h) ────────────────────┐
-│  Last check: 2 min ago     [Run check now] btn    │
-│                                                    │
-│  Inbound:   142 received → 142 persisted   OK     │
-│  Outbound:  890 sent     → 887 confirmed   3 ⚠   │
-│                                                    │
-│  ⚠ 3 issues found:                                 │
-│   • +57 313 588 5956  inbound  missing in chat   │
-│     [Restore]                                      │
-│   • +52 ...           outbound  no status 26h    │
-│     [Mark failed]                                  │
-│                                                    │
-│  [Auto-fix all] [Last 7 days ▾]                   │
-└────────────────────────────────────────────────────┘
+-- Остальным с perm_inbox - даём только свою (perm_stats=true, perm_stats_all=false)
+UPDATE workspace_members
+  SET perm_stats = true
+  WHERE perm_stats = false AND perm_inbox = true;
 ```
 
-## Edge function: `reconcile-messages`
+## Код
+1. **`src/lib/workspaceRole.ts`** - добавить `perm_stats`, `perm_stats_all` в `PERM_KEYS` и в SELECT.
+2. **`src/pages/workspace/WorkspaceLayout.tsx`** + **`WorkspaceSidebar.tsx`** - заменить `stats: "perm_inbox"` на `stats: "perm_stats"`.
+3. **`src/pages/workspace/WorkspaceStats.tsx`** - заменить `canViewAll = canManageSettings || isAdmin || isOwner` на `canViewAll = isAdmin || isOwner || permissions.perm_stats_all`. Без `perm_stats_all` scope-селектор скрыт, всегда "me".
+4. **`src/components/workspace/TeamView.tsx`** - добавить два новых лейбла в `PERM_LABELS`:
+   - `perm_stats: "Stats"`
+   - `perm_stats_all: "Stats - see whole team"`
+   В UI: тумблер "Stats - see whole team" disabled когда `perm_stats=false`.
 
-Параметры: `workspace_id`, `hours` (default 24), `auto_fix` (bool).
+## UX в Section access
+```
+Stats                          [toggle]
+  ↳ See whole team             [toggle]   (indented, disabled if Stats off)
+```
 
-Flow:
-1. Auth: текущий юзер должен быть workspace manager (RLS уже покрывает).
-2. Найти все номера workspace → `whatsapp_numbers.id[]`.
-3. **Inbound pass:**
-   - Select `whatsapp_message_events` где `event_type='inbound_message_received'` и `whatsapp_number_id IN (...)` и `created_at > now() - hours`.
-   - Для каждого: проверить наличие `messages` row с тем же `provider_message_id` (из `raw.payload.id`).
-   - Missing → если `auto_fix`: вставить conversation + message из raw, залогировать `inbound_message_recovered` event.
-4. **Outbound pass:**
-   - Select `messages` direction=outbound, status IN ('sent','queued'), `created_at < now() - 1h`.
-   - Для каждого: в `whatsapp_message_events` искать события `message-event` с тем же `provider_message_id` и type=delivered/read/failed.
-   - Если есть → update status. Если нет за 24ч → mark failed.
-5. Вернуть JSON: `{ inbound: {checked, missing, recovered}, outbound: {checked, stuck, synced, failed}, issues: [...] }`.
-
-**Никаких внешних API не зовём.** Только postgres. Токены = 0.
-
-## Опциональный cron
-Раз в час дёргать `reconcile-messages` со всеми workspace_id автоматически и при `missing > 0` слать алерт в существующий Slack dispatcher (отдельный event type `integrity_alert`).
-
-## Файлы
-- `supabase/functions/reconcile-messages/index.ts` — новая edge function
-- `src/components/workspace/MessageIntegrityPanel.tsx` — UI компонент с кнопкой и списком issues
-- `src/pages/workspace/WorkspaceOverview.tsx` — встроить панель
-- (опционально) cron job через `supabase--insert` + `pg_cron`
-
-## Что НЕ делаем
-- Не звоним в Gupshup API (это стоило бы токены/лимиты)
-- Не трогаем outbound текст — только статусы
-- Не удаляем ничего; только insert/update восстановленных записей
+## Что НЕ трогаем
+- Существующие настройки клиентов - backfill сохраняет текущее поведение
+- RLS на underlying таблицах - фильтрация уже идёт через `setterIdForRpc` на клиенте/RPC
+- Никаких визуальных изменений в самой странице Stats для тех у кого `perm_stats_all`
