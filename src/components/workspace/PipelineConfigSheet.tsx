@@ -911,7 +911,7 @@ export default function PipelineConfigSheet({
           <div className="rounded-lg border border-border p-3 space-y-3">
             <label className="flex items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-medium">Auto first-touch</div>
+                <div className="text-sm font-medium">Auto-send first message when a lead is imported</div>
                 <div className="text-[11px] text-muted-foreground">
                   Send the first message automatically when a lead is imported.
                 </div>
