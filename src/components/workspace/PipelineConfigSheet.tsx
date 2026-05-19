@@ -1434,6 +1434,9 @@ export default function PipelineConfigSheet({
           </div>
         </section>
 
+        <ZapierWebhookSection pipelineId={pipeId} />
+
+
         <div className="mt-6 flex justify-end gap-2 sticky bottom-0 bg-background pt-3 pb-1 border-t border-border">
           <Button variant="ghost" onClick={onClose}>Close</Button>
           <Button
