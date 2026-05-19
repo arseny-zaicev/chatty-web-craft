@@ -41,7 +41,7 @@ const fetchBm = async (id: string) => {
   if (!bm) throw new Error("Not found");
   const [{ data: linked }, { data: pool }, { data: events }, { data: ws }] = await Promise.all([
     supabase.from("whatsapp_numbers").select("id, phone_number, display_name, status, messaging_limit, business_manager_id, workspace_id, provided_by, assigned_ref").eq("business_manager_id", id),
-    supabase.from("whatsapp_numbers").select("id, phone_number, display_name, status, messaging_limit, business_manager_id, workspace_id, provided_by, assigned_ref").eq("workspace_id", bm.workspace_id).is("business_manager_id", null),
+    supabase.from("whatsapp_numbers").select("id, phone_number, display_name, status, messaging_limit, business_manager_id, workspace_id, provided_by, assigned_ref").is("business_manager_id", null).order("display_name").limit(500),
     supabase.from("business_manager_warmup_events").select("*").eq("business_manager_id", id).order("created_at", { ascending: false }).limit(50),
     supabase.from("workspaces").select("id, name").eq("id", bm.workspace_id).maybeSingle(),
   ]);
