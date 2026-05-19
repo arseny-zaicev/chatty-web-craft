@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { IskraSparkMark } from "@/components/IskraLogo";
 
 const MESSAGES = [
-  "Soon your WhatsApp gonna be blasting. Wait a bit.",
+  "Soon your WhatsApp gonna be blasting.",
   "Warming up the spark…",
   "Polishing the pipeline…",
   "Loading replies that actually convert…",
