@@ -776,7 +776,21 @@ async function processQueue(admin: any) {
   // it from 'scheduled' -> 'sending' below (the conditional UPDATE acts as the lock).
   // If a tick crashes or times out mid-send, the row stays in 'sending' indefinitely
   // and is invisible to subsequent ticks (which only claim 'scheduled'). Reap stuck
-  // 'sending' rows older than 10 minutes back to 'scheduled' so they are retried.
+  // 'sending' rows back to 'scheduled' so they are retried.
+  //
+  // marketing_instant blasts hammer Gupshup hard and a stuck isolate can freeze the
+  // whole campaign until reap. Use a shorter (2-min) window for those, and keep
+  // the conservative 10-min window for paced/utility. The mode-scoped call is a
+  // no-op on Postgres functions that haven't been migrated yet (it just errors and
+  // is caught), so this stays safe during rollout.
+  try {
+    await admin.rpc("reap_stuck_sending_recipients", {
+      p_idle_minutes: 2,
+      p_dispatch_modes: ["marketing_instant"],
+    });
+  } catch (err) {
+    console.warn("reap_stuck_sending_recipients (instant) failed", err);
+  }
   try {
     await admin.rpc("reap_stuck_sending_recipients", { p_idle_minutes: 10 });
   } catch (err) {
@@ -1281,8 +1295,16 @@ async function processQueue(admin: any) {
     const isUtility = tplCategory === "utility" || tplCategory === "authentication";
     const perNumberFloor = isInstant ? 0 : (isUtility ? 60 : 1);
     const perNumberCap = Math.max(1, Number(camp.max_inflight_per_number ?? 5));
+    // For marketing_instant the configured per_number cap (often 200) lets a single
+    // tick spawn 200 parallel Gupshup fetches inside one Deno isolate. That regularly
+    // overshoots the 30s isolate wall-clock / 55s tick budget and leaves rows stuck
+    // in 'sending' for 10 min until reap. Hard-cap the actual concurrency to something
+    // an isolate can finish in one tick; pg_cron still fires every minute so total
+    // throughput per campaign is unchanged, we just stop creating dead zones.
+    const INSTANT_PARALLEL_HARD_CAP = 40;
+    const effectiveCap = isInstant ? Math.min(perNumberCap, INSTANT_PARALLEL_HARD_CAP) : perNumberCap;
     // Paced/utility floor>0 forces serialization within a number.
-    const parallel = perNumberFloor > 0 ? 1 : Math.min(perNumberCap, recipients.length);
+    const parallel = perNumberFloor > 0 ? 1 : Math.min(effectiveCap, recipients.length);
 
     let cursor = 0;
     const workers: Promise<void>[] = [];

@@ -3566,7 +3566,9 @@ export type Database = {
         Args: { p_campaign_ids: string[] }
         Returns: {
           campaign_id: string
+          delivered_count: number
           failed: number
+          failed_event_count: number
           meeting: number
           pending: number
           positive: number
@@ -3885,10 +3887,12 @@ export type Database = {
         Args: { p_idle_minutes?: number }
         Returns: number
       }
-      reap_stuck_sending_recipients: {
-        Args: { p_idle_minutes?: number }
-        Returns: number
-      }
+      reap_stuck_sending_recipients:
+        | { Args: { p_idle_minutes?: number }; Returns: number }
+        | {
+            Args: { p_dispatch_modes?: string[]; p_idle_minutes?: number }
+            Returns: number
+          }
       recompute_payout_run: {
         Args: { _run_id: string }
         Returns: {
