@@ -371,7 +371,7 @@ function CampaignDetail({
   group: CampaignGroup;
   canManage: boolean;
   numberById: Map<string, { id: string; phone_number: string; label: string | null; display_name: string | null }>;
-  liveCounts?: { replied: number; tagged: number; positive: number; warm: number; sent: number };
+  liveCounts?: { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number };
 }) {
   const campaignIds = group.campaigns.map((c) => c.id);
   const tz = tzInfo(group.recipientCountry).tz;
