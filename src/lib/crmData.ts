@@ -43,6 +43,7 @@ export type Conversation = Pick<
   | "contact_name"
   | "last_message_text"
   | "last_message_at"
+  | "last_inbound_at"
   | "unread_count"
   | "whatsapp_number_id"
   | "workspace_id"
@@ -86,7 +87,7 @@ export async function fetchCrmBase(workspaceId?: string) {
   let conversationsQuery = supabase
     .from("conversations")
     .select(
-      "id, contact_phone, contact_name, last_message_text, last_message_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id",
+      "id, contact_phone, contact_name, last_message_text, last_message_at, last_inbound_at, unread_count, whatsapp_number_id, workspace_id, is_starred, pinned_at, assigned_user_id, active_responder_id, active_responder_at, pipeline_id",
     )
     .order("last_message_at", { ascending: false, nullsFirst: false })
     // Cap initial load to 1000 most-recent conversations. Older ones are
@@ -133,19 +134,15 @@ export async function fetchCrmBase(workspaceId?: string) {
     if (t) conversationStageType.set(d.conversation_id, t);
   });
 
-  // Set of conversation ids that have at least one inbound message (i.e. contact replied).
-  // Backed by conversations.last_inbound_at (maintained by trigger) so this is one
-  // small index lookup, not a 20k-row message scan. Accurate across the whole workspace
-  // even when older threads are not in the initial 1000-row batch.
-  const repliedConversationIds = new Set<string>();
-  let repliedQuery = supabase
-    .from("conversations")
-    .select("id")
-    .not("last_inbound_at", "is", null)
-    .limit(50000);
-  if (workspaceId) repliedQuery = repliedQuery.eq("workspace_id", workspaceId);
-  const { data: repliedRows } = await repliedQuery;
-  (repliedRows ?? []).forEach((r: any) => r.id && repliedConversationIds.add(r.id));
+  // "Replied" = conversation row has a non-null last_inbound_at. Derived inline
+  // from the conversations payload — no extra workspace-wide id pull. The
+  // 1000-row cap matches what the CRM list actually renders; older replied
+  // threads are reachable via server-side search (see searchConversations).
+  const repliedConversationIds = new Set<string>(
+    (conversations ?? [])
+      .filter((c: any) => c.last_inbound_at)
+      .map((c: any) => c.id),
+  );
 
   return {
     numbers: (numbers ?? []) as WhatsAppNumber[],

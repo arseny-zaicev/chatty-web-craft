@@ -12,7 +12,12 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-function normalizePhone(p: string): string {
+// Strips a webhook-provided phone string to its digits.
+// NOT the same as the shared `normalizePhone` in _shared/phone.ts (which repairs
+// country codes for lead intake). Webhook destinations/sources are already in
+// E.164 form from Gupshup; we only need to remove '+' and separators so the
+// digits match what we store in whatsapp_numbers.phone_number / conversations.contact_phone.
+function stripToDigits(p: string): string {
   return (p || "").toString().replace(/[^\d]/g, "");
 }
 
@@ -51,10 +56,10 @@ async function handleInbound(payload: Record<string, unknown>) {
   const sender = (inner.sender ?? {}) as Record<string, unknown>;
   const msgPayload = (inner.payload ?? {}) as Record<string, unknown>;
   const appName = String(payload.app ?? inner.app ?? "").trim();
-  const destination = normalizePhone(String(
+  const destination = stripToDigits(String(
     inner.destination ?? payload.destination ?? ""
   ));
-  const source = normalizePhone(String(inner.source ?? sender.phone ?? payload.source ?? ""));
+  const source = stripToDigits(String(inner.source ?? sender.phone ?? payload.source ?? ""));
   if (!source) {
     console.warn("Missing source", { destination, source });
     return;

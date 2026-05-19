@@ -21,7 +21,12 @@ function json(data: unknown, status = 200) {
   });
 }
 
-function normalizePhone(phone: string) {
+// Strips a phone string to digits only. Recipients reaching this point have
+// already been normalized + CC-repaired upstream by `lead-intake` /
+// `google-sheets-sync` (which both use `_shared/phone.ts`). This helper only
+// guarantees a clean digits-only contact_phone for inserts into
+// campaign_recipients / conversations. Do NOT use this for raw lead intake.
+function stripToDigits(phone: string) {
   return String(phone || "").replace(/[^\d]/g, "");
 }
 
@@ -398,7 +403,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   const cleanRecipientsAll = recipients
     .map((r: any) => ({
-      contact_phone: normalizePhone(r.phone || r.contact_phone),
+      contact_phone: stripToDigits(r.phone || r.contact_phone),
       contact_name: String(r.name || r.contact_name || "").trim().slice(0, 160) || null,
       variables: typeof r.variables === "object" && r.variables ? r.variables : {},
       conversation_id: typeof r.conversation_id === "string" && uuidRegex.test(r.conversation_id) ? r.conversation_id : null,
