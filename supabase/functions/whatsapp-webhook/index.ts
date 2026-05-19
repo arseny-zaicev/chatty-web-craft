@@ -260,6 +260,7 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
       .single();
     if (error || !created) {
       console.error("Failed to create conversation", error);
+      await markRaw(rawId, { processing_status: "failed", processed_at: new Date().toISOString(), error_message: `conversation_insert_failed: ${error?.message ?? "unknown"}`, workspace_id: number.workspace_id, whatsapp_number_id: number.id });
       return;
     }
     conversationId = created.id;
