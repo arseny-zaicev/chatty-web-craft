@@ -17,6 +17,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizePhone } from "../_shared/phone.ts";
+import { normalizeFirstName } from "../_shared/name.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -246,6 +247,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     let testLeadCount = 0;
     let duplicateCount = 0;
     let crossPipelineDuplicateCount = 0;
+    let nameUnusableCount = 0;
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
     const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
@@ -268,12 +270,16 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       const row = newRows[i] ?? [];
       const phoneRaw = row[phoneIdx];
       const nameRawCell = nameIdx >= 0 ? row[nameIdx] : null;
-      const name = nameRawCell && !isTestLeadValue(nameRawCell)
-        ? String(nameRawCell).slice(0, 200) : null;
+      const isTestName = isTestLeadValue(nameRawCell);
+      const nameResult = !isTestName ? normalizeFirstName(nameRawCell) : { value: null, raw: nameRawCell == null ? null : String(nameRawCell), outcome: "unusable" as const };
+      const name = nameResult.value;
+      if (nameResult.outcome === "unusable" && nameRawCell != null && String(nameRawCell).trim() !== "") nameUnusableCount++;
       const externalId = `row-${sheetRowNumber}`;
       const payload: Record<string, unknown> = {
         _sheet_row: sheetRowNumber,
         _phone_raw: phoneRaw == null ? "" : String(phoneRaw),
+        _first_name_raw: nameResult.raw ?? null,
+        _first_name_outcome: nameResult.outcome,
       };
       headers.forEach((h, idx) => {
         if (h && row[idx] != null && row[idx] !== "") payload[h] = row[idx];
@@ -443,6 +449,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         duplicate: duplicateCount,
         cross_pipeline_duplicate: crossPipelineDuplicateCount,
         skipped_test_lead: testLeadCount,
+        name_unusable: nameUnusableCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
     });
@@ -460,6 +467,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       duplicate: duplicateCount,
       cross_pipeline_duplicate: crossPipelineDuplicateCount,
       skipped_test_lead: testLeadCount,
+      name_unusable: nameUnusableCount,
       last_synced_row: lastProcessedRow,
     };
   } catch (e) {

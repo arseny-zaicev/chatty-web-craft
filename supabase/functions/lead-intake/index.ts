@@ -12,6 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { normalizePhone } from "../_shared/phone.ts";
+import { normalizeFirstName } from "../_shared/name.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -102,32 +103,22 @@ Deno.serve(async (req) => {
     let testLeadCount = 0;
     let duplicateCount = 0;
     let crossPipelineDuplicateCount = 0;
+    let nameUnusableCount = 0;
     const acceptedLeads: { id: string; phone: string; name: string | null; conversation_id: string | null }[] = [];
-
-    // 1. Open the batch
-    const { data: batch, error: batchErr } = await admin
-      .from("import_batches")
-      .insert({
-        workspace_id: source.workspace_id,
-        pipeline_id: source.pipeline_id,
-        source_connection_id: source.id,
-        source_kind: source.kind,
-        status: "processing",
-        total: rawLeads.length,
-      })
-      .select("id")
-      .single();
-    if (batchErr || !batch) return json({ error: batchErr?.message ?? "Could not open batch" }, 500);
 
     // 2. Validate + dedupe + import each row
     for (const raw of rawLeads) {
       const phoneResult = normalizePhone(raw?.phone, defaultCC);
-      const name = raw?.name ? String(raw.name).slice(0, 200) : null;
+      const nameResult = normalizeFirstName(raw?.name);
+      const name = nameResult.value;
+      if (nameResult.outcome === "unusable") nameUnusableCount++;
       const externalId = raw?.external_id ? String(raw.external_id).slice(0, 200) : null;
       const incomingPayload = (raw?.payload && typeof raw.payload === "object") ? raw.payload : {};
       const payload: Record<string, unknown> = {
         ...incomingPayload,
         _phone_raw: phoneResult.raw,
+        _first_name_raw: nameResult.raw ?? null,
+        _first_name_outcome: nameResult.outcome,
       };
 
       if (!phoneResult.ok) {
@@ -249,6 +240,7 @@ Deno.serve(async (req) => {
         duplicate: duplicateCount,
         cross_pipeline_duplicate: crossPipelineDuplicateCount,
         skipped_test_lead: testLeadCount,
+        name_unusable: nameUnusableCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
     });
@@ -269,6 +261,7 @@ Deno.serve(async (req) => {
       duplicate: duplicateCount,
       cross_pipeline_duplicate: crossPipelineDuplicateCount,
       skipped_test_lead: testLeadCount,
+      name_unusable: nameUnusableCount,
     });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);

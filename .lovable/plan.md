@@ -1,153 +1,119 @@
-## Goal
+# Fitpreneur 2-pipeline setup — mirror Launch wizard UX + first-name normalization
 
-Make the 2-client setup (2 Sheets → 2 Pipelines → shared 3-number pool → first-touch + follow-up) deliver reliably. Below I separate what already exists in this repo from what still needs to be built, with the 3 clarifications you asked for.
+## What you actually said
 
----
+1. *"Сделай как в Launch — одно поле, где выбираю либо группу либо одиночный шаблон, и сразу видно к какому аккаунту шаблон."*
+2. *"Нормализуй имя — брать только первое нормальное имя, без рандомных букв и мусора."* (screenshot: `Jessi` cursive, `halil aslan` gothic, `St`, `lukas`, `memo`, `No Gi Judo & Sambo`, etc.)
 
-## A. Issue classification
-
-| # | Area | Class |
-|---|---|---|
-| 1 | Wrong source/pipeline routing | Bug (workspace-wide dedupe is too wide) |
-| 2 | Shared sender pool + per-number template variants | Backend works; **operator UI is incomplete** |
-| 3 | Phone normalization | Missing capability + data quality (2 inconsistent copies today) |
-| 4 | Follow-up curfew + template enforcement | Backend exists; **runtime needs verification**, visibility + silent-failure are gaps |
+That's it. Nothing else changes.
 
 ---
 
-## B. What ALREADY exists in the repo (do not rebuild)
+## Root cause of confusion (verified in DB)
 
-**Schema / DB**
-- `source_connections (pipeline_id, kind='google_sheet', config jsonb, secret_token)` — each source is hard-wired to exactly one pipeline.
-- `pipelines.default_sender_number_ids uuid[]` — both pipelines can list the same 3 numbers.
-- `pipelines.first_touch_template_group_id`, `follow_up_template_group_id` — FKs to `template_groups`.
-- `template_groups (template_names text[])` — one logical group, multiple per-sender variant names.
-- `pipelines.follow_up_enabled / follow_up_delay_minutes (480) / follow_up_curfew_end (20:00) / follow_up_resume_at (09:00) / follow_up_timezone ('Europe/Berlin')`.
-- DB function `public.pipeline_follow_up_send_at(pipeline_id, base_ts)` — computes the next-allowed local-time slot, DST-safe via `AT TIME ZONE`.
-- Triggers: `schedule_follow_up_on_first_touch_sent`, `cancel_follow_up_on_inbound`, `cancel_follow_up_on_stage_change`.
+Fitpreneur has 3 senders, 3 logical templates each, all named differently per sender:
 
-**Backend**
-- `lead-dispatch` — resolves per-sender variants from a template group, silent-skips senders missing an approved variant, round-robins recipients, logs `sender_skipped` to `campaign_dispatch_events`.
-- `follow-up-dispatch` — reads due `pipeline_follow_ups` rows, resolves per-sender variant, creates per-day per-number follow-up campaign, cancels with `cancelled_reason` when sender lacks an approved variant or is unavailable.
-- `google-sheets-sync` — has its own inline `normalizePhone()` (length 7–10 + defaultCC).
-- `lead-intake` — has its **own** copy of `normalizePhone()`.
+```
+PramodElemOrgNum2  →  fe_daily        fe_reactivation   8hrs_followup
+Yasim              →  dail_leads_fe   rea_fe            8hrsfe
+Yasin              →  daily_fe        reactiv_fe        followup8hrs
+template_groups for this workspace: 0
+```
 
-**Frontend**
-- `PipelineConfigSheet.tsx` — operator can pick a template group for first-touch and follow-up.
+PipelineConfigSheet currently shows two separate dropdowns ("Single template" vs "Template group") side by side, with a flat list of template names and no sender attribution. Operator can't tell what belongs where, and the groups dropdown is empty because no groups were ever created for this workspace.
+
+LaunchWizard already solved this exact problem with `groupLogicalTemplates(templates, templateGroups)` → one unified "logical template" dropdown that lists groups + singles together, with a group icon, variant count, and a `Manage groups` button next to it. The plan is to port that pattern into PipelineConfigSheet.
 
 ---
 
-## C. What does NOT exist yet (real work)
+## Plan
 
-**Backend**
-- No `_shared/phone.ts` helper. The two `normalizePhone()` copies drift and neither handles trunk-zero or an `ambiguous` outcome, and neither preserves the raw value.
-- `google-sheets-sync` dedupes lead_imports **workspace-wide** by phone — leaks across pipelines.
-- `google-sheets-sync` returns only `total/accepted/rejected`. No `normalized/invalid/ambiguous/duplicate/skipped_test_lead` split.
-- `follow-up-dispatch` cancels with a reason but does **not** emit a Slack notice — operator never sees blocked follow-ups.
+### 1. Mirror the Launch wizard template UX in `PipelineConfigSheet.tsx`
 
-**Frontend / operator UI**
-- `PipelineConfigSheet` has **no** sender × variant matrix. After picking a template group there is no visible mapping of `which sender uses which approved variant`. Operators cannot verify wiring.
-- No "Connected sources" list per pipeline.
-- No read-only banner of `timezone / curfew / resume / delay` for follow-up.
-- No labelled "Default country code" field on the Sheet source editor (today it lives in raw JSON).
-- `WorkspaceData.tsx` does not show extended import counts.
+Replace the current two-column "Single template / Template group" block (both first-touch and follow-up) with the same component pattern used in `LaunchWizard.tsx`:
 
----
+- One **"Logical template"** dropdown that lists:
+  - all template groups (with a `<Layers />` icon and `(N variants · group)` suffix)
+  - all single approved templates not covered by a group, each rendered as `template_name — SenderDisplayName` so it's instantly obvious which account owns it
+- A **`Manage groups`** button next to it, opening the existing `TemplateGroupsDialog` (already imported from `LaunchWizard.tsx`, just needs to be mounted in this component too).
+- A small per-sender readiness strip below the dropdown (reuse the existing `SenderVariantMatrix` already in this file) showing ✓/⨯ for each selected sender against the chosen logical template — so before clicking Save you see "all 3 senders have a variant" or "Yasin is missing".
+- When a group is chosen, persist `first_touch_template_group_id`; when a single template is chosen, persist `first_touch_template_id`. Same for follow-up. (Schema already supports both, mutation logic already in place — only the UI changes.)
 
-## D. The 3 clarifications
+Wiring details:
+- Reuse `groupLogicalTemplates`, `Template`, and the existing `templateGroups` query that's already in `PipelineConfigSheet.tsx`.
+- Extend the `templates` query to also fetch `whatsapp_number_id`, then join client-side against `numbers` to render `name — senderLabel` for singles.
+- No backend changes. No schema changes.
 
-### D1. Canonical phone storage format — decision: **digits-only E.164** (no leading `+`)
+### 2. First-name normalization at import time
 
-**Why:** the existing codebase (`google-sheets-sync`, `lead-intake`, `conversations.contact_phone`, `campaign_recipients.contact_phone`, `whatsapp_message_events`, Gupshup webhook handlers, the in-app inbox) already stores and matches on digits-only E.164. Adding `+` now would break every existing equality lookup and dedupe path. Switching to `+E.164` would be a separate, larger migration.
+Add a shared helper `supabase/functions/_shared/name.ts` with one function:
 
-**Rule, applied everywhere the helper is used:**
-- Storage format on `lead_imports.phone`, `conversations.contact_phone`, `campaign_recipients.contact_phone`: **digits only, no `+`, no spaces, length 8–15** (E.164 max is 15 digits).
-- Display format in UI: `+<digits>` (prefix added at render time). The new `senderFullLabel` already does this.
-- Raw value: always preserved in `lead_imports.payload._phone_raw` for audit.
-- Examples (the user's): `4917630349501` → kept; `41766496279` → kept; `4366488243202` → kept; `01512xxxxxxx` with `defaultCC=49` → `4915xxxxxxx`; `+49 176 30349501` → `4917630349501`.
+```
+normalizeFirstName(raw: string | null): {
+  value: string | null,      // clean first name, Title-Case
+  raw: string | null,        // original cell as received
+  outcome: "ok" | "empty" | "unusable"
+}
+```
 
-### D2. Same phone in Warm + Reactivation Sheets — deterministic ownership rule
+Rules (deterministic, no AI):
 
-The product reality: one WhatsApp number = one inbox thread. We cannot run two parallel conversations. So:
+- Unicode-normalise with NFKD → strip combining marks → re-compose → maps cursive/script/gothic/fullwidth letters back to plain ASCII-ish (so `𝓙𝓮𝓼𝓼𝓲` → `Jessi`, `𝔥𝔞𝔩𝔦𝔩` → `halil`).
+- Strip emoji and zero-width characters.
+- Trim, collapse whitespace, take the **first token** only (so `Kevin Bo Grundmann` → `Kevin`, `No Gi Judo & Sambo` → `No` → rejected by next rule).
+- Reject as `unusable` if any of:
+  - length < 2 after cleanup (`St`, single letters, `E.`)
+  - contains digits
+  - is in a small banned list of obvious non-names (`gmbh`, `ug`, `kg`, `team`, `info`, `admin`, `test`, `no`, `kein`, `xxx`, common business words). List lives in the same file so it's easy to extend.
+  - whole token is lowercase **and** length ≤ 4 (catches `memo`, `lukas` is borderline → keep, see next rule)
+- Title-case the result (`lukas` → `Lukas`, `philipe` → `Philipe`).
+- Always preserve the original in `payload._first_name_raw` for audit.
 
-| Question | Rule |
-|---|---|
-| **Which pipeline owns the conversation?** | The pipeline that **created the conversation first** — i.e. whichever Sheet was synced first for this phone. We persist that in `conversations.pipeline_id` (already a column, already populated by the existing `propagate_campaign_pipeline_to_conversation` trigger). It is **not** moved on the second sync. |
-| **Where do replies go?** | To the inbox tied to `conversations.pipeline_id`. Members with access only to the owning pipeline see the reply. (Existing `can_access_pipeline` RLS already enforces this.) |
-| **Which follow-up logic wins?** | The owning pipeline's. Follow-up rows are created from `first_touch` sends; we only first-touch from the **owning pipeline**, so only the owning pipeline ever schedules a follow-up for that phone. |
-| **Duplicate presence across the two Sheets** | The non-owning pipeline's sync still creates a `lead_imports` row (so the operator can see "this Reactivation lead actually lives in Warm"), but with `status='duplicate'`, `conversation_id` set to the existing conversation, and `error='phone owned by pipeline <name>'`. It is **not** first-touched. Counts surface it as `duplicate` in the import report. |
-| **What about a brand-new phone** that only exists in one Sheet? | Imported into that pipeline, conversation created with `pipeline_id = that pipeline`. Standard flow. |
+Wire it into both:
+- `supabase/functions/google-sheets-sync/index.ts` — replace the current `String(nameRawCell).slice(0, 200)` block.
+- `supabase/functions/lead-intake/index.ts` — same.
 
-The dedupe change in `google-sheets-sync` becomes:
-1. Lookup existing `conversations` workspace-wide.
-2. If found AND its `pipeline_id != source.pipeline_id` → write a `duplicate` lead row with the explanation, do **not** queue.
-3. If found AND its `pipeline_id == source.pipeline_id` → standard duplicate path.
-4. If not found → import into this pipeline (the dispatcher will create the conversation, owning it for this pipeline).
-5. The existing `lead_imports` workspace-wide phone check is dropped — it was overly aggressive.
+Behaviour on `unusable`:
+- The lead is **still imported** (we don't want to lose a phone number), but `name` is stored as `NULL` and `payload._first_name_outcome = "unusable"`.
+- `lead-dispatch` already falls back to a neutral greeting when the WhatsApp template variable for first name is empty, so the first message just won't address the person by name instead of saying "Hi memo" or "Hi 𝓙𝓮𝓼𝓼𝓲".
+- Import counters returned by both functions get a new bucket: `name_unusable: N` alongside the existing `normalized / invalid / ambiguous / duplicate / test_lead` counts. Surface in `WorkspaceData.tsx` next to the other counts.
 
-This rule is deterministic, observable (the operator sees "owned by X" on the duplicate row), and consistent with how the dispatcher already works.
+### 3. (Tiny) Make the "Auto-send first message" toggle copy literal
 
-### D3. Follow-up — runtime verification, not assumption
+One-line label change in `PipelineConfigSheet.tsx`:
+`Auto first-touch` → `Auto-send first message when a lead is imported`.
 
-I will treat the existing backend as **unverified** and run an end-to-end check before claiming it works. Concretely, before shipping the UI/Slack changes I will:
-
-1. **DB-fn sanity** — call `SELECT public.pipeline_follow_up_send_at(<pid>, '2026-05-19 17:00:00+02')` for a pipeline with the Berlin curfew and confirm the returned timestamp is the next day's 09:00 Berlin. Repeat with a 10:00 base to confirm it returns the same value unchanged.
-2. **Trigger fire** — flip a test `campaign_recipients` row to `status='sent'` for a `first_touch` campaign in a Berlin pipeline and assert that one row is created in `pipeline_follow_ups` with the expected `scheduled_at`.
-3. **Cancellation triggers** — insert an inbound message on that conversation, assert the follow-up row goes to `cancelled` with reason `inbound_reply`. Repeat by moving the deal to a `lost` stage, assert `cancelled_reason='stage_lost'`.
-4. **Dispatch path** — set a follow-up row's `scheduled_at` to `now()`, invoke `follow-up-dispatch`, assert (a) a recipient row was inserted into the per-day follow-up campaign for the right sender, (b) `pipeline_follow_ups.status='dispatched'`.
-5. **Template enforcement** — set up a sender with **no** approved variant, repeat step 4, assert the row flips to `cancelled` with reason `no_approved_template_for_number` AND (after the new code is in place) a `slack_event_queue` row exists.
-6. **DST** — repeat step 1 with a date that straddles CET/CEST to confirm the offset is correct on both sides.
-
-These checks are recorded as a checklist in the implementation PR. Any failure stops the rollout and is reported back.
+No behaviour change — the readiness checklist already blocks the toggle until everything is ready.
 
 ---
 
-## E. Implementation order
+## Files that will actually change
 
-1. **Shared phone helper + canonical format** — create `_shared/phone.ts`, wire into both functions, return classification, preserve raw.
-2. **Per-pipeline / owning-pipeline dedupe** — apply rule D2 in `google-sheets-sync`.
-3. **Follow-up runtime verification** — execute D3 checks against the current code.
-4. **Follow-up Slack notice** — extend `follow-up-dispatch` to emit on cancel.
-5. **Operator UI** — `PipelineConfigSheet` matrix + connected sources + curfew banner + defaultCC field; `WorkspaceData` counts.
+- `supabase/functions/_shared/name.ts` — **NEW**, ~60 LOC.
+- `supabase/functions/google-sheets-sync/index.ts` — use the helper, add `name_unusable` counter.
+- `supabase/functions/lead-intake/index.ts` — use the helper, add `name_unusable` counter.
+- `src/components/workspace/PipelineConfigSheet.tsx` — swap the template block for the Launch-wizard-style logical-template dropdown + Manage groups button + mount `TemplateGroupsDialog`; tiny label tweak.
+- `src/pages/workspace/WorkspaceData.tsx` — add the `Name unusable: N` count alongside existing counters.
 
----
-
-## F. Acceptance criteria
-
-| Area | Pass test |
-|---|---|
-| Canonical phone format | Every `lead_imports.phone`, `conversations.contact_phone`, `campaign_recipients.contact_phone` written by the new code is digits-only E.164 (8–15 digits, no `+`). Raw value present in `payload._phone_raw`. |
-| Normalization examples | `+49 176 30349501` → `4917630349501`. `01512xxxxxxx` with defaultCC=49 → `4915xxxxxxx`. `abc123` → `invalid`. `01234567` with no defaultCC → `ambiguous` (not queued). |
-| Owning-pipeline rule | Phone X imported into Warm first → conversation `pipeline_id=Warm`. Same phone later in Reactivation Sheet → `lead_imports` row in Reactivation with `status=duplicate`, `conversation_id=<existing>`, `error='phone owned by pipeline Warm Leads'`. No second first-touch. Replies still land in Warm. |
-| Shared sender pool visible | `PipelineConfigSheet` shows a 3-row matrix per template group: sender label × variant name × `Approved/Pending/Missing/Paused`. |
-| Follow-up runtime (D3) | All 6 checks pass; results documented in the PR. |
-| Follow-up block visible | Sender without an approved follow-up variant → row cancelled with reason AND Slack notice appears. |
-| Counts surfaced | `WorkspaceData` shows `normalized / invalid / ambiguous / duplicate / skipped_test_lead` per batch. |
-| 2-client repeatability | Same config done for client B with no code change. |
+No SQL migration. No changes to dispatch/follow-up/Slack/phone-normalisation runtime.
 
 ---
 
-## G. Files that will need real edits
+## Out of scope
 
-| File | New / Edit | Reason |
-|---|---|---|
-| `supabase/functions/_shared/phone.ts` | NEW | Shared normalizer, digits-only E.164, `ambiguous` outcome |
-| `supabase/functions/google-sheets-sync/index.ts` | Edit | Use helper, owning-pipeline dedupe (D2), extended counts, preserve raw |
-| `supabase/functions/lead-intake/index.ts` | Edit | Use helper |
-| `supabase/functions/follow-up-dispatch/index.ts` | Edit | Emit Slack notice on cancel |
-| `src/components/workspace/PipelineConfigSheet.tsx` | Edit | Sender × variant matrix, connected sources, curfew banner, defaultCC field |
-| `src/pages/workspace/WorkspaceData.tsx` | Edit (small) | Show extended import counts |
-
-No SQL migration required.
+- No new admin pages, no redesign, no wizard changes.
+- No "auto-create groups for me" magic — operator clicks `Manage groups` once, sets them up, never thinks about it again per pipeline.
+- No name-normalisation backfill of existing rows. Only applies to new imports going forward. (If you want a one-off backfill SQL after testing, say so and I'll write it separately.)
 
 ---
 
-## H. Known limitations after this pass
+## What to manually test after I ship this
 
-- Per-lead timezone is not introduced — follow-up uses pipeline-level `follow_up_timezone` (Europe/Berlin).
-- Sender round-robin stays index-based; no health/cap weighting.
-- Template approval status read from `message_templates.status` — depends on existing `templates-status-sync` cron.
-- Ambiguous numbers require a human to set `default_country_code` or fix the Sheet — by design we will not silently send to them.
-- The owning-pipeline rule is "first-write-wins". Re-assignment of a conversation to the other pipeline is a manual operator action (not built here).
-- Storage format stays **digits-only E.164** to avoid a workspace-wide data migration; `+` is added only at display time.
-- `WorkspaceLibrary` write-scope RLS is out of scope for this pass.
+1. Open Warm Leads pipeline for Fitpreneur → confirm the new single "Logical template" dropdown shows groups + singles, with `— senderLabel` suffix on singles.
+2. Click `Manage groups`, create `Daily leads` covering `fe_daily / dail_leads_fe / daily_fe`. Confirm it appears in the dropdown immediately with `(3 variants · group)`.
+3. Repeat for `Reactivation` and `8h follow-up`.
+4. Pick `Daily leads` as first-touch group, all 3 senders selected → sender readiness strip shows ✓✓✓.
+5. Toggle "Auto-send first message when a lead is imported" → save.
+6. Add a row to the Warm Sheet with name `𝓙𝓮𝓼𝓼𝓲` → confirm imported as `Jessi`. Add `memo` → confirm imported with `name = NULL` and `_first_name_raw = "memo"`. Add `Kevin Bo Grundmann` → confirm imported as `Kevin`.
+7. Confirm round-robin: 3 new leads → 3 different senders dispatched.
+8. Repeat the template-group step for the Reactivation pipeline with the `Reactivation` group.
