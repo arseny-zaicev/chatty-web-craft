@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Paperclip,
   Mic,
+  AlertTriangle,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
@@ -50,6 +51,7 @@ type Message = {
   status: string;
   created_at: string;
   sent_by_user_id: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 const CRM = ({
@@ -390,21 +392,27 @@ const CRM = ({
     };
   }, [activeId]);
 
-  // Realtime messages for active conversation
+  // Realtime messages for active conversation - INSERT for new messages, UPDATE for status changes (sent -> failed, etc.)
   useRealtimeTable<Message>(
     {
       channel: `crm-messages-${activeId ?? "none"}`,
       table: "messages",
-      event: "INSERT",
+      event: "*",
       filter: activeId ? `conversation_id=eq.${activeId}` : undefined,
       enabled: !!activeId,
     },
     (payload) => {
-      const newMsg = payload.new as Message;
-      setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+      if (payload.eventType === "INSERT") {
+        const newMsg = payload.new as Message;
+        setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+      } else if (payload.eventType === "UPDATE") {
+        const updated = payload.new as Message;
+        setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+      }
     },
     [activeId],
   );
+
 
 
   useEffect(() => {
@@ -972,12 +980,27 @@ const CRM = ({
                   ) : (
                     messages.map((m) => {
                       const isOut = m.direction === "outbound";
+                      const isFailed = m.status === "failed";
+                      // Surface provider error reason (e.g. 24h window expired) directly on the bubble.
+                      const meta = (m.metadata ?? {}) as Record<string, unknown>;
+                      const debug = (meta.debug ?? {}) as Record<string, unknown>;
+                      const providerBody = (debug.provider_body ?? {}) as Record<string, unknown>;
+                      const providerPayload = (providerBody.payload ?? {}) as Record<string, unknown>;
+                      const failureReason = isFailed
+                        ? (providerPayload.reason as string | undefined)
+                          || (debug.provider_message as string | undefined)
+                          || (meta.error as string | undefined)
+                          || "Message failed to send"
+                        : null;
+                      const failureCode = isFailed ? (providerPayload.code as number | string | undefined) : undefined;
                       return (
                         <div key={m.id} className={`flex ${isOut ? "justify-end" : "justify-start"}`}>
                           <div
                             className={`max-w-[60%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
                               isOut
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
+                                ? isFailed
+                                  ? "bg-destructive/10 text-foreground border border-destructive/50 rounded-br-sm"
+                                  : "bg-primary text-primary-foreground rounded-br-sm"
                                 : "bg-card border border-border rounded-bl-sm"
                             }`}
                           >
@@ -992,9 +1015,19 @@ const CRM = ({
                                 Media attachment
                               </a>
                             )}
+                            {isFailed && failureReason && (
+                              <div className="mt-1.5 text-[11px] text-destructive flex items-start gap-1">
+                                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                                <span>
+                                  {failureCode ? `#${failureCode} ` : ""}{failureReason}
+                                </span>
+                              </div>
+                            )}
                             <div
                               className={`text-[10px] mt-1 flex items-center gap-1.5 ${
-                                isOut ? "text-primary-foreground/70" : "text-muted-foreground"
+                                isOut
+                                  ? isFailed ? "text-muted-foreground" : "text-primary-foreground/70"
+                                  : "text-muted-foreground"
                               }`}
                             >
                               <span
@@ -1026,7 +1059,11 @@ const CRM = ({
                                   · by {memberDisplayName(resolveSender(m.sent_by_user_id))}
                                 </span>
                               )}
-                              {isOut && <span>· {m.status}</span>}
+                              {isOut && (
+                                <span className={isFailed ? "text-destructive font-medium" : ""}>
+                                  · {m.status}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
