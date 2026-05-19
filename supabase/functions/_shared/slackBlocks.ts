@@ -123,7 +123,7 @@ export function buildCampaignGroupBlocks(args: {
   ];
   if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
     fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(totals.total)} msgs` });
-    const delivered = totals.sent - totals.failed;
+    const delivered = Math.max(0, totals.sent - totals.failed);
     fields.push({ type: "mrkdwn", text: `*Sent*\n${fmtNumber(totals.sent)} (${fmtPct(totals.sent, totals.total)})` });
     fields.push({ type: "mrkdwn", text: `*Delivered*\n${fmtNumber(delivered)} · ${fmtNumber(totals.failed)} failed` });
   } else if (event === "campaign_scheduled" || event === "campaign_launched" || event === "campaign_resumed") {
@@ -204,7 +204,7 @@ export function buildCampaignLifecycleBlocks(args: {
 
   if (event === "campaign_completed" || event === "campaign_cancelled" || event === "campaign_failed") {
     fields.push({ type: "mrkdwn", text: `*Volume*\n${fmtNumber(total)} msgs` });
-    const delivered = sent - failed;
+    const delivered = Math.max(0, sent - failed);
     fields.push({ type: "mrkdwn", text: `*Sent*\n${fmtNumber(sent)} (${fmtPct(sent, total)})` });
     fields.push({ type: "mrkdwn", text: `*Delivered*\n${fmtNumber(delivered)} · ${fmtNumber(failed)} failed` });
   } else if (event === "campaign_scheduled" || event === "campaign_launched" || event === "campaign_resumed") {
