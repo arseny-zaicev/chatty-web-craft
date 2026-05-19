@@ -558,13 +558,13 @@ async function handleStatus(payload: Record<string, unknown>) {
   const mapped = map[eventType];
 
   // Look up message + recipient (if any) so we can backfill links on the event row.
-  let messageRow: { id: string; user_id: string; conversation_id: string } | null = null;
+  let messageRow: { id: string; user_id: string; conversation_id: string; metadata: any } | null = null;
   let convRow: { workspace_id: string; whatsapp_number_id: string } | null = null;
   let recipientId: string | null = null;
   if (providerMessageId) {
     const { data: m } = await supabase
       .from("messages")
-      .select("id, user_id, conversation_id")
+      .select("id, user_id, conversation_id, metadata")
       .eq("provider_message_id", providerMessageId)
       .maybeSingle();
     messageRow = m ?? null;
@@ -576,12 +576,23 @@ async function handleStatus(payload: Record<string, unknown>) {
         .maybeSingle();
       convRow = c ?? null;
     }
-    const { data: r } = await supabase
-      .from("campaign_recipients")
-      .select("id")
-      .eq("provider_message_id", providerMessageId)
-      .maybeSingle();
-    recipientId = r?.id ?? null;
+    // Direct lookup by provider_message_id. Failed events sometimes arrive before
+    // the recipient row is fully indexed, so we retry briefly on miss.
+    for (let attempt = 0; attempt < 3 && !recipientId; attempt++) {
+      const { data: r } = await supabase
+        .from("campaign_recipients")
+        .select("id")
+        .eq("provider_message_id", providerMessageId)
+        .maybeSingle();
+      if (r?.id) { recipientId = r.id; break; }
+      if (attempt < 2) await new Promise((res) => setTimeout(res, 200 + attempt * 300));
+    }
+    // Fallback: the recipient may have been linked to the message via metadata
+    // even when provider_message_id never reached the recipients row.
+    if (!recipientId && messageRow?.metadata) {
+      const metaRid = (messageRow.metadata as any)?.campaign_recipient_id;
+      if (metaRid) recipientId = String(metaRid);
+    }
   }
 
   // Extract provider error if present (Gupshup uses payload.payload.code / reason).
@@ -616,14 +627,28 @@ async function handleStatus(payload: Record<string, unknown>) {
       .eq("id", messageRow.id);
   }
 
-  // Propagate terminal states to the campaign recipient too.
+  // Propagate terminal states to the campaign recipient too. We force-update on
+  // failure regardless of current status so silent Gupshup rejections (e.g. code
+  // 4003 "template did not match") flip the recipient out of `sent` and the
+  // sync_lead_import_status_from_recipient trigger cascades to lead_imports.
   if (recipientId && (mapped === "failed" || mapped === "delivered" || mapped === "sent")) {
-    const recipientStatus = mapped === "failed" ? "failed" : "sent";
-    await supabase
-      .from("campaign_recipients")
-      .update({ status: recipientStatus, error_message: errorMessage ?? undefined })
-      .eq("id", recipientId);
+    const composedErr = errorCode
+      ? `[${errorCode}] ${errorMessage ?? "provider failure"}`
+      : (errorMessage ?? null);
+    if (mapped === "failed") {
+      await supabase
+        .from("campaign_recipients")
+        .update({ status: "failed", error_message: composedErr ?? "provider reported failed" })
+        .eq("id", recipientId);
+    } else {
+      await supabase
+        .from("campaign_recipients")
+        .update({ status: "sent" })
+        .eq("id", recipientId)
+        .in("status", ["pending", "scheduled", "sending"]);
+    }
   }
+
 }
 
 serve(async (req) => {

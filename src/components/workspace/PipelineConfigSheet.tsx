@@ -677,12 +677,30 @@ export default function PipelineConfigSheet({
   };
 
   const deleteSource = async (s: Source) => {
-    if (!confirm(`Disconnect "${s.name}"?`)) return;
+    // Count pending/queued leads still tied to this source so the user knows
+    // what will be discarded.
+    const { count: pendingLeads } = await supabase
+      .from("lead_imports")
+      .select("id", { count: "exact", head: true })
+      .eq("source_connection_id", s.id)
+      .in("status", ["pending", "awaiting_manual", "queued"]);
+    const n = pendingLeads ?? 0;
+    const msg = n > 0
+      ? `Disconnect "${s.name}"?\n\n${n} pending lead${n === 1 ? "" : "s"} are still queued from this source. They will be discarded so they cannot be sent later. Continue?`
+      : `Disconnect "${s.name}"?`;
+    if (!confirm(msg)) return;
+    if (n > 0) {
+      // Mark pending leads as skipped BEFORE deleting the FK row, so the
+      // edge function never sees orphaned NULL-source leads.
+      await supabase.rpc("purge_pending_leads_for_source", { _source_id: s.id });
+    }
     const { error } = await supabase.from("source_connections").delete().eq("id", s.id);
     if (error) return toast.error(error.message);
-    toast.success("Source removed");
+    toast.success(n > 0 ? `Source removed · ${n} queued lead${n === 1 ? "" : "s"} discarded` : "Source removed");
     refetchSources();
+    qc.invalidateQueries({ queryKey: ["pipeline-lead-counters", pipeId] });
   };
+
 
   const saveSourceConfig = async (s: Source, cfg: Record<string, any>) => {
     const { error } = await supabase.from("source_connections").update({ config: cfg }).eq("id", s.id);

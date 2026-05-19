@@ -3721,6 +3721,10 @@ export type Database = {
         Args: { _base_ts: string; _pipeline_id: string }
         Returns: string
       }
+      purge_pending_leads_for_source: {
+        Args: { _source_id: string }
+        Returns: number
+      }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
