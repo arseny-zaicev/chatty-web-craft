@@ -10,7 +10,7 @@ import { Loader2, Plus, Trash2, Zap, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { Stage } from "@/lib/crmData";
 
-type TriggerKind = "button_click" | "inbound_keyword" | "inbound_any";
+type TriggerKind = "button_click" | "inbound_keyword" | "inbound_any" | "follow_up_sent";
 
 type Automation = {
   id: string;
