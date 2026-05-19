@@ -60,9 +60,13 @@ import { HelmetProvider } from "react-helmet-async";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AuthCacheReset from "@/components/AuthCacheReset";
 import { BrowserRouter, Navigate, Routes, Route, useLocation, useParams } from "react-router-dom";
+import { installGlobalErrorHandlers, logError } from "@/lib/logger";
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
+
+installGlobalErrorHandlers();
 
 const RedirectPartnerDetail = () => {
   const { id } = useParams();
@@ -134,6 +138,16 @@ const queryClient = new QueryClient({
       refetchOnReconnect: false,
     },
   },
+  queryCache: new QueryCache({
+    onError: (err, query) => {
+      logError("query", err, { queryKey: query.queryKey });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (err, _vars, _ctx, mutation) => {
+      logError("mutation", err, { mutationKey: mutation.options.mutationKey });
+    },
+  }),
 });
 
 const RouteFallback = () => <IskraLoader />;
@@ -164,6 +178,7 @@ const App = () => (
           <ScrollToTop />
             <SiteChrome />
           <ChunkErrorBoundary>
+            <RouteErrorBoundary routeName="root">
             <Suspense fallback={<RouteFallback />}>
               <Routes>
               <Route path="/" element={<Index />} />
@@ -231,6 +246,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            </RouteErrorBoundary>
           </ChunkErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { visibleRefetchInterval } from "@/lib/visibleRefetchInterval";
 import { ArrowLeft, RefreshCw, Loader2, Users, Clock, AlertTriangle, MessageSquare, CheckCircle2, CalendarCheck, Inbox } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { evaluateAdminAccess } from "@/lib/adminGuard";
@@ -59,7 +60,8 @@ export default function OpsPerformance() {
     queryKey: ["ops-operator-performance", win],
     queryFn: () => fetchOperatorPerformance(win),
     enabled: authReady,
-    refetchInterval: 60_000,
+    refetchInterval: visibleRefetchInterval(60_000),
+    refetchIntervalInBackground: false,
   });
 
   const totals = useMemo(() => {

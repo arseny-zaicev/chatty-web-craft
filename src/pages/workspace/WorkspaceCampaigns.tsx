@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Megaphone, Rocket, Loader2, ChevronRight, ChevronDown, RefreshCw, Pause, Play, X, SkipForward, RotateCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { visibleRefetchInterval } from "@/lib/visibleRefetchInterval";
 import { fetchCampaignSummaries } from "@/lib/launchData";
 import { friendlySenderLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
@@ -193,7 +194,8 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
       return m;
     },
     enabled: allCampaignIds.length > 0,
-    refetchInterval: 30_000,
+    refetchInterval: visibleRefetchInterval(30_000),
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 
