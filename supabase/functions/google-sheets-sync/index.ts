@@ -276,6 +276,12 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
     const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
+    const pipelineCcs: string[] = Array.isArray((pipeline as any).expected_country_codes)
+      ? ((pipeline as any).expected_country_codes as string[]) : [];
+    const ccListForPhone: string[] = [
+      ...(defaultCC ? [defaultCC] : []),
+      ...pipelineCcs.filter((c) => c && c !== defaultCC),
+    ];
     const leadImportRows: Record<string, unknown>[] = [];
 
     // Cache resolved owning-pipeline names so we don't lookup the same name
