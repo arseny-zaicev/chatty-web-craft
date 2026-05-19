@@ -1342,7 +1342,13 @@ function SheetSourceConfig({
           <Input value={phoneCol} onChange={(e) => setPhoneCol(e.target.value)} placeholder="phone or B" className="h-8 text-xs" />
         </div>
         <div>
-          <Label className="text-[10px]">Name column</Label>
+          <Label className="text-[10px]">Default country code</Label>
+          <Input value={defaultCC} onChange={(e) => setDefaultCC(e.target.value)} placeholder="49" className="h-8 text-xs" />
+        </div>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Used to prefix local-format numbers (e.g. <code>017…</code>). Leave blank if all rows are already in international form. Phones without country code AND no default set are flagged <code>ambiguous</code> and not sent to.
+      </p>
           <Input value={nameCol} onChange={(e) => setNameCol(e.target.value)} placeholder="name or A" className="h-8 text-xs" />
         </div>
       </div>
