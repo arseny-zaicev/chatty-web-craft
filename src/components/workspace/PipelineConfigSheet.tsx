@@ -325,11 +325,19 @@ export default function PipelineConfigSheet({
       .from("pipelines")
       .update({
         auto_outreach_enabled: autoOutreach,
-        first_touch_template_id: templateId || null,
+        first_touch_template_id: templateGroupId ? null : (templateId || null),
+        first_touch_template_group_id: templateGroupId || null,
         default_sender_number_ids: senderIds,
         slack_channel_id: slackChannel.trim() || null,
         daily_cap: effectiveCap,
         sending_window,
+        follow_up_enabled: followUpEnabled,
+        follow_up_template_id: followUpGroupId ? null : (followUpTemplateId || null),
+        follow_up_template_group_id: followUpGroupId || null,
+        follow_up_delay_minutes: Math.max(1, parseInt(followUpDelayMin, 10) || 480),
+        follow_up_curfew_end: followUpCurfewEnd,
+        follow_up_resume_at: followUpResumeAt,
+        follow_up_timezone: followUpTz,
       })
       .eq("id", pipeId);
     if (error) return toast.error(error.message);
