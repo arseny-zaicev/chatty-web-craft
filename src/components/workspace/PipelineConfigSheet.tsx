@@ -1283,6 +1283,14 @@ export default function PipelineConfigSheet({
           <Button onClick={saveOutreach}>Save changes</Button>
         </div>
       </SheetContent>
+      {wsId && (
+        <TemplateGroupsDialog
+          open={groupsDialogOpen}
+          onOpenChange={setGroupsDialogOpen}
+          workspaceId={wsId}
+          templates={(templates ?? []) as any}
+        />
+      )}
     </Sheet>
   );
 }
