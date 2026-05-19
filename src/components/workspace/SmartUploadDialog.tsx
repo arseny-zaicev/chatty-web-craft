@@ -131,6 +131,52 @@ export function SmartUploadDialog({
       toast.error("Drop a file with at least 1 row");
       return;
     }
+
+    // Reuse path: NO AI call. Build the AnalyzeResult locally from the picked
+    // source batch's static values + heuristic column mapping (exact header
+    // matches against template/generic fields). Each batch still owns its own
+    // snapshot — we only copy values, not references.
+    if (reuseBatchId && Object.keys(reuseStatic).length > 0) {
+      const sourceBatch = (batchesQ.data ?? []).find((b) => b.id === reuseBatchId);
+      const headerSet = new Set(parsed.headers.map((h) => h.toLowerCase()));
+      const targets = Array.from(new Set([...expectedFields, "first_name", "last_name", "city", "company", "email"]));
+      const column_mapping: Record<string, string> = {};
+      for (const h of parsed.headers) {
+        const lc = h.toLowerCase().replace(/\s+/g, "_");
+        const hit = targets.find((t) => t.toLowerCase() === lc);
+        if (hit) column_mapping[h] = hit;
+      }
+      const country_distribution: Record<string, number> = {};
+      const phoneCol = detectPhoneColumn(parsed.headers);
+      if (phoneCol) {
+        for (const row of parsed.rows.slice(0, 150)) {
+          const raw = String(row[phoneCol] ?? "").replace(/\D/g, "");
+          const cc = raw.startsWith("49") ? "DE" : raw.startsWith("971") ? "AE" : raw.startsWith("44") ? "GB" : raw.startsWith("1") ? "US" : raw.startsWith("91") ? "IN" : "??";
+          country_distribution[cc] = (country_distribution[cc] ?? 0) + 1;
+        }
+      }
+      const suggested_name = (sourceBatch?.name ? `${sourceBatch.name} (reuse)` : "Reused batch") +
+        ` · ${new Date().toLocaleDateString()}`;
+      const r: AnalyzeResult = {
+        column_mapping,
+        static_values: { ...reuseStatic },
+        matched_template_id: null,
+        matched_template_name: templateName || sourceBatch?.copy_profile || null,
+        matched_template_confidence: 1,
+        suggested_name,
+        country_distribution,
+        warnings: headerSet.size === 0 ? ["File has no header row"] : [],
+        notes: `Reused static values from "${sourceBatch?.name ?? "prior batch"}" — no AI call.`,
+      };
+      setResult(r);
+      setName(r.suggested_name);
+      const top = Object.entries(country_distribution).sort((a, b) => b[1] - a[1])[0];
+      if (top && top[0] !== "??") setCountry(top[0]);
+      setMapping(column_mapping);
+      setStep("preview");
+      return;
+    }
+
     setAnalyzing(true);
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -155,12 +201,6 @@ export function SmartUploadDialog({
         return;
       }
       const r = json as AnalyzeResult;
-      // Per-batch isolation: if operator picked a reuse-source batch, that batch's
-      // static values OVERRIDE the AI-detected ones for this new batch. Each batch
-      // still keeps its own snapshot in audience_batches.notes (no shared cache).
-      if (Object.keys(reuseStatic).length > 0) {
-        r.static_values = { ...r.static_values, ...reuseStatic };
-      }
       setResult(r);
       setName(r.suggested_name);
       const top = Object.entries(r.country_distribution ?? {}).sort((a, b) => b[1] - a[1])[0];
@@ -433,7 +473,7 @@ export function SmartUploadDialog({
               <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button onClick={analyze} disabled={analyzing || !parsed}>
                 {analyzing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
-                Analyze with AI
+                {reuseBatchId && Object.keys(reuseStatic).length > 0 ? "Reuse without AI" : "Analyze with AI"}
               </Button>
             </>
           )}
