@@ -90,14 +90,11 @@ export function validateTemplateForLaunch(
     );
   }
 
-  // 1b. "Hey there {{1}}" trap: literal "there" immediately before {{1}} means
-  // the empty-name fallback ("there") will double up. Block before launch.
-  // Matches: "there {{1}}", "there{{1}}", case-insensitive, word-bounded.
-  if (variableNames.length > 0 && /\bthere\s*\{\{\s*1\s*\}\}/i.test(body)) {
-    throw new Error(
-      `Template "${template.name ?? "?"}" contains "there {{1}}". When a recipient has no name, {{1}} falls back to "there" and the message reads "Hey there there". Edit the template to drop the literal "there" before the placeholder.`,
-    );
-  }
+  // 1b. "Hey there {{1}}" trap. This is only a real launch blocker when at
+  // least one selected recipient has an empty first variable. If every selected
+  // recipient has a name, the message renders as "Hey there Toni" and is safe.
+  const hasLiteralThereBeforeFirstPlaceholder =
+    variableNames.length > 0 && /\bthere\s*\{\{\s*1\s*\}\}/i.test(body);
 
   if (recipients.length === 0 || variableNames.length === 0) {
     return { warnings: [] };
@@ -114,6 +111,12 @@ export function validateTemplateForLaunch(
 
   const total = recipients.length;
   const warnings: string[] = [];
+
+  if (hasLiteralThereBeforeFirstPlaceholder && emptyByIdx[0] > 0) {
+    throw new Error(
+      `Template "${template.name ?? "?"}" has "there {{1}}" and ${emptyByIdx[0]} of ${total} selected recipients have no name. Those messages would render as "Hey there there". Fix the missing names or remove the literal "there" before {{1}}.`,
+    );
+  }
 
   // 3. Hard fail: any non-name variable empty in >5% of recipients.
   for (let i = 1; i < variableNames.length; i++) {
