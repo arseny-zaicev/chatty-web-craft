@@ -3796,6 +3796,9 @@ export type Database = {
         Args: { p_number_ids: string[] }
         Returns: {
           daily_send_limit: number
+          delivered_7d: number
+          delivered_all: number
+          delivered_today: number
           failed_7d: number
           failed_today: number
           last_failed_at: string
