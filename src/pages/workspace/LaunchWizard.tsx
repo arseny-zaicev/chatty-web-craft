@@ -33,7 +33,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
-import { friendlySenderLabel } from "@/lib/crmData";
+import { friendlySenderLabel, senderFullLabel } from "@/lib/crmData";
 import DispatchControlPanel, { type DispatchMode } from "@/components/workspace/DispatchControlPanel";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
