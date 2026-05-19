@@ -859,29 +859,30 @@ export default function PipelineConfigSheet({
                 <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === (stages ?? []).length - 1} onClick={() => moveStage(s.id, 1)}>
                   <ArrowDown className="w-3.5 h-3.5" />
                 </Button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="w-5 h-5 rounded border border-border shrink-0"
-                    style={{ backgroundColor: s.color }}
-                    title="Change color"
-                    onClick={(e) => {
-                      const pop = e.currentTarget.nextElementSibling as HTMLElement | null;
-                      if (pop) pop.classList.toggle("hidden");
-                    }}
-                  />
-                  <div className="hidden absolute z-10 mt-1 left-0 rounded-md border border-border bg-popover p-1.5 grid grid-cols-6 gap-1 shadow-md">
-                    {STAGE_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className="w-5 h-5 rounded border border-border"
-                        style={{ backgroundColor: c }}
-                        onClick={(ev) => { colorStage(s.id, c); (ev.currentTarget.parentElement as HTMLElement).classList.add("hidden"); }}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-5 h-5 rounded border border-border shrink-0"
+                      style={{ backgroundColor: s.color }}
+                      title="Change color"
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent align="start" sideOffset={6} className="w-auto p-2">
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {STAGE_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          aria-label={`Set color ${c}`}
+                          className={`w-6 h-6 rounded border ${s.color?.toLowerCase() === c.toLowerCase() ? "border-foreground ring-2 ring-ring" : "border-border"}`}
+                          style={{ backgroundColor: c }}
+                          onClick={() => colorStage(s.id, c)}
+                        />
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Input
                   defaultValue={s.name}
                   onBlur={(e) => { if (e.target.value.trim() && e.target.value !== s.name) renameStage(s.id, e.target.value.trim()); }}
