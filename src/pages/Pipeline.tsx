@@ -912,6 +912,7 @@ const StageColumn = ({
             onOpenChat={onOpenChat}
             conversation={conversationOf?.(d) ?? null}
             assignee={assigneeOf?.(d) ?? null}
+            isFailedStage={!!failedStageId && d.stage_id === failedStageId}
           />
         ))}
         {deals.length === 0 && (
