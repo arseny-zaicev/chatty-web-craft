@@ -727,7 +727,7 @@ export default function LaunchWizard() {
   const snapshotFingerprint = useMemo(() => {
     const parts = {
       a: dbBatchId || `paste:${recipients.length}`,
-      t: activeLogical?.id ?? "",
+      t: activeLogical?.key ?? "",
       n: [...activeNumbers.map((n) => n.id)].sort(),
       m: Object.entries(mapping).sort(([a], [b]) => a.localeCompare(b)),
     };
