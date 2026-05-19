@@ -118,6 +118,96 @@ function extractSpreadsheetId(input: string): string {
   return input.trim();
 }
 
+// Sender × variant approval matrix.
+// Renders one row per selected sender in the pipeline pool. For each row it
+// shows the variant name from this template group that targets that sender,
+// plus the approval status the WhatsApp BSP currently reports
+// (Approved / Pending / Missing / Paused).
+function SenderVariantMatrix({
+  workspaceId,
+  groupId,
+  groupName,
+  templateNames,
+  senders,
+}: {
+  workspaceId: string;
+  groupId: string;
+  groupName: string;
+  templateNames: string[];
+  senders: WaNumber[];
+}) {
+  const { data: variants } = useQuery({
+    queryKey: ["template-group-variants", workspaceId, groupId, templateNames.join("|")],
+    enabled: Boolean(workspaceId && groupId && templateNames.length && senders.length),
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("message_templates")
+        .select("name, status, whatsapp_number_id")
+        .eq("workspace_id", workspaceId)
+        .in("name", templateNames);
+      return (data ?? []) as { name: string; status: string; whatsapp_number_id: string }[];
+    },
+  });
+
+  if (!senders.length) {
+    return (
+      <p className="text-[10px] text-muted-foreground mt-1">
+        Pick sender numbers below — the matrix will show which approved variant routes to each.
+      </p>
+    );
+  }
+
+  const byNumber = new Map<string, { name: string; status: string }>();
+  for (const v of variants ?? []) {
+    // Prefer an approved variant if multiple exist for the same number.
+    const cur = byNumber.get(v.whatsapp_number_id);
+    if (!cur || (v.status === "approved" && cur.status !== "approved")) {
+      byNumber.set(v.whatsapp_number_id, { name: v.name, status: v.status });
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-border bg-muted/20 px-2 py-1.5">
+      <div className="text-[10px] text-muted-foreground mb-1">
+        Sender × variant for group <span className="font-medium text-foreground">{groupName}</span>
+      </div>
+      <div className="space-y-1">
+        {senders.map((n) => {
+          const v = byNumber.get(n.id);
+          const senderPaused = !n.is_active || !["active", "ready"].includes(n.status);
+          let label = "Missing";
+          let cls = "bg-red-500/15 text-red-700 border-red-500/40";
+          if (senderPaused) {
+            label = "Sender paused";
+            cls = "bg-zinc-500/15 text-zinc-700 border-zinc-500/40";
+          } else if (v) {
+            if (v.status === "approved") { label = "Approved"; cls = "bg-emerald-500/15 text-emerald-700 border-emerald-500/40"; }
+            else if (v.status === "pending") { label = "Pending"; cls = "bg-amber-500/15 text-amber-800 border-amber-500/40"; }
+            else if (v.status === "rejected") { label = "Rejected"; cls = "bg-red-500/15 text-red-700 border-red-500/40"; }
+            else { label = v.status; cls = "bg-zinc-500/15 text-zinc-700 border-zinc-500/40"; }
+          }
+          return (
+            <div key={n.id} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="font-mono truncate">
+                {n.display_name ? `${n.display_name} (+${n.phone_number})` : `+${n.phone_number}`}
+              </span>
+              <span className="flex items-center gap-1.5 shrink-0">
+                <code className="text-[10px] text-muted-foreground truncate max-w-[10rem]">
+                  {v?.name ?? "—"}
+                </code>
+                <span className={`px-1.5 py-0.5 rounded border text-[10px] ${cls}`}>{label}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-1">
+        Senders without an Approved variant in this group are silent-skipped at send time.
+      </p>
+    </div>
+  );
+}
+
 export default function PipelineConfigSheet({
   pipeline,
   open,
@@ -887,6 +977,20 @@ export default function PipelineConfigSheet({
               <p className="text-[10px] text-muted-foreground mt-1">
                 A template group routes to whichever sender has its approved variant. Use this when 2+ numbers share the same outreach.
               </p>
+              {templateGroupId && wsId && (() => {
+                const g = (templateGroups ?? []).find((x) => x.id === templateGroupId);
+                if (!g) return null;
+                const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
+                return (
+                  <SenderVariantMatrix
+                    workspaceId={wsId}
+                    groupId={g.id}
+                    groupName={g.name}
+                    templateNames={g.template_names || []}
+                    senders={selected}
+                  />
+                );
+              })()}
             </div>
 
             <div>
@@ -1039,6 +1143,20 @@ export default function PipelineConfigSheet({
                 </Select>
               </div>
             </div>
+            {followUpGroupId && wsId && (() => {
+              const g = (templateGroups ?? []).find((x) => x.id === followUpGroupId);
+              if (!g) return null;
+              const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
+              return (
+                <SenderVariantMatrix
+                  workspaceId={wsId}
+                  groupId={g.id}
+                  groupName={g.name}
+                  templateNames={g.template_names || []}
+                  senders={selected}
+                />
+              );
+            })()}
 
             <div className="grid grid-cols-4 gap-2">
               <div>
@@ -1136,6 +1254,7 @@ function SheetSourceConfig({
   const [phoneCol, setPhoneCol] = useState<string>(cfg.phone_column || "phone");
   const [nameCol, setNameCol] = useState<string>(cfg.name_column || "name");
   const [headerRow, setHeaderRow] = useState<string>(String(cfg.header_row ?? 1));
+  const [defaultCC, setDefaultCC] = useState<string>(String(cfg.default_country_code ?? ""));
 
   useEffect(() => {
     if (editing) {
@@ -1144,6 +1263,7 @@ function SheetSourceConfig({
       setPhoneCol(cfg.phone_column || "phone");
       setNameCol(cfg.name_column || "name");
       setHeaderRow(String(cfg.header_row ?? 1));
+      setDefaultCC(String(cfg.default_country_code ?? ""));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
@@ -1188,6 +1308,7 @@ function SheetSourceConfig({
       toast.error("Phone column is required");
       return;
     }
+    const cc = defaultCC.replace(/\D/g, "");
     onSave({
       ...cfg,
       spreadsheet_id: spreadsheetId,
@@ -1195,6 +1316,7 @@ function SheetSourceConfig({
       phone_column: phoneCol.trim(),
       name_column: nameCol.trim() || null,
       header_row: Math.max(1, parseInt(headerRow, 10) || 1),
+      default_country_code: cc || null,
       // preserve last_synced_row; default to header_row
       last_synced_row: cfg.last_synced_row ?? Math.max(1, parseInt(headerRow, 10) || 1),
     });
@@ -1223,7 +1345,14 @@ function SheetSourceConfig({
           <Label className="text-[10px]">Name column</Label>
           <Input value={nameCol} onChange={(e) => setNameCol(e.target.value)} placeholder="name or A" className="h-8 text-xs" />
         </div>
+        <div>
+          <Label className="text-[10px]">Default country code</Label>
+          <Input value={defaultCC} onChange={(e) => setDefaultCC(e.target.value)} placeholder="49" className="h-8 text-xs" />
+        </div>
       </div>
+      <p className="text-[10px] text-muted-foreground">
+        Default country code prefixes local-format numbers (e.g. <code>017…</code> → <code>4917…</code>). Leave blank if all rows are already international. Phones without country code AND no default set are flagged <code>ambiguous</code> and not sent to.
+      </p>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button size="sm" onClick={save}>Save</Button>

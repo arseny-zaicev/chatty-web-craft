@@ -179,21 +179,39 @@ Deno.serve(async (req) => {
         const p = pipeMap.get(row.pipeline_id);
         if (!p || !p.follow_up_enabled) { skipped++; continue; }
 
-        const tplForN = tplCache.get(p.id)?.get(row.whatsapp_number_id);
-        if (!tplForN) {
+        const conv = convMap.get(row.conversation_id);
+
+        const cancelWithNotice = async (reason: string) => {
           await admin.from("pipeline_follow_ups").update({
             status: "cancelled",
-            cancelled_reason: "no_approved_template_for_number",
+            cancelled_reason: reason,
           }).eq("id", row.id);
+          await admin.from("slack_event_queue").insert({
+            event_type: "follow_up.cancelled",
+            workspace_id: row.workspace_id,
+            payload: {
+              follow_up_id: row.id,
+              pipeline_id: row.pipeline_id,
+              pipeline_name: p?.name,
+              conversation_id: row.conversation_id,
+              contact_phone: conv?.contact_phone ?? null,
+              contact_name: conv?.contact_name ?? null,
+              whatsapp_number_id: row.whatsapp_number_id,
+              reason,
+              scheduled_at: row.scheduled_at,
+            },
+          }).then(() => {}, () => {});
+        };
+
+        const tplForN = tplCache.get(p.id)?.get(row.whatsapp_number_id);
+        if (!tplForN) {
+          await cancelWithNotice("no_approved_template_for_number");
           skipped++; continue;
         }
 
         const num = numberCache.get(row.whatsapp_number_id);
         if (!num || !num.is_active || !["active", "ready"].includes(num.status)) {
-          await admin.from("pipeline_follow_ups").update({
-            status: "cancelled",
-            cancelled_reason: "sender_unavailable",
-          }).eq("id", row.id);
+          await cancelWithNotice("sender_unavailable");
           skipped++; continue;
         }
 
@@ -211,7 +229,6 @@ Deno.serve(async (req) => {
         }
         if (!campaignId) { skipped++; continue; }
 
-        const conv = convMap.get(row.conversation_id);
         const phone = conv?.contact_phone;
         if (!phone) { skipped++; continue; }
 

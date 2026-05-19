@@ -11,6 +11,7 @@
 // or a single object with the same shape.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { normalizePhone } from "../_shared/phone.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -26,23 +27,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-function normalizePhone(raw: unknown, defaultCountryCode?: string | null): string | null {
-  if (raw == null) return null;
-  let s = String(raw).trim();
-  if (!s) return null;
-  if (/<\s*test\s+lead/i.test(s)) return null;
-  s = s.replace(/^\s*(p|P|П|tel|phone|whatsapp|wa)\s*[:：]\s*/i, "");
-  s = s.replace(/[^\d+]/g, "");
-  if (!s) return null;
-  let digits = s.startsWith("+") ? s.slice(1) : s;
-  const cc = (defaultCountryCode || "").replace(/\D/g, "");
-  if (cc && !digits.startsWith(cc) && digits.length >= 7 && digits.length <= 10) {
-    digits = cc + digits;
-  }
-  if (digits.length < 7 || digits.length > 16) return null;
-  return digits;
-}
 
 type LeadInput = {
   phone?: unknown;
@@ -113,33 +97,64 @@ Deno.serve(async (req) => {
 
     let accepted = 0;
     let rejected = 0;
+    let invalidCount = 0;
+    let ambiguousCount = 0;
+    let testLeadCount = 0;
+    let duplicateCount = 0;
+    let crossPipelineDuplicateCount = 0;
     const acceptedLeads: { id: string; phone: string; name: string | null; conversation_id: string | null }[] = [];
+
+    // 1. Open the batch
+    const { data: batch, error: batchErr } = await admin
+      .from("import_batches")
+      .insert({
+        workspace_id: source.workspace_id,
+        pipeline_id: source.pipeline_id,
+        source_connection_id: source.id,
+        source_kind: source.kind,
+        status: "processing",
+        total: rawLeads.length,
+      })
+      .select("id")
+      .single();
+    if (batchErr || !batch) return json({ error: batchErr?.message ?? "Could not open batch" }, 500);
 
     // 2. Validate + dedupe + import each row
     for (const raw of rawLeads) {
-      const phone = normalizePhone(raw?.phone, defaultCC);
+      const phoneResult = normalizePhone(raw?.phone, defaultCC);
       const name = raw?.name ? String(raw.name).slice(0, 200) : null;
       const externalId = raw?.external_id ? String(raw.external_id).slice(0, 200) : null;
-      const payload = (raw?.payload && typeof raw.payload === "object") ? raw.payload : {};
+      const incomingPayload = (raw?.payload && typeof raw.payload === "object") ? raw.payload : {};
+      const payload: Record<string, unknown> = {
+        ...incomingPayload,
+        _phone_raw: phoneResult.raw,
+      };
 
-      if (!phone) {
+      if (!phoneResult.ok) {
         rejected++;
+        if (phoneResult.status === "test_lead") testLeadCount++;
+        else if (phoneResult.status === "ambiguous") ambiguousCount++;
+        else invalidCount++;
         await admin.from("lead_imports").insert({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
           source_connection_id: source.id,
           external_id: externalId,
-          phone: String(raw?.phone ?? ""),
+          phone: String(raw?.phone ?? "").slice(0, 32),
           name,
           payload,
-          status: "invalid",
-          error: "Invalid phone",
+          status: phoneResult.status === "test_lead" ? "invalid" : phoneResult.status === "ambiguous" ? "invalid" : "invalid",
+          error: phoneResult.reason,
         });
         continue;
       }
+      const phone = phoneResult.phone;
 
-      // Dedupe within workspace
+      // Owning-pipeline dedupe: a conversation sticks to whichever pipeline
+      // created it first. If the same phone shows up later from a source
+      // wired to a different pipeline, we record it as a duplicate referencing
+      // the existing conversation and do NOT enqueue a first-touch.
       const { data: existingConv } = await admin
         .from("conversations")
         .select("id, pipeline_id")
@@ -149,6 +164,17 @@ Deno.serve(async (req) => {
 
       if (existingConv) {
         rejected++;
+        duplicateCount++;
+        let errorMsg: string | null = null;
+        if (existingConv.pipeline_id && existingConv.pipeline_id !== source.pipeline_id) {
+          crossPipelineDuplicateCount++;
+          const { data: owner } = await admin
+            .from("pipelines")
+            .select("name")
+            .eq("id", existingConv.pipeline_id)
+            .maybeSingle();
+          errorMsg = `phone owned by pipeline ${owner?.name ?? existingConv.pipeline_id}`;
+        }
         await admin.from("lead_imports").insert({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
@@ -160,6 +186,7 @@ Deno.serve(async (req) => {
           payload,
           conversation_id: existingConv.id,
           status: "duplicate",
+          error: errorMsg,
         });
         continue;
       }
@@ -181,6 +208,7 @@ Deno.serve(async (req) => {
         .single();
       if (impErr || !imported) {
         rejected++;
+        invalidCount++;
         continue;
       }
       accepted++;
@@ -216,6 +244,11 @@ Deno.serve(async (req) => {
         total: rawLeads.length,
         accepted,
         rejected,
+        invalid: invalidCount,
+        ambiguous: ambiguousCount,
+        duplicate: duplicateCount,
+        cross_pipeline_duplicate: crossPipelineDuplicateCount,
+        skipped_test_lead: testLeadCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
     });
@@ -231,6 +264,11 @@ Deno.serve(async (req) => {
       total: rawLeads.length,
       accepted,
       rejected,
+      invalid: invalidCount,
+      ambiguous: ambiguousCount,
+      duplicate: duplicateCount,
+      cross_pipeline_duplicate: crossPipelineDuplicateCount,
+      skipped_test_lead: testLeadCount,
     });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
