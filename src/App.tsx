@@ -94,6 +94,7 @@ const OpsAssistant = lazyWithRetry(() => import("./pages/admin/OpsAssistant"));
 const OpsPerformance = lazyWithRetry(() => import("./pages/admin/OpsPerformance"));
 const FinanceRunDetail = lazyWithRetry(() => import("./pages/admin/FinanceRunDetail"));
 const Reconciliation = lazyWithRetry(() => import("./pages/admin/Reconciliation"));
+const WebhookDLQ = lazyWithRetry(() => import("./pages/admin/WebhookDLQ"));
 const Partners = lazyWithRetry(() => import("./pages/admin/Partners"));
 const PartnerDetail = lazyWithRetry(() => import("./pages/admin/PartnerDetail"));
 const BusinessManagers = lazyWithRetry(() => import("./pages/admin/BusinessManagers"));
@@ -196,6 +197,7 @@ const App = () => (
               <Route path="/admin/finance/partners/:id" element={<RedirectPartnerDetail />} />
               <Route path="/admin/finance/runs/:id" element={<FinanceRunDetail />} />
               <Route path="/admin/reconciliation" element={<Reconciliation />} />
+              <Route path="/admin/webhook-dlq" element={<WebhookDLQ />} />
               <Route path="/tv/:token" element={<OpsLive />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />

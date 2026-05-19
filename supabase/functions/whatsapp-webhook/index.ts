@@ -50,7 +50,16 @@ async function phoneMatchesRecentPipelineCountry(pipelineId: string | null, phon
   return prefixes.length === 0 || prefixes.some((prefix) => phone.startsWith(prefix));
 }
 
-async function handleInbound(payload: Record<string, unknown>) {
+async function markRaw(rawId: string | null, patch: Record<string, unknown>) {
+  if (!rawId) return;
+  try {
+    await supabase.from("whatsapp_webhook_raw").update(patch).eq("id", rawId);
+  } catch (e) {
+    console.error("Failed to update whatsapp_webhook_raw", rawId, e);
+  }
+}
+
+async function handleInbound(payload: Record<string, unknown>, rawId: string | null = null) {
   console.log("Inbound payload:", JSON.stringify(payload));
   const inner = (payload.payload ?? {}) as Record<string, unknown>;
   const sender = (inner.sender ?? {}) as Record<string, unknown>;
@@ -62,6 +71,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   const source = stripToDigits(String(inner.source ?? sender.phone ?? payload.source ?? ""));
   if (!source) {
     console.warn("Missing source", { destination, source });
+    await markRaw(rawId, { processing_status: "skipped", processed_at: new Date().toISOString(), error_message: "missing source" });
     return;
   }
 
@@ -83,6 +93,7 @@ async function handleInbound(payload: Record<string, unknown>) {
         provider_message_id: earlyProviderMessageId,
         existing_message_id: dupExisting.id,
       });
+      await markRaw(rawId, { processing_status: "skipped", processed_at: new Date().toISOString(), message_id: dupExisting.id, error_message: "duplicate provider_message_id" });
       return;
     }
   }
@@ -158,6 +169,7 @@ async function handleInbound(payload: Record<string, unknown>) {
       payload,
       replay_status: "pending",
     });
+    await markRaw(rawId, { processing_status: "failed", processed_at: new Date().toISOString(), error_message: `no_number_match:${reason}` });
     return;
   }
   console.log("Matched inbound whatsapp_number", {
@@ -248,6 +260,7 @@ async function handleInbound(payload: Record<string, unknown>) {
       .single();
     if (error || !created) {
       console.error("Failed to create conversation", error);
+      await markRaw(rawId, { processing_status: "failed", processed_at: new Date().toISOString(), error_message: `conversation_insert_failed: ${error?.message ?? "unknown"}`, workspace_id: number.workspace_id, whatsapp_number_id: number.id });
       return;
     }
     conversationId = created.id;
@@ -372,8 +385,32 @@ async function handleInbound(payload: Record<string, unknown>) {
         })
         .eq("id", inboundAudit.id);
     }
+    await supabase.from("whatsapp_webhook_failures").insert({
+      reason: "message_insert_failed",
+      app_name: appName || null,
+      destination: destination || null,
+      source: source || null,
+      event_type: "message",
+      payload,
+      replay_status: "pending",
+    });
+    await markRaw(rawId, {
+      processing_status: "failed",
+      processed_at: new Date().toISOString(),
+      error_message: insertMessageError?.message ?? "message insert returned no id",
+      workspace_id: number.workspace_id,
+      whatsapp_number_id: number.id,
+    });
     return;
   }
+
+  await markRaw(rawId, {
+    processing_status: "processed",
+    processed_at: new Date().toISOString(),
+    message_id: insertedMessage.id,
+    workspace_id: number.workspace_id,
+    whatsapp_number_id: number.id,
+  });
 
   if (inboundAudit?.id) {
     await supabase
@@ -385,6 +422,7 @@ async function handleInbound(payload: Record<string, unknown>) {
       })
       .eq("id", inboundAudit.id);
   }
+
 
   // Apply automations: inbound_any + inbound_keyword + button_click
   const triggers: string[] = ["inbound_any"];
@@ -727,27 +765,79 @@ async function handleStatus(payload: Record<string, unknown>) {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  let rawId: string | null = null;
+  let payload: Record<string, unknown> | null = null;
+
   try {
-    const payload = await req.json();
-    const type = (payload.type as string) ?? "";
+    payload = await req.json() as Record<string, unknown>;
+  } catch (err) {
+    console.error("Webhook JSON parse error", err);
+    return new Response(JSON.stringify({ ok: false, error: "invalid json" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // RAW-FIRST CAPTURE: persist the full payload BEFORE any business logic.
+  // Guarantees that no inbound webhook can ever silently disappear, even if
+  // the handler throws, the DB rejects an insert, or a downstream call fails.
+  try {
+    const type = String((payload as any).type ?? "");
+    const inner = ((payload as any).payload ?? {}) as Record<string, unknown>;
+    const sender = (inner.sender ?? {}) as Record<string, unknown>;
+    const appName = String((payload as any).app ?? inner.app ?? "").trim() || null;
+    const destination = stripToDigits(String(inner.destination ?? (payload as any).destination ?? "")) || null;
+    const source = stripToDigits(String(inner.source ?? sender.phone ?? (payload as any).source ?? "")) || null;
+    const providerMessageId = (inner.id as string) ?? null;
+
+    const { data: rawRow, error: rawErr } = await supabase
+      .from("whatsapp_webhook_raw")
+      .insert({
+        type: type || null,
+        app_name: appName,
+        destination,
+        source,
+        provider_message_id: providerMessageId,
+        payload,
+        processing_status: "received",
+      })
+      .select("id")
+      .maybeSingle();
+    if (rawErr) console.error("whatsapp_webhook_raw insert failed", rawErr);
+    rawId = rawRow?.id ?? null;
+  } catch (err) {
+    console.error("Raw capture failed (continuing)", err);
+  }
+
+  try {
+    const type = String((payload as any).type ?? "");
     console.log("Gupshup webhook event", type);
 
     if (type === "message") {
-      await handleInbound(payload);
+      await handleInbound(payload, rawId);
     } else if (type === "message-event" || type === "user-event") {
       await handleStatus(payload);
+      await markRaw(rawId, { processing_status: "processed", processed_at: new Date().toISOString() });
     } else {
       console.log("Unhandled type", type, JSON.stringify(payload).slice(0, 500));
+      await markRaw(rawId, { processing_status: "skipped", processed_at: new Date().toISOString(), error_message: `unhandled type: ${type}` });
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ ok: true, raw_id: rawId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "unknown";
-    console.error("Webhook error", msg);
+    const stack = err instanceof Error ? err.stack ?? null : null;
+    console.error("Webhook error", msg, stack);
+    await markRaw(rawId, {
+      processing_status: "failed",
+      processed_at: new Date().toISOString(),
+      error_message: msg,
+      error_stack: stack,
+    });
     // Return 200 anyway so Gupshup doesn't keep retrying on parse errors
-    return new Response(JSON.stringify({ ok: false, error: msg }), {
+    return new Response(JSON.stringify({ ok: false, error: msg, raw_id: rawId }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
