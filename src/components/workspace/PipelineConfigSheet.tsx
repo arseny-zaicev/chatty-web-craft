@@ -1591,3 +1591,173 @@ function SheetSourceConfig({
     </div>
   );
 }
+
+// ============================================================================
+// Zapier webhook section
+// ============================================================================
+
+type Delivery = {
+  id: string;
+  event_type: string;
+  status: string;
+  response_status: number | null;
+  error: string | null;
+  created_at: string;
+  sent_at: string | null;
+};
+
+const ZAPIER_HOSTS = ["hooks.zapier.com", "hook.eu1.make.com", "hook.us1.make.com", "hook.eu2.make.com"];
+
+function fmtGst(iso: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("en-GB", {
+      timeZone: "Asia/Dubai", day: "2-digit", month: "short",
+      hour: "2-digit", minute: "2-digit",
+    }) + " GST";
+  } catch { return iso; }
+}
+
+function ZapierWebhookSection({ pipelineId }: { pipelineId: string | null }) {
+  const [url, setUrl] = useState("");
+  const [loadedUrl, setLoadedUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [lastTest, setLastTest] = useState<{ ok: boolean; status: number; body?: string; error?: string } | null>(null);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+
+  useEffect(() => {
+    if (!pipelineId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("pipelines").select("zapier_webhook_url").eq("id", pipelineId).maybeSingle();
+      if (cancelled) return;
+      const v = (data as any)?.zapier_webhook_url ?? "";
+      setUrl(v); setLoadedUrl(v);
+    })();
+    return () => { cancelled = true; };
+  }, [pipelineId]);
+
+  const loadDeliveries = async () => {
+    if (!pipelineId) return;
+    const { data } = await supabase
+      .from("pipeline_webhook_deliveries")
+      .select("id, event_type, status, response_status, error, created_at, sent_at")
+      .eq("pipeline_id", pipelineId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    setDeliveries((data ?? []) as Delivery[]);
+  };
+
+  const hostOk = (v: string) => {
+    if (!v) return true;
+    try { return ZAPIER_HOSTS.includes(new URL(v).hostname); } catch { return false; }
+  };
+
+  const save = async () => {
+    if (!pipelineId) return;
+    const trimmed = url.trim();
+    if (trimmed && !hostOk(trimmed)) {
+      toast.error("URL must be a Zapier or Make hook (hooks.zapier.com / hook.<region>.make.com).");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from("pipelines")
+      .update({ zapier_webhook_url: trimmed || null })
+      .eq("id", pipelineId);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    setLoadedUrl(trimmed);
+    toast.success(trimmed ? "Zapier webhook saved" : "Zapier webhook removed");
+  };
+
+  const sendTest = async () => {
+    if (!pipelineId || !url.trim()) return;
+    setTesting(true);
+    setLastTest(null);
+    const { data, error } = await supabase.functions.invoke("test-pipeline-webhook", {
+      body: { pipeline_id: pipelineId, url: url.trim() },
+    });
+    setTesting(false);
+    if (error) { toast.error(error.message); return; }
+    const r = data as any;
+    setLastTest({ ok: r?.ok, status: r?.response_status, body: r?.response_body, error: r?.error });
+    if (r?.ok) toast.success(`Zapier responded ${r.response_status}`);
+    else toast.error(r?.error || `Zapier responded ${r?.response_status ?? "error"}`);
+  };
+
+  const dirty = url.trim() !== loadedUrl;
+
+  if (!pipelineId) return null;
+
+  return (
+    <section className="mt-6 space-y-3">
+      <h3 className="text-sm font-semibold flex items-center gap-2">
+        <Webhook className="w-4 h-4" /> Zapier webhook
+      </h3>
+      <div className="rounded-lg border border-border p-3 space-y-3">
+        <div>
+          <Label className="text-xs">Webhook URL</Label>
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://hooks.zapier.com/hooks/catch/..."
+            className="h-9 font-mono text-xs mt-1"
+          />
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            Fires <code>deal.stage_changed</code> on every stage move in this pipeline. In Zapier, use a
+            "Catch Hook" trigger and paste the URL above. Make.com hooks also work.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={save} disabled={saving || !dirty}>
+            {saving ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Check className="w-3 h-3 mr-1.5" />}
+            Save URL
+          </Button>
+          <Button size="sm" variant="secondary" onClick={sendTest} disabled={testing || !url.trim() || dirty}>
+            {testing ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : null}
+            Send test ping
+          </Button>
+          <Popover onOpenChange={(o) => { if (o) loadDeliveries(); }}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="ghost">Last 10 deliveries</Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-96 p-3" align="end">
+              <div className="text-xs font-medium mb-2">Recent deliveries</div>
+              {deliveries.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">No deliveries yet.</p>
+              ) : (
+                <ul className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {deliveries.map((d) => (
+                    <li key={d.id} className="flex items-start justify-between gap-2 text-[11px] border-b border-border pb-1.5 last:border-0">
+                      <div className="min-w-0">
+                        <div className="font-mono truncate">{d.event_type}</div>
+                        <div className="text-muted-foreground">{fmtGst(d.sent_at ?? d.created_at)}</div>
+                        {d.error && <div className="text-destructive truncate">{d.error}</div>}
+                      </div>
+                      <span className={
+                        d.status === "sent" ? "text-emerald-600" :
+                        d.status === "failed" ? "text-destructive" : "text-muted-foreground"
+                      }>
+                        {d.status}{d.response_status ? ` ${d.response_status}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {lastTest && (
+          <div className={`text-[11px] rounded border px-2 py-1.5 ${lastTest.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-destructive/30 bg-destructive/5 text-destructive"}`}>
+            Test result: HTTP {lastTest.status || "—"}{lastTest.error ? ` · ${lastTest.error}` : ""}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
