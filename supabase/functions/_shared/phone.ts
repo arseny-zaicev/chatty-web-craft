@@ -125,15 +125,37 @@ export function normalizePhone(
     return { ok: true, phone: digits, raw: rawStr, matched_cc: matched };
   }
 
+  // Aggressive DE mobile rule: bare 10-11 digit number starting with 15/16/17
+  // is a German mobile without the country code. If "49" is in the pipeline's
+  // expected CCs, always treat it as DE - even when other CCs (43/41) are also
+  // configured. This is the dominant Google-Sheets / lead-form mistake.
+  // Applies before the trunk-zero / multi-CC ambiguity branches.
+  const tryDeMobile = (d: string): string | null => {
+    if (!ccList.includes("49")) return null;
+    if (!/^(15|16|17)\d{8,9}$/.test(d)) return null; // 10-11 digits, DE mobile prefix
+    return "49" + d;
+  };
+
   // 2) Already starts with one of the pipeline's expected CCs?
   const expectedMatch = ccList.find((cc) => digits.startsWith(cc) && fitsNational(cc, digits.slice(cc.length)));
   if (expectedMatch && digits.length >= 8 && digits.length <= 15) {
     return { ok: true, phone: digits, raw: rawStr, matched_cc: expectedMatch };
   }
 
+  // 2.5) Bare DE mobile shortcut (no leading 0, no CC).
+  {
+    const out = tryDeMobile(digits);
+    if (out) return { ok: true, phone: out, raw: rawStr, matched_cc: "49" };
+  }
+
   // 3) Starts with leading zero (trunk prefix) -> try each expected CC.
   if (digits.startsWith("0") && ccList.length > 0) {
     const national = digits.replace(/^0+/, "");
+    // 3.a) Trunk-zero DE mobile shortcut.
+    {
+      const out = tryDeMobile(national);
+      if (out) return { ok: true, phone: out, raw: rawStr, matched_cc: "49" };
+    }
     const candidates = ccList.filter((cc) => fitsNational(cc, national));
     if (candidates.length === 1) {
       const out = candidates[0] + national;
