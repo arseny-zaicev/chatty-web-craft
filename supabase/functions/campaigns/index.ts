@@ -21,7 +21,12 @@ function json(data: unknown, status = 200) {
   });
 }
 
-function normalizePhone(phone: string) {
+// Strips a phone string to digits only. Recipients reaching this point have
+// already been normalized + CC-repaired upstream by `lead-intake` /
+// `google-sheets-sync` (which both use `_shared/phone.ts`). This helper only
+// guarantees a clean digits-only contact_phone for inserts into
+// campaign_recipients / conversations. Do NOT use this for raw lead intake.
+function stripToDigits(phone: string) {
   return String(phone || "").replace(/[^\d]/g, "");
 }
 
