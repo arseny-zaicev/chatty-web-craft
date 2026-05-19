@@ -47,8 +47,8 @@ export default function WorkspaceStats() {
   });
 
   const mySetterId = useMemo(
-    () => (user?.id ? setters.find((s) => s.linked_user_id === user.id)?.id ?? null : null),
-    [setters, user?.id],
+    () => (userId ? setters.find((s) => s.linked_user_id === userId)?.id ?? null : null),
+    [setters, userId],
   );
 
   const setterIdForRpc = scope === "me" ? mySetterId : null;
