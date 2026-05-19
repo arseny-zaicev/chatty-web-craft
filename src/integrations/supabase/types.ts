@@ -3717,6 +3717,10 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      pipeline_follow_up_send_at: {
+        Args: { _base_ts: string; _pipeline_id: string }
+        Returns: string
+      }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {

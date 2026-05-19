@@ -515,7 +515,7 @@ Deno.serve(async (req) => {
 
     const { data: pipelines } = await admin
       .from("pipelines")
-      .select("id, user_id, workspace_id, name, auto_outreach_enabled, first_touch_template_id, default_sender_number_ids, sending_window, daily_cap, slack_channel_id")
+      .select("id, user_id, workspace_id, name, auto_outreach_enabled, first_touch_template_id, first_touch_template_group_id, default_sender_number_ids, sending_window, daily_cap, slack_channel_id, follow_up_enabled, follow_up_delay_minutes, follow_up_curfew_end, follow_up_resume_at, follow_up_timezone")
       .in("id", pipelineIds)
       .eq("auto_outreach_enabled", true);
 

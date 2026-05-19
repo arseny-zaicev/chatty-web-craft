@@ -41,11 +41,21 @@ type Pipeline = {
   name: string;
   auto_outreach_enabled: boolean;
   first_touch_template_id: string | null;
+  first_touch_template_group_id?: string | null;
   default_sender_number_ids: string[];
   slack_channel_id: string | null;
   daily_cap: number | null;
   sending_window: { start?: string; end?: string; timezone?: string } | null;
+  follow_up_enabled?: boolean;
+  follow_up_template_id?: string | null;
+  follow_up_template_group_id?: string | null;
+  follow_up_delay_minutes?: number;
+  follow_up_curfew_end?: string;
+  follow_up_resume_at?: string;
+  follow_up_timezone?: string;
 };
+
+type TemplateGroup = { id: string; name: string; template_names: string[] };
 
 type SourceKind = "webhook" | "google_sheet" | "csv_upload" | "apps_script" | "api";
 type Source = {
@@ -104,6 +114,7 @@ export default function PipelineConfigSheet({
 
   const [autoOutreach, setAutoOutreach] = useState(false);
   const [templateId, setTemplateId] = useState<string>("");
+  const [templateGroupId, setTemplateGroupId] = useState<string>("");
   const [senderIds, setSenderIds] = useState<string[]>([]);
   const [slackChannel, setSlackChannel] = useState("");
   const [dailyCap, setDailyCap] = useState<string>("");
@@ -112,6 +123,15 @@ export default function PipelineConfigSheet({
   const [timezone, setTimezone] = useState<string>("Asia/Kolkata");
   const [syncingTemplates, setSyncingTemplates] = useState(false);
 
+  // Follow-up
+  const [followUpEnabled, setFollowUpEnabled] = useState(false);
+  const [followUpTemplateId, setFollowUpTemplateId] = useState<string>("");
+  const [followUpGroupId, setFollowUpGroupId] = useState<string>("");
+  const [followUpDelayMin, setFollowUpDelayMin] = useState<string>("480");
+  const [followUpCurfewEnd, setFollowUpCurfewEnd] = useState<string>("20:00");
+  const [followUpResumeAt, setFollowUpResumeAt] = useState<string>("09:00");
+  const [followUpTz, setFollowUpTz] = useState<string>("Europe/Berlin");
+
   const [showNewSource, setShowNewSource] = useState(false);
   const [newSourceKind, setNewSourceKind] = useState<SourceKind>("google_sheet");
   const [newSourceName, setNewSourceName] = useState("");
@@ -119,15 +139,25 @@ export default function PipelineConfigSheet({
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const trimTime = (v?: string | null) => (v ? String(v).slice(0, 5) : "");
+
   const hydrate = (p: Pipeline) => {
     setAutoOutreach(Boolean(p.auto_outreach_enabled));
     setTemplateId(p.first_touch_template_id ?? "");
+    setTemplateGroupId(p.first_touch_template_group_id ?? "");
     setSenderIds(p.default_sender_number_ids ?? []);
     setSlackChannel(p.slack_channel_id ?? "");
     setDailyCap(p.daily_cap ? String(p.daily_cap) : "");
     setWinStart(p.sending_window?.start ?? "09:00");
     setWinEnd(p.sending_window?.end ?? "18:00");
     setTimezone(p.sending_window?.timezone ?? "Asia/Kolkata");
+    setFollowUpEnabled(Boolean(p.follow_up_enabled));
+    setFollowUpTemplateId(p.follow_up_template_id ?? "");
+    setFollowUpGroupId(p.follow_up_template_group_id ?? "");
+    setFollowUpDelayMin(String(p.follow_up_delay_minutes ?? 480));
+    setFollowUpCurfewEnd(trimTime(p.follow_up_curfew_end) || "20:00");
+    setFollowUpResumeAt(trimTime(p.follow_up_resume_at) || "09:00");
+    setFollowUpTz(p.follow_up_timezone ?? "Europe/Berlin");
   };
 
   const { data: templates } = useQuery({
@@ -141,6 +171,19 @@ export default function PipelineConfigSheet({
         .eq("status", "approved")
         .order("name");
       return (data ?? []) as Template[];
+    },
+  });
+
+  const { data: templateGroups } = useQuery({
+    queryKey: ["pipeline-template-groups", wsId],
+    enabled: Boolean(wsId && open),
+    queryFn: async (): Promise<TemplateGroup[]> => {
+      const { data } = await supabase
+        .from("template_groups")
+        .select("id, name, template_names")
+        .eq("workspace_id", wsId)
+        .order("name");
+      return (data ?? []) as TemplateGroup[];
     },
   });
 
@@ -234,7 +277,7 @@ export default function PipelineConfigSheet({
   );
   const readiness = useMemo(() => {
     const items = [
-      { key: "template", label: "First-touch template selected", ok: Boolean(templateId) },
+      { key: "template", label: "First-touch template or template group selected", ok: Boolean(templateId || templateGroupId) },
       { key: "sender", label: "At least one ready sender number", ok: readySenders.length > 0 },
       { key: "window", label: "Sending window + timezone set", ok: Boolean(winStart && winEnd && timezone) },
       { key: "cap", label: "Daily cap set", ok: Boolean(dailyCap && parseInt(dailyCap, 10) > 0) },
@@ -242,7 +285,7 @@ export default function PipelineConfigSheet({
     ];
     const allOk = items.every((i) => i.ok);
     return { items, allOk };
-  }, [templateId, readySenders, winStart, winEnd, timezone, dailyCap, slackChannel]);
+  }, [templateId, templateGroupId, readySenders, winStart, winEnd, timezone, dailyCap, slackChannel]);
 
   const firstBlockerToast = () => {
     const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
@@ -282,11 +325,19 @@ export default function PipelineConfigSheet({
       .from("pipelines")
       .update({
         auto_outreach_enabled: autoOutreach,
-        first_touch_template_id: templateId || null,
+        first_touch_template_id: templateGroupId ? null : (templateId || null),
+        first_touch_template_group_id: templateGroupId || null,
         default_sender_number_ids: senderIds,
         slack_channel_id: slackChannel.trim() || null,
         daily_cap: effectiveCap,
         sending_window,
+        follow_up_enabled: followUpEnabled,
+        follow_up_template_id: followUpGroupId ? null : (followUpTemplateId || null),
+        follow_up_template_group_id: followUpGroupId || null,
+        follow_up_delay_minutes: Math.max(1, parseInt(followUpDelayMin, 10) || 480),
+        follow_up_curfew_end: followUpCurfewEnd,
+        follow_up_resume_at: followUpResumeAt,
+        follow_up_timezone: followUpTz,
       })
       .eq("id", pipeId);
     if (error) return toast.error(error.message);
@@ -637,7 +688,7 @@ export default function PipelineConfigSheet({
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs">First-touch template</Label>
+                <Label className="text-xs">First-touch template / group</Label>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -650,15 +701,42 @@ export default function PipelineConfigSheet({
                     : <><RefreshCw className="w-3 h-3 mr-1" />Refresh from Gupshup</>}
                 </Button>
               </div>
-              <Select value={templateId || "none"} onValueChange={(v) => setTemplateId(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {(templates ?? []).map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Single template (one sender)</div>
+                  <Select
+                    value={templateId || "none"}
+                    onValueChange={(v) => { setTemplateId(v === "none" ? "" : v); if (v !== "none") setTemplateGroupId(""); }}
+                    disabled={Boolean(templateGroupId)}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {(templates ?? []).map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Template group (shared pool)</div>
+                  <Select
+                    value={templateGroupId || "none"}
+                    onValueChange={(v) => { setTemplateGroupId(v === "none" ? "" : v); if (v !== "none") setTemplateId(""); }}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {(templateGroups ?? []).map((g) => (
+                        <SelectItem key={g.id} value={g.id}>{g.name} ({g.template_names.length})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                A template group routes to whichever sender has its approved variant. Use this when 2+ numbers share the same outreach.
+              </p>
             </div>
 
             <div>
@@ -763,6 +841,96 @@ export default function PipelineConfigSheet({
             </p>
           </div>
         </section>
+
+        {/* Follow-up */}
+        <section className="mt-6 space-y-3">
+          <h3 className="text-sm font-semibold">Follow-up</h3>
+          <div className="rounded-lg border border-border p-3 space-y-3">
+            <label className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium">Auto follow-up</div>
+                <div className="text-[11px] text-muted-foreground">
+                  After a first-touch is sent, schedule a single follow-up unless the lead replies or the deal is closed.
+                </div>
+              </div>
+              <Switch checked={followUpEnabled} onCheckedChange={setFollowUpEnabled} />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Single template</Label>
+                <Select
+                  value={followUpTemplateId || "none"}
+                  onValueChange={(v) => { setFollowUpTemplateId(v === "none" ? "" : v); if (v !== "none") setFollowUpGroupId(""); }}
+                  disabled={Boolean(followUpGroupId)}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {(templates ?? []).map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Template group (shared pool)</Label>
+                <Select
+                  value={followUpGroupId || "none"}
+                  onValueChange={(v) => { setFollowUpGroupId(v === "none" ? "" : v); if (v !== "none") setFollowUpTemplateId(""); }}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {(templateGroups ?? []).map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name} ({g.template_names.length})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <Label className="text-xs">Delay (minutes)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={followUpDelayMin}
+                  onChange={(e) => setFollowUpDelayMin(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Curfew start</Label>
+                <Input type="time" value={followUpCurfewEnd} onChange={(e) => setFollowUpCurfewEnd(e.target.value)} className="h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">Resume at</Label>
+                <Input type="time" value={followUpResumeAt} onChange={(e) => setFollowUpResumeAt(e.target.value)} className="h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">Timezone</Label>
+                <Select value={followUpTz} onValueChange={setFollowUpTz}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Europe/Berlin">Europe/Berlin</SelectItem>
+                    <SelectItem value="Europe/London">Europe/London</SelectItem>
+                    <SelectItem value="Asia/Dubai">Asia/Dubai</SelectItem>
+                    <SelectItem value="Asia/Kolkata">Asia/Kolkata</SelectItem>
+                    <SelectItem value="America/New_York">America/New_York</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Follow-ups land {Math.round((parseInt(followUpDelayMin, 10) || 480) / 60)}h after first-touch. If that falls between {followUpCurfewEnd} and {followUpResumeAt} ({followUpTz}), it is pushed to {followUpResumeAt} the next day.
+            </p>
+          </div>
+        </section>
+
+
 
         {/* Notifications */}
         <section className="mt-6 space-y-3">
