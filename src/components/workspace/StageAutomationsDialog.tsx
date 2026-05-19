@@ -82,13 +82,17 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
   // For button_click trigger
   const [pickedTemplateId, setPickedTemplateId] = useState<string>("");
   const [pickedButtonText, setPickedButtonText] = useState<string>("");
+  // For time-based + assignment triggers
+  const [delayValue, setDelayValue] = useState<string>("8");
+  const [delayUnit, setDelayUnit] = useState<"minutes" | "hours" | "days">("hours");
+  const [sourceStageId, setSourceStageId] = useState<string>("");
 
   const { data: rules = [], isLoading } = useQuery({
     queryKey: automationsKey(workspaceId, pipelineId),
     queryFn: async (): Promise<Automation[]> => {
       let q = supabase
         .from("stage_automations")
-        .select("id, trigger, trigger_value, target_stage_id, is_active, workspace_id, pipeline_id")
+        .select("id, trigger, trigger_value, target_stage_id, is_active, workspace_id, pipeline_id, delay_minutes, source_stage_id")
         .order("created_at", { ascending: false });
       if (workspaceId) q = q.eq("workspace_id", workspaceId);
       if (pipelineId) q = q.eq("pipeline_id", pipelineId);
@@ -113,7 +117,13 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
 
   const pickedTemplate = useMemo(() => templates.find((t) => t.id === pickedTemplateId), [templates, pickedTemplateId]);
 
-  const insertRule = async (params: { trigger: TriggerKind; value: string | null; targetStageId: string }) => {
+  const insertRule = async (params: {
+    trigger: TriggerKind;
+    value: string | null;
+    targetStageId: string;
+    delayMinutes?: number | null;
+    sourceStageId?: string | null;
+  }) => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) throw new Error("Not authenticated");
     const { error } = await supabase.from("stage_automations").insert({
@@ -123,15 +133,22 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
       trigger: params.trigger,
       trigger_value: params.value,
       target_stage_id: params.targetStageId,
+      delay_minutes: params.delayMinutes ?? null,
+      source_stage_id: params.sourceStageId ?? null,
       is_active: true,
     } as any);
     if (error) throw error;
   };
 
+  const isTimeBased = trigger === "time_no_inbound" || trigger === "time_in_stage";
+  const isAssignment = trigger === "conversation_assigned" || trigger === "conversation_claimed_self";
+
   const create = useMutation({
     mutationFn: async () => {
       if (!stageId) throw new Error("Pick a target stage");
       let value: string | null = null;
+      let delayMinutes: number | null = null;
+      let sourceStage: string | null = null;
       if (trigger === "inbound_keyword") {
         const list = triggerValue.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
         if (list.length === 0) throw new Error("Add at least one keyword");
@@ -140,8 +157,18 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
         const txt = pickedButtonText.trim();
         if (!txt) throw new Error("Pick a button from the template");
         value = txt;
+      } else if (isTimeBased) {
+        const n = Number(delayValue);
+        if (!Number.isFinite(n) || n <= 0) throw new Error("Enter a positive delay");
+        if (!sourceStageId) throw new Error("Pick the source stage to watch");
+        if (sourceStageId === stageId) throw new Error("Source and target stages must differ");
+        const mult = delayUnit === "minutes" ? 1 : delayUnit === "hours" ? 60 : 1440;
+        delayMinutes = Math.round(n * mult);
+        sourceStage = sourceStageId;
+      } else if (isAssignment) {
+        sourceStage = sourceStageId || null;
       }
-      await insertRule({ trigger, value, targetStageId: stageId });
+      await insertRule({ trigger, value, targetStageId: stageId, delayMinutes, sourceStageId: sourceStage });
     },
     onSuccess: () => {
       toast.success("Automation added");
