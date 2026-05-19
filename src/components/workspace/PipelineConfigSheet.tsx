@@ -77,6 +77,8 @@ type Pipeline = {
   follow_up_curfew_end?: string;
   follow_up_resume_at?: string;
   follow_up_timezone?: string;
+  expected_country_codes?: string[] | null;
+  failed_stage_id?: string | null;
 };
 
 type TemplateGroup = { id: string; name: string; template_names: string[] };
@@ -246,6 +248,10 @@ export default function PipelineConfigSheet({
   const [followUpResumeAt, setFollowUpResumeAt] = useState<string>("09:00");
   const [followUpTz, setFollowUpTz] = useState<string>("Europe/Berlin");
 
+  // Phone normalization + failed routing
+  const [expectedCcs, setExpectedCcs] = useState<string[]>([]);
+  const [failedStageId, setFailedStageId] = useState<string>("");
+
   const [showNewSource, setShowNewSource] = useState(false);
   const [newSourceKind, setNewSourceKind] = useState<SourceKind>("google_sheet");
   const [newSourceName, setNewSourceName] = useState("");
@@ -272,6 +278,8 @@ export default function PipelineConfigSheet({
     setFollowUpCurfewEnd(trimTime(p.follow_up_curfew_end) || "20:00");
     setFollowUpResumeAt(trimTime(p.follow_up_resume_at) || "09:00");
     setFollowUpTz(p.follow_up_timezone ?? "Europe/Berlin");
+    setExpectedCcs(Array.isArray(p.expected_country_codes) ? p.expected_country_codes : []);
+    setFailedStageId(p.failed_stage_id ?? "");
   };
 
   const { data: templates } = useQuery({
@@ -582,6 +590,8 @@ export default function PipelineConfigSheet({
         follow_up_curfew_end: followUpCurfewEnd,
         follow_up_resume_at: followUpResumeAt,
         follow_up_timezone: followUpTz,
+        expected_country_codes: expectedCcs,
+        failed_stage_id: failedStageId || null,
       })
       .eq("id", pipeId);
     if (error) return toast.error(error.message);
