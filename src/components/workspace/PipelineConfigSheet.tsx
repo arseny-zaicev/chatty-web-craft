@@ -300,17 +300,7 @@ export default function PipelineConfigSheet({
     },
   });
 
-  // Sender label lookup for showing "template_name — SenderName" in dropdowns.
-  const senderLabelById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const n of numbers ?? []) {
-      m.set(n.id, friendlySenderLabel(n as any) || n.display_name || `+${n.phone_number}`);
-    }
-    return m;
-  }, [numbers]);
-
-  // Manage-groups dialog state. Templates passed in match the shape
-  // TemplateGroupsDialog expects (it only reads `.name` for the picker).
+  // Manage-groups dialog state.
   const [groupsDialogOpen, setGroupsDialogOpen] = useState(false);
 
   const { data: numbers, refetch: refetchNumbers } = useQuery({
