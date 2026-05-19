@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { acquireJobLock } from "../_shared/jobLock.ts";
+import { killReason } from "../_shared/jobKillSwitch.ts";
+import { withJobRun, logJobSkipped } from "../_shared/jobRun.ts";
 import {
   buildTemplateParams,
   renderTemplateBody as sharedRenderTemplateBody,
@@ -1779,12 +1781,23 @@ serve(async (req) => {
       if (cronSecret && provided && provided !== cronSecret && !isServiceAuth) {
         return json({ error: "Unauthorized" }, 401);
       }
+      // Kill-switch (env + DB flag). Only gates the cron "process" path, not
+      // manual user actions like launch/pause/resume.
+      const __startedAt = Date.now();
+      const __kr = await killReason(admin, "campaigns-process");
+      if (__kr) {
+        logJobSkipped("campaigns-process", __kr, __startedAt);
+        return json({ ok: true, skipped: __kr });
+      }
       // Cron + manual triggers can fire concurrently; serialize processQueue
       // so two ticks don't pick up the same scheduled recipients and double-send.
       const release = await acquireJobLock(admin, "campaigns-process");
-      if (!release) return json({ ok: true, skipped: "locked" });
+      if (!release) {
+        logJobSkipped("campaigns-process", "locked", __startedAt);
+        return json({ ok: true, skipped: "locked" });
+      }
       try {
-        return await processQueue(admin);
+        return await withJobRun("campaigns-process", () => processQueue(admin));
       } finally {
         await release();
       }
