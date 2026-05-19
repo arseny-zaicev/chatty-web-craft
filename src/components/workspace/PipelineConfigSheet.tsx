@@ -944,55 +944,83 @@ export default function PipelineConfigSheet({
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs">First-touch template / group</Label>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-[11px]"
-                  onClick={refreshTemplates}
-                  disabled={syncingTemplates}
-                >
-                  {syncingTemplates
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : <><RefreshCw className="w-3 h-3 mr-1" />Refresh from Gupshup</>}
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="text-[10px] text-muted-foreground mb-1">Single template (one sender)</div>
-                  <Select
-                    value={templateId || "none"}
-                    onValueChange={(v) => { setTemplateId(v === "none" ? "" : v); if (v !== "none") setTemplateGroupId(""); }}
-                    disabled={Boolean(templateGroupId)}
+                <Label className="text-xs">First-touch template</Label>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => setGroupsDialogOpen(true)}
                   >
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {(templates ?? []).map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <div className="text-[10px] text-muted-foreground mb-1">Template group (shared pool)</div>
-                  <Select
-                    value={templateGroupId || "none"}
-                    onValueChange={(v) => { setTemplateGroupId(v === "none" ? "" : v); if (v !== "none") setTemplateId(""); }}
+                    <Layers className="w-3 h-3 mr-1" />Manage groups
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={refreshTemplates}
+                    disabled={syncingTemplates}
                   >
-                    <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {(templateGroups ?? []).map((g) => (
-                        <SelectItem key={g.id} value={g.id}>{g.name} ({g.template_names.length})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    {syncingTemplates
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <><RefreshCw className="w-3 h-3 mr-1" />Refresh from Gupshup</>}
+                  </Button>
                 </div>
               </div>
+              <Select
+                value={templateGroupId ? `group:${templateGroupId}` : (templateId ? `tpl:${templateId}` : "none")}
+                onValueChange={(v) => {
+                  if (v === "none") { setTemplateId(""); setTemplateGroupId(""); return; }
+                  if (v.startsWith("group:")) { setTemplateGroupId(v.slice(6)); setTemplateId(""); }
+                  else { setTemplateId(v.slice(4)); setTemplateGroupId(""); }
+                }}
+              >
+                <SelectTrigger className="h-9"><SelectValue placeholder="Pick a template or group…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {(templateGroups ?? []).length > 0 && (
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">Groups (multi-sender)</div>
+                  )}
+                  {(templateGroups ?? []).map((g) => (
+                    <SelectItem key={`g-${g.id}`} value={`group:${g.id}`}>
+                      <span className="inline-flex items-center gap-2">
+                        <Layers className="w-3 h-3 text-primary" />
+                        <span>{g.name}</span>
+                        <span className="text-[10px] text-muted-foreground">({g.template_names.length} variants · group)</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                  {(templates ?? []).length > 0 && (
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">Single templates</div>
+                  )}
+                  {(templates ?? []).map((t) => {
+                    const sender = t.whatsapp_number_id ? senderLabelById.get(t.whatsapp_number_id) : null;
+                    return (
+                      <SelectItem key={`t-${t.id}`} value={`tpl:${t.id}`}>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="font-mono text-xs">{t.name}</span>
+                          {sender && <span className="text-[10px] text-muted-foreground">— {sender}</span>}
+                          {!sender && <span className="text-[10px] text-amber-600">— no sender</span>}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
               <p className="text-[10px] text-muted-foreground mt-1">
-                A template group routes to whichever sender has its approved variant. Use this when 2+ numbers share the same outreach.
+                Pick a <b>group</b> to round-robin across senders that each have their own approved variant. Pick a <b>single template</b> to send only from the one sender that owns it.
               </p>
+              {/* Warning when single template + multi sender */}
+              {templateId && senderIds.length > 1 && (() => {
+                const t = (templates ?? []).find((x) => x.id === templateId);
+                const owner = t?.whatsapp_number_id ? senderLabelById.get(t.whatsapp_number_id) : null;
+                return (
+                  <div className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-700 flex items-start gap-1.5">
+                    <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                    <span>You selected {senderIds.length} senders but a single template owned by <b>{owner ?? "unknown sender"}</b>. Only that sender will send. Create a template group to round-robin across all senders.</span>
+                  </div>
+                );
+              })()}
               {templateGroupId && wsId && (() => {
                 const g = (templateGroups ?? []).find((x) => x.id === templateGroupId);
                 if (!g) return null;
