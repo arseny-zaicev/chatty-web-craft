@@ -160,6 +160,7 @@ export default function PartnerDetail() {
   );
 
   const sent7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.sent_7d || 0), 0);
+  const delivered7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.delivered_7d || 0), 0);
   const unpaid = (runs || []).filter(r => r.status === "draft" || r.status === "approved")
     .reduce((s, r) => s + Number(r.total_payout_usd || 0), 0);
   const monthStart = startOfMonth(new Date());
@@ -190,8 +191,11 @@ export default function PartnerDetail() {
           <Stat label="Restricted #" value={String(restrictedNums)} alert={restrictedNums > 0} />
           <Stat label="Blocked #" value={String(blockedNums)} alert={blockedNums > 0} />
           <Stat label="Sent today" value={(pm?.sent_today ?? 0).toLocaleString()} />
+          <Stat label="Delivered today" value={(pm?.delivered_today ?? 0).toLocaleString()} />
           <Stat label="Sent all-time" value={(pm?.sent_alltime ?? 0).toLocaleString()} />
+          <Stat label="Delivered all-time" value={(pm?.delivered_alltime ?? 0).toLocaleString()} />
           <Stat label="Sent 7d" value={sent7dTotal.toLocaleString()} />
+          <Stat label="Delivered 7d" value={delivered7dTotal.toLocaleString()} />
           <Stat label="Open payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
           <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
         </div>
@@ -235,9 +239,9 @@ export default function PartnerDetail() {
                     <TableHead>Warm-up</TableHead>
                     <TableHead>Numbers</TableHead>
                     <TableHead>Numbers summary</TableHead>
-                    <TableHead className="text-right">Sent today</TableHead>
-                    <TableHead className="text-right">Sent 7d</TableHead>
-                    <TableHead className="text-right">Sent all</TableHead>
+                    <TableHead className="text-right">Deliv / Sent today</TableHead>
+                    <TableHead className="text-right">Deliv / Sent 7d</TableHead>
+                    <TableHead className="text-right">Deliv / Sent all</TableHead>
                     <TableHead className="text-right">Restricted</TableHead>
                     <TableHead className="text-right">Blocked</TableHead>
                     <TableHead className="text-right">Clients</TableHead>
@@ -253,6 +257,9 @@ export default function PartnerDetail() {
                       const sentToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_today || 0), 0);
                       const sent7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_7d || 0), 0);
                       const sentAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_all || 0), 0);
+                      const delivToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_today || 0), 0);
+                      const deliv7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_7d || 0), 0);
+                      const delivAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_all || 0), 0);
                       const summary = bmNums.slice(0, 3).map(n => n.display_name || `+${n.phone_number}`).join(", ")
                         + (bmNums.length > 3 ? ` +${bmNums.length - 3}` : "");
                       const invalidateBm = () => {
@@ -286,9 +293,18 @@ export default function PartnerDetail() {
                             ) : bmNums.length}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate" title={summary}>{summary || "—"}</TableCell>
-                          <TableCell className="text-right tabular-nums">{sentToday.toLocaleString()}</TableCell>
-                          <TableCell className="text-right tabular-nums">{sent7d.toLocaleString()}</TableCell>
-                          <TableCell className="text-right tabular-nums">{sentAll.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{delivToday.toLocaleString()}</span>
+                            <span className="text-muted-foreground"> / {sentToday.toLocaleString()}</span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{deliv7d.toLocaleString()}</span>
+                            <span className="text-muted-foreground"> / {sent7d.toLocaleString()}</span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{delivAll.toLocaleString()}</span>
+                            <span className="text-muted-foreground"> / {sentAll.toLocaleString()}</span>
+                          </TableCell>
                           <TableCell className={`text-right tabular-nums ${restricted > 0 ? "text-amber-600 font-medium" : ""}`}>{restricted}</TableCell>
                           <TableCell className={`text-right tabular-nums ${blocked > 0 ? "text-destructive font-medium" : ""}`}>{blocked}</TableCell>
                           <TableCell className="text-right tabular-nums">{wsSet.size}</TableCell>
@@ -1106,21 +1122,54 @@ function AddNumbersToBmButton({
 }: { bmId: string; bmWorkspaceId: string | null; count: number; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
+  const [showBusy, setShowBusy] = useState(false);
+  const [search, setSearch] = useState("");
 
   const { data: pool } = useQuery({
-    queryKey: ["admin", "bm-attach-pool", bmId, bmWorkspaceId],
+    queryKey: ["admin", "bm-attach-pool", bmId, showBusy],
     enabled: open,
     queryFn: async () => {
       let q = supabase
         .from("whatsapp_numbers")
-        .select("id, phone_number, display_name, status, workspace_id")
-        .is("business_manager_id", null);
-      if (bmWorkspaceId) q = q.eq("workspace_id", bmWorkspaceId);
-      const { data, error } = await q.order("display_name");
+        .select("id, phone_number, display_name, status, workspace_id, business_manager_id")
+        .neq("id", "00000000-0000-0000-0000-000000000000")
+        .neq("business_manager_id", bmId);
+      if (!showBusy) q = q.is("business_manager_id", null);
+      const { data, error } = await q.order("display_name").limit(500);
       if (error) throw error;
       return (data ?? []) as any[];
     },
   });
+
+  const { data: wsNames } = useQuery({
+    queryKey: ["admin", "ws-names-mini"],
+    queryFn: async () => {
+      const { data } = await supabase.from("workspaces").select("id, name");
+      const m = new Map<string, string>();
+      (data ?? []).forEach((w: any) => m.set(w.id, w.name));
+      return m;
+    },
+  });
+
+  const { data: bmNames } = useQuery({
+    queryKey: ["admin", "bm-names-mini"],
+    enabled: showBusy && open,
+    queryFn: async () => {
+      const { data } = await supabase.from("business_managers").select("id, name");
+      const m = new Map<string, string>();
+      (data ?? []).forEach((b: any) => m.set(b.id, b.name));
+      return m;
+    },
+  });
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return pool ?? [];
+    return (pool ?? []).filter(n =>
+      String(n.phone_number || "").toLowerCase().includes(term) ||
+      String(n.display_name || "").toLowerCase().includes(term)
+    );
+  }, [pool, search]);
 
   const attach = useMutation({
     mutationFn: async () => {
@@ -1144,25 +1193,49 @@ function AddNumbersToBmButton({
           {count} <Plus className="w-3 h-3 ml-1" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-2" align="end">
-        <div className="text-xs text-muted-foreground mb-2">
-          Unassigned numbers{bmWorkspaceId ? " in this workspace" : ""}
+      <PopoverContent className="w-[380px] p-2" align="end">
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search phone or name…"
+            className="h-7 text-xs"
+          />
         </div>
-        <div className="max-h-56 overflow-y-auto space-y-1">
-          {(pool ?? []).length === 0 && (
-            <div className="text-xs text-muted-foreground py-3 text-center">No numbers available</div>
+        <label className="flex items-center gap-2 text-[11px] text-muted-foreground mb-2 cursor-pointer">
+          <Checkbox checked={showBusy} onCheckedChange={(v) => setShowBusy(Boolean(v))} />
+          Show numbers attached to other BMs (will be re-attached on save)
+        </label>
+        <div className="max-h-64 overflow-y-auto space-y-1">
+          {filtered.length === 0 && (
+            <div className="text-xs text-muted-foreground py-3 text-center">No numbers match</div>
           )}
-          {(pool ?? []).map(n => (
-            <label key={n.id} className="flex items-center gap-2 text-xs hover:bg-muted/50 rounded px-1 py-0.5 cursor-pointer">
-              <Checkbox
-                checked={picked.includes(n.id)}
-                onCheckedChange={() => setPicked(p => p.includes(n.id) ? p.filter(x => x !== n.id) : [...p, n.id])}
-              />
-              <span className="font-mono">+{n.phone_number}</span>
-              <span className="text-muted-foreground truncate">{n.display_name || ""}</span>
-              <Badge variant="outline" className="ml-auto text-[10px]">{n.status}</Badge>
-            </label>
-          ))}
+          {filtered.map(n => {
+            const wsLabel = n.workspace_id ? (wsNames?.get(n.workspace_id) || n.workspace_id.slice(0,6)) : "no ws";
+            const inOtherBm = n.business_manager_id && n.business_manager_id !== bmId;
+            const otherBmLabel = inOtherBm ? (bmNames?.get(n.business_manager_id) || n.business_manager_id.slice(0,6)) : null;
+            return (
+              <label key={n.id} className="flex items-center gap-2 text-xs hover:bg-muted/50 rounded px-1 py-1 cursor-pointer">
+                <Checkbox
+                  checked={picked.includes(n.id)}
+                  onCheckedChange={() => setPicked(p => p.includes(n.id) ? p.filter(x => x !== n.id) : [...p, n.id])}
+                />
+                <div className="flex flex-col flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono">+{n.phone_number}</span>
+                    <span className="text-muted-foreground truncate">{n.display_name || ""}</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] text-muted-foreground">ws: {wsLabel}</span>
+                    {otherBmLabel && (
+                      <span className="text-[10px] text-amber-600">· now in BM: {otherBmLabel}</span>
+                    )}
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[10px] shrink-0">{n.status}</Badge>
+              </label>
+            );
+          })}
         </div>
         <div className="flex justify-end gap-2 mt-2">
           <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>

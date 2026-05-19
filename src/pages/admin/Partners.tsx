@@ -160,8 +160,8 @@ export default function Partners() {
                   <TableHead>BMs</TableHead>
                   <TableHead>Numbers</TableHead>
                   <TableHead>Referred #</TableHead>
-                  <TableHead>Sent today</TableHead>
-                  <TableHead>Sent all-time</TableHead>
+                  <TableHead>Delivered / Sent today</TableHead>
+                  <TableHead>Delivered / Sent all-time</TableHead>
                   <TableHead>Partner rate</TableHead>
                   <TableHead>Manager rate</TableHead>
                   <TableHead>Unpaid</TableHead>
@@ -193,8 +193,14 @@ export default function Partners() {
                             ? <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30">{referredCount}</Badge>
                             : <span className="text-muted-foreground">-</span>}
                         </TableCell>
-                        <TableCell className="tabular-nums">{(pm?.sent_today ?? 0).toLocaleString()}</TableCell>
-                        <TableCell className="tabular-nums text-muted-foreground">{(pm?.sent_alltime ?? 0).toLocaleString()}</TableCell>
+                        <TableCell className="tabular-nums">
+                          <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(pm?.delivered_today ?? 0).toLocaleString()}</span>
+                          <span className="text-muted-foreground"> / {(pm?.sent_today ?? 0).toLocaleString()}</span>
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(pm?.delivered_alltime ?? 0).toLocaleString()}</span>
+                          <span> / {(pm?.sent_alltime ?? 0).toLocaleString()}</span>
+                        </TableCell>
                         <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
                         <TableCell className="font-mono text-xs">{p.referral_rate_usd > 0 ? `$${Number(p.referral_rate_usd).toFixed(4)}` : <span className="text-muted-foreground">-</span>}</TableCell>
                         <TableCell className={unpaid > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>

@@ -117,37 +117,58 @@ export async function fetchNumberMetrics(
   return byNum;
 }
 
-// ---------- PARTNERS (aggregate over currently-owned numbers) ----------
+// ---------- PARTNERS (aggregate over BMs currently assigned to the partner) ----------
+// NOTE: `number_ownership` is empty in production. The truth for "which numbers
+// belong to a partner right now" lives in active `bm_partner_assignments` →
+// the BM's `whatsapp_numbers`. We aggregate via `number_live_stats` so the
+// numbers in the partner row and in the per-BM table reconcile to the digit.
 export async function fetchPartnerMetrics(
   partnerIds: string[]
 ): Promise<Map<string, TodayMetrics & AlltimeMetrics>> {
-  if (!partnerIds.length) return new Map();
-  // Use number_ownership active rows (effective_to IS NULL) for "current" ownership.
-  const { data: own } = await supabase
-    .from("number_ownership")
-    .select("partner_id, whatsapp_number_id, effective_to")
+  const out = new Map<string, TodayMetrics & AlltimeMetrics>();
+  partnerIds.forEach((p) => out.set(p, { ...ZERO_TODAY, ...ZERO_ALL }));
+  if (!partnerIds.length) return out;
+
+  // partner -> active BMs
+  const { data: assigns } = await supabase
+    .from("bm_partner_assignments")
+    .select("partner_id, business_manager_id, effective_to")
     .in("partner_id", partnerIds)
     .is("effective_to", null);
+  const bmToPartner = new Map<string, string>();
+  (assigns ?? []).forEach((r: any) => {
+    if (!bmToPartner.has(r.business_manager_id)) bmToPartner.set(r.business_manager_id, r.partner_id);
+  });
+  const bmIds = Array.from(bmToPartner.keys());
+  if (!bmIds.length) return out;
+
+  // BMs -> numbers
+  const { data: nums } = await supabase
+    .from("whatsapp_numbers")
+    .select("id, business_manager_id")
+    .in("business_manager_id", bmIds);
   const numToPartner = new Map<string, string>();
-  (own ?? []).forEach((r: any) => {
-    if (!numToPartner.has(r.whatsapp_number_id)) numToPartner.set(r.whatsapp_number_id, r.partner_id);
+  (nums ?? []).forEach((n: any) => {
+    const pid = bmToPartner.get(n.business_manager_id);
+    if (pid) numToPartner.set(n.id, pid);
   });
   const numIds = Array.from(numToPartner.keys());
-  const numMetrics = await fetchNumberMetrics(numIds);
-  const byPartner = new Map<string, TodayMetrics & AlltimeMetrics>();
-  partnerIds.forEach((p) => byPartner.set(p, { ...ZERO_TODAY, ...ZERO_ALL }));
-  for (const [numId, partnerId] of numToPartner) {
-    const m = numMetrics.get(numId);
-    if (!m) continue;
-    const acc = byPartner.get(partnerId)!;
-    acc.sent_today += m.sent_today;
-    acc.delivered_today += m.delivered_today;
-    acc.failed_today += m.failed_today;
-    acc.sent_alltime += m.sent_alltime;
-    acc.delivered_alltime += m.delivered_alltime;
-    acc.failed_alltime += m.failed_alltime;
-  }
-  return byPartner;
+  if (!numIds.length) return out;
+
+  // Pull live stats (same RPC used by per-BM rows so totals reconcile).
+  const { data: live } = await (supabase.rpc as any)("number_live_stats", { p_number_ids: numIds });
+  (live ?? []).forEach((r: any) => {
+    const pid = numToPartner.get(r.whatsapp_number_id);
+    if (!pid) return;
+    const acc = out.get(pid)!;
+    acc.sent_today += Number(r.sent_today ?? 0);
+    acc.delivered_today += Number(r.delivered_today ?? 0);
+    acc.failed_today += Number(r.failed_today ?? 0);
+    acc.sent_alltime += Number(r.sent_all ?? 0);
+    acc.delivered_alltime += Number(r.delivered_all ?? 0);
+    acc.failed_alltime += Number(r.failed_today ?? 0); // failed_all not in RPC; keep today as best-effort
+  });
+  return out;
 }
 
 // ---------- BUSINESS MANAGERS (aggregate over linked numbers) ----------

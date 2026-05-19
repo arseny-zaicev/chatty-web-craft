@@ -1,66 +1,39 @@
-## Что нашёл по двум проблемам
+## Что не так и что починим
 
-### Проблема 1: "Контакт пишет 1 раз, мы видим 2-3 раза" — баг дедупликации webhook
+### 1) Статистика по партнёрам — везде нули / неправда
 
-**Root cause найден.** Webhook `supabase/functions/whatsapp-webhook/index.ts` (строка 298) делает обычный `.insert()` входящего сообщения, **без проверки** что такой `provider_message_id` уже есть в базе. Gupshup ретраит доставку webhook (особенно на quick_reply кнопки `Block` / `Not for me`), и каждый ретрай создаёт новый дубль.
+**Корень проблемы:** функция `fetchPartnerMetrics` (`src/lib/metrics.ts`) считает "Sent today / all-time" по таблице `number_ownership`, в которой **ровно 0 строк во всей базе**. Поэтому в `/admin/partners` (колонки Sent today, Sent all-time) и в верхней плашке `/admin/partners/:id` (Sent today, Sent all-time) всегда показывается 0 / любая ерунда, хотя в табличке BM внизу той же страницы цифры правильные — те считаются через другой источник (`number_live_stats` по `business_manager_id`).
 
-**Доказательство из БД (последние 3 дня в iskra):**
-- 44 группы дублей входящих сообщений (всего 113 рядов вместо 44).
-- Во всех дублях `provider_message_id` **идентичный**. Пример: convo `01c96c40...` — одно и то же сообщение `Block` с wamid `HBgMNDQ3NTY1...3NzgwMzc4NDYA` записано 3 раза (13:49:20, 13:49:27, 13:49:32 GST → это 17:49 Dubai).
-- Ещё пример: `Ja gerne!` от того же контакта записано 3 раза в течение 18 секунд с одинаковым wamid.
+**Что сделаем:**
+- Перепишу `fetchPartnerMetrics` так, чтобы партнёр → его BMы (через активные `bm_partner_assignments` где `effective_to IS NULL`) → номера (`whatsapp_numbers.business_manager_id IN (...)`) → агрегируем `number_live_stats` (тот же RPC, что использует BM-таблица).
+- Результат: цифры в строке партнёра в списке + в верхней плашке совпадут с суммой по строкам BM внутри партнёра. Никаких "0".
+- Таблицу `number_ownership` не трогаем — она пустая и не используется нигде ещё критично, оставим как есть.
 
-Это объясняет почему в iskra инбоксе "многие отвечают по 2-3 раза" — на самом деле они пишут один раз, а дублирует наш webhook handler.
+### 2) В стате нет "Delivered" — добавим везде, включая партнёров
 
-### Проблема 2: Сообщение видно в превью слева, но не отображается в чате
+Сейчас "Delivered" есть только в KPI воркспейса и в карточке отчёта кампании. В партнёрских и BM-разрезах его нет, потому что RPC `number_live_stats` возвращает только `sent_*` и `failed_*`, без `delivered_*`.
 
-В скриншоте по Loni (`a7403ca6...`): последнее реальное сообщение в БД — `"Möchtest du mit deinem Fitnesscoaching nebenbei..."` отправлено сеттером в 18:38:38 Dubai (14:38:38 UTC). Превью слева в сайдбаре его показывает (`last_message_text` обновился), но в открытом чате этого пузыря нет — обведённое красным пустое место там, где он должен был отрисоваться.
+**Что сделаем:**
+- Миграция: расширю `public.number_live_stats(p_number_ids uuid[])` — добавлю `delivered_today bigint`, `delivered_7d bigint`, `delivered_all bigint`. Условие: `cr.status IN ('delivered','read')` (read = тоже доставлено и прочитано). Sent остаётся как было (`sent | delivered | read`), чтобы Delivered ≤ Sent.
+- На фронте добавлю колонку **Delivered today** и в `/admin/partners` (список), и в `/admin/partners/:id` (верхняя плашка + строки BM), и в `/admin/business-managers/:id` (плашка статов). Везде в формате `Delivered / Sent` (например, `1,180 / 1,205`), чтобы сразу видна была доставляемость.
 
-Realtime-подписка в `CRM.tsx` (строки 395-419) подписана корректно: `event: "*"`, фильтр `conversation_id=eq.${activeId}`, INSERT добавляет сообщение в `setMessages`. То есть код правильный, но событие не доходит до клиента. Возможные причины:
+### 3) Не добавляются номера под партнёра / BM
 
-1. **Realtime postgres_changes фильтруется RLS:** событие INSERT доходит только тем клиентам, чей JWT проходит SELECT-политику на messages. Если сеттер отправляет сообщение под `user_id = owner_workspace`, а смотрит чат другой member workspace, RLS может тихо отфильтровать событие.
-2. **Канал realtime отвалился:** WebSocket к Supabase отключается после простоя/смены сети, мы не переподписываемся.
-3. **Refetch при возврате фокуса отсутствует:** даже когда `conversations.last_message_at` обновляется в сайдбаре, мы не реакаемся для активного чата.
+В попапе "Attach" пул номеров фильтруется как `business_manager_id IS NULL AND workspace_id = <ws партнёра>`. Поэтому "No numbers available" — все номера, которые есть, уже привязаны к каким-то BM (часто к другому BM этого же или соседнего воркспейса) либо лежат в другом воркспейсе.
 
-## План фиксов
+**Что сделаем в попапе "Attach" на `PartnerDetail` (компонент `AddNumbersToBmButton`) и в "Attach" на `BusinessManagerDetail`:**
+- Уберу жёсткий фильтр по `workspace_id`. По умолчанию покажу **все** свободные номера (`business_manager_id IS NULL`) из всех воркспейсов, с маленькой подписью у каждого "ws: <name>" чтобы было видно откуда тянем.
+- Добавлю переключатель **"Show numbers attached to other BMs"** — когда включён, показываются и уже занятые номера (с пометкой "сейчас в BM XYZ"). При выборе такого номера на attach мы автоматически переносим его (обновляем `business_manager_id` + пишем event в `bm_number_events`), без ручной отвязки.
+- При attach пропишем `workspace_id` партнёрского BM, чтобы номер сразу оказался в правильном воркспейсе.
+- Поиск по номеру/имени сверху, чтобы быстро искать когда пул большой.
 
-### A. Дедупликация входящих в webhook (Проблема 1) — критичный фикс
+## Технические детали
 
-Файл `supabase/functions/whatsapp-webhook/index.ts`:
+**Файлы:**
+- `src/lib/metrics.ts` — `fetchPartnerMetrics` переписать: убрать `number_ownership`, идти через `bm_partner_assignments → whatsapp_numbers → number_live_stats`.
+- `supabase/migrations/<new>.sql` — `CREATE OR REPLACE FUNCTION public.number_live_stats(...)` с добавлением `delivered_today/7d/all` (status IN ('delivered','read')).
+- `src/pages/admin/Partners.tsx` — колонка `Delivered today`, формат `delivered / sent`.
+- `src/pages/admin/PartnerDetail.tsx` — в верхней плашке `Delivered today` и `Delivered 7d`; в таблице BM колонки `Delivered today` / `Delivered 7d` / `Delivered all`; `AddNumbersToBmButton` — снять `workspace_id` фильтр, добавить toggle "show busy", поиск, авто-перенос.
+- `src/pages/admin/BusinessManagerDetail.tsx` — карточка статов с `Delivered today/7d/all`; попап attach — те же изменения, что и для PartnerDetail.
 
-1. **Перед вставкой inbound message** (~строка 298) проверять `SELECT id FROM messages WHERE provider_message_id = ? LIMIT 1`. Если ряд уже есть — `return` (не вставлять, не обновлять `conversation.last_message_text`, не слать Slack, не триггерить classify-replies).
-2. **Опционально, для надёжности**: добавить partial unique index в миграции:
-   ```sql
-   CREATE UNIQUE INDEX IF NOT EXISTS messages_provider_message_id_uniq
-     ON public.messages (provider_message_id)
-     WHERE provider_message_id IS NOT NULL;
-   ```
-   Это страхует на случай гонки между параллельными webhook-вызовами Gupshup.
-3. **Чистка существующих дублей** (44 группы) — отдельной разовой миграцией: оставить самую раннюю строку в каждой группе `(provider_message_id)`, остальные удалить. Перед удалением — пересчитать `conversations.last_message_text` / `last_message_at` если они ссылались на удалённый ряд (хотя они хранят текст, а не FK).
-
-### B. Подтянуть пропавшее сообщение в открытом чате (Проблема 2)
-
-Файл `src/pages/CRM.tsx`:
-
-1. **Fallback refetch при обновлении `last_message_at` для активного чата.** В realtime-обработчике `conversations` (уже подписан) — если `payload.new.id === activeId` и `payload.new.last_message_at` новее времени последнего сообщения в `messages[]`, дёргать `fetchConversationMessages(activeId)` и мерджить.
-2. **Refetch при возврате фокуса вкладки** (`visibilitychange` → если есть `activeId`, перезагрузить сообщения).
-3. **Логировать `subscribe` callback** в `useRealtimeTable` (статусы `SUBSCRIBED`/`CHANNEL_ERROR`/`CLOSED`) — чтобы диагностировать, отвалился ли канал.
-4. **Проверить RLS на `messages`** в БД: убедиться, что все workspace members могут `SELECT` сообщения в чатах своего workspace (не только `user_id = auth.uid()`). Если политика слишком узкая — расширить.
-
-### C. Диагностика и тесты
-
-- После фикса A прогнать тот же запрос на дубли — должно быть 0 групп новых дублей за следующий час.
-- Проверить convo `01c96c40-5f1a-4e1c-9b73-de02df7c62fc` после чистки — должно остаться по 1 ряду каждого wamid.
-- Открыть Loni-подобный чат в двух вкладках, отправить сообщение из одной — убедиться что во второй вкладке оно появляется без рефреша.
-
-## Порядок работ
-
-1. Сначала **A1+A2** (webhook idempotency + unique index) — останавливает кровотечение с новыми дублями.
-2. Потом **A3** (чистка существующих дублей в iskra) — отдельная миграция, согласовать с тобой перед запуском.
-3. Параллельно **B1+B2** — фронтенд-фолбек, чтобы пропавшие сообщения дотягивались refetch-ом.
-4. **B3+B4** — диагностика, при необходимости миграция RLS.
-
-## Технические детали (для разработчика)
-
-- Webhook сейчас не различает `message` vs `message-event` для дедупа — нужно дедуплить только `type: "message"` (inbound) по `provider_message_id`. События `message-event` (статусы delivered/read) обрабатываются отдельной веткой и там dedup уже не критичен.
-- Unique index на `provider_message_id` затронет и outbound (там тоже хранится wamid от Gupshup) — нужно проверить, что в outbound нет коллизий. Если есть — сделать индекс `WHERE direction = 'inbound'`.
-- Чистку дублей делать в транзакции с `ROW_NUMBER() OVER (PARTITION BY provider_message_id ORDER BY created_at) > 1 → DELETE`.
+**Что не ломаем:** RLS, существующие RPC сигнатуры (только дополнение полей), API кампаний.
