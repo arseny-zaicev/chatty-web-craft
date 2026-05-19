@@ -593,7 +593,7 @@ export default function PipelineConfigSheet({
         follow_up_curfew_end: followUpCurfewEnd,
         follow_up_resume_at: followUpResumeAt,
         follow_up_timezone: followUpTz,
-        expected_country_codes: expectedCcs,
+        expected_country_codes: expectedCcsText.split(/[,\s]+/).map((s) => s.replace(/\D/g, "")).filter(Boolean),
         failed_stage_id: failedStageId || null,
       })
       .eq("id", pipeId);
