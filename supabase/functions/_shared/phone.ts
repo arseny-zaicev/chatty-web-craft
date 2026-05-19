@@ -36,6 +36,12 @@ export function normalizePhone(
   if (!cleaned) return { ok: false, status: "invalid", raw: rawStr, reason: "no digits" };
   const hasPlus = cleaned.startsWith("+");
   let digits = hasPlus ? cleaned.slice(1) : cleaned;
+  // International dial-out prefix '00' (e.g. "0049...") is equivalent to '+'.
+  let treatAsInternational = hasPlus;
+  if (!hasPlus && digits.startsWith("00") && digits.length >= 10) {
+    digits = digits.slice(2);
+    treatAsInternational = true;
+  }
   // Drop any further '+' characters that appeared mid-string (typos).
   digits = digits.replace(/\+/g, "");
   if (!/^\d+$/.test(digits)) return { ok: false, status: "invalid", raw: rawStr, reason: "non-digit chars" };
