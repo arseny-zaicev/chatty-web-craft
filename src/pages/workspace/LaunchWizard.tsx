@@ -350,27 +350,7 @@ export default function LaunchWizard() {
     });
   }, [variableNames, mapping]);
 
-  // Hollow mapping: variable is mapped to a column, but EVERY sampled DB row
-  // resolves to an empty string. This is the "Hey there there" trap: the wizard
-  // shows "1/1 mapped" but the launched message has nothing to substitute and
-  // {{1}} falls back to "there". Only checked for database source.
-  const hollowVars = useMemo(() => {
-    if (audienceSource !== "database") return [] as string[];
-    const rows = sampleDbRowsQ.data ?? [];
-    if (rows.length === 0) return [];
-    const out: string[] = [];
-    for (const v of variableNames) {
-      const src = mapping[v];
-      if (!src || src.startsWith("__static:")) continue;
-      const allEmpty = rows.every((r) => {
-        const fromPayload = String((r.payload as any)?.[src] ?? "").trim();
-        const fromDerived = String((r.derived_payload as any)?.[src] ?? "").trim();
-        return !fromPayload && !fromDerived;
-      });
-      if (allEmpty) out.push(v);
-    }
-    return out;
-  }, [audienceSource, variableNames, mapping, sampleDbRowsQ.data]);
+  // hollowVars is computed below (after sampleDbRowsQ is declared).
 
   // Sample value preview for each variable (uses first available recipient/db row)
   const variablePreviewValue = (v: string): string => {
