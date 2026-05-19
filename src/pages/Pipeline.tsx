@@ -931,12 +931,14 @@ const DraggableDeal = ({
   onOpenChat,
   conversation,
   assignee,
+  isFailedStage,
 }: {
   deal: Deal;
   onClick: () => void;
   onOpenChat?: (conversationId: string) => void;
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
+  isFailedStage?: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: deal.id });
   const style: React.CSSProperties = {
@@ -956,6 +958,7 @@ const DraggableDeal = ({
         onOpenChat={onOpenChat}
         conversation={conversation}
         assignee={assignee}
+        isFailedStage={isFailedStage}
       />
     </div>
   );
