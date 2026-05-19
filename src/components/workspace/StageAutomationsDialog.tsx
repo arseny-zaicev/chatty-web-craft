@@ -231,6 +231,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
                     <SelectItem value="inbound_any">Any inbound reply</SelectItem>
                     <SelectItem value="inbound_keyword">Keyword in reply</SelectItem>
                     <SelectItem value="button_click">Button click</SelectItem>
+                    <SelectItem value="follow_up_sent">Follow-up sent (auto)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
