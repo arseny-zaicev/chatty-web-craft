@@ -250,6 +250,7 @@ export default function PipelineConfigSheet({
 
   // Phone normalization + failed routing
   const [expectedCcs, setExpectedCcs] = useState<string[]>([]);
+  const [expectedCcsText, setExpectedCcsText] = useState<string>("");
   const [failedStageId, setFailedStageId] = useState<string>("");
 
   const [showNewSource, setShowNewSource] = useState(false);
