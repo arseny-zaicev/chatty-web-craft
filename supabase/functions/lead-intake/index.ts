@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
 
     // 2. Validate + dedupe + import each row
     for (const raw of rawLeads) {
-      const phoneResult = normalizePhone(raw?.phone, defaultCC);
+      const phoneResult = normalizePhone(raw?.phone, ccListForPhone.length ? ccListForPhone : defaultCC);
       const nameResult = normalizeFirstName(raw?.name);
       const name = nameResult.value;
       if (nameResult.outcome === "unusable") nameUnusableCount++;
