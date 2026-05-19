@@ -28,7 +28,7 @@ type TemplateRow = {
   provider_template_id: string | null;
 };
 
-type NumberRow = { id: string; phone_number: string; display_name: string | null };
+type NumberRow = { id: string; phone_number: string; display_name: string | null; provider_app_id: string | null; label: string | null };
 
 const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", dot: "bg-emerald-500" },
