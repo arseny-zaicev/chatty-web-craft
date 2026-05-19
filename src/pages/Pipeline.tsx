@@ -970,12 +970,14 @@ const DealCard = ({
   onOpenChat,
   conversation,
   assignee,
+  isFailedStage,
 }: {
   deal: Deal;
   dragging?: boolean;
   onOpenChat?: (conversationId: string) => void;
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
+  isFailedStage?: boolean;
 }) => {
   const phone = deal.contact_phone ?? conversation?.contact_phone ?? null;
   const convId = deal.conversation_id ?? conversation?.id ?? null;
