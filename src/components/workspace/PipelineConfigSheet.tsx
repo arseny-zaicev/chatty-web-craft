@@ -288,7 +288,7 @@ export default function PipelineConfigSheet({
   });
 
   const { data: templateGroups } = useQuery({
-    queryKey: ["pipeline-template-groups", wsId],
+    queryKey: ["template-groups", wsId],
     enabled: Boolean(wsId && open),
     queryFn: async (): Promise<TemplateGroup[]> => {
       const { data } = await supabase
