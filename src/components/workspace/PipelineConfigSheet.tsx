@@ -1259,10 +1259,11 @@ export default function PipelineConfigSheet({
             <div>
               <Label className="text-xs">Expected country codes</Label>
               <Input
-                value={expectedCcs.join(", ")}
-                onChange={(e) =>
+                value={expectedCcsText}
+                onChange={(e) => setExpectedCcsText(e.target.value)}
+                onBlur={() =>
                   setExpectedCcs(
-                    e.target.value
+                    expectedCcsText
                       .split(/[,\s]+/)
                       .map((s) => s.replace(/\D/g, ""))
                       .filter(Boolean),
