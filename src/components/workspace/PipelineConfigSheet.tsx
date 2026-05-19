@@ -95,7 +95,7 @@ type Source = {
   created_at: string;
 };
 
-type Template = { id: string; name: string };
+type Template = { id: string; name: string; whatsapp_number_id: string | null };
 type WaNumber = {
   id: string;
   phone_number: string;
