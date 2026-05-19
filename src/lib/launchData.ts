@@ -285,11 +285,16 @@ export type NameInputs = {
 
 export function buildCampaignName(input: NameInputs): string {
   const d = input.date ?? new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  // Always use Dubai (workspace) time so the launch date matches the batch date
+  // produced by buildBatchName. Browser-local + UTC mixing caused names like
+  // "2026-05-19 | UK | 2026-05-18 | UK | ..." near midnight UTC.
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const dateKey = fmt.format(d); // YYYY-MM-DD
   const parts = [
-    `${yyyy}-${mm}-${dd}`,
+    dateKey,
     input.geo || "--",
     (input.audience || "Audience").trim(),
     (input.templateLabel || "Template").trim(),
