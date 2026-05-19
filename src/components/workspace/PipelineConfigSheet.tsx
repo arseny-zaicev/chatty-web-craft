@@ -1308,6 +1308,7 @@ function SheetSourceConfig({
       toast.error("Phone column is required");
       return;
     }
+    const cc = defaultCC.replace(/\D/g, "");
     onSave({
       ...cfg,
       spreadsheet_id: spreadsheetId,
@@ -1315,6 +1316,7 @@ function SheetSourceConfig({
       phone_column: phoneCol.trim(),
       name_column: nameCol.trim() || null,
       header_row: Math.max(1, parseInt(headerRow, 10) || 1),
+      default_country_code: cc || null,
       // preserve last_synced_row; default to header_row
       last_synced_row: cfg.last_synced_row ?? Math.max(1, parseInt(headerRow, 10) || 1),
     });
