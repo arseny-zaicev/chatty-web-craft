@@ -35,8 +35,12 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
+import { groupLogicalTemplates, type Template as LaunchTemplate, type LogicalTemplate, type TemplateGroup as LaunchTemplateGroup } from "@/lib/launchData";
+import TemplateGroupsDialog from "@/components/workspace/TemplateGroupsDialog";
+import { friendlySenderLabel } from "@/lib/crmData";
 
 type Stage = {
   id: string;
