@@ -849,7 +849,8 @@ export default function LaunchWizard() {
         const built: Recipient[] = reserved.map((r) => {
           const vars: Record<string, string> = {};
           const dp: Record<string, string> = (r as any).derived_payload ?? {};
-          for (const v of variableNames) {
+          for (let i = 0; i < variableNames.length; i++) {
+            const v = variableNames[i];
             const src = mapping[v];
             let raw = "";
             if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
@@ -858,6 +859,7 @@ export default function LaunchWizard() {
               const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
               raw = String(dp?.[dpKey] ?? dp?.[v] ?? "");
             }
+            if (!raw && i === 0) raw = pickNameFromPayload(r.payload);
             vars[v] = raw;
           }
           rowIdByPhone.set(r.phone, r.id);
