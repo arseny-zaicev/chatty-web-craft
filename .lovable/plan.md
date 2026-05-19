@@ -1,142 +1,153 @@
-# Operational reliability fixes — campaign prep, variables, pipelines, visibility (v2)
+## Goal
 
-## 1. Issue classification
+Make the 2-client setup (2 Sheets → 2 Pipelines → shared 3-number pool → first-touch + follow-up) deliver reliably. Below I separate what already exists in this repo from what still needs to be built, with the 3 clarifications you asked for.
 
-| # | Issue | Class |
-|---|------|------|
-| 1 | App/number identifier hidden in template selection (only display_name) | UX gap |
-| 2 | Utility upload only supports one variable-loading mode | Missing capability |
-| 3 | Same static values reused across all batches of a preset | Missing capability |
-| 4 | Static variables not recognized after upload | Bug |
-| 5 | Launch blocks valid static-variable campaigns | Bug |
-| 6 | Prep prompt targets Lovable Cloud (`xglfamaa…`) instead of personal Supabase (`pdoddfoy…`) | Config/environment mismatch |
-| 7 | Snapshot/QA blocks scheduling several hours ahead | Bug |
-| 8 | Pipeline stages: only rename works, no reorder/delete/color | Missing capability |
-| 9 | Clients cannot manage their own quick replies (route is manager-gated) | Bug (permission) |
-| 10 | Full sender number hidden in inbox / CRM | UX gap |
-| 11 | Sender / template-variant readiness not obvious in launch routing | UX gap |
+---
 
-## 2. Implementation order
+## A. Issue classification
 
-**P0** — #6 prep prompt target → #4 + #5 + #7 static recognition + snapshot validity → #3 per-batch static → #2 dual upload modes → #1 + #11 sender identifier visibility.
-**P1** — #9 client quick-replies access → #8 pipeline stage management → #10 full sender number in inbox/CRM.
+| # | Area | Class |
+|---|---|---|
+| 1 | Wrong source/pipeline routing | Bug (workspace-wide dedupe is too wide) |
+| 2 | Shared sender pool + per-number template variants | Backend works; **operator UI is incomplete** |
+| 3 | Phone normalization | Missing capability + data quality (2 inconsistent copies today) |
+| 4 | Follow-up curfew + template enforcement | Backend exists; **runtime needs verification**, visibility + silent-failure are gaps |
 
-## 3. Required product/data changes
+---
 
-### A. Prep prompt target (issue 6)
-`src/lib/prepPresets.ts` — remove `VITE_SUPABASE_URL` from INSERT TARGET; hard-code personal Supabase project ref `pdoddfoyrutakwemejpe` as the ingest URL; add an explicit "then call the `import-audience-from-personal` edge function on Lovable Cloud to pull the rows" step. No `xglfamaa` ref in the prompt.
+## B. What ALREADY exists in the repo (do not rebuild)
 
-### B. Variable modes (issue 2)
-`SmartUploadDialog.tsx` — Tabs at top: **Manual variables** (current AI flow) / **From prepared batch** (new). The prepared-batch tab lists batches with `__static_values__` in `notes` and pre-fills static map without an AI call. Static values are editable per `var_N` in both tabs.
+**Schema / DB**
+- `source_connections (pipeline_id, kind='google_sheet', config jsonb, secret_token)` — each source is hard-wired to exactly one pipeline.
+- `pipelines.default_sender_number_ids uuid[]` — both pipelines can list the same 3 numbers.
+- `pipelines.first_touch_template_group_id`, `follow_up_template_group_id` — FKs to `template_groups`.
+- `template_groups (template_names text[])` — one logical group, multiple per-sender variant names.
+- `pipelines.follow_up_enabled / follow_up_delay_minutes (480) / follow_up_curfew_end (20:00) / follow_up_resume_at (09:00) / follow_up_timezone ('Europe/Berlin')`.
+- DB function `public.pipeline_follow_up_send_at(pipeline_id, base_ts)` — computes the next-allowed local-time slot, DST-safe via `AT TIME ZONE`.
+- Triggers: `schedule_follow_up_on_first_touch_sent`, `cancel_follow_up_on_inbound`, `cancel_follow_up_on_stage_change`.
 
-### C. Per-batch static values (issue 3) — no bleed-over
-- Each new batch persists its own `__static_values__` JSON inside `audience_batches.notes`. Already supported; SmartUpload now always writes from the operator-supplied map (not from AI guess shared across batches).
-- `WorkspaceData` lists each batch with a chip showing its own static map (tooltip with values). Verifies independence visually.
-- `LaunchWizard` reads `expectedStaticValues` strictly from the **currently selected `dbBatch.notes`** (already does — verify no shared singleton/cache key collision between batches; query key must include `dbBatchId`).
+**Backend**
+- `lead-dispatch` — resolves per-sender variants from a template group, silent-skips senders missing an approved variant, round-robins recipients, logs `sender_skipped` to `campaign_dispatch_events`.
+- `follow-up-dispatch` — reads due `pipeline_follow_ups` rows, resolves per-sender variant, creates per-day per-number follow-up campaign, cancels with `cancelled_reason` when sender lacks an approved variant or is unavailable.
+- `google-sheets-sync` — has its own inline `normalizePhone()` (length 7–10 + defaultCC).
+- `lead-intake` — has its **own** copy of `normalizePhone()`.
 
-### D. Static variable recognition + launch unblocking (issues 4 + 5)
-`LaunchWizard.tsx`:
-- When `audienceSource === "database"` and `derived_payload[var_N]` is present and equal across the sampled rows AND matches `expectedStaticValues[var_N]`, auto-seed `mapping[v] = "__static:<value>"` so the variable is recognised as resolved.
-- Remove "Launch blocked" path for `sameForEveryoneVars` — they become amber warnings only.
-- `staticQaIssues` only blocks launch when **every** sampled row mismatches (true preset bug); otherwise downgrade to warning.
+**Frontend**
+- `PipelineConfigSheet.tsx` — operator can pick a template group for first-touch and follow-up.
 
-### E. Snapshot validity model (issue 7) — explicit, not just "warnings"
-Replace the "must re-prepare every launch" behaviour with a **snapshot fingerprint**:
+---
 
-1. When the operator opens Launch with a database batch, capture a `prepSnapshot` object the moment the QA passes:
-   - `batch_id`
-   - `batch_updated_at` (from `audience_batches.updated_at`)
-   - `template_logical_key` + `template_version_hash` (concat of `template.id|status|body` for every selected number's variant)
-   - `sender_set_hash` (sorted list of selected `whatsapp_number_id`s + their `is_active`)
-   - `static_values_hash` (md5 of expected static map)
-   - `captured_at`
-2. Store it client-side keyed by `(campaign-draft-key)` while the wizard is open.
-3. On Launch (immediate or scheduled), recompute the same fingerprint and compare:
-   - **All hashes match → snapshot is valid, launch proceeds with no re-prepare regardless of how many hours have passed.**
-   - **Any hash differs → show a precise diff** ("Template variant for +971… changed status: approved → paused", "Batch updated 12 min ago: 320 → 318 unused rows", "Sender set changed") and require operator to re-confirm; re-prepare is only forced if `static_values_hash` or `batch_updated_at` changed in a way that invalidates the per-row sample.
-4. Server-side safety (already in place) stays: reservations are stale-released by `release_stale_reservations`, capacity is recalculated at launch, dispatcher re-validates each recipient.
+## C. What does NOT exist yet (real work)
 
-Result: prep at 10:00, schedule for 18:00, launch fires without a forced re-prepare unless the batch, template, or senders actually changed in between.
+**Backend**
+- No `_shared/phone.ts` helper. The two `normalizePhone()` copies drift and neither handles trunk-zero or an `ambiguous` outcome, and neither preserves the raw value.
+- `google-sheets-sync` dedupes lead_imports **workspace-wide** by phone — leaks across pipelines.
+- `google-sheets-sync` returns only `total/accepted/rejected`. No `normalized/invalid/ambiguous/duplicate/skipped_test_lead` split.
+- `follow-up-dispatch` cancels with a reason but does **not** emit a Slack notice — operator never sees blocked follow-ups.
 
-### F. Template/sender visibility (issues 1 + 11) — full identifier, not a suffix
-`src/lib/crmData.ts` — add:
-```ts
-senderFullLabel(n) = "+<E.164 phone> · <display_name> · app:<provider_app_id> · fleet:<label>"
-```
-Every field rendered in full (no truncation, no last-6 trick); the only fallback is omitting a field that is null. A small "copy" affordance per identifier so operators can paste it into Gupshup.
+**Frontend / operator UI**
+- `PipelineConfigSheet` has **no** sender × variant matrix. After picking a template group there is no visible mapping of `which sender uses which approved variant`. Operators cannot verify wiring.
+- No "Connected sources" list per pipeline.
+- No read-only banner of `timezone / curfew / resume / delay` for follow-up.
+- No labelled "Default country code" field on the Sheet source editor (today it lives in raw JSON).
+- `WorkspaceData.tsx` does not show extended import counts.
 
-`TemplatesView.tsx` — replace the current footer `display_name ?? +phone` with a three-line block:
-- `+<phone>` (monospace, full)
-- `display_name` (when present)
-- `app:<provider_app_id>` + `fleet:<label>` (when present)
-Plus the per-template status pill stays.
+---
 
-`LaunchWizard.tsx` sender picker + resolution panel — use the same full identifier, and next to each show the chosen logical template's variant status for THAT sender (`Approved` / `Pending` / `Missing` / `Paused`).
+## D. The 3 clarifications
 
-### G. Client quick replies (issue 9) — route AND write-scope
-`WorkspaceLayout.tsx` — remove `"library"` from `managerOnly`. Then validate end-to-end:
+### D1. Canonical phone storage format — decision: **digits-only E.164** (no leading `+`)
 
-- **Route access**: `client` and `member` roles can navigate to `/ws/:slug/library` and see the page (verified after the gate removal).
-- **Read scope**: `WorkspaceLibrary` already separates `workspace` (shared) and `personal` snippets. Verify the query returns both for non-managers (RLS check on `saved_replies`).
-- **Write scope** (must be enforced in BOTH UI and DB):
-  - non-manager can create / edit / delete their **own personal** snippets;
-  - non-manager **cannot** create or edit `workspace`-scope (shared/global) snippets — the scope toggle in the editor is disabled for them (already partly in place via `canManageWorkspace`), and the save mutation forces `scope = "personal"` when the user is not a manager (already present at line 102 of `WorkspaceLibrary.tsx`, double-check it covers updates too, not just inserts);
-  - RLS on `saved_replies`: confirm policy allows `auth.uid() = user_id` for write on personal rows and restricts workspace-scope writes to managers/owner (read existing policy; if missing, document as known gap — no schema migration done in this change).
-- Add a one-time test: log in as a `member` user, open library, create a personal snippet (must succeed), attempt to edit a workspace snippet (UI must hide edit/delete; if a curl bypass attempt is made the DB policy must reject — verify by reading current RLS).
+**Why:** the existing codebase (`google-sheets-sync`, `lead-intake`, `conversations.contact_phone`, `campaign_recipients.contact_phone`, `whatsapp_message_events`, Gupshup webhook handlers, the in-app inbox) already stores and matches on digits-only E.164. Adding `+` now would break every existing equality lookup and dedupe path. Switching to `+E.164` would be a separate, larger migration.
 
-### H. Pipeline stage management (issue 8)
-`PipelineConfigSheet.tsx` — new "Stages" section: drag-reorder writing `pipeline_stages.position`, inline color picker (8 presets), rename, delete with confirm (blocked if stage holds deals; offer "move deals to <other stage>"). No schema change.
+**Rule, applied everywhere the helper is used:**
+- Storage format on `lead_imports.phone`, `conversations.contact_phone`, `campaign_recipients.contact_phone`: **digits only, no `+`, no spaces, length 8–15** (E.164 max is 15 digits).
+- Display format in UI: `+<digits>` (prefix added at render time). The new `senderFullLabel` already does this.
+- Raw value: always preserved in `lead_imports.payload._phone_raw` for audit.
+- Examples (the user's): `4917630349501` → kept; `41766496279` → kept; `4366488243202` → kept; `01512xxxxxxx` with `defaultCC=49` → `4915xxxxxxx`; `+49 176 30349501` → `4917630349501`.
 
-### I. Full sender number in inbox/CRM (issue 10)
-Replace `friendlySenderLabel` usages in CRM header and inbox list with `senderFullLabel` (always shows `+<full E.164>` even when a `display_name` exists). `friendlySenderLabel` is kept for outbound system text where the phone would be noise.
+### D2. Same phone in Warm + Reactivation Sheets — deterministic ownership rule
 
-## 4. Acceptance criteria (concrete)
+The product reality: one WhatsApp number = one inbox thread. We cannot run two parallel conversations. So:
 
-1. **Sender / template identifier (full, not truncated)** — every template card and every launch sender row shows: full E.164 phone, display_name (if any), full `provider_app_id`, fleet `label` (if any), all selectable/copyable. No `…` truncation on app_id or phone.
-2. **Two upload modes** — Smart upload dialog has a Tabs control; "From prepared batch" lists prior batches and pre-fills static values with zero AI calls.
-3. **Independent static values per batch — no bleed-over** *(explicit acceptance test)*:
-   - Create Batch A from preset `marketing_static_3` with `var_2 = "AAA"`, `var_3 = "AAA-long"`.
-   - Create Batch B from the SAME preset with `var_2 = "BBB"`, `var_3 = "BBB-long"`.
-   - Open Launch wizard, pick Batch A → preview shows AAA values; switch to Batch B without leaving the page → preview shows BBB values.
-   - Re-pick Batch A → AAA values reappear (no cache contamination).
-   - Inspect both `audience_batches.notes` rows: each contains its own `__static_values__` JSON, independent.
-4. **Static recognised + launch enabled** — DB batch with static vars in `derived_payload`: wizard shows each `{var_N}` slot as "same for everyone" with the actual value, no amber "unmapped", Launch button is enabled.
-5. **Prep prompt** — generated Codex prompt contains `project: pdoddfoyrutakwemejpe` and the `import-audience-from-personal` step; contains no `xglfamaa` reference.
-6. **Snapshot validity — explicit fingerprint model**:
-   - Prepare a batch at T, schedule a campaign for T+5h.
-   - **Path A (nothing changed)**: at T+5h launch fires automatically, no re-prepare prompt, no "Re-prepare the batch" toast.
-   - **Path B (template paused at T+2h)**: at T+5h the operator sees a precise diff card listing the changed template/sender, and Launch is blocked until they re-confirm or pick another sender. Re-prepare is NOT forced.
-   - **Path C (batch was re-imported with new static values at T+2h)**: re-prepare IS required because `static_values_hash` changed; the diff card states that explicitly.
-7. **Stage management** — in Pipeline Config you can drag-reorder, change color, delete (with deal-protection), and rename stages; all changes persist.
-8. **Client quick replies — route + write permissions** *(explicit acceptance test)*:
-   - Sign in as a `client`/`member` user → `/ws/:slug/library` opens (no redirect).
-   - Create a personal snippet → success.
-   - Edit / delete that personal snippet → success.
-   - Open a workspace (shared) snippet → edit/delete buttons are hidden; scope toggle is locked to "personal" in the editor.
-   - Backend RLS verified: a direct API attempt by a non-manager to update a workspace-scope row is rejected by policy (or, if not enforced today, recorded as a known gap to fix in a follow-up migration; documented in the change notes).
-9. **Full sender number in CRM/inbox** — header and conversation list always show `+<full E.164>`, even when `display_name` is set.
-10. **Launch sender readiness** — sender picker shows per-number template-variant status for the chosen logical template; "Missing"/"Paused" senders are visually distinct.
+| Question | Rule |
+|---|---|
+| **Which pipeline owns the conversation?** | The pipeline that **created the conversation first** — i.e. whichever Sheet was synced first for this phone. We persist that in `conversations.pipeline_id` (already a column, already populated by the existing `propagate_campaign_pipeline_to_conversation` trigger). It is **not** moved on the second sync. |
+| **Where do replies go?** | To the inbox tied to `conversations.pipeline_id`. Members with access only to the owning pipeline see the reply. (Existing `can_access_pipeline` RLS already enforces this.) |
+| **Which follow-up logic wins?** | The owning pipeline's. Follow-up rows are created from `first_touch` sends; we only first-touch from the **owning pipeline**, so only the owning pipeline ever schedules a follow-up for that phone. |
+| **Duplicate presence across the two Sheets** | The non-owning pipeline's sync still creates a `lead_imports` row (so the operator can see "this Reactivation lead actually lives in Warm"), but with `status='duplicate'`, `conversation_id` set to the existing conversation, and `error='phone owned by pipeline <name>'`. It is **not** first-touched. Counts surface it as `duplicate` in the import report. |
+| **What about a brand-new phone** that only exists in one Sheet? | Imported into that pipeline, conversation created with `pipeline_id = that pipeline`. Standard flow. |
 
-## 5. Files to change
+The dedupe change in `google-sheets-sync` becomes:
+1. Lookup existing `conversations` workspace-wide.
+2. If found AND its `pipeline_id != source.pipeline_id` → write a `duplicate` lead row with the explanation, do **not** queue.
+3. If found AND its `pipeline_id == source.pipeline_id` → standard duplicate path.
+4. If not found → import into this pipeline (the dispatcher will create the conversation, owning it for this pipeline).
+5. The existing `lead_imports` workspace-wide phone check is dropped — it was overly aggressive.
 
-- `src/lib/prepPresets.ts`
-- `src/components/workspace/SmartUploadDialog.tsx`
-- `src/pages/workspace/WorkspaceData.tsx` (per-batch static chip)
-- `src/pages/workspace/LaunchWizard.tsx` (static recognition, snapshot fingerprint, full sender identifier)
-- `src/lib/crmData.ts` (`senderFullLabel`)
-- `src/components/workspace/TemplatesView.tsx`
-- `src/components/workspace/PipelineConfigSheet.tsx`
-- `src/pages/workspace/WorkspaceLayout.tsx` (library role gate)
-- `src/components/workspace/WorkspaceLibrary.tsx` (verify write-scope on updates, not only inserts)
-- `src/pages/CRM.tsx` + inbox header components (full sender number)
+This rule is deterministic, observable (the operator sees "owned by X" on the duplicate row), and consistent with how the dispatcher already works.
 
-No schema migrations, no edge-function changes. All UI / wizard-logic / config.
+### D3. Follow-up — runtime verification, not assumption
 
-## 6. Out of scope
+I will treat the existing backend as **unverified** and run an end-to-end check before claiming it works. Concretely, before shipping the UI/Slack changes I will:
 
-- No new tables or edge functions.
-- No layout redesign.
-- No dispatcher/template-group logic changes (already shipped).
-- No changes to the personal Supabase project — only the prompt that points Codex at it.
+1. **DB-fn sanity** — call `SELECT public.pipeline_follow_up_send_at(<pid>, '2026-05-19 17:00:00+02')` for a pipeline with the Berlin curfew and confirm the returned timestamp is the next day's 09:00 Berlin. Repeat with a 10:00 base to confirm it returns the same value unchanged.
+2. **Trigger fire** — flip a test `campaign_recipients` row to `status='sent'` for a `first_touch` campaign in a Berlin pipeline and assert that one row is created in `pipeline_follow_ups` with the expected `scheduled_at`.
+3. **Cancellation triggers** — insert an inbound message on that conversation, assert the follow-up row goes to `cancelled` with reason `inbound_reply`. Repeat by moving the deal to a `lost` stage, assert `cancelled_reason='stage_lost'`.
+4. **Dispatch path** — set a follow-up row's `scheduled_at` to `now()`, invoke `follow-up-dispatch`, assert (a) a recipient row was inserted into the per-day follow-up campaign for the right sender, (b) `pipeline_follow_ups.status='dispatched'`.
+5. **Template enforcement** — set up a sender with **no** approved variant, repeat step 4, assert the row flips to `cancelled` with reason `no_approved_template_for_number` AND (after the new code is in place) a `slack_event_queue` row exists.
+6. **DST** — repeat step 1 with a date that straddles CET/CEST to confirm the offset is correct on both sides.
 
-After approval I implement in the order above and return: files changed, per-issue result, config-vs-code split, manual test checklist (matching the acceptance criteria), and any remaining limitations (notably the RLS check outcome for #8).
+These checks are recorded as a checklist in the implementation PR. Any failure stops the rollout and is reported back.
+
+---
+
+## E. Implementation order
+
+1. **Shared phone helper + canonical format** — create `_shared/phone.ts`, wire into both functions, return classification, preserve raw.
+2. **Per-pipeline / owning-pipeline dedupe** — apply rule D2 in `google-sheets-sync`.
+3. **Follow-up runtime verification** — execute D3 checks against the current code.
+4. **Follow-up Slack notice** — extend `follow-up-dispatch` to emit on cancel.
+5. **Operator UI** — `PipelineConfigSheet` matrix + connected sources + curfew banner + defaultCC field; `WorkspaceData` counts.
+
+---
+
+## F. Acceptance criteria
+
+| Area | Pass test |
+|---|---|
+| Canonical phone format | Every `lead_imports.phone`, `conversations.contact_phone`, `campaign_recipients.contact_phone` written by the new code is digits-only E.164 (8–15 digits, no `+`). Raw value present in `payload._phone_raw`. |
+| Normalization examples | `+49 176 30349501` → `4917630349501`. `01512xxxxxxx` with defaultCC=49 → `4915xxxxxxx`. `abc123` → `invalid`. `01234567` with no defaultCC → `ambiguous` (not queued). |
+| Owning-pipeline rule | Phone X imported into Warm first → conversation `pipeline_id=Warm`. Same phone later in Reactivation Sheet → `lead_imports` row in Reactivation with `status=duplicate`, `conversation_id=<existing>`, `error='phone owned by pipeline Warm Leads'`. No second first-touch. Replies still land in Warm. |
+| Shared sender pool visible | `PipelineConfigSheet` shows a 3-row matrix per template group: sender label × variant name × `Approved/Pending/Missing/Paused`. |
+| Follow-up runtime (D3) | All 6 checks pass; results documented in the PR. |
+| Follow-up block visible | Sender without an approved follow-up variant → row cancelled with reason AND Slack notice appears. |
+| Counts surfaced | `WorkspaceData` shows `normalized / invalid / ambiguous / duplicate / skipped_test_lead` per batch. |
+| 2-client repeatability | Same config done for client B with no code change. |
+
+---
+
+## G. Files that will need real edits
+
+| File | New / Edit | Reason |
+|---|---|---|
+| `supabase/functions/_shared/phone.ts` | NEW | Shared normalizer, digits-only E.164, `ambiguous` outcome |
+| `supabase/functions/google-sheets-sync/index.ts` | Edit | Use helper, owning-pipeline dedupe (D2), extended counts, preserve raw |
+| `supabase/functions/lead-intake/index.ts` | Edit | Use helper |
+| `supabase/functions/follow-up-dispatch/index.ts` | Edit | Emit Slack notice on cancel |
+| `src/components/workspace/PipelineConfigSheet.tsx` | Edit | Sender × variant matrix, connected sources, curfew banner, defaultCC field |
+| `src/pages/workspace/WorkspaceData.tsx` | Edit (small) | Show extended import counts |
+
+No SQL migration required.
+
+---
+
+## H. Known limitations after this pass
+
+- Per-lead timezone is not introduced — follow-up uses pipeline-level `follow_up_timezone` (Europe/Berlin).
+- Sender round-robin stays index-based; no health/cap weighting.
+- Template approval status read from `message_templates.status` — depends on existing `templates-status-sync` cron.
+- Ambiguous numbers require a human to set `default_country_code` or fix the Sheet — by design we will not silently send to them.
+- The owning-pipeline rule is "first-write-wins". Re-assignment of a conversation to the other pipeline is a manual operator action (not built here).
+- Storage format stays **digits-only E.164** to avoid a workspace-wide data migration; `+` is added only at display time.
+- `WorkspaceLibrary` write-scope RLS is out of scope for this pass.
