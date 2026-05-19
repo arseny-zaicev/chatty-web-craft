@@ -781,7 +781,7 @@ export default function PipelineConfigSheet({
                   className="h-7 text-xs flex-1"
                 />
                 <Select value={s.stage_type} onValueChange={async (v) => {
-                  const { error } = await supabase.from("pipeline_stages").update({ stage_type: v }).eq("id", s.id);
+                  const { error } = await supabase.from("pipeline_stages").update({ stage_type: v as "open" | "won" | "lost" }).eq("id", s.id);
                   if (error) toast.error(error.message); else refetchStages();
                 }}>
                   <SelectTrigger className="h-7 w-20 text-[11px]"><SelectValue /></SelectTrigger>
