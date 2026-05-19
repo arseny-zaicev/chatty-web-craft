@@ -28,7 +28,7 @@ export default function WorkspaceStats() {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const userId = useRequireAuth();
   const { data: access } = useWorkspaceAccess(workspace?.id);
-  const canViewAll = Boolean(access?.canManageSettings || access?.isAdmin || access?.isOwner);
+  const canViewAll = Boolean(access?.isAdmin || access?.isOwner || access?.permissions?.perm_stats_all);
 
   const [range, setRange] = useState<Range>("7d");
   const [pipelineId, setPipelineId] = useState<string>("all");

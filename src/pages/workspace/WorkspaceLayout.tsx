@@ -148,7 +148,7 @@ const ROUTE_PERM: Record<string, PermKey | null> = {
   overview: "perm_overview",
   inbox: "perm_inbox",
   pipeline: "perm_pipeline",
-  stats: "perm_inbox",
+  stats: "perm_stats",
   campaigns: "perm_campaigns_view",
   library: "perm_quick_replies_use",
   settings: "perm_settings",
@@ -180,6 +180,8 @@ const PERM_TO_SEG: Record<PermKey, string> = {
   perm_materials: "materials",
   perm_settings: "settings",
   perm_launch: "launch",
+  perm_stats: "stats",
+  perm_stats_all: "stats",
 };
 
 function RoleGuardedOutlet({ workspace }: { workspace?: Workspace }) {
