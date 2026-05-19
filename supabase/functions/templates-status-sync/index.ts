@@ -259,5 +259,5 @@ serve(cronGuard("templates-status-sync", async (req) => {
     workspaces_notified: perWorkspace.size,
     total_changes: totalChanges,
     dry_run: dryRun,
-  });
+}));
 });
