@@ -220,6 +220,7 @@ const App = () => (
                 <Route path=":slug/data" element={<WorkspaceSection section="data" />} />
                 <Route path=":slug/data/profiles" element={<WorkspacePrepProfiles />} />
                 <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
+                <Route path=":slug/stats" element={<WorkspaceStats />} />
                 <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
                 <Route path=":slug/roadmap" element={<Roadmap />} />
