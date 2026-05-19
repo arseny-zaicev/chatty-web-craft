@@ -6,6 +6,7 @@
 // Triggered by pg_cron every 15 minutes. Can also be invoked ad-hoc with
 // { number_id: "<uuid>" } to force-sync a single number.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -110,7 +111,7 @@ async function fetchAppHealth(appId: string, perKey: string | null): Promise<{
   return { status, messagingLimit, quality, displayNameStatus, raw: merged };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard({ jobName: "numbers-health-sync", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -197,4 +198,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({
     total: numbers?.length || 0, synced, changed, failed, details: onlyId ? details : undefined,
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-});
+}));

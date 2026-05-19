@@ -2,6 +2,7 @@
 // Posts a global summary to ops-campaigns and per-workspace summary to client channels.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildDigestBlocks, postSlack, brandTag } from "../_shared/slackBlocks.ts";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const OPS_CAMPAIGNS = Deno.env.get("SLACK_OPS_CAMPAIGNS_CHANNEL_ID") || "";
@@ -11,7 +12,7 @@ function todayUaeDateStr(): string {
   return fmt.format(new Date()); // YYYY-MM-DD
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("slack-morning-digest", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const today = todayUaeDateStr();
@@ -69,4 +70,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ workspaces: rowsByWs.size, campaigns: totalCampaigns, volume: totalVolume }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

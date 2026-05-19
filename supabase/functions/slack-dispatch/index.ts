@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { acquireJobLock } from "../_shared/jobLock.ts";
 import {
+import { cronGuard } from "../_shared/cronGuard.ts";
   buildCampaignGroupBlocks,
   buildNumberAlertBlocks,
   buildPositiveLeadBlocks,
@@ -86,7 +87,7 @@ async function alreadyNotified(supabase: any, eventType: string, conversationId:
   return (count ?? 0) > 0;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("slack-dispatch", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -460,4 +461,4 @@ Deno.serve(async (req) => {
   } finally {
     await release();
   }
-});
+}));

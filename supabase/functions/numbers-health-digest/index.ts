@@ -4,6 +4,7 @@
 // snapshot. Idempotent.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { postSlack } from "../_shared/slackBlocks.ts";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,7 @@ function bucket<T extends string | null>(arr: T[]): Record<string, number> {
   return out;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("numbers-health-digest", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(
@@ -181,4 +182,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, posted: true, regressions: regressions.length, summary }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

@@ -1,0 +1,1 @@
+INSERT INTO public.system_flags (key, value) VALUES ('jobs.disabled', '{"all": false, "jobs": []}'::jsonb) ON CONFLICT (key) DO NOTHING;

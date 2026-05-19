@@ -6,6 +6,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendSlackMessage } from "../_shared/slack.ts";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -94,7 +95,7 @@ type NumberDiff = {
   notifyIds: string[];
 };
 
-serve(async (req) => {
+serve(cronGuard("templates-status-sync", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -258,5 +259,5 @@ serve(async (req) => {
     workspaces_notified: perWorkspace.size,
     total_changes: totalChanges,
     dry_run: dryRun,
-  });
+}));
 });

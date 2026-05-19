@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const ALLOWED_HOSTS = new Set([
   "hooks.zapier.com",
@@ -19,7 +20,7 @@ function isAllowed(url: string): boolean {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard({ jobName: "dispatch-pipeline-webhooks", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const admin = createClient(
@@ -109,4 +110,4 @@ Deno.serve(async (req) => {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

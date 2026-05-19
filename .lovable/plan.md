@@ -1,69 +1,127 @@
-# Audit: почему не грузит админ-панель
 
-## 1. Что я проверил
+# Backend stabilization plan v4 (final, repo-scope explicit)
 
-- **Lovable Cloud status**: backend healthy.
-- **Прямой curl с сервера** к `xglfamaaotmwulglwcui.supabase.co`:
-  - `/auth/v1/health` → HTTP 401 за **64 ms** (норма, эндпоинт жив)
-  - `/rest/v1/` → HTTP 401 за **57 ms** (норма)
-- **Браузерные логи у тебя**:
-  - `GET /auth/v1/user` → **Failed to fetch** (не таймаут, а обрыв на сетевом уровне до ответа сервера)
-  - 2× `POST /auth/v1/token?grant_type=password` → **Failed to fetch**
-  - Финальный toast: `Login request timed out. Try again.` через 15 s — это наш собственный `withTimeout` в `AdminAuth.tsx`, сработавший потому что fetch так и не дождался ответа.
-- **Код**:
-  - `src/pages/AdminAuth.tsx` — login обёрнут в `withTimeout(15s)`, ошибку показывает корректно.
-  - `src/lib/adminGuard.ts` — `getSession` (5s) и MFA-вызовы (8s) тоже под таймаутами, при сбое идёт redirect на `/admin-auth` с `reason: "auth-unavailable"`. Это уже починено в прошлых итерациях.
-  - Service worker'ов и перехватчиков `fetch` в проекте нет.
+## 1. Live inventory (source of truth)
 
-## 2. Диагноз
+### Group 1 — Active cron in Cloud AND function in repo (patched this pass)
 
-Бэкенд работает. **`Failed to fetch` в браузере = запрос даже не дошёл до Supabase.** Это всегда одна из трёх причин на стороне клиента:
+| jobname (Cloud) | schedule | repo function |
+|---|---|---|
+| `auto-generate-insights-15min` | `*/15 * * * *` | `auto-generate-insights` |
+| `classify-replies-15min` | `*/15 * * * *` | `classify-replies` |
+| `campaign-day-rollover-15m` | `*/15 * * * *` | `campaign-day-rollover` |
+| `campaign-overflow-rebalance-30m` | `*/30 * * * *` | `campaign-overflow-rebalance` |
+| `numbers-health-sync-every-15-min` | `*/15 * * * *` | `numbers-health-sync` |
+| `numbers-health-digest-every-6h` | `0 */6 * * *` | `numbers-health-digest` |
+| `gupshup-mail-poll-every-5min` | `*/5 * * * *` | `gupshup-mail-poll` |
+| `templates-status-sync-hourly` | `0 5-17 * * *` | `templates-status-sync` |
+| `reply-notification-watchdog-hourly` | `15 * * * *` | `reply-notification-watchdog` |
+| `slack-inbox-watch-every-30min` | `*/30 * * * *` | `slack-inbox-watch` |
+| `slack-morning-digest` | `0 5 * * *` | `slack-morning-digest` |
+| `slack-evening-digest` | `0 16 * * *` | `slack-evening-digest` |
+| `slack-pipeline-digest-evening` | `0 16 * * *` | `slack-pipeline-digest` |
 
-1. **Сетевой обрыв / нестабильный канал** (Wi-Fi, VPN, корпоративный прокси). Самый частый случай — особенно совпадает с тем, что у тебя был параллельный `Failed to fetch` к `/auth/v1/user` (это фон, не клик).
-2. **Браузерное расширение / ad-blocker / DNS-фильтр**, режущий `*.supabase.co` или конкретно `/auth/v1/*`. uBlock, Brave Shields, Pi-hole, NextDNS regular suspects.
-3. **Stale preview-таб**: токен в браузере истёк/повреждён, preview-iframe держит мёртвое CORS-соединение. После долгого открытого таба это бывает.
+### Group 2 — Dormant in Cloud (no active cron) but function present in repo (patched this pass — safe before any future re-enable)
 
-Что **точно НЕ причина** (исключено по логам/curl):
-- Lovable Cloud (auth/DB здоровы)
-- Наш guard-код (он работает корректно — именно поэтому ты видишь redirect и тост, а не белый экран)
-- RLS / роли (до них не доходит — падает сам HTTP-запрос)
-- Service worker (его нет)
+`process-email-queue`, `campaigns`, `lead-dispatch`, `follow-up-dispatch`, `dispatch-pipeline-webhooks`, `slack-dispatch`, `google-sheets-sync`, `health-watchdog`, `automation-time-watchdog`.
 
-## 3. План действий — от дешёвого к сложному
+### Group 3 — Cloud-only, NOT patched this pass (runbook only)
 
-### Шаг 0. Быстрая проверка (30 сек, без кода)
-Прежде чем что-то менять, попроси юзера сделать в таком порядке:
-1. Открыть в браузере напрямую: `https://xglfamaaotmwulglwcui.supabase.co/auth/v1/health` → должен прийти JSON.
-2. Если открылось → проблема в preview-табе: **hard reload** (Cmd+Shift+R) + очистить cookies/localStorage для `lovableproject.com`.
-3. Если **не** открылось → VPN / расширение / DNS. Отключить uBlock/Brave Shields, выключить VPN, попробовать в Incognito или другом браузере.
+Verified against `supabase/functions/` tree: **none**. Every function referenced in current/historical cron is present in the repo. If a Cloud-only job is discovered later, it goes here and gets a runbook entry only — no code change in this pass.
 
-В 90% случаев на этом всё закончится.
+### Group 4 — Webhook/RPC only (out of scope)
 
-### Шаг 1. Сделать диагностику видимой в UI (мелкая правка `AdminAuth.tsx`)
-Сейчас юзер видит только `"Login request timed out"`. Различить «сервер тупит» от «браузер не может выйти в сеть» нельзя. Добавить:
-- Перед `signInWithPassword` делать `fetch('https://xglfamaaotmwulglwcui.supabase.co/auth/v1/health', { method: 'GET' })` с таймаутом 3 s.
-- Если этот health-чек падает с `TypeError: Failed to fetch` → показывать конкретный месседж: *"Can't reach auth server from your browser. Check VPN / extensions / network, then retry."* + опциональная ссылка на open-in-new-tab.
-- Если health-чек прошёл, а login упал → старый таймаут-месседж (значит реально сервер медленный).
+Skipped (not cron-driven, no overload risk): `whatsapp-webhook`, `whatsapp-webhook-replay`, `send-whatsapp`, `lead-intake`, `calendly-webhook`, `submit-form`, `auth-email-hook`, `init-admin`, `admin-clients`, `invite-workspace-member`, `workspace-invite-link`, `audience-ai-prepare`, `import-audience-from-personal`, `ops-assistant`, `pipeline-pause`, `tv-token`, `register-calendly-webhook`, `gupshup-set-callback`, `reconcile-messages`, `campaign-insights`, `campaign-report-export`, `campaign-report-pdf`, `manager-payout-report-pdf`, `payout-report-pdf`, `slack-payout-post`, `test-pipeline-webhook`, `generate-ai-seo-report`, `google-sheets`, `cron-heartbeat`.
 
-Это +~20 строк, **только** в `AdminAuth.tsx`, без архитектурных изменений.
+**Implementation scope = Group 1 ∪ Group 2 = 22 functions, all present in repo.**
 
-### Шаг 2. Авто-ретрай login один раз (мелкая правка)
-Внутри `handleLogin`: если первая попытка упала с `TypeError: Failed to fetch` (именно сетевой error, не auth error), подождать 800 ms и автоматически повторить **один** раз. Большинство `Failed to fetch` — transient. Тоже только в `AdminAuth.tsx`.
+## 2. Three emergency stop paths
 
-### Шаг 3. (Опционально, если шаги 0–2 не решили)
-- Сбросить локальный auth-state кнопкой "Reset session": `await supabase.auth.signOut(); localStorage.clear(); location.reload();` прямо на форме логина. Помогает при «отравленных» токенах.
+### Path A — Env kill switch (always works, no DB needed)
+Secret `JOBS_KILLED`. Empty = no-op. `"all"`/`"*"` = stop everything. Comma list = stop only those. Checked at the top of `Deno.serve` before any DB call.
 
-## 4. Чего **не** делаю
+```ts
+// _shared/jobKillSwitch.ts
+export function envKilled(jobName: string): boolean {
+  const v = (Deno.env.get("JOBS_KILLED") ?? "").trim().toLowerCase();
+  if (!v) return false;
+  if (v === "all" || v === "*") return true;
+  return v.split(",").map(s => s.trim()).includes(jobName.toLowerCase());
+}
+```
+Flip via Backend → Secrets. Takes effect on next cold start (~30s).
 
-- Не трогаю `adminGuard.ts` — он уже корректный.
-- Не переписываю MFA flow.
-- Не меняю Supabase клиент или роуты.
-- Не делаю системных оптимизаций (это отдельная задача из предыдущего optimization-плана).
+### Path B — DB flag (simple, fail-open)
+Reuse `public.system_flags`, single row `key='jobs.disabled'`, value `{"all": false, "jobs": []}`. One supabase-js read with `AbortSignal.timeout(1500)`. Any error/timeout → return `false` (continue normally).
 
-## 5. Порядок имплементации
+```ts
+export async function flagKilled(admin, jobName): Promise<boolean> {
+  try {
+    const { data } = await admin
+      .from("system_flags").select("value").eq("key", "jobs.disabled")
+      .abortSignal(AbortSignal.timeout(1500)).maybeSingle();
+    const v = data?.value as { all?: boolean; jobs?: string[] } | undefined;
+    if (!v) return false;
+    if (v.all === true) return true;
+    return Array.isArray(v.jobs) && v.jobs.includes(jobName);
+  } catch { return false; }
+}
+```
+No RPC, no statement_timeout, no extra plumbing.
 
-1. Сначала **Шаг 0** — без кода, ты проверяешь у себя (это решит проблему здесь и сейчас).
-2. Если хочешь, чтобы на будущее юзер сразу видел внятное сообщение — делаю **Шаг 1 + Шаг 2** одним коммитом в `src/pages/AdminAuth.tsx` (один файл, ~30 строк, риск нулевой).
-3. **Шаг 3** — только если Шаги 0–2 не помогли.
+### Path C — Manual SQL unschedule (nuclear, in runbook)
+Paste-ready block targeting the 13 currently-active `jobname`s from Group 1, plus a template `WHERE jobname IN (...)` for anything re-scheduled later.
 
-Жду апрува: делать Шаги 1+2, или сначала прогонишь Шаг 0 у себя?
+Incident order: A → B → C.
+
+## 3. Overlap protection
+
+`acquireJobLock(admin, jobName)` (existing helper, fail-open) added to functions in **Group 1 ∪ Group 2** that don't already have it:
+
+- Already locked (keep as-is): `campaigns`, `lead-dispatch`, `slack-dispatch`, `follow-up-dispatch`.
+- Add lock to: `dispatch-pipeline-webhooks`, `process-email-queue`, `google-sheets-sync`, `health-watchdog`, `automation-time-watchdog`, `classify-replies`, `auto-generate-insights`, `numbers-health-sync`, `gupshup-mail-poll`.
+
+## 4. Operational per-run logging
+
+New `_shared/jobRun.ts` exposes `withJobRun(name, fn)`. Body receives a mutable `run` object: `selected`, `processed`, `skipped(reason, n?)`. Always emits one structured line in `finally`:
+
+```
+[job:NAME] status=ok selected=42 processed=40 skipped=2 skip_reasons={locked_row:1,no_number:1} duration_ms=1834
+[job:NAME] status=skipped reason=kill_switch_env duration_ms=2
+[job:NAME] status=skipped reason=kill_switch_flag duration_ms=8
+[job:NAME] status=skipped reason=locked duration_ms=14
+[job:NAME] status=failed err="..." duration_ms=5012 selected=42 processed=11
+```
+
+Applied to all 22 functions in scope.
+
+## 5. Runbook
+
+`docs/runbook-backend-incident.md`:
+- Paths A/B/C with paste-ready commands
+- Full Group 1 jobname → repo function map (for Path C)
+- Group 2 list as "currently dormant — do not re-enable casually"
+- Group 3 placeholder ("Cloud-only jobs go here if discovered")
+- Grep commands for the new `[job:NAME]` log format
+- Pointer to the future re-enable plan (out of scope)
+
+## 6. Out of scope (explicit)
+
+- No `cron.schedule` calls. Zero re-enable.
+- No edits to Group 3 (empty today) or Group 4 functions.
+- No frontend, no product logic, no schema changes beyond seeding the kill-switch row.
+
+## 7. Implementation order
+
+1. Migration: idempotent seed of `system_flags ('jobs.disabled', '{"all":false,"jobs":[]}')`.
+2. Add `_shared/jobKillSwitch.ts` + `_shared/jobRun.ts` (pure additions).
+3. Wire kill-switch + `withJobRun` into Group 1 functions (live in prod — protect first).
+4. Wire kill-switch + `withJobRun` + missing locks into Group 2 functions (safe-before-reenable).
+5. Write `docs/runbook-backend-incident.md`.
+6. Stop.
+
+## Technical notes
+
+- Lock helper fails open if `try_job_lock` RPC missing → safe to add the call before RPC exists.
+- All edits additive; healthy runs gain one cheap flag read + one log line.
+- Zero RLS or schema changes beyond the one seed row.
