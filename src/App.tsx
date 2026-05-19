@@ -110,6 +110,7 @@ const Pipeline = lazyWithRetry(() => import("./pages/Pipeline"));
 
 const WorkspaceLayout = lazyWithRetry(() => import("./pages/workspace/WorkspaceLayout"));
 const WorkspaceSection = lazyWithRetry(() => import("./pages/workspace/WorkspaceSection"));
+const WorkspaceStats = lazyWithRetry(() => import("./pages/workspace/WorkspaceStats"));
 const WorkspaceOverview = lazyWithRetry(() => import("./pages/workspace/WorkspaceOverview"));
 
 const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/WorkspaceSettings"));
