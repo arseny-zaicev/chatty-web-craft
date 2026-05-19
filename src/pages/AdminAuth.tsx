@@ -10,6 +10,37 @@ import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
 const AUTH_TIMEOUT_MS = 15000;
+const AUTH_HEALTH_TIMEOUT_MS = 3000;
+const AUTH_HEALTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/health`;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : String(error ?? "");
+
+const isNetworkFetchError = (error: unknown) =>
+  getErrorMessage(error).toLowerCase().includes("failed to fetch");
+
+const assertAuthReachable = async () => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AUTH_HEALTH_TIMEOUT_MS);
+
+  try {
+    await fetch(AUTH_HEALTH_URL, {
+      method: "GET",
+      headers: {
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new Error(
+      "Can't reach the auth server from this browser. Check VPN, ad blocker, DNS, or network, then retry.",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 const withTimeout = async <T,>(promise: Promise<T>, message = "Login request timed out. Try again.") => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -22,6 +53,16 @@ const withTimeout = async <T,>(promise: Promise<T>, message = "Login request tim
     ]);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+const signInWithRetry = async (email: string, password: string) => {
+  try {
+    return await withTimeout(supabase.auth.signInWithPassword({ email, password }));
+  } catch (error) {
+    if (!isNetworkFetchError(error)) throw error;
+    await delay(800);
+    return withTimeout(supabase.auth.signInWithPassword({ email, password }));
   }
 };
 
@@ -51,10 +92,8 @@ const AdminAuth = () => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await withTimeout(supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      }));
+      await assertAuthReachable();
+      const { data, error } = await signInWithRetry(normalizedEmail, password);
 
       if (error) {
         console.error("Login error:", error);
