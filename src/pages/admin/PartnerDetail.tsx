@@ -293,9 +293,18 @@ export default function PartnerDetail() {
                             ) : bmNums.length}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate" title={summary}>{summary || "—"}</TableCell>
-                          <TableCell className="text-right tabular-nums">{sentToday.toLocaleString()}</TableCell>
-                          <TableCell className="text-right tabular-nums">{sent7d.toLocaleString()}</TableCell>
-                          <TableCell className="text-right tabular-nums">{sentAll.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{delivToday.toLocaleString()}</span>
+                            <span className="text-muted-foreground"> / {sentToday.toLocaleString()}</span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{deliv7d.toLocaleString()}</span>
+                            <span className="text-muted-foreground"> / {sent7d.toLocaleString()}</span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">{delivAll.toLocaleString()}</span>
+                            <span className="text-muted-foreground"> / {sentAll.toLocaleString()}</span>
+                          </TableCell>
                           <TableCell className={`text-right tabular-nums ${restricted > 0 ? "text-amber-600 font-medium" : ""}`}>{restricted}</TableCell>
                           <TableCell className={`text-right tabular-nums ${blocked > 0 ? "text-destructive font-medium" : ""}`}>{blocked}</TableCell>
                           <TableCell className="text-right tabular-nums">{wsSet.size}</TableCell>
