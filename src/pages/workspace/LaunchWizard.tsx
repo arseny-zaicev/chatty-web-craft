@@ -294,6 +294,38 @@ export default function LaunchWizard() {
     });
   }, [variableNames, columns]);
 
+  // Auto-seed __static mapping for DB batches where the preset declared
+  // campaign-static var_N values AND every sampled row already carries that
+  // exact value in derived_payload. This recognises preset-prepared static
+  // variables as "resolved" instead of leaving them as "unmapped".
+  // (Plan §D — issue 4/5: static var recognition.)
+  useEffect(() => {
+    if (audienceSource !== "database") return;
+    if (!variableNames.length) return;
+    const expected = expectedStaticValues; // resolved below via useMemo (same scope)
+    const rows = sampleDbRowsQ?.data ?? [];
+    if (!Object.keys(expected).length || rows.length === 0) return;
+    setMapping((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      variableNames.forEach((v) => {
+        if (next[v]) return; // operator override or earlier auto-map wins
+        const key = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v.toLowerCase()}`;
+        const exp = expected[key];
+        if (!exp) return;
+        const allMatch = rows.every((r) => String(r.derived_payload?.[key] ?? "").trim() === exp.trim());
+        if (allMatch) {
+          next[v] = `__static:${exp}`;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+    // expectedStaticValues + sampleDbRowsQ.data are the real deps; ESLint will
+    // not see expectedStaticValues yet because it's declared after this hook.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audienceSource, variableNames, sampleDbRowsQ?.data, dbBatch?.notes]);
+
   // Classify each variable by data source: per-row column, same-for-all static, or unset.
   const variableSourceKind = (v: string): "per_row" | "static" | "missing" => {
     const m = mapping[v];
