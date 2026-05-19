@@ -449,6 +449,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         duplicate: duplicateCount,
         cross_pipeline_duplicate: crossPipelineDuplicateCount,
         skipped_test_lead: testLeadCount,
+        name_unusable: nameUnusableCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
     });
@@ -466,6 +467,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       duplicate: duplicateCount,
       cross_pipeline_duplicate: crossPipelineDuplicateCount,
       skipped_test_lead: testLeadCount,
+      name_unusable: nameUnusableCount,
       last_synced_row: lastProcessedRow,
     };
   } catch (e) {
