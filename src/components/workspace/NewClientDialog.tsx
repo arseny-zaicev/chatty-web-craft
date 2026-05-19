@@ -71,12 +71,12 @@ export function NewClientDialog({ open, onOpenChange }: { open: boolean; onOpenC
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>New client</DialogTitle>
           <DialogDescription>Create a new workspace to manage their inbox, campaigns and reporting.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto flex-1 pr-1 -mr-1">
           <Field label="Display name">
             <Input
               autoFocus
