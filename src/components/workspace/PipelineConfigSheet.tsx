@@ -728,6 +728,77 @@ export default function PipelineConfigSheet({
           </div>
         </section>
 
+        {/* Stages */}
+        <section className="mt-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Stages</h3>
+            <Button size="sm" variant="outline" onClick={addStage}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add stage
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Reorder, recolor, rename or remove the columns visible on this board.
+          </p>
+          <div className="rounded-lg border border-border divide-y divide-border">
+            {(stages ?? []).length === 0 && (
+              <div className="p-3 text-xs text-muted-foreground text-center">No stages yet.</div>
+            )}
+            {(stages ?? []).map((s, i) => (
+              <div key={s.id} className="p-2 flex items-center gap-2">
+                <GripVertical className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => moveStage(s.id, -1)}>
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === (stages ?? []).length - 1} onClick={() => moveStage(s.id, 1)}>
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </Button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="w-5 h-5 rounded border border-border shrink-0"
+                    style={{ backgroundColor: s.color }}
+                    title="Change color"
+                    onClick={(e) => {
+                      const pop = e.currentTarget.nextElementSibling as HTMLElement | null;
+                      if (pop) pop.classList.toggle("hidden");
+                    }}
+                  />
+                  <div className="hidden absolute z-10 mt-1 left-0 rounded-md border border-border bg-popover p-1.5 grid grid-cols-6 gap-1 shadow-md">
+                    {STAGE_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className="w-5 h-5 rounded border border-border"
+                        style={{ backgroundColor: c }}
+                        onClick={(ev) => { colorStage(s.id, c); (ev.currentTarget.parentElement as HTMLElement).classList.add("hidden"); }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <Input
+                  defaultValue={s.name}
+                  onBlur={(e) => { if (e.target.value.trim() && e.target.value !== s.name) renameStage(s.id, e.target.value.trim()); }}
+                  className="h-7 text-xs flex-1"
+                />
+                <Select value={s.stage_type} onValueChange={async (v) => {
+                  const { error } = await supabase.from("pipeline_stages").update({ stage_type: v }).eq("id", s.id);
+                  if (error) toast.error(error.message); else refetchStages();
+                }}>
+                  <SelectTrigger className="h-7 w-20 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="won">Won</SelectItem>
+                    <SelectItem value="lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteStage(s)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Outreach */}
         <section className="mt-6 space-y-3">
           <h3 className="text-sm font-semibold">Outreach</h3>
