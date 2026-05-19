@@ -13,21 +13,22 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { fetchWorkspaces, workspaceKeys, type Workspace } from "@/lib/workspaces";
-import { useWorkspaceAccess, isManagerLike, isAdmin } from "@/lib/workspaceRole";
+import { useWorkspaceAccess, type PermKey } from "@/lib/workspaceRole";
 
-const overviewTab = { key: "overview", label: "Overview", icon: LayoutDashboard };
-const campaignsTab = { key: "campaigns", label: "Campaigns", icon: Megaphone };
-const baseClientTabs = [
-  { key: "inbox", label: "Inbox", icon: Inbox },
-  { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
+type Tab = { key: string; label: string; icon: typeof Inbox; perm: PermKey; end?: boolean };
+
+const OPS_TABS: Tab[] = [
+  { key: "overview", label: "Overview", icon: LayoutDashboard, perm: "perm_overview", end: true },
+  { key: "inbox", label: "Inbox", icon: Inbox, perm: "perm_inbox" },
+  { key: "pipeline", label: "Pipeline", icon: KanbanSquare, perm: "perm_pipeline" },
+  { key: "campaigns", label: "Campaigns", icon: Megaphone, perm: "perm_campaigns_view" },
+  { key: "data", label: "Data", icon: Database, perm: "perm_data" },
+  { key: "materials", label: "Materials", icon: FolderOpen, perm: "perm_materials" },
+  { key: "library", label: "Quick replies", icon: BookOpen, perm: "perm_quick_replies_use" },
 ];
-const managerExtras = [
-  { key: "data", label: "Data", icon: Database },
-  { key: "materials", label: "Materials", icon: FolderOpen },
-  { key: "library", label: "Quick replies", icon: BookOpen },
-];
-const setupTabs = [
-  { key: "settings", label: "Settings", icon: SettingsIcon },
+
+const SETUP_TABS: Tab[] = [
+  { key: "settings", label: "Settings", icon: SettingsIcon, perm: "perm_settings" },
 ];
 
 export function WorkspaceSidebar() {
@@ -37,17 +38,11 @@ export function WorkspaceSidebar() {
   const { data: workspaces, isLoading } = useQuery({ queryKey: workspaceKeys.list, queryFn: fetchWorkspaces });
   const currentWs = (workspaces ?? []).find((w: Workspace) => w.slug === slug);
   const { data: access } = useWorkspaceAccess(currentWs?.id);
-  const role = access?.role;
-  const canManage = isManagerLike(role);
-  const canLaunch = isAdmin(role);
-  const canSeeStats = canManage || (role === "client" && Boolean(access?.canViewStats));
+  const permissions = access?.permissions;
 
-  const clientTabs = [
-    ...(canSeeStats ? [overviewTab] : []),
-    ...baseClientTabs,
-    ...(canSeeStats ? [campaignsTab] : []),
-  ];
-  const opsTabs = canManage ? [...clientTabs, ...managerExtras] : clientTabs;
+  const visibleOps = OPS_TABS.filter((t) => permissions?.[t.perm]);
+  const visibleSetup = SETUP_TABS.filter((t) => permissions?.[t.perm]);
+  const canLaunch = Boolean(permissions?.perm_launch);
 
   return (
     <Sidebar collapsible="icon">
@@ -71,69 +66,66 @@ export function WorkspaceSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {slug && slug !== "new" && (
-          <>
-            <SidebarGroup>
-              <SidebarGroupLabel>{!collapsed && "Operations"}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {opsTabs.map((t) => (
-                    <SidebarMenuItem key={t.key}>
-                      <SidebarMenuButton asChild tooltip={t.label}>
-                        <NavLink
-                          to={`/ws/${slug}/${t.key}`}
-                          end={t.key === "overview"}
-                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
-                        >
-                          <t.icon className="w-4 h-4" />
-                          {!collapsed && <span>{t.label}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                  {canLaunch && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild tooltip="Launch campaign">
-                        <NavLink
-                          to={`/ws/${slug}/launch`}
-                          className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
-                        >
-                          <Rocket className="w-4 h-4" />
-                          {!collapsed && <span>Launch</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+        {slug && slug !== "new" && visibleOps.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>{!collapsed && "Operations"}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleOps.map((t) => (
+                  <SidebarMenuItem key={t.key}>
+                    <SidebarMenuButton asChild tooltip={t.label}>
+                      <NavLink
+                        to={`/ws/${slug}/${t.key}`}
+                        end={t.end}
+                        className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
+                      >
+                        <t.icon className="w-4 h-4" />
+                        {!collapsed && <span>{t.label}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+                {canLaunch && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Launch campaign">
+                      <NavLink
+                        to={`/ws/${slug}/launch`}
+                        className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-primary/10 text-primary" : "text-primary"}`}
+                      >
+                        <Rocket className="w-4 h-4" />
+                        {!collapsed && <span>Launch</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-            {canManage && (
-              <SidebarGroup>
-                <SidebarGroupLabel>{!collapsed && "Setup"}</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {setupTabs.map((t) => (
-                      <SidebarMenuItem key={t.key}>
-                        <SidebarMenuButton asChild tooltip={t.label}>
-                          <NavLink
-                            to={`/ws/${slug}/${t.key}`}
-                            className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
-                          >
-                            <t.icon className="w-4 h-4" />
-                            {!collapsed && <span>{t.label}</span>}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
-          </>
+        {slug && slug !== "new" && visibleSetup.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>{!collapsed && "Setup"}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleSetup.map((t) => (
+                  <SidebarMenuItem key={t.key}>
+                    <SidebarMenuButton asChild tooltip={t.label}>
+                      <NavLink
+                        to={`/ws/${slug}/${t.key}`}
+                        className={({ isActive }) => `flex items-center gap-2 ${isActive ? "bg-muted text-foreground" : ""}`}
+                      >
+                        <t.icon className="w-4 h-4" />
+                        {!collapsed && <span>{t.label}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         )}
       </SidebarContent>
     </Sidebar>
   );
 }
-
