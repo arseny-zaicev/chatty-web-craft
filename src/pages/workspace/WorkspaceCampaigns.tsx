@@ -444,9 +444,11 @@ function CampaignDetail({
   // straight to 'replied' without passing through 'sent'); fall back to the
   // cached counter if the RPC hasn't loaded yet.
   const liveSent = Math.max(liveCounts?.sent ?? 0, group.sent ?? 0);
+  const liveDelivered = Math.min(liveCounts?.delivered ?? 0, liveSent);
   const totals = {
     total: group.total,
     sent: liveSent,
+    delivered: liveDelivered,
     failed: group.failed,
     pending: Math.max(0, group.total - liveSent - group.failed),
     today: group.today,
@@ -514,9 +516,15 @@ function CampaignDetail({
           </Button>
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-2">
         <Stat label="Total" value={totals.total.toLocaleString()} />
         <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
+        <Stat
+          label="Delivered"
+          value={totals.delivered.toLocaleString()}
+          tone="good"
+          sub={totals.sent > 0 ? `${Math.round((totals.delivered / totals.sent) * 100)}% of sent` : undefined}
+        />
         <Stat label="Pending" value={totals.pending.toLocaleString()} />
         <Stat label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "bad" : undefined} />
       </div>
