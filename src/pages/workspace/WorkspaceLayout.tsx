@@ -148,6 +148,7 @@ const ROUTE_PERM: Record<string, PermKey | null> = {
   overview: "perm_overview",
   inbox: "perm_inbox",
   pipeline: "perm_pipeline",
+  stats: "perm_inbox",
   campaigns: "perm_campaigns_view",
   library: "perm_quick_replies_use",
   settings: "perm_settings",
