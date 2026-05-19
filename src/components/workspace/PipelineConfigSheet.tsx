@@ -842,6 +842,96 @@ export default function PipelineConfigSheet({
           </div>
         </section>
 
+        {/* Follow-up */}
+        <section className="mt-6 space-y-3">
+          <h3 className="text-sm font-semibold">Follow-up</h3>
+          <div className="rounded-lg border border-border p-3 space-y-3">
+            <label className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium">Auto follow-up</div>
+                <div className="text-[11px] text-muted-foreground">
+                  After a first-touch is sent, schedule a single follow-up unless the lead replies or the deal is closed.
+                </div>
+              </div>
+              <Switch checked={followUpEnabled} onCheckedChange={setFollowUpEnabled} />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Single template</Label>
+                <Select
+                  value={followUpTemplateId || "none"}
+                  onValueChange={(v) => { setFollowUpTemplateId(v === "none" ? "" : v); if (v !== "none") setFollowUpGroupId(""); }}
+                  disabled={Boolean(followUpGroupId)}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {(templates ?? []).map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Template group (shared pool)</Label>
+                <Select
+                  value={followUpGroupId || "none"}
+                  onValueChange={(v) => { setFollowUpGroupId(v === "none" ? "" : v); if (v !== "none") setFollowUpTemplateId(""); }}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {(templateGroups ?? []).map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name} ({g.template_names.length})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <Label className="text-xs">Delay (minutes)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={followUpDelayMin}
+                  onChange={(e) => setFollowUpDelayMin(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Curfew start</Label>
+                <Input type="time" value={followUpCurfewEnd} onChange={(e) => setFollowUpCurfewEnd(e.target.value)} className="h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">Resume at</Label>
+                <Input type="time" value={followUpResumeAt} onChange={(e) => setFollowUpResumeAt(e.target.value)} className="h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">Timezone</Label>
+                <Select value={followUpTz} onValueChange={setFollowUpTz}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Europe/Berlin">Europe/Berlin</SelectItem>
+                    <SelectItem value="Europe/London">Europe/London</SelectItem>
+                    <SelectItem value="Asia/Dubai">Asia/Dubai</SelectItem>
+                    <SelectItem value="Asia/Kolkata">Asia/Kolkata</SelectItem>
+                    <SelectItem value="America/New_York">America/New_York</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Follow-ups land {Math.round((parseInt(followUpDelayMin, 10) || 480) / 60)}h after first-touch. If that falls between {followUpCurfewEnd} and {followUpResumeAt} ({followUpTz}), it is pushed to {followUpResumeAt} the next day.
+            </p>
+          </div>
+        </section>
+
+
+
         {/* Notifications */}
         <section className="mt-6 space-y-3">
           <h3 className="text-sm font-semibold">Notifications</h3>
