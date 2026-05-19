@@ -241,12 +241,24 @@ export function buildPrepPrompt(
 
   return `You are preparing an audience batch for the "${ctx.workspaceName}" workspace.
 
+===========================================================================
+INSERT TARGET — READ THIS FIRST
+  Personal Supabase project (NOT Lovable Cloud):
+    project ref:  pdoddfoyrutakwemejpe
+    project url:  https://pdoddfoyrutakwemejpe.supabase.co
+    table:        public.audience_rows
+    workspace_id: ${ctx.workspaceId}
+    batch_id:     ${ctx.batchId ?? "<MISSING — create the batch first from the Data page, then re-copy this prompt>"}
+  DO NOT insert into the Lovable Cloud project (xglfamaaotmwulglwcui).
+  Use the batch_id above as-is. Do NOT create a new batch.
+===========================================================================
+
 PREP PROFILE: ${profile.name}
 Campaign type: ${profile.campaign_type}
 Logical template / copy: ${ph(profile.template_label)}
 ${profile.description ? `Notes: ${profile.description}\n` : ""}
 GOAL
-Take the raw input rows the operator gives you and produce a clean, validated dataset that can be inserted directly into the audience_rows table for this workspace.
+Take the raw input rows the operator gives you and produce a clean, validated dataset that can be inserted directly into public.audience_rows in the PERSONAL Supabase project above (ref pdoddfoyrutakwemejpe).
 
 REQUIRED SOURCE FIELDS (must be present and non-empty unless a fallback covers them)
 ${required}
