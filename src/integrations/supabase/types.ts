@@ -2419,6 +2419,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          pipeline_id: string | null
           target_stage_id: string
           trigger: Database["public"]["Enums"]["automation_trigger"]
           trigger_value: string | null
@@ -2430,6 +2431,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          pipeline_id?: string | null
           target_stage_id: string
           trigger: Database["public"]["Enums"]["automation_trigger"]
           trigger_value?: string | null
@@ -2441,6 +2443,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          pipeline_id?: string | null
           target_stage_id?: string
           trigger?: Database["public"]["Enums"]["automation_trigger"]
           trigger_value?: string | null
@@ -2449,6 +2452,13 @@ export type Database = {
           workspace_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "stage_automations_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stage_automations_target_stage_id_fkey"
             columns: ["target_stage_id"]
