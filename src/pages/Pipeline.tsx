@@ -754,6 +754,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
         open={showAutomations}
         onOpenChange={setShowAutomations}
         workspaceId={workspaceId}
+        pipelineId={selectedPipelineId}
         stages={stages}
       />
 
