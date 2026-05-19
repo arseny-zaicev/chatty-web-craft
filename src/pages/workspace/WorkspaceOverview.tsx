@@ -14,7 +14,7 @@ import { fetchWorkspaceOverview, portfolioKeys } from "@/lib/portfolioMetrics";
 import { fetchCampaignSummaries } from "@/lib/launchData";
 import { groupCampaigns, type CampaignRow } from "@/lib/campaigns";
 import { tzInfo, dateKeyInTz, todayKeyInTz, shortDateInTz, timeInTz } from "@/lib/timezones";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceAccess } from "@/lib/workspaceRole";
 import { LatestReportCard } from "@/components/workspace/LatestReportCard";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
@@ -28,8 +28,9 @@ const HEALTH = {
 
 export default function WorkspaceOverview() {
   const { workspace } = useOutletContext<WorkspaceContext>();
-  const { data: role } = useWorkspaceRole(workspace?.id);
-  const canManage = isManagerLike(role);
+  const { data: access } = useWorkspaceAccess(workspace?.id);
+  const canManage = Boolean(access?.canManageSettings);
+  const canLaunch = Boolean(access?.permissions?.perm_launch);
   const { data, isLoading } = useQuery({
     queryKey: portfolioKeys.workspaceOverview(workspace?.id ?? ""),
     queryFn: () => fetchWorkspaceOverview(workspace!.id),
@@ -53,10 +54,8 @@ export default function WorkspaceOverview() {
     return <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const isClient = role === "client";
-  // Hide the "blocked / no active numbers" badge from the client view —
-  // it's an internal infra signal and was confusing clients.
-  const H = isClient && data.health === "blocked" ? HEALTH.idle : HEALTH[data.health];
+  // "blocked / no active numbers" is an internal infra signal; hide from non-managers.
+  const H = !canManage && data.health === "blocked" ? HEALTH.idle : HEALTH[data.health];
   const slug = workspace.slug;
 
   return (
@@ -73,7 +72,7 @@ export default function WorkspaceOverview() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/inbox`}><Inbox className="w-4 h-4 mr-1.5" />Open Inbox</Link></Button>
-          <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />Launch</Link></Button>
+          {canLaunch && <Button asChild size="sm"><Link to={`/ws/${slug}/launch`}><Rocket className="w-4 h-4 mr-1.5" />Launch</Link></Button>}
         </div>
       </div>
 
@@ -103,7 +102,11 @@ export default function WorkspaceOverview() {
             {data.recent_launches.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 No campaigns yet.
-                <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>
+                {canLaunch ? (
+                  <div className="mt-3"><Button asChild size="sm"><Link to={`/ws/${slug}/launch`}>Launch first campaign</Link></Button></div>
+                ) : (
+                  <div className="mt-3"><Button asChild size="sm" variant="outline"><Link to={`/ws/${slug}/inbox`}>Open Inbox</Link></Button></div>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-border">
