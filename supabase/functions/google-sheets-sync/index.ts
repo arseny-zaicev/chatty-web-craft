@@ -276,6 +276,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
     const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
+    const leadImportRows: Record<string, unknown>[] = [];
 
     // Cache resolved owning-pipeline names so we don't lookup the same name
     // 200 times for a Sheet that's full of duplicates of the other pipeline.
@@ -288,6 +289,9 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       pipelineNameCache.set(pid, n);
       return n;
     };
+
+    const normalizedRows: any[] = [];
+    const phonesToCheck = new Set<string>();
 
     // 3. Validate + dedupe + import
     for (let i = 0; i < newRows.length; i++) {
