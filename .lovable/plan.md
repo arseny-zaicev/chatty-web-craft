@@ -1,39 +1,86 @@
-## Что не так и что починим
+# Чтобы такого больше не было: фиксим рассинхрон Inbox-превью
 
-### 1) Статистика по партнёрам — везде нули / неправда
+## Что произошло
 
-**Корень проблемы:** функция `fetchPartnerMetrics` (`src/lib/metrics.ts`) считает "Sent today / all-time" по таблице `number_ownership`, в которой **ровно 0 строк во всей базе**. Поэтому в `/admin/partners` (колонки Sent today, Sent all-time) и в верхней плашке `/admin/partners/:id` (Sent today, Sent all-time) всегда показывается 0 / любая ерунда, хотя в табличке BM внизу той же страницы цифры правильные — те считаются через другой источник (`number_live_stats` по `business_manager_id`).
+В списке чатов под "Oscar Velasquez" показывался текст (в момент скриншота - email `Oscar.velasquez@dispapeles.com`, позже - `"Mañana en este horario esta bien"`), которого **физически нет в треде сообщений** этого разговора.
 
-**Что сделаем:**
-- Перепишу `fetchPartnerMetrics` так, чтобы партнёр → его BMы (через активные `bm_partner_assignments` где `effective_to IS NULL`) → номера (`whatsapp_numbers.business_manager_id IN (...)`) → агрегируем `number_live_stats` (тот же RPC, что использует BM-таблица).
-- Результат: цифры в строке партнёра в списке + в верхней плашке совпадут с суммой по строкам BM внутри партнёра. Никаких "0".
-- Таблицу `number_ownership` не трогаем — она пустая и не используется нигде ещё критично, оставим как есть.
+Проверил БД:
+- `conversations.last_message_text` = `"Mañana en este horario esta bien"` @ `16:16:41`
+- Последнее реальное сообщение в `messages` для этого диалога - `16:13:31`
+- Поиск этого текста по всей таблице `messages` - **0 совпадений**
 
-### 2) В стате нет "Delivered" — добавим везде, включая партнёров
+То есть колонка `last_message_text` живёт отдельной жизнью от реальных сообщений.
 
-Сейчас "Delivered" есть только в KPI воркспейса и в карточке отчёта кампании. В партнёрских и BM-разрезах его нет, потому что RPC `number_live_stats` возвращает только `sent_*` и `failed_*`, без `delivered_*`.
+## Корневая причина
 
-**Что сделаем:**
-- Миграция: расширю `public.number_live_stats(p_number_ids uuid[])` — добавлю `delivered_today bigint`, `delivered_7d bigint`, `delivered_all bigint`. Условие: `cr.status IN ('delivered','read')` (read = тоже доставлено и прочитано). Sent остаётся как было (`sent | delivered | read`), чтобы Delivered ≤ Sent.
-- На фронте добавлю колонку **Delivered today** и в `/admin/partners` (список), и в `/admin/partners/:id` (верхняя плашка + строки BM), и в `/admin/business-managers/:id` (плашка статов). Везде в формате `Delivered / Sent` (например, `1,180 / 1,205`), чтобы сразу видна была доставляемость.
+`last_message_text` / `last_message_at` пишутся вручную **в трёх разных местах**, каждое - своим путём, без транзакции с insert в `messages`:
 
-### 3) Не добавляются номера под партнёра / BM
+1. `supabase/functions/whatsapp-webhook/index.ts` - 3 точки (входящие: строки 199, 229, 545). Update в `conversations` идёт **до** insert в `messages`, ошибка insert не проверяется.
+2. `supabase/functions/send-whatsapp/index.ts:307` - исходящие через UI.
+3. Кампании (campaigns / send pipelines) - пишут свой текст шаблона.
 
-В попапе "Attach" пул номеров фильтруется как `business_manager_id IS NULL AND workspace_id = <ws партнёра>`. Поэтому "No numbers available" — все номера, которые есть, уже привязаны к каким-то BM (часто к другому BM этого же или соседнего воркспейса) либо лежат в другом воркспейсе.
+Любой сбой между "обновили превью" и "вставили message" (RLS, дубль провайдер-id, ретрай вебхука, отправка на чужой номер, тестовый payload) → превью показывает фантомный текст, которого в треде нет. Точно такая же дыра позволяет показать email-черновик / placeholder / fallback `[text]` без реальной строки.
 
-**Что сделаем в попапе "Attach" на `PartnerDetail` (компонент `AddNumbersToBmButton`) и в "Attach" на `BusinessManagerDetail`:**
-- Уберу жёсткий фильтр по `workspace_id`. По умолчанию покажу **все** свободные номера (`business_manager_id IS NULL`) из всех воркспейсов, с маленькой подписью у каждого "ws: <name>" чтобы было видно откуда тянем.
-- Добавлю переключатель **"Show numbers attached to other BMs"** — когда включён, показываются и уже занятые номера (с пометкой "сейчас в BM XYZ"). При выборе такого номера на attach мы автоматически переносим его (обновляем `business_manager_id` + пишем event в `bm_number_events`), без ручной отвязки.
-- При attach пропишем `workspace_id` партнёрского BM, чтобы номер сразу оказался в правильном воркспейсе.
-- Поиск по номеру/имени сверху, чтобы быстро искать когда пул большой.
+## План фикса
 
-## Технические детали
+### 1. Сделать `last_message_text` производным полем (single source of truth)
 
-**Файлы:**
-- `src/lib/metrics.ts` — `fetchPartnerMetrics` переписать: убрать `number_ownership`, идти через `bm_partner_assignments → whatsapp_numbers → number_live_stats`.
-- `supabase/migrations/<new>.sql` — `CREATE OR REPLACE FUNCTION public.number_live_stats(...)` с добавлением `delivered_today/7d/all` (status IN ('delivered','read')).
-- `src/pages/admin/Partners.tsx` — колонка `Delivered today`, формат `delivered / sent`.
-- `src/pages/admin/PartnerDetail.tsx` — в верхней плашке `Delivered today` и `Delivered 7d`; в таблице BM колонки `Delivered today` / `Delivered 7d` / `Delivered all`; `AddNumbersToBmButton` — снять `workspace_id` фильтр, добавить toggle "show busy", поиск, авто-перенос.
-- `src/pages/admin/BusinessManagerDetail.tsx` — карточка статов с `Delivered today/7d/all`; попап attach — те же изменения, что и для PartnerDetail.
+Миграция:
 
-**Что не ломаем:** RLS, существующие RPC сигнатуры (только дополнение полей), API кампаний.
+- Триггер `AFTER INSERT ON public.messages` (и `AFTER UPDATE OF body` на всякий) обновляет родительскую `conversations`:
+  - `last_message_text = NEW.body` (или `'[' || media_type || ']'` если body пустой)
+  - `last_message_at = NEW.created_at`
+  - для inbound: `unread_count = unread_count + 1`, `last_inbound_at = NEW.created_at`
+- Триггер `AFTER DELETE ON public.messages` пересчитывает превью из оставшихся сообщений (или ставит NULL).
+- Опционально: `REVOKE UPDATE (last_message_text, last_message_at) ON public.conversations FROM authenticated, anon` - чтобы клиент физически не мог писать в эти поля.
+
+### 2. Удалить все ручные апдейты `last_message_text` / `last_message_at`
+
+- `supabase/functions/whatsapp-webhook/index.ts` - убрать поля из 3 update/insert блоков (создание диалога оставляем, но без превью - его проставит триггер первого message).
+- `supabase/functions/send-whatsapp/index.ts` - убрать update после insert.
+- Проверить campaigns / reply-watchdog / slack-dispatch - не должны писать в эти колонки.
+
+### 3. Не считать диалог "поступившим", пока message не вставлен
+
+В webhook порядок меняем на: **сначала** insert в `messages` (с проверкой ошибки), и только если успешно - триггер сам обновит conversations. Если insert падает → диалог остаётся без фантомного превью + лог ошибки.
+
+### 4. Бэкфилл
+
+Одноразовый UPDATE: для каждого `conversation_id` взять `body` и `created_at` последнего реального сообщения и записать в `last_message_text` / `last_message_at`. Где сообщений нет - выставить NULL. Это сразу очистит существующие фантомы (включая случаи "Mañana...", где-то email и т.п.).
+
+### 5. Защита от регрессий
+
+- DB-инвариант (CHECK или вьюшка-монитор) + edge function `inbox-integrity-check` (раз в час): считает диалоги, у которых `last_message_text` не равен body последнего message. В норме - 0. Шлём в Slack-канал ops при >0.
+- Простой unit-тест миграции: insert message → проверка conversations.last_message_text.
+
+## Что НЕ трогаем
+
+- UI инбокса (`src/pages/CRM.tsx:789`) - читает то же поле, после фикса будет всегда корректно.
+- `unread_count` логику кампаний/реалтайма - отдельная тема, в этот план не входит.
+
+## Технические детали (для разработчика)
+
+Файлы:
+- новая миграция `supabase/migrations/<ts>_conversations_preview_trigger.sql`
+- `supabase/functions/whatsapp-webhook/index.ts` (3 места)
+- `supabase/functions/send-whatsapp/index.ts` (1 место)
+- бэкфилл-SQL разовый в той же миграции
+- (опц.) новая edge `supabase/functions/inbox-integrity-check/index.ts` + cron
+
+Псевдо-SQL триггера:
+
+```sql
+create or replace function public.tg_conversations_sync_preview()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  update public.conversations
+     set last_message_text = coalesce(NEW.body, '[' || coalesce(NEW.media_type,'media') || ']'),
+         last_message_at   = NEW.created_at,
+         last_inbound_at   = case when NEW.direction='inbound' then NEW.created_at else last_inbound_at end,
+         unread_count      = case when NEW.direction='inbound' then coalesce(unread_count,0)+1 else unread_count end
+   where id = NEW.conversation_id;
+  return NEW;
+end$$;
+```
+
+После approve - применяю миграцию, чищу edge-функции, запускаю бэкфилл, и фантомы пропадают навсегда.
