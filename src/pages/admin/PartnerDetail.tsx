@@ -160,6 +160,7 @@ export default function PartnerDetail() {
   );
 
   const sent7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.sent_7d || 0), 0);
+  const delivered7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.delivered_7d || 0), 0);
   const unpaid = (runs || []).filter(r => r.status === "draft" || r.status === "approved")
     .reduce((s, r) => s + Number(r.total_payout_usd || 0), 0);
   const monthStart = startOfMonth(new Date());
