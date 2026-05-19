@@ -250,6 +250,7 @@ export default function PipelineConfigSheet({
 
   // Phone normalization + failed routing
   const [expectedCcs, setExpectedCcs] = useState<string[]>([]);
+  const [expectedCcsText, setExpectedCcsText] = useState<string>("");
   const [failedStageId, setFailedStageId] = useState<string>("");
 
   const [showNewSource, setShowNewSource] = useState(false);
@@ -278,7 +279,9 @@ export default function PipelineConfigSheet({
     setFollowUpCurfewEnd(trimTime(p.follow_up_curfew_end) || "20:00");
     setFollowUpResumeAt(trimTime(p.follow_up_resume_at) || "09:00");
     setFollowUpTz(p.follow_up_timezone ?? "Europe/Berlin");
-    setExpectedCcs(Array.isArray(p.expected_country_codes) ? p.expected_country_codes : []);
+    const ccs = Array.isArray(p.expected_country_codes) ? p.expected_country_codes : [];
+    setExpectedCcs(ccs);
+    setExpectedCcsText(ccs.join(", "));
     setFailedStageId(p.failed_stage_id ?? "");
   };
 
@@ -590,7 +593,7 @@ export default function PipelineConfigSheet({
         follow_up_curfew_end: followUpCurfewEnd,
         follow_up_resume_at: followUpResumeAt,
         follow_up_timezone: followUpTz,
-        expected_country_codes: expectedCcs,
+        expected_country_codes: expectedCcsText.split(/[,\s]+/).map((s) => s.replace(/\D/g, "")).filter(Boolean),
         failed_stage_id: failedStageId || null,
       })
       .eq("id", pipeId);
@@ -1259,10 +1262,11 @@ export default function PipelineConfigSheet({
             <div>
               <Label className="text-xs">Expected country codes</Label>
               <Input
-                value={expectedCcs.join(", ")}
-                onChange={(e) =>
+                value={expectedCcsText}
+                onChange={(e) => setExpectedCcsText(e.target.value)}
+                onBlur={() =>
                   setExpectedCcs(
-                    e.target.value
+                    expectedCcsText
                       .split(/[,\s]+/)
                       .map((s) => s.replace(/\D/g, ""))
                       .filter(Boolean),
