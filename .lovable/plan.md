@@ -1,91 +1,119 @@
-## Что нужно сделать
 
-Три блока работы. Все три - чтобы лиды реально нормализовались и отправлялись, а не помечались мусором.
+# Permission-based workspace access
 
----
+Goal: replace coarse `admin / manager / client` route gates with explicit per-user permission flags. The `role` column stays as a free-text label (badge only) and global admin (`arseny@iskra.ae`) keeps full access. The "retry failed lead" flow we just shipped keeps working - it only requires Pipeline access (which everyone gets by default in migration).
 
-### 1. Умная нормализация телефона (для DE/AT/CH и других)
+## 1. Permission model
 
-**Сейчас:** если номер кривой - помечается `invalid` и не отправляется.
+Per workspace member, boolean toggles:
 
-**Будет:** реальная починка по слоям, потом уже invalid если совсем никак.
+| Key | Controls |
+|---|---|
+| `perm_overview` | Overview tab + stats route |
+| `perm_inbox` | Inbox tab + `/inbox` route |
+| `perm_pipeline` | Pipeline tab + `/pipeline` route (and Retry button on failed cards) |
+| `perm_campaigns_view` | Campaigns tab (read-only campaign reports) |
+| `perm_quick_replies_use` | Library tab + use quick replies in composer |
+| `perm_quick_replies_manage` | Create/edit/delete **shared** workspace quick replies (personal ones always allowed if `perm_quick_replies_use`) |
+| `perm_settings` | Settings tab (team, brand, pipelines, numbers, templates) |
+| `perm_data` | Data tab |
+| `perm_materials` | Materials tab |
+| `perm_launch` | Launch button in sidebar + `/launch` route + "Launch first campaign" CTA |
 
-Логика для каждого номера:
-1. Если есть `+` или `00` → уже международный, нормализуем как есть.
-2. Если уже начинается с известного country code из списка пайплайна (49/43/41/...) → принимаем как есть.
-3. Если начинается с `0` + есть `expected_country_codes` на пайплайне:
-   - Один CC в списке → убираем 0, добавляем CC (`017612345 → 4917612345`).
-   - Несколько CC → пробуем по длине национального номера для каждой страны (DE моб 10-11, AT 10-13, CH 9-10). Если только одна страна подходит по длине → выбираем её.
-   - Иначе → `needs_review` (не invalid - оператор может починить вручную).
-4. Чистый локальный (7-10 цифр без префикса) + один CC → добавляем CC.
-5. Полностью невалидный (буквы, <7 цифр, явный мусор) → `invalid`.
+Global admin (`is_admin(uid)`) and workspace owner (`workspaces.owner_user_id`) always bypass all checks - they implicitly have every permission.
 
-**Где хранить настройки страны:**
-- Добавим поле `expected_country_codes` (массив text, напр. `['49','43','41']`) на уровне **пайплайна** - один раз настроил и работает для всех источников. Можно переопределить на уровне source_connection (через `config.country_codes`).
-- В UI пайплайна - мульти-селект стран с флагами.
+## 2. Data model changes
 
----
+Migration on `workspace_members`:
 
-### 2. Нормализация имени
+- Add ten `boolean NOT NULL DEFAULT false` columns listed above.
+- Keep existing `role` (informational label) and `can_view_stats` (kept for backward read compat, but no longer gates anything).
+- Replace `is_workspace_manager` usage in app code with a new SQL helper:
+  ```
+  has_workspace_permission(_workspace_id, _user_id, _perm text) returns boolean
+  ```
+  Returns true if admin, workspace owner, or `workspace_members.<perm column> = true`.
+- RLS policies that currently use `is_workspace_manager` on `workspace_saved_replies`, `pipelines`, `templates`, etc. are updated to call `has_workspace_permission(..., 'perm_settings')` or the corresponding flag. **Owners-manage-memberships policy on `workspace_members` itself is untouched** so settings access can't be self-escalated.
+- `retry_lead_import` RPC is unchanged - it already checks `is_workspace_member + can_access_pipeline`, both of which remain.
 
-Применяется при импорте и при отправке:
-- `trim()`, схлопнуть множественные пробелы
-- Удалить эмодзи и символы типа 🔥, ★, →
-- Удалить хвосты типа `(IG)`, `- Coach`, `from Berlin`
-- Title Case (`GERALD gautsch` → `Gerald Gautsch`)
-- Взять **только первое слово** для подстановки в `{{name}}` (хранить полное в `payload.full_name`, использовать короткое в `payload.first_name`)
-- Если получилось пусто или короче 2 символов → fallback `there` / пустая строка (зависит от шаблона)
+### Migration of existing rows
 
----
+Backfill in the same migration:
 
-### 3. Авто-перемещение в стадию при failed
+- `role = 'manager'` → all ten flags = true.
+- `role = 'client'` with `can_view_stats = true` → `inbox, pipeline, overview, campaigns_view, quick_replies_use` = true.
+- `role = 'client'` with `can_view_stats = false` → `inbox, pipeline, quick_replies_use` = true.
+- `perm_launch`, `perm_settings`, `perm_data`, `perm_materials`, `perm_quick_replies_manage` stay false for every existing client. (Owners are unaffected - they bypass via `is_workspace_owner`.)
 
-**Сейчас:** если Gupshup вернул failed (например `4003 template did not match`), лид помечается `failed`, но в Kanban остаётся там же где был.
+New invites default to `inbox + pipeline + quick_replies_use` unless inviter ticks more.
 
-**Будет:**
-- Новое поле на пайплайне: `failed_stage_id` (FK на `pipeline_stages`, nullable).
-- В UI настроек пайплайна - дропдаун "Стадия для невалидных номеров" (по умолчанию создаётся стадия `WhatsApp invalid (call)` при первом use).
-- Триггер БД: когда `campaign_recipients.status` → `failed`, ищем связанный `deal` через `lead_imports.deal_id` или `conversation_id`, переносим его в `failed_stage_id` пайплайна.
-- Если есть `conversation` - помечаем тэгом/нотой с текстом ошибки от Gupshup (например `WhatsApp invalid - error 4003`), чтобы оператор сразу видел причину и мог позвонить.
+## 3. Files changed
 
----
+**SQL (one migration):**
+- `supabase/migrations/<new>.sql` - add columns, backfill, create `has_workspace_permission`, rewrite affected RLS policies.
 
-### Файлы
+**Access layer:**
+- `src/lib/workspaceRole.ts` - replace `useWorkspaceAccess` return shape with `{ role: string; permissions: Record<PermKey, boolean>; isOwner: boolean; isAdmin: boolean }`. Add `usePerm(workspaceId, key)` helper. Keep `isManagerLike`/`isAdmin` exports as thin shims (admin only) so non-migrated callers still compile, then remove them once everything is converted.
 
-**Edge functions:**
-- `_shared/phone.ts` - новая логика с массивом country codes + статус `needs_review`
-- `_shared/name.ts` - **новый файл** с `normalizeName()` + `firstName()`
-- `lead-dispatch/index.ts` - использовать новые normalizePhone(codes[]) + normalizeName перед отправкой
-- `lead-intake/index.ts`, `google-sheets-sync/index.ts` - применять normalizeName при импорте
-- `campaigns/index.ts` - использовать `first_name` для подстановки `{{1}}`/`{{name}}`
+**Routing & shell:**
+- `src/components/workspace/WorkspaceSidebar.tsx` - build tab list from permissions, not role buckets. Fix `NavLink` `end` flags so Inbox/Pipeline/Overview/Campaigns highlight correctly (use `end` only on the index route; others rely on path prefix match).
+- `src/pages/workspace/WorkspaceLayout.tsx` - `RoleGuardedOutlet` switches to a per-route permission map:
+  ```
+  overview → perm_overview, inbox → perm_inbox, pipeline → perm_pipeline,
+  campaigns → perm_campaigns_view, library → perm_quick_replies_use,
+  settings → perm_settings, data → perm_data, materials → perm_materials,
+  launch → perm_launch
+  ```
+  Redirect target = first permitted section (fallback: sign out with toast if none).
 
-**БД (миграция):**
-- `pipelines.expected_country_codes text[]` (default `'{}'`)
-- `pipelines.failed_stage_id uuid` (FK pipeline_stages)
-- Триггер `move_deal_on_recipient_failed` на `campaign_recipients`
+**Team UI:**
+- `src/components/workspace/TeamView.tsx` - per-member permissions editor: a compact grid of switches (one row per member, one column per permission, plus the role label as free text). Inviter dialog gets the same grid with sensible defaults. Removes the existing `can_view_stats` switch.
 
-**UI:**
-- `PipelineConfigSheet.tsx` - блок "Страны (для нормализации номеров)" мульти-селект + "Стадия для невалидных номеров" дропдаун
-- `LeadCard.tsx` (или эквивалент) - бейдж "Phone needs review" со статусом `needs_review` + inline-редактор номера
+**Per-screen gates / CTA cleanup:**
+- `src/pages/workspace/WorkspaceOverview.tsx` - "Launch first campaign" CTA hidden unless `perm_launch`; replaced with "Open Inbox" for non-launchers.
+- `src/pages/workspace/WorkspaceCampaigns.tsx` - launch/create buttons gated on `perm_launch`; read view on `perm_campaigns_view`.
+- `src/components/workspace/WorkspaceLibrary.tsx` - personal replies always editable; shared section read-only unless `perm_quick_replies_manage`.
+- `src/components/workspace/PipelinesView.tsx` - edit actions gated on `perm_settings`.
+- `src/pages/workspace/WorkspaceSettings.tsx` - already only mounts when route is permitted; no inner change needed.
 
-**Бэкфилл (после деплоя):**
-- Прогнать существующие `skipped`/`invalid` лиды (с error `phone_revalidation_failed` или `length too short`) через новый нормализатор. Что починилось → вернуть в `pending`. Что не починилось → оставить с пометкой `needs_review`.
+## 4. How each surface behaves after the change
 
----
+- **Team access UI:** A simple Google-style table - left column is the user (avatar + email + free-text role badge), then one switch per permission. Saving updates `workspace_members` directly via the existing `owners-manage-memberships` RLS policy.
+- **Quick Replies:** Tab appears only if `perm_quick_replies_use`. Inside, "Shared" tab is view-only without `perm_quick_replies_manage` (create/edit/delete buttons hidden, RLS enforces same on the server). Personal replies are always editable by their owner.
+- **Launch protection:** Launch sidebar item, `/launch` route, and any "Launch campaign / Launch first campaign" CTAs across Overview, Campaigns, empty states are wrapped in `permissions.perm_launch`. Route guard returns `Navigate` to the user's first permitted section. RLS on campaign-creating tables already requires `is_workspace_manager`; we change that to `has_workspace_permission(..., 'perm_launch')`.
+- **Retry failed leads (recently added):** Unchanged. RPC still checks `is_workspace_member + can_access_pipeline`. Any user with `perm_pipeline` (everyone, by migration default) can fix the number and resend.
 
-### Что НЕ делаем (чтобы не раздувать)
+## 5. Mapping summary for existing users
 
-- Не угадываем страну автоматически из самих данных таблицы - оператор явно указывает страны пайплайна.
-- Не трогаем существующих 109 orphan-лидов - они правильно помечены skipped.
-- Не делаем UI для массового редактирования имён - только авто-нормализация.
+| Today | After migration | Net change |
+|---|---|---|
+| admin email | bypasses all | none |
+| workspace owner | bypasses all | none |
+| `role=manager` member | all 10 perms on | same access |
+| `role=client`, stats on | inbox, pipeline, overview, campaigns_view, quick_replies_use | loses nothing they had |
+| `role=client`, stats off | inbox, pipeline, quick_replies_use | gains explicit quick replies use (matches today's behavior); loses nothing |
 
----
+No one loses access; no one silently gains Launch or Settings.
 
-### Порядок
+## 6. Manual test matrix
 
-1. Миграция БД (поля + триггер).
-2. `_shared/phone.ts` + `_shared/name.ts`.
-3. Обновить edge functions.
-4. UI настроек пайплайна.
-5. Бэкфилл существующих skipped/invalid.
-6. Проверка на реальных данных Fitpreneur.
+Create three test members in one workspace:
+
+1. **Operator** = inbox + pipeline + quick_replies_use only.
+   - Sidebar: only Inbox + Pipeline + Quick replies.
+   - Direct nav to `/launch`, `/settings`, `/campaigns`, `/overview`, `/data`, `/materials` → redirected to `/inbox`.
+   - Failed lead card in Pipeline → Retry dialog opens, fix number, lead re-queues. (validates the access we just built)
+   - Quick replies: shared tab read-only, personal editable.
+
+2. **Closer** = operator + overview + campaigns_view + quick_replies_manage.
+   - Sees Overview, Campaigns tabs; no Launch button.
+   - Overview shows "Open Inbox" CTA instead of "Launch first campaign".
+   - Can edit shared quick replies.
+   - `/launch` direct nav → redirected to `/overview`.
+
+3. **Full manager** = all perms on.
+   - Sees every sidebar item including Launch and Settings.
+   - Can edit team permissions for Operator/Closer.
+   - Launch wizard works end-to-end.
+
+4. **Sidebar highlighting** sanity: navigate Overview → Inbox → Pipeline → Campaigns and confirm only the active item is highlighted (no stale Overview highlight on `/inbox`).
