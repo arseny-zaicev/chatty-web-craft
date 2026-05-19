@@ -35,9 +35,7 @@ function randomDelay(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-async function readJson(res: Response) {
-  return await res.json().catch(() => ({}));
-}
+// readJson now imported from ./_helpers.ts
 
 // Gupshup template-fetch / parsing helpers and the template-action handlers
 // (upsertTemplate / syncTemplates / syncTemplatesAll) now live in
