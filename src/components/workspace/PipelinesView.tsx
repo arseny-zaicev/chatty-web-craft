@@ -275,6 +275,26 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                     <Button
                       size="icon"
                       variant="ghost"
+                      className="h-8 w-8"
+                      title="Duplicate into this workspace"
+                      onClick={async () => {
+                        try {
+                          let candidate = `${p.name} (copy)`;
+                          let n = 2;
+                          while (nameExists(candidate)) { candidate = `${p.name} (copy ${n++})`; }
+                          await duplicatePipeline(p.id, workspaceId, candidate, p.color);
+                          toast.success("Pipeline duplicated");
+                          invalidate();
+                        } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                      }}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
                       className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => setDeleting(p)}
                       disabled={p.is_default}
