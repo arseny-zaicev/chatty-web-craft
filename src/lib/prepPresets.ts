@@ -243,6 +243,12 @@ INSERT TARGET (PERSONAL Supabase project — NOT Lovable Cloud)
   batch_id: ${ctx.batchId ?? "<MISSING - create the batch first from the Data page>"}
   preset: ${preset.id}
 
+BEFORE INSERT (CRITICAL — prevents the 0-unused stub-batch problem)
+  If a batch with the same name "YYYY-MM-DD | COUNTRY | AUDIENCE" already
+  exists in Lovable Cloud for this workspace, REUSE its batch_id.
+  Never ask the operator to "create another batch" — duplicates show up in
+  the Launch wizard and block the operator from selecting the real one.
+
 WORKFLOW FOR CODEX
   1. Parse the raw input the operator pasted.
   2. Apply validation + dedupe rules above.
