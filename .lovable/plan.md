@@ -1,63 +1,103 @@
-## Проблема
+# Audit: что не так с датами и именами батчей
 
-Сейчас `marketing_instant` для свежей кампании (`campaign_id` ещё нет) **гарантированно ломается**:
+## Что я нашёл (по скриншотам + коду)
 
-- `campaigns/index.ts` строки 213-222 — если нет `reuseCampaignId`, возвращает 409 `must_prepare`.
-- А `prepareCampaign` (строки 1925-1932) пишет `prepared_at/signature` в БД **только если** есть `reuseCampaignId`.
-- Для свежей кампании `campaign_id` физически нет до самого launch → ни один prepare никогда не сохраняется → launch всегда падает.
+### 1. Двойной префикс "DATE | COUNTRY" в имени кампании (главная боль)
 
-Кнопка "Mark reviewed" в UI — это вообще локальный fingerprint в `sessionStorage` (LaunchWizard.tsx 727-749), backend о ней ничего не знает.
+Скрин 2 показывает имя кампании:
+`2026-05-19 | UK | 2026-05-18 | UK | Mixed Founder-Led Services | iskra uk main | C...`
 
-DispatchControlPanel зовёт `action=prepare` и получает обратно `snapshot.signature`, но LaunchWizard эту подпись **никуда не передаёт** при launch.
+Причина — два независимых билдера имени, которые конкатятся:
 
-## Решение (минимум кода, без перестройки)
+- `src/pages/workspace/WorkspaceData.tsx:239` — `buildBatchName(country, audience)` сохраняет батч под именем `"YYYY-MM-DD | COUNTRY | AUDIENCE"` в `audience_batches.name`.
+- `src/pages/workspace/LaunchWizard.tsx:250-256` — авто-заполняет поле `audience` ПОЛНЫМ именем батча (`dbBatch.name`), включая дату и страну.
+- `src/lib/launchData.ts:286 buildCampaignName` — делает `${today} | ${geo} | ${audience} | ${template} | ${cta}` и снова клеит дату+страну спереди.
 
-Передавать подпись снапшота в launch и проверять её на сервере. Если совпадает с подписью, рассчитанной из тех же входов запроса launch — снапшот считается «свежим» даже без `campaign_id`.
+Итог: имя кампании всегда содержит сегодняшнюю дату + дату батча и страну дважды.
 
-### 1. Frontend — `src/pages/workspace/LaunchWizard.tsx`
+### 2. Куча пустых батчей на одну и ту же дату (5 строк "2026-05-18 | UK | …")
 
-- В `dispatchState` (из `DispatchControlPanel.onSnapshotChange`) уже есть `signature`. Добавить его в тело launch:
-  ```ts
-  snapshot_signature: dispatchState.signature,
-  ```
-- Дизейблить «Launch now» для `marketing_instant`, если `!dispatchState.ok || !dispatchState.signature`. Внутренний клиентский `snapshotValid` (sessionStorage) оставляем как «человеческая отметка», не как блокировку.
+Скрин 1: четыре батча "0 unused / 0 valid" + один настоящий 2695/2695.
 
-### 2. Backend — `supabase/functions/campaigns/index.ts`
+Происхождение:
+- В `WorkspaceData` оператор может несколько раз нажать "Create batch" — каждый раз создаётся новая запись в `audience_batches` (Lovable Cloud).
+- Codex/AI по промпту в `src/lib/prepPresets.ts:238-243` вставляет строки в **личный** Supabase под `batch_id`, который оператор передал. Если batch_id не совпал (опечатка, новый prep, старый prompt с дефолтом), `import-audience-from-personal` дёрнет пустой набор → батч остаётся 0/0.
+- Никакой dedupe-проверки по (workspace, name) или (workspace, date, audience) в коде нет.
 
-В блоке `if (dispatchMode === "marketing_instant")` (строки 207-223):
+И самое опасное — LaunchWizard.tsx:243-248 авто-выбирает первый батч из списка (он отсортирован `created_at desc` в `fetchBatches`, `src/lib/audienceData.ts:300`). То есть мастер запуска по умолчанию ставит **самый свежий пустой stub**, а не реальный батч с 2695 контактами. Это и есть "подставляет что-то неверное совершенно".
 
-- Если `reuseCampaignId` — старая логика остаётся (читаем из БД).
-- Если **нет** `reuseCampaignId`:
-  - Прочитать `body.snapshot_signature`.
-  - Посчитать ожидаемую подпись через уже существующую `computeSnapshotSignature({ numberIds, templateIds, audienceCount: recipients.length, windowStart, windowEnd, perNumberQuota, maxInflightPerNumber, maxInflightPerCampaign })`.
-  - Если совпадает — пропускаем launch.
-  - Если нет / отсутствует — отдаём 409 `must_prepare` с понятным сообщением «Click *Mark reviewed* / re-run snapshot — inputs changed after prepare.»
+### 3. Таймзонный разлад между двумя билдерами имени
 
-Это закрывает реальный риск, который защищал must_prepare (оператор увидел блокеры/варнинги), потому что подпись детерминистски привязана к тем же входам.
+- `buildBatchName` (`WorkspaceData.tsx:240`) использует `new Date().toISOString().slice(0,10)` → **UTC**.
+- `buildCampaignName` (`launchData.ts:287-292`) использует `d.getFullYear/getMonth/getDate` → **локальное время браузера**.
 
-### 3. Snapshot fingerprint UX (опционально, ~5 минут)
+Ты в Дубае (UTC+4). После 04:00 GST UTC ещё показывает вчерашний день. Утром в Дубае создаётся батч с датой "вчера UTC", а кампания запускается с датой "сегодня GST" — разные даты в одном имени. Это вторая причина того, что в скрине 2 видна пара "2026-05-19 | UK | 2026-05-18".
 
-В LaunchWizard блок «Snapshot not yet confirmed / Mark reviewed» — переписать на серверный статус:
-- Если `dispatchState.ok && dispatchState.signature` — зелёный «Snapshot ready (server-verified)».
-- Иначе — оранжевый «Prepare snapshot first» с автоскроллом к `DispatchControlPanel`.
+### 4. Промпт в personal Supabase, который ты просил починить
 
-Старый клиентский fingerprint можно удалить (`snapshotKey`, `confirmedSnapshot`, `snapshotFingerprint`) — он только путает.
+Я проверил оба промпта:
+- `src/lib/prepPresets.ts:185-253` — INSERT TARGET корректно указывает personal Supabase (`PERSONAL_SUPABASE_PROJECT_REF`, `PERSONAL_SUPABASE_URL`), workspace_id и batch_id подставляются из контекста. Это **правильно**.
+- `src/lib/prepProfiles.ts:217-308` (legacy prep prompt) — всё ещё указывает `INSERT TARGET (Supabase) table: public.audience_rows` **без явного указания personal vs Lovable Cloud**. Если Codex по ошибке возьмёт этот промпт, он вставит строки в Lovable Cloud → потом `import-audience-from-personal` не найдёт ничего → ещё один stub 0/0. Это, скорее всего, то, что ты имел в виду.
 
-## Файлы
+Ни один из промптов не предупреждает Codex переиспользовать существующий батч на ту же дату/страну/аудиторию вместо создания нового.
 
-- `supabase/functions/campaigns/index.ts` — снять deadlock, принять `snapshot_signature`.
-- `src/pages/workspace/LaunchWizard.tsx` — пробросить `snapshot_signature`, упростить UI снапшота.
-- (опц.) `src/components/workspace/DispatchControlPanel.tsx` — без изменений; уже отдаёт signature через `onSnapshotChange`.
+---
 
-## Что НЕ трогаем
+## Что предлагаю исправить (Plan Mode — только описание)
 
-- `prepareCampaign` (логика и snapshot-отчёт).
-- Paced mode (его deadlock не касается).
-- Kill-switch, stale_snapshot для повторных запусков по `campaign_id`.
+### Fix 1 — убрать двойной префикс в имени кампании
+В `LaunchWizard.tsx` (~строки 250-256) при авто-заполнении `audience` из `dbBatch.name` срезать ведущие `YYYY-MM-DD | COUNTRY | ` если оно там есть, оставив только хвост `Mixed Founder-Led Services`. Регулярка: `^\d{4}-\d{2}-\d{2}\s*\|\s*[A-Z-]{2,}\s*\|\s*`. Тогда `buildCampaignName` снова склеит ровно `DATE | COUNTRY | AUDIENCE | TEMPLATE | CTA`.
 
-## Порядок
+### Fix 2 — одинаковая таймзона для имени батча и кампании
+В `buildBatchName` (`WorkspaceData.tsx:240`) и `buildCampaignName` (`launchData.ts:287-292`) использовать одну хелпер-функцию `dateKeyInTz(new Date(), 'Asia/Dubai')` (она уже есть в `src/lib/timezones.ts`). Это решает "вчера в UTC vs сегодня в GST".
+Альтернатива: использовать TZ страны кампании (`tzInfo(country).tz`) — тогда имя батча для UK будет в London, для AE в Dubai. Но проще всегда workspace-time (Dubai) и зафиксировать в комментарии.
 
-1. Backend: принять `snapshot_signature` + сверить hash. Deploy edge function.
-2. Frontend: пробросить `snapshot_signature` в launch.
-3. UI: заменить локальный fingerprint на серверный статус (опц.).
-4. Тест: открыть LaunchWizard → выбрать numbers + audience → Prepare в DispatchControlPanel → Launch now должен пройти.
+### Fix 3 — не предлагать в Launch заведомо пустой батч
+В `LaunchWizard.tsx:243-248` менять авто-пик: вместо `data![0]` брать первый батч с `unused > 0` (данные уже есть через `useAudienceBatchesQuery` в `src/lib/audienceData.ts` — там есть stats). Если все пустые — оставить пусто и показать предупреждение.
+
+### Fix 4 — почистить накопившийся мусор + защита на будущее
+- В `WorkspaceData.tsx` (`buildBatchName` + `createBatch`-мутация около строки 360) перед инсертом проверить наличие батча с тем же `name` в этом workspace. Если есть — переиспользовать (вернуть его `id`) и не плодить дубль.
+- В UI списка батчей выделять "0 unused / 0 valid" как warning с кнопкой "Delete empty batch".
+- Опционально: миграция, которая навешивает unique-index `(workspace_id, lower(name))` на `audience_batches` чтобы дубли больше не создавались.
+
+### Fix 5 — выровнять промпты
+- В `src/lib/prepProfiles.ts:292-297` явно прописать "INSERT TARGET (PERSONAL Supabase project — NOT Lovable Cloud)" + ссылку на ENV-константы, ровно как в `prepPresets.ts`. Это закроет риск, что старый промпт инсертит не туда.
+- В обоих промптах добавить раздел "BEFORE INSERT: если в Lovable Cloud уже есть batch с именем `YYYY-MM-DD | COUNTRY | AUDIENCE` для этого workspace — переиспользуй его batch_id, не проси оператора создавать новый".
+
+### Fix 6 (диагностика, не правка)
+Прогнать SQL по `audience_batches` workspace ISKRA, чтобы:
+- посчитать все пустые батчи за последние 7 дней,
+- посмотреть, есть ли строки в `audience_rows` для каждого stub'а (быстрая выборка через `supabase--read_query`), и одной командой их удалить.
+
+---
+
+## Технические детали
+
+```text
+audience_batches.name = "2026-05-18 | UK | Mixed Founder-Led Services"
+                            │           │   └── operator-provided "audience"
+                            │           └────── COUNTRY (uppercased)
+                            └────────────────── date in UTC  ← bug source #2
+
+LaunchWizard.audience      = dbBatch.name (вся строка целиком)  ← bug #1
+campaign.name (auto)       = `${today_local} | ${country} | ${audience} | ${template} | ${cta}`
+                           = "2026-05-19 | UK | 2026-05-18 | UK | Mixed Founder-Led Services | iskra uk main | C..."
+```
+
+Файлы под правку:
+- `src/pages/workspace/WorkspaceData.tsx` — Fix 2, Fix 4
+- `src/pages/workspace/LaunchWizard.tsx` — Fix 1, Fix 3
+- `src/lib/launchData.ts` (buildCampaignName) — Fix 2
+- `src/lib/prepProfiles.ts` и `src/lib/prepPresets.ts` — Fix 5
+- (опционально) миграция `audience_batches_unique_name`
+
+---
+
+## Порядок выполнения, если апрувишь
+
+1. Fix 1 + Fix 3 (5 минут, разблокирует тебе текущий запуск).
+2. Fix 2 (TZ-консистентность).
+3. Fix 4 (защита от дублей + чистка через SQL).
+4. Fix 5 (промпты — чтобы Codex больше не плодил пустышки).
+
+Скажи "go 1+3", "go all" или что именно делать — никаких изменений в коде до твоего OK.
