@@ -897,9 +897,33 @@ export default function PipelineConfigSheet({
         <section className="mt-6 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Stages</h3>
-            <Button size="sm" variant="outline" onClick={addStage}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> Add stage
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="ghost" onClick={exportStages} disabled={!(stages ?? []).length} title="Download stages as a JSON preset">
+                <Upload className="w-3.5 h-3.5 mr-1 rotate-180" /> Export
+              </Button>
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const mode = (stages ?? []).length === 0
+                      ? "replace"
+                      : (confirm("OK = Replace all stages with preset.\nCancel = Append preset stages after existing.") ? "replace" : "append");
+                    await importStages(f, mode);
+                    e.target.value = "";
+                  }}
+                />
+                <Button asChild size="sm" variant="ghost" title="Load stages from a JSON preset">
+                  <span><Upload className="w-3.5 h-3.5 mr-1" /> Import</span>
+                </Button>
+              </label>
+              <Button size="sm" variant="outline" onClick={addStage}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Add stage
+              </Button>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             Reorder, recolor, rename or remove the columns visible on this board.
