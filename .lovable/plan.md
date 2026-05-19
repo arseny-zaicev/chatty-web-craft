@@ -1,119 +1,102 @@
 
-# Permission-based workspace access
+## Что уже есть в БД (хорошие новости)
 
-Goal: replace coarse `admin / manager / client` route gates with explicit per-user permission flags. The `role` column stays as a free-text label (badge only) and global admin (`arseny@iskra.ae`) keeps full access. The "retry failed lead" flow we just shipped keeps working - it only requires Pipeline access (which everyone gets by default in migration).
+- `conversations.assigned_user_id`, `assigned_at`, `active_responder_id`
+- `conversations.first_human_reply_at`, `last_human_reply_at`, `waiting_since`, `last_inbound_at`
+- Триггер `touch_conversation_reply_timing` уже считает все эти тайминги при каждом сообщении
+- RPC `ops_operator_performance(_from, _to)` уже возвращает median first response, median reply time, активные/назначенные чаты, конверсии в meeting и т.д. (но `admin only`)
+- `workspace_members` + `is_workspace_manager()` для прав
 
-## 1. Permission model
+Значит, костяк готов — нужно только расширить роли, поправить RPC под workspace и собрать UI.
 
-Per workspace member, boolean toggles:
+---
 
-| Key | Controls |
-|---|---|
-| `perm_overview` | Overview tab + stats route |
-| `perm_inbox` | Inbox tab + `/inbox` route |
-| `perm_pipeline` | Pipeline tab + `/pipeline` route (and Retry button on failed cards) |
-| `perm_campaigns_view` | Campaigns tab (read-only campaign reports) |
-| `perm_quick_replies_use` | Library tab + use quick replies in composer |
-| `perm_quick_replies_manage` | Create/edit/delete **shared** workspace quick replies (personal ones always allowed if `perm_quick_replies_use`) |
-| `perm_settings` | Settings tab (team, brand, pipelines, numbers, templates) |
-| `perm_data` | Data tab |
-| `perm_materials` | Materials tab |
-| `perm_launch` | Launch button in sidebar + `/launch` route + "Launch first campaign" CTA |
+## 1. Сеттеры — модель (и user-сеттеры, и внешние метки)
 
-Global admin (`is_admin(uid)`) and workspace owner (`workspaces.owner_user_id`) always bypass all checks - they implicitly have every permission.
+- Новая enum-роль `setter` в `app_role` (если ещё нет — добавить).
+- Новая таблица `workspace_setters` — для внешних людей без логина:
+  - `id`, `workspace_id`, `display_name`, `avatar_url`, `external` (bool), `linked_user_id` nullable, `is_active`
+  - Если `linked_user_id` есть → это участник workspace; если нет → просто метка
+- На `conversations` добавить `assigned_setter_id uuid` (ссылка на `workspace_setters.id`). Старый `assigned_user_id` остаётся для обратной совместимости и автозаполняется из `linked_user_id`.
+- Триггер: при `INSERT/UPDATE` assigned_setter_id → подставлять `assigned_user_id`, ставить `assigned_at = now()`.
 
-## 2. Data model changes
+## 2. Назначение в Inbox (ручное)
 
-Migration on `workspace_members`:
+- В заголовке открытого чата — поповер «Assign to» со списком активных сеттеров workspace, поиск, аватары, очистка.
+- Записывает в `conversations.assigned_setter_id`.
+- В карточке чата в списке — маленький аватар назначенного сеттера справа.
 
-- Add ten `boolean NOT NULL DEFAULT false` columns listed above.
-- Keep existing `role` (informational label) and `can_view_stats` (kept for backward read compat, but no longer gates anything).
-- Replace `is_workspace_manager` usage in app code with a new SQL helper:
-  ```
-  has_workspace_permission(_workspace_id, _user_id, _perm text) returns boolean
-  ```
-  Returns true if admin, workspace owner, or `workspace_members.<perm column> = true`.
-- RLS policies that currently use `is_workspace_manager` on `workspace_saved_replies`, `pipelines`, `templates`, etc. are updated to call `has_workspace_permission(..., 'perm_settings')` or the corresponding flag. **Owners-manage-memberships policy on `workspace_members` itself is untouched** so settings access can't be self-escalated.
-- `retry_lead_import` RPC is unchanged - it already checks `is_workspace_member + can_access_pipeline`, both of which remain.
+## 3. Фильтры по сеттеру
 
-### Migration of existing rows
+- В Inbox-баре фильтров (рядом с All pipelines / All numbers) — новый селект **Assignee**: «Все», «Не назначены», список сеттеров, «Только мои» (если текущий user — сеттер).
+- В Pipeline-вью — такой же селект над колонками; фильтрует deals по `conversation.assigned_setter_id`.
+- В обоих местах счётчики (Unread, Replied, Negative) пересчитываются по выбранному сеттеру.
 
-Backfill in the same migration:
+## 4. Управление сеттерами
 
-- `role = 'manager'` → all ten flags = true.
-- `role = 'client'` with `can_view_stats = true` → `inbox, pipeline, overview, campaigns_view, quick_replies_use` = true.
-- `role = 'client'` with `can_view_stats = false` → `inbox, pipeline, quick_replies_use` = true.
-- `perm_launch`, `perm_settings`, `perm_data`, `perm_materials`, `perm_quick_replies_manage` stay false for every existing client. (Owners are unaffected - they bypass via `is_workspace_owner`.)
+- В Settings → Team новый раздел **Setters**:
+  - Список с avatar + name + статус (Active / Paused) + чьи чаты ведёт (счётчик)
+  - «Add setter» → выбрать из workspace members **или** ввести имя вручную (external)
+  - Toggle active/paused, edit, remove
+- Доступно только manager/owner workspace.
 
-New invites default to `inbox + pipeline + quick_replies_use` unless inviter ticks more.
+## 5. Stats-таб
 
-## 3. Files changed
+Новый пункт сайдбара воркспейса — **Stats**. Открывается всем участникам workspace, но данные показываются по правилам:
 
-**SQL (one migration):**
-- `supabase/migrations/<new>.sql` - add columns, backfill, create `has_workspace_permission`, rewrite affected RLS policies.
+- **Toggle сверху**: `Me` (мои метрики) / `Team` (все сеттеры).
+  - `Team` доступен только manager/owner; обычный сеттер этот переключатель не видит.
+- **Time range**: Last 24h / 7d / 30d / Custom (default 7d, Dubai tz).
+- **Pipeline filter**: All / конкретный пайплайн.
 
-**Access layer:**
-- `src/lib/workspaceRole.ts` - replace `useWorkspaceAccess` return shape with `{ role: string; permissions: Record<PermKey, boolean>; isOwner: boolean; isAdmin: boolean }`. Add `usePerm(workspaceId, key)` helper. Keep `isManagerLike`/`isAdmin` exports as thin shims (admin only) so non-migrated callers still compile, then remove them once everything is converted.
+### Метрики (на сеттера и в сумме):
 
-**Routing & shell:**
-- `src/components/workspace/WorkspaceSidebar.tsx` - build tab list from permissions, not role buckets. Fix `NavLink` `end` flags so Inbox/Pipeline/Overview/Campaigns highlight correctly (use `end` only on the index route; others rely on path prefix match).
-- `src/pages/workspace/WorkspaceLayout.tsx` - `RoleGuardedOutlet` switches to a per-route permission map:
-  ```
-  overview → perm_overview, inbox → perm_inbox, pipeline → perm_pipeline,
-  campaigns → perm_campaigns_view, library → perm_quick_replies_use,
-  settings → perm_settings, data → perm_data, materials → perm_materials,
-  launch → perm_launch
-  ```
-  Redirect target = first permitted section (fallback: sign out with toast if none).
+1. **Active chats** — конверсии где `assigned_setter_id = X` и стадия `open`
+2. **Avg first response time** — медиана/среднее (`first_human_reply_at − first inbound`) для чатов сеттера в окне
+3. **Avg reply time in dialog** — медиана (`outbound human − предшествующий inbound`) по всем парам в окне
+4. **Stage conversions** — сколько лидов сеттер довёл до Booked / Showed / Closed (берём из истории `deals` + текущей стадии)
 
-**Team UI:**
-- `src/components/workspace/TeamView.tsx` - per-member permissions editor: a compact grid of switches (one row per member, one column per permission, plus the role label as free text). Inviter dialog gets the same grid with sensible defaults. Removes the existing `can_view_stats` switch.
+Плюс таблица «Per setter» с этими 4 колонками + сортировка.
 
-**Per-screen gates / CTA cleanup:**
-- `src/pages/workspace/WorkspaceOverview.tsx` - "Launch first campaign" CTA hidden unless `perm_launch`; replaced with "Open Inbox" for non-launchers.
-- `src/pages/workspace/WorkspaceCampaigns.tsx` - launch/create buttons gated on `perm_launch`; read view on `perm_campaigns_view`.
-- `src/components/workspace/WorkspaceLibrary.tsx` - personal replies always editable; shared section read-only unless `perm_quick_replies_manage`.
-- `src/components/workspace/PipelinesView.tsx` - edit actions gated on `perm_settings`.
-- `src/pages/workspace/WorkspaceSettings.tsx` - already only mounts when route is permitted; no inner change needed.
+### Технически:
 
-## 4. How each surface behaves after the change
+- Новый RPC `setter_performance(_workspace_id, _from, _to, _pipeline_id, _setter_id)`:
+  - SECURITY DEFINER
+  - Если `_setter_id` указан → проверяем, что caller это либо сам сеттер (по `linked_user_id`), либо `is_workspace_manager`
+  - Если NULL → только manager/owner
+  - Использует ту же логику что `ops_operator_performance`, но с фильтром по workspace и `assigned_setter_id`
 
-- **Team access UI:** A simple Google-style table - left column is the user (avatar + email + free-text role badge), then one switch per permission. Saving updates `workspace_members` directly via the existing `owners-manage-memberships` RLS policy.
-- **Quick Replies:** Tab appears only if `perm_quick_replies_use`. Inside, "Shared" tab is view-only without `perm_quick_replies_manage` (create/edit/delete buttons hidden, RLS enforces same on the server). Personal replies are always editable by their owner.
-- **Launch protection:** Launch sidebar item, `/launch` route, and any "Launch campaign / Launch first campaign" CTAs across Overview, Campaigns, empty states are wrapped in `permissions.perm_launch`. Route guard returns `Navigate` to the user's first permitted section. RLS on campaign-creating tables already requires `is_workspace_manager`; we change that to `has_workspace_permission(..., 'perm_launch')`.
-- **Retry failed leads (recently added):** Unchanged. RPC still checks `is_workspace_member + can_access_pipeline`. Any user with `perm_pipeline` (everyone, by migration default) can fix the number and resend.
+### Share
 
-## 5. Mapping summary for existing users
+Для v1 — никакого публичного токена. Сеттер логинится в свой workspace и видит **только** свои цифры; manager видит всех. Это закрывает запрос «я могу выбрать — он видит только своё или всё».
+(Публичный share-link можно добавить позже отдельной задачей.)
 
-| Today | After migration | Net change |
-|---|---|---|
-| admin email | bypasses all | none |
-| workspace owner | bypasses all | none |
-| `role=manager` member | all 10 perms on | same access |
-| `role=client`, stats on | inbox, pipeline, overview, campaigns_view, quick_replies_use | loses nothing they had |
-| `role=client`, stats off | inbox, pipeline, quick_replies_use | gains explicit quick replies use (matches today's behavior); loses nothing |
+---
 
-No one loses access; no one silently gains Launch or Settings.
+## Файлы
 
-## 6. Manual test matrix
+**Миграция:**
+- `workspace_setters` table + RLS
+- `conversations.assigned_setter_id` + триггер sync с `assigned_user_id`
+- `setter_performance(...)` RPC
 
-Create three test members in one workspace:
+**Backend:** edge-функции не нужны — всё через RPC.
 
-1. **Operator** = inbox + pipeline + quick_replies_use only.
-   - Sidebar: only Inbox + Pipeline + Quick replies.
-   - Direct nav to `/launch`, `/settings`, `/campaigns`, `/overview`, `/data`, `/materials` → redirected to `/inbox`.
-   - Failed lead card in Pipeline → Retry dialog opens, fix number, lead re-queues. (validates the access we just built)
-   - Quick replies: shared tab read-only, personal editable.
+**Frontend (новое/правки):**
+- `src/components/workspace/AssigneeFilter.tsx` — переиспользуемый селект (Inbox + Pipeline)
+- `src/components/workspace/AssignSetterPopover.tsx` — назначение в чате
+- `src/components/workspace/SettersSettings.tsx` — управление в Settings → Team
+- `src/pages/workspace/WorkspaceStats.tsx` — новая страница Stats
+- `src/lib/setters.ts` — fetch/mutate helpers
+- Правки: `WorkspaceSidebar.tsx` (новый пункт Stats), `Pipeline.tsx`, `WorkspaceOverview.tsx`/Inbox, `src/lib/inbox.ts` (фильтр по сеттеру в запросе)
 
-2. **Closer** = operator + overview + campaigns_view + quick_replies_manage.
-   - Sees Overview, Campaigns tabs; no Launch button.
-   - Overview shows "Open Inbox" CTA instead of "Launch first campaign".
-   - Can edit shared quick replies.
-   - `/launch` direct nav → redirected to `/overview`.
+---
 
-3. **Full manager** = all perms on.
-   - Sees every sidebar item including Launch and Settings.
-   - Can edit team permissions for Operator/Closer.
-   - Launch wizard works end-to-end.
+## Что НЕ делаем в этом круге
 
-4. **Sidebar highlighting** sanity: navigate Overview → Inbox → Pipeline → Campaigns and confirm only the active item is highlighted (no stale Overview highlight on `/inbox`).
+- Авто round-robin распределение
+- Авто-назначение по стадии
+- Публичная share-ссылка на Stats без логина
+- SLA / алерты по медленным сеттерам
+
+Если ок — пишу миграцию и код за раз.
