@@ -38,21 +38,22 @@ async function fetchInsight(campaignId: string): Promise<Insight | null> {
   return (data as Insight | null) ?? null;
 }
 
-type LiveTotals = { total: number; sent: number; failed: number; pending: number; replied: number; positive: number; meeting: number };
+type LiveTotals = { total: number; sent: number; delivered: number; failed: number; pending: number; replied: number; positive: number; meeting: number };
 
 async function fetchLiveTotals(campaignIds: string[]): Promise<LiveTotals> {
-  const empty: LiveTotals = { total: 0, sent: 0, failed: 0, pending: 0, replied: 0, positive: 0, meeting: 0 };
+  const empty: LiveTotals = { total: 0, sent: 0, delivered: 0, failed: 0, pending: 0, replied: 0, positive: 0, meeting: 0 };
   if (campaignIds.length === 0) return empty;
   const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: campaignIds });
   if (error || !data) return empty;
   return (data as any[]).reduce<LiveTotals>((acc, r) => ({
-    total:    acc.total    + Number(r.total ?? 0),
-    sent:     acc.sent     + Number(r.sent ?? 0),
-    failed:   acc.failed   + Number(r.failed ?? 0),
-    pending:  acc.pending  + Number(r.pending ?? 0),
-    replied:  acc.replied  + Number(r.replied ?? 0),
-    positive: acc.positive + Number(r.positive ?? 0),
-    meeting:  acc.meeting  + Number(r.meeting ?? 0),
+    total:     acc.total     + Number(r.total ?? 0),
+    sent:      acc.sent      + Number(r.sent ?? 0),
+    delivered: acc.delivered + Number(r.delivered_count ?? 0),
+    failed:    acc.failed    + Number(r.failed ?? 0),
+    pending:   acc.pending   + Number(r.pending ?? 0),
+    replied:   acc.replied   + Number(r.replied ?? 0),
+    positive:  acc.positive  + Number(r.positive ?? 0),
+    meeting:   acc.meeting   + Number(r.meeting ?? 0),
   }), empty);
 }
 
@@ -204,9 +205,10 @@ export function CampaignReportPanel({
 
       {/* Live KPI strip — always visible, polled every 30s, never read from cached snapshot */}
       {liveTotals && (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+        <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 mb-3">
           <KpiMini label="Total" value={liveTotals.total} />
           <KpiMini label="Sent" value={liveTotals.sent} tone="good" />
+          <KpiMini label="Delivered" value={liveTotals.delivered} tone="good" />
           <KpiMini label="Failed" value={liveTotals.failed} tone={liveTotals.failed > 0 ? "bad" : undefined} />
           <KpiMini label="Replied" value={liveTotals.replied} />
           <KpiMini label="Positive" value={liveTotals.positive} tone="good" />

@@ -176,10 +176,10 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const { data: liveCountsByCampaign } = useQuery({
     queryKey: ["campaigns", "live-counts", workspaceId, allCampaignIds.slice().sort().join(",")],
     queryFn: async () => {
-      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
+      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
       const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: allCampaignIds });
-      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
-      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
+      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
       for (const r of data as any[]) {
         m.set(r.campaign_id, {
           replied: Number(r.replied ?? 0),
@@ -187,6 +187,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
           positive: Number(r.positive ?? 0),
           warm: Number(r.warm ?? 0),
           sent: Number(r.sent ?? 0),
+          delivered: Number(r.delivered_count ?? 0),
         });
       }
       return m;
@@ -197,14 +198,14 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   });
 
   const groupLiveCounts = useMemo(() => {
-    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number }>();
+    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
     for (const g of groups) {
-      let replied = 0, tagged = 0, positive = 0, warm = 0, sent = 0;
+      let replied = 0, tagged = 0, positive = 0, warm = 0, sent = 0, delivered = 0;
       for (const c of g.campaigns) {
         const v = liveCountsByCampaign?.get(c.id);
-        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; sent += v.sent; }
+        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; sent += v.sent; delivered += v.delivered; }
       }
-      out.set(g.key, { replied, tagged, positive, warm, sent });
+      out.set(g.key, { replied, tagged, positive, warm, sent, delivered });
     }
     return out;
   }, [groups, liveCountsByCampaign]);
@@ -370,7 +371,7 @@ function CampaignDetail({
   group: CampaignGroup;
   canManage: boolean;
   numberById: Map<string, { id: string; phone_number: string; label: string | null; display_name: string | null }>;
-  liveCounts?: { replied: number; tagged: number; positive: number; warm: number; sent: number };
+  liveCounts?: { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number };
 }) {
   const campaignIds = group.campaigns.map((c) => c.id);
   const tz = tzInfo(group.recipientCountry).tz;
@@ -443,9 +444,11 @@ function CampaignDetail({
   // straight to 'replied' without passing through 'sent'); fall back to the
   // cached counter if the RPC hasn't loaded yet.
   const liveSent = Math.max(liveCounts?.sent ?? 0, group.sent ?? 0);
+  const liveDelivered = Math.min(liveCounts?.delivered ?? 0, liveSent);
   const totals = {
     total: group.total,
     sent: liveSent,
+    delivered: liveDelivered,
     failed: group.failed,
     pending: Math.max(0, group.total - liveSent - group.failed),
     today: group.today,
@@ -513,9 +516,15 @@ function CampaignDetail({
           </Button>
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-2">
         <Stat label="Total" value={totals.total.toLocaleString()} />
         <Stat label="Sent" value={totals.sent.toLocaleString()} tone="good" />
+        <Stat
+          label="Delivered"
+          value={totals.delivered.toLocaleString()}
+          tone="good"
+          subtitle={totals.sent > 0 ? `${Math.round((totals.delivered / totals.sent) * 100)}% of sent` : undefined}
+        />
         <Stat label="Pending" value={totals.pending.toLocaleString()} />
         <Stat label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "bad" : undefined} />
       </div>
