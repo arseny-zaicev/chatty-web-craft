@@ -257,6 +257,9 @@ export default function PartnerDetail() {
                       const sentToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_today || 0), 0);
                       const sent7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_7d || 0), 0);
                       const sentAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.sent_all || 0), 0);
+                      const delivToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_today || 0), 0);
+                      const deliv7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_7d || 0), 0);
+                      const delivAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_all || 0), 0);
                       const summary = bmNums.slice(0, 3).map(n => n.display_name || `+${n.phone_number}`).join(", ")
                         + (bmNums.length > 3 ? ` +${bmNums.length - 3}` : "");
                       const invalidateBm = () => {
