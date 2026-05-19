@@ -239,19 +239,28 @@ export default function LaunchWizard() {
     ? (dbAllUnused ? dbAvailable : Math.min(Math.max(0, Number(dbQty) || 0), dbAvailable))
     : 0;
 
-  // Auto-pick first batch when entering db mode
+  // Auto-pick first NON-EMPTY batch when entering db mode.
+  // Picking the freshest stub (unused=0) silently launched against an empty pool.
   useEffect(() => {
     if (audienceSource !== "database") return;
-    if (!dbBatchId && (dbBatchesQ.data?.length ?? 0) > 0) {
-      setDbBatchId(dbBatchesQ.data![0].id);
-    }
-  }, [audienceSource, dbBatchesQ.data, dbBatchId]);
+    if (dbBatchId) return;
+    const batches = dbBatchesQ.data ?? [];
+    if (batches.length === 0) return;
+    const stats = dbStatsQ.data ?? [];
+    const unusedById = new Map(stats.map((s) => [s.batch_id, s.unused ?? 0]));
+    const firstWithRows = batches.find((b) => (unusedById.get(b.id) ?? 0) > 0);
+    setDbBatchId((firstWithRows ?? batches[0]).id);
+  }, [audienceSource, dbBatchesQ.data, dbStatsQ.data, dbBatchId]);
 
-  // Auto-fill audience name from selected DB batch (unless user typed their own)
+  // Auto-fill audience name from selected DB batch (unless user typed their own).
+  // Strip the "YYYY-MM-DD | COUNTRY | " prefix because buildCampaignName re-adds
+  // date + country itself; without this we get "2026-05-19 | UK | 2026-05-18 | UK | ...".
   useEffect(() => {
     if (audienceSource !== "database") return;
     if (audienceDirty) return;
-    const n = (dbBatch?.name ?? "").trim();
+    const raw = (dbBatch?.name ?? "").trim();
+    const cleaned = raw.replace(/^\d{4}-\d{2}-\d{2}\s*\|\s*[A-Z-]{2,}\s*\|\s*/, "").trim();
+    const n = cleaned || raw;
     if (n && n !== audience) setAudience(n);
   }, [audienceSource, dbBatch?.name, audienceDirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
