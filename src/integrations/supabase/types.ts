@@ -3406,19 +3406,12 @@ export type Database = {
       v_metrics_today_by_campaign: {
         Row: {
           campaign_id: string | null
+          delivered_today: number | null
           failed_today: number | null
           sent_today: number | null
           workspace_id: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "campaign_recipients_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       v_metrics_today_by_number: {
         Row: {
