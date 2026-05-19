@@ -3566,7 +3566,9 @@ export type Database = {
         Args: { p_campaign_ids: string[] }
         Returns: {
           campaign_id: string
+          delivered_count: number
           failed: number
+          failed_event_count: number
           meeting: number
           pending: number
           positive: number
