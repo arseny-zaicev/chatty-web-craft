@@ -37,7 +37,10 @@ import {
   ArrowUp,
   ArrowDown,
   Layers,
+  ChevronDown,
+  BookOpen,
 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { groupLogicalTemplates, type Template as LaunchTemplate, type LogicalTemplate, type TemplateGroup as LaunchTemplateGroup } from "@/lib/launchData";
 import TemplateGroupsDialog from "@/components/workspace/TemplateGroupsDialog";
@@ -1711,6 +1714,56 @@ function ZapierWebhookSection({ pipelineId }: { pipelineId: string | null }) {
             "Catch Hook" trigger and paste the URL above. Make.com hooks also work.
           </p>
         </div>
+
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="group flex w-full items-center justify-between rounded-md border border-dashed border-border bg-muted/30 px-2.5 py-1.5 text-left text-[11px] font-medium hover:bg-muted/60 transition"
+            >
+              <span className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5" />
+                How to connect (Iskra guide)
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 transition-transform group-data-[state=open]:rotate-180" />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 rounded-md border border-border bg-background/60 p-3 text-[11px] leading-relaxed text-muted-foreground space-y-2.5">
+            <div>
+              <div className="font-semibold text-foreground mb-1">1. Create the Zap</div>
+              In Zapier, click <span className="font-medium text-foreground">Create Zap</span> → search for the
+              trigger <span className="font-medium text-foreground">Webhooks by Zapier</span> → choose{" "}
+              <span className="font-medium text-foreground">Catch Hook</span> → Continue (no child key needed).
+            </div>
+            <div>
+              <div className="font-semibold text-foreground mb-1">2. Copy the URL into Iskra</div>
+              Zapier shows a <code>https://hooks.zapier.com/hooks/catch/...</code> URL. Paste it in the field
+              above and click <span className="font-medium text-foreground">Save URL</span>, then{" "}
+              <span className="font-medium text-foreground">Send test ping</span> - you should see the sample
+              payload appear in Zapier within seconds.
+            </div>
+            <div>
+              <div className="font-semibold text-foreground mb-1">3. Route by stage</div>
+              One webhook covers the whole pipeline. To run different actions per stage, add a{" "}
+              <span className="font-medium text-foreground">Filter by Zapier</span> step:{" "}
+              <code>to_stage.name</code> (Text) <span className="font-medium text-foreground">exactly matches</span>{" "}
+              e.g. <code>Booked</code>. Duplicate the Zap for each stage you want to automate, or use{" "}
+              <span className="font-medium text-foreground">Paths by Zapier</span> to branch inside one Zap.
+            </div>
+            <div>
+              <div className="font-semibold text-foreground mb-1">4. Useful payload fields</div>
+              <code>event</code>, <code>pipeline_id</code>, <code>from_stage.name</code>,{" "}
+              <code>to_stage.name</code>, <code>deal.id</code>, <code>contact.phone</code>,{" "}
+              <code>contact.name</code>, <code>occurred_at</code> (ISO UTC).
+            </div>
+            <div className="rounded border border-border bg-muted/40 p-2">
+              <span className="font-medium text-foreground">Tip:</span> use{" "}
+              <span className="font-medium text-foreground">Last 10 deliveries</span> below to debug - green{" "}
+              <code>sent</code> means Zapier received it. Make.com hooks (<code>hook.eu1/us1/eu2.make.com</code>)
+              work the same way.
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={save} disabled={saving || !dirty}>
