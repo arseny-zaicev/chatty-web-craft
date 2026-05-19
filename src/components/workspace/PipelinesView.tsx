@@ -68,11 +68,28 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(COLOR_PRESETS[0]);
+  const [copyFromId, setCopyFromId] = useState<string>("");
+  const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const [deleting, setDeleting] = useState<Pipeline | null>(null);
   const [configuring, setConfiguring] = useState<Pipeline | null>(null);
+
+  // All pipelines across workspaces the current user has access to — used as
+  // source candidates for "Copy from existing pipeline".
+  const { data: allPipelines = [] } = useQuery({
+    queryKey: ["all-pipelines-for-copy"],
+    enabled: showNew && canManage,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipelines")
+        .select("id, name, workspace_id, workspaces(name)")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const { data: sourceCounts = {} } = useQuery({
     queryKey: ["pipelines", workspaceId, "source-counts"],
