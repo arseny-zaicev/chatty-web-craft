@@ -376,16 +376,20 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     <div className="text-xs font-medium">Section access</div>
                     <p className="text-[10px] text-muted-foreground">Toggle exactly what {displayName} can see and do.</p>
                     <div className="divide-y divide-border">
-                      {PERM_KEYS.map((k) => (
-                        <label key={k} className="flex items-center justify-between gap-2 py-1.5 cursor-pointer">
-                          <span className="text-xs">{PERM_LABELS[k]}</span>
-                          <Switch
-                            checked={Boolean(m.permissions?.[k])}
-                            onCheckedChange={(v) => togglePerm.mutate({ id: m.id, key: k, value: v })}
-                            disabled={togglePerm.isPending}
-                          />
-                        </label>
-                      ))}
+                      {PERM_KEYS.map((k) => {
+                        const isDependent = k === "perm_stats_all";
+                        const depDisabled = isDependent && !m.permissions?.perm_stats;
+                        return (
+                          <label key={k} className={`flex items-center justify-between gap-2 py-1.5 ${isDependent ? "pl-4" : ""} ${depDisabled ? "opacity-50" : "cursor-pointer"}`}>
+                            <span className="text-xs">{PERM_LABELS[k]}</span>
+                            <Switch
+                              checked={Boolean(m.permissions?.[k])}
+                              onCheckedChange={(v) => togglePerm.mutate({ id: m.id, key: k, value: v })}
+                              disabled={togglePerm.isPending || depDisabled}
+                            />
+                          </label>
+                        );
+                      })}
                     </div>
                   </PopoverContent>
                 </Popover>
