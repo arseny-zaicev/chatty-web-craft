@@ -7,9 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity, BarChart3, Pencil, Layers } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity, Pencil, Layers, Shield } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PERM_KEYS, type PermKey } from "@/lib/workspaceRole";
+
+type MemberPermissions = Record<PermKey, boolean>;
 
 type Member = {
   id: string;
@@ -17,6 +20,7 @@ type Member = {
   role: string;
   can_view_stats: boolean;
   allowed_pipeline_ids: string[] | null;
+  permissions?: MemberPermissions;
   joined_at: string | null;
   invited_at: string | null;
   membership_created_at: string | null;
@@ -27,6 +31,19 @@ type Member = {
   last_seen_at: string | null;
   minutes_30d: number;
   sessions_30d: number;
+};
+
+const PERM_LABELS: Record<PermKey, string> = {
+  perm_overview: "Overview",
+  perm_inbox: "Inbox",
+  perm_pipeline: "Pipeline",
+  perm_campaigns_view: "Campaigns",
+  perm_quick_replies_use: "Quick replies (use)",
+  perm_quick_replies_manage: "Quick replies (manage shared)",
+  perm_settings: "Settings",
+  perm_data: "Data",
+  perm_materials: "Materials",
+  perm_launch: "Launch campaigns",
 };
 
 type WsPipeline = { id: string; name: string; color: string | null };
@@ -135,15 +152,13 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to remove"),
   });
 
-  const toggleStats = useMutation({
-    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
-      const { error } = await supabase.from("workspace_members").update({ can_view_stats: value }).eq("id", id);
+  const togglePerm = useMutation({
+    mutationFn: async ({ id, key, value }: { id: string; key: PermKey; value: boolean }) => {
+      const { error } = await supabase.from("workspace_members").update({ [key]: value }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: membersKey(workspaceId) });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to update"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: membersKey(workspaceId) }); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to update permission"),
   });
 
   const { data: links, isLoading: linksLoading } = useQuery({
@@ -347,18 +362,32 @@ export default function TeamView({ workspaceId }: { workspaceId: string }) {
                     </Button>
                   </div>
                 )}
-                {m.role === "client" && (
-                  <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mt-1">
-                    <BarChart3 className="w-3 h-3" />
-                    <span>Can view Overview & Campaigns</span>
-                    <Switch
-                      checked={m.can_view_stats}
-                      onCheckedChange={(v) => toggleStats.mutate({ id: m.id, value: v })}
-                      disabled={toggleStats.isPending}
-                    />
-                  </label>
-                )}
-                {m.role === "client" && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition mt-1" type="button">
+                      <Shield className="w-3 h-3" />
+                      Permissions ({Object.values(m.permissions ?? {}).filter(Boolean).length}/{PERM_KEYS.length})
+                      <Pencil className="w-3 h-3 opacity-60" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-3 space-y-2" align="start">
+                    <div className="text-xs font-medium">Section access</div>
+                    <p className="text-[10px] text-muted-foreground">Toggle exactly what {displayName} can see and do.</p>
+                    <div className="divide-y divide-border">
+                      {PERM_KEYS.map((k) => (
+                        <label key={k} className="flex items-center justify-between gap-2 py-1.5 cursor-pointer">
+                          <span className="text-xs">{PERM_LABELS[k]}</span>
+                          <Switch
+                            checked={Boolean(m.permissions?.[k])}
+                            onCheckedChange={(v) => togglePerm.mutate({ id: m.id, key: k, value: v })}
+                            disabled={togglePerm.isPending}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {(m.role === "client" || (m.allowed_pipeline_ids?.length ?? 0) > 0) && (
                   <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1 flex-wrap">
                     <Layers className="w-3 h-3" />
                     <span>

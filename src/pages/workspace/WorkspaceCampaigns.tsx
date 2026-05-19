@@ -8,7 +8,7 @@ import { fetchCampaignSummaries } from "@/lib/launchData";
 import { friendlySenderLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useWorkspaceRole, isManagerLike, isAdmin } from "@/lib/workspaceRole";
+import { useWorkspaceAccess } from "@/lib/workspaceRole";
 import { groupCampaigns, type CampaignRow, type CampaignGroup } from "@/lib/campaigns";
 import { CampaignReportPanel } from "@/components/workspace/CampaignReportPanel";
 import CampaignRuntimePanel from "@/components/workspace/CampaignRuntimePanel";
@@ -139,9 +139,9 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
     queryFn: () => fetchCampaignSummaries(workspaceId),
     staleTime: 30_000,
   });
-  const { data: role } = useWorkspaceRole(workspaceId);
-  const canManage = isManagerLike(role);
-  const canLaunch = isAdmin(role);
+  const { data: access } = useWorkspaceAccess(workspaceId);
+  const canManage = Boolean(access?.canManageSettings);
+  const canLaunch = Boolean(access?.permissions?.perm_launch);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {

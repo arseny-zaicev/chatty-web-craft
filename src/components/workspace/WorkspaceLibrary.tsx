@@ -13,7 +13,7 @@ import {
   BUILTIN_FIELDS, LibraryField, SavedReply, SavedReplyScope,
   fetchLibraryFields, fetchSavedReplies, libraryKeys,
 } from "@/lib/workspaceLibrary";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceAccess } from "@/lib/workspaceRole";
 
 const ALL = "__all__";
 const FAV = "__fav__";
@@ -48,8 +48,8 @@ export default function WorkspaceLibrary({ workspaceId }: { workspaceId: string 
   const [editing, setEditing] = useState<Draft | null>(null);
   const [showVars, setShowVars] = useState(false);
 
-  const { data: role } = useWorkspaceRole(workspaceId);
-  const canManageWorkspace = isManagerLike(role);
+  const { data: access } = useWorkspaceAccess(workspaceId);
+  const canManageWorkspace = Boolean(access?.permissions?.perm_quick_replies_manage);
   const defaultScope: SavedReplyScope = canManageWorkspace ? "workspace" : "personal";
 
   const { data: replies = [], isLoading } = useQuery({

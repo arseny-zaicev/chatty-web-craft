@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useWorkspaceRole, useWorkspaceAccess, isManagerLike, isAdmin } from "@/lib/workspaceRole";
+import { useWorkspaceRole, useWorkspaceAccess, type PermKey } from "@/lib/workspaceRole";
 import { IskraLoader } from "@/components/IskraLoader";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 
@@ -143,27 +143,56 @@ function WorkspaceHeader({ workspace, slug, sectionLabel }: { workspace?: Worksp
   );
 }
 
+/** Per-route permission map. `null` = no permission required (open to any member). */
+const ROUTE_PERM: Record<string, PermKey | null> = {
+  overview: "perm_overview",
+  inbox: "perm_inbox",
+  pipeline: "perm_pipeline",
+  campaigns: "perm_campaigns_view",
+  library: "perm_quick_replies_use",
+  settings: "perm_settings",
+  data: "perm_data",
+  materials: "perm_materials",
+  launch: "perm_launch",
+};
+
+/** Order in which we look for a fallback section to redirect to. */
+const FALLBACK_ORDER: PermKey[] = [
+  "perm_inbox",
+  "perm_pipeline",
+  "perm_overview",
+  "perm_campaigns_view",
+  "perm_quick_replies_use",
+  "perm_data",
+  "perm_materials",
+  "perm_settings",
+  "perm_launch",
+];
+const PERM_TO_SEG: Record<PermKey, string> = {
+  perm_overview: "overview",
+  perm_inbox: "inbox",
+  perm_pipeline: "pipeline",
+  perm_campaigns_view: "campaigns",
+  perm_quick_replies_use: "library",
+  perm_quick_replies_manage: "library",
+  perm_data: "data",
+  perm_materials: "materials",
+  perm_settings: "settings",
+  perm_launch: "launch",
+};
+
 function RoleGuardedOutlet({ workspace }: { workspace?: Workspace }) {
   const location = useLocation();
   const { data: access, isLoading } = useWorkspaceAccess(workspace?.id);
   if (!workspace) return <Outlet context={{ workspace }} />;
-  if (isLoading) return <WorkspaceMainFallback />;
-  const role = access?.role;
-  const seg = location.pathname.split("/").filter(Boolean)[2];
-  // `library` is intentionally NOT manager-only: clients and members must be able
-  // to manage their own personal quick-replies. Write-scope (workspace vs personal)
-  // is enforced inside WorkspaceLibrary itself + RLS on workspace_saved_replies.
-  const managerOnly = seg === "settings" || seg === "data" || seg === "materials";
-  const adminOnly = seg === "launch";
-  const statsGated = seg === "overview" || seg === "campaigns" || !seg; // root → overview
-  if (adminOnly && !isAdmin(role)) {
-    return <Navigate to={`/ws/${workspace.slug}/inbox`} replace />;
-  }
-  if (managerOnly && !isManagerLike(role)) {
-    return <Navigate to={`/ws/${workspace.slug}/inbox`} replace />;
-  }
-  if (statsGated && role === "client" && !access?.canViewStats) {
-    return <Navigate to={`/ws/${workspace.slug}/inbox`} replace />;
+  if (isLoading || !access) return <WorkspaceMainFallback />;
+  const seg = location.pathname.split("/").filter(Boolean)[2] ?? "overview";
+  const required = ROUTE_PERM[seg];
+  const allowed = required ? Boolean(access.permissions[required]) : true;
+  if (!allowed) {
+    const fallbackPerm = FALLBACK_ORDER.find((p) => access.permissions[p]);
+    const fallbackSeg = fallbackPerm ? PERM_TO_SEG[fallbackPerm] : "overview";
+    return <Navigate to={`/ws/${workspace.slug}/${fallbackSeg}`} replace />;
   }
   return <Outlet context={{ workspace } satisfies Partial<WorkspaceContext>} />;
 }

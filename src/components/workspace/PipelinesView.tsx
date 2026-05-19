@@ -23,7 +23,7 @@ import {
   setDefaultPipeline,
 } from "@/lib/pipelines";
 import { supabase } from "@/integrations/supabase/client";
-import { useWorkspaceRole, isManagerLike } from "@/lib/workspaceRole";
+import { useWorkspaceAccess } from "@/lib/workspaceRole";
 
 const COLOR_PRESETS = [
   "#6366f1", "#3b82f6", "#10b981", "#f59e0b",
@@ -40,8 +40,8 @@ const NAME_EXAMPLES = [
 
 export default function PipelinesView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
-  const { data: role } = useWorkspaceRole(workspaceId);
-  const canManage = isManagerLike(role);
+  const { data: access } = useWorkspaceAccess(workspaceId);
+  const canManage = Boolean(access?.canManageSettings);
   const { data: pipelines = [], isLoading } = useQuery({
     queryKey: pipelinesKey(workspaceId),
     queryFn: () => fetchPipelines(workspaceId),
