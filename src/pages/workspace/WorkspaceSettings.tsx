@@ -25,6 +25,7 @@ export default function WorkspaceSettings() {
         <p className="text-sm text-muted-foreground">Technical setup for {workspace.name}. Team, numbers, templates and provider config.</p>
         <div className="flex gap-1 mt-4 flex-wrap">
           <TabBtn active={tab === "team"} onClick={() => setTab("team")} icon={<Users className="w-3.5 h-3.5" />}>Team</TabBtn>
+          <TabBtn active={tab === "setters"} onClick={() => setTab("setters")} icon={<UserCog className="w-3.5 h-3.5" />}>Setters</TabBtn>
           <TabBtn active={tab === "brand"} onClick={() => setTab("brand")} icon={<Sparkles className="w-3.5 h-3.5" />}>Brand</TabBtn>
           <TabBtn active={tab === "pipelines"} onClick={() => setTab("pipelines")} icon={<KanbanSquare className="w-3.5 h-3.5" />}>Pipelines</TabBtn>
           <TabBtn active={tab === "numbers"} onClick={() => setTab("numbers")} icon={<Phone className="w-3.5 h-3.5" />}>Numbers</TabBtn>
@@ -34,6 +35,7 @@ export default function WorkspaceSettings() {
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === "team" && <TeamView workspaceId={workspace.id} />}
+        {tab === "setters" && <SettersView workspaceId={workspace.id} />}
         {tab === "brand" && <BrandEditor workspaceId={workspace.id} />}
         {tab === "pipelines" && <PipelinesView workspaceId={workspace.id} />}
         {tab === "numbers" && <NumbersInventory workspaceId={workspace.id} />}
