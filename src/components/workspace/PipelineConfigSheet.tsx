@@ -277,7 +277,7 @@ export default function PipelineConfigSheet({
   );
   const readiness = useMemo(() => {
     const items = [
-      { key: "template", label: "First-touch template selected", ok: Boolean(templateId) },
+      { key: "template", label: "First-touch template or template group selected", ok: Boolean(templateId || templateGroupId) },
       { key: "sender", label: "At least one ready sender number", ok: readySenders.length > 0 },
       { key: "window", label: "Sending window + timezone set", ok: Boolean(winStart && winEnd && timezone) },
       { key: "cap", label: "Daily cap set", ok: Boolean(dailyCap && parseInt(dailyCap, 10) > 0) },
@@ -285,7 +285,7 @@ export default function PipelineConfigSheet({
     ];
     const allOk = items.every((i) => i.ok);
     return { items, allOk };
-  }, [templateId, readySenders, winStart, winEnd, timezone, dailyCap, slackChannel]);
+  }, [templateId, templateGroupId, readySenders, winStart, winEnd, timezone, dailyCap, slackChannel]);
 
   const firstBlockerToast = () => {
     const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
