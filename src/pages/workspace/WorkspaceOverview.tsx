@@ -16,6 +16,7 @@ import { groupCampaigns, type CampaignRow } from "@/lib/campaigns";
 import { tzInfo, dateKeyInTz, todayKeyInTz, shortDateInTz, timeInTz } from "@/lib/timezones";
 import { useWorkspaceAccess } from "@/lib/workspaceRole";
 import { LatestReportCard } from "@/components/workspace/LatestReportCard";
+import { MessageIntegrityPanel } from "@/components/workspace/MessageIntegrityPanel";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
 const HEALTH = {
