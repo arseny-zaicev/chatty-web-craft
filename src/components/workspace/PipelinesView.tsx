@@ -298,9 +298,30 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New pipeline</DialogTitle>
-          <DialogDescription>Creates an independent board pre-seeded with default stages.</DialogDescription>
+          <DialogDescription>Creates an independent board pre-seeded with default stages, or duplicate an existing pipeline from any workspace you have access to.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Copy from existing pipeline (optional)</label>
+              <Select value={copyFromId || "__none__"} onValueChange={(v) => setCopyFromId(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Start blank with default stages" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="__none__">Start blank with default stages</SelectItem>
+                  {allPipelines.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.workspaces?.name ? `${p.workspaces.name} · ` : ""}{p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {copyFromId && (
+                <p className="text-[11px] text-muted-foreground">
+                  Copies stages, automations, sending window, daily cap and template group. Auto-outreach stays OFF and sender numbers are NOT copied - attach them after review.
+                </p>
+              )}
+            </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Name</label>
               <Input
