@@ -1122,21 +1122,54 @@ function AddNumbersToBmButton({
 }: { bmId: string; bmWorkspaceId: string | null; count: number; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
+  const [showBusy, setShowBusy] = useState(false);
+  const [search, setSearch] = useState("");
 
   const { data: pool } = useQuery({
-    queryKey: ["admin", "bm-attach-pool", bmId, bmWorkspaceId],
+    queryKey: ["admin", "bm-attach-pool", bmId, showBusy],
     enabled: open,
     queryFn: async () => {
       let q = supabase
         .from("whatsapp_numbers")
-        .select("id, phone_number, display_name, status, workspace_id")
-        .is("business_manager_id", null);
-      if (bmWorkspaceId) q = q.eq("workspace_id", bmWorkspaceId);
-      const { data, error } = await q.order("display_name");
+        .select("id, phone_number, display_name, status, workspace_id, business_manager_id")
+        .neq("id", "00000000-0000-0000-0000-000000000000")
+        .neq("business_manager_id", bmId);
+      if (!showBusy) q = q.is("business_manager_id", null);
+      const { data, error } = await q.order("display_name").limit(500);
       if (error) throw error;
       return (data ?? []) as any[];
     },
   });
+
+  const { data: wsNames } = useQuery({
+    queryKey: ["admin", "ws-names-mini"],
+    queryFn: async () => {
+      const { data } = await supabase.from("workspaces").select("id, name");
+      const m = new Map<string, string>();
+      (data ?? []).forEach((w: any) => m.set(w.id, w.name));
+      return m;
+    },
+  });
+
+  const { data: bmNames } = useQuery({
+    queryKey: ["admin", "bm-names-mini"],
+    enabled: showBusy && open,
+    queryFn: async () => {
+      const { data } = await supabase.from("business_managers").select("id, name");
+      const m = new Map<string, string>();
+      (data ?? []).forEach((b: any) => m.set(b.id, b.name));
+      return m;
+    },
+  });
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return pool ?? [];
+    return (pool ?? []).filter(n =>
+      String(n.phone_number || "").toLowerCase().includes(term) ||
+      String(n.display_name || "").toLowerCase().includes(term)
+    );
+  }, [pool, search]);
 
   const attach = useMutation({
     mutationFn: async () => {
@@ -1160,25 +1193,49 @@ function AddNumbersToBmButton({
           {count} <Plus className="w-3 h-3 ml-1" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-2" align="end">
-        <div className="text-xs text-muted-foreground mb-2">
-          Unassigned numbers{bmWorkspaceId ? " in this workspace" : ""}
+      <PopoverContent className="w-[380px] p-2" align="end">
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search phone or name…"
+            className="h-7 text-xs"
+          />
         </div>
-        <div className="max-h-56 overflow-y-auto space-y-1">
-          {(pool ?? []).length === 0 && (
-            <div className="text-xs text-muted-foreground py-3 text-center">No numbers available</div>
+        <label className="flex items-center gap-2 text-[11px] text-muted-foreground mb-2 cursor-pointer">
+          <Checkbox checked={showBusy} onCheckedChange={(v) => setShowBusy(Boolean(v))} />
+          Show numbers attached to other BMs (will be re-attached on save)
+        </label>
+        <div className="max-h-64 overflow-y-auto space-y-1">
+          {filtered.length === 0 && (
+            <div className="text-xs text-muted-foreground py-3 text-center">No numbers match</div>
           )}
-          {(pool ?? []).map(n => (
-            <label key={n.id} className="flex items-center gap-2 text-xs hover:bg-muted/50 rounded px-1 py-0.5 cursor-pointer">
-              <Checkbox
-                checked={picked.includes(n.id)}
-                onCheckedChange={() => setPicked(p => p.includes(n.id) ? p.filter(x => x !== n.id) : [...p, n.id])}
-              />
-              <span className="font-mono">+{n.phone_number}</span>
-              <span className="text-muted-foreground truncate">{n.display_name || ""}</span>
-              <Badge variant="outline" className="ml-auto text-[10px]">{n.status}</Badge>
-            </label>
-          ))}
+          {filtered.map(n => {
+            const wsLabel = n.workspace_id ? (wsNames?.get(n.workspace_id) || n.workspace_id.slice(0,6)) : "no ws";
+            const inOtherBm = n.business_manager_id && n.business_manager_id !== bmId;
+            const otherBmLabel = inOtherBm ? (bmNames?.get(n.business_manager_id) || n.business_manager_id.slice(0,6)) : null;
+            return (
+              <label key={n.id} className="flex items-center gap-2 text-xs hover:bg-muted/50 rounded px-1 py-1 cursor-pointer">
+                <Checkbox
+                  checked={picked.includes(n.id)}
+                  onCheckedChange={() => setPicked(p => p.includes(n.id) ? p.filter(x => x !== n.id) : [...p, n.id])}
+                />
+                <div className="flex flex-col flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono">+{n.phone_number}</span>
+                    <span className="text-muted-foreground truncate">{n.display_name || ""}</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] text-muted-foreground">ws: {wsLabel}</span>
+                    {otherBmLabel && (
+                      <span className="text-[10px] text-amber-600">· now in BM: {otherBmLabel}</span>
+                    )}
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[10px] shrink-0">{n.status}</Badge>
+              </label>
+            );
+          })}
         </div>
         <div className="flex justify-end gap-2 mt-2">
           <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
