@@ -58,11 +58,11 @@ Deno.serve(async (req) => {
 
     // Paginate pull from personal (Supabase caps each select at 1000)
     const PAGE = 1000;
-    const allRows: Array<{ phone: string; payload: any; validation_status: string }> = [];
+    const allRows: Array<{ phone: string; payload: any; derived_payload: any; validation_status: string }> = [];
     for (let from = 0; ; from += PAGE) {
       const { data: page, error: pullErr } = await personal
         .from("audience_rows")
-        .select("phone, payload, validation_status")
+        .select("phone, payload, derived_payload, validation_status")
         .eq("batch_id", batch_id)
         .order("phone")
         .range(from, from + PAGE - 1);
@@ -90,14 +90,38 @@ Deno.serve(async (req) => {
       });
     }
 
-    const toInsert = allRows.map((r) => ({
-      batch_id,
-      workspace_id: batch.workspace_id,
-      phone: r.phone,
-      payload: r.payload ?? {},
-      validation_status: r.validation_status ?? "valid",
-      usage_status: "unused",
-    }));
+    // Helper: pick first non-empty name-like field from payload (case-insensitive).
+    const NAME_KEYS = ["first_name", "firstname", "given_name", "givenname", "name", "fullname", "full_name"];
+    const pickName = (payload: any): string => {
+      if (!payload || typeof payload !== "object") return "";
+      const lc: Record<string, any> = {};
+      for (const k of Object.keys(payload)) lc[k.toLowerCase()] = payload[k];
+      for (const k of NAME_KEYS) {
+        const v = String(lc[k] ?? "").trim();
+        if (v) return v.split(/\s+/)[0]; // first token only
+      }
+      return "";
+    };
+
+    let backfilled_var_1 = 0;
+    const toInsert = allRows.map((r) => {
+      const payload = r.payload ?? {};
+      const dp: Record<string, any> = { ...(r.derived_payload ?? {}) };
+      // Backfill var_1 from payload name fields when missing -> avoids "Hey there {{1}}" => "there there".
+      if (!String(dp.var_1 ?? "").trim()) {
+        const guess = pickName(payload);
+        if (guess) { dp.var_1 = guess; backfilled_var_1 += 1; }
+      }
+      return {
+        batch_id,
+        workspace_id: batch.workspace_id,
+        phone: r.phone,
+        payload,
+        derived_payload: dp,
+        validation_status: r.validation_status ?? "valid",
+        usage_status: "unused",
+      };
+    });
 
     let inserted = 0;
     const CHUNK = 500;
