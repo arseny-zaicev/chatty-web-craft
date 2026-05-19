@@ -441,6 +441,64 @@ export default function PipelineConfigSheet({
     if (error) toast.error(error.message); else { toast.success("Stage deleted"); refetchStages(); qc.invalidateQueries({ queryKey: ["stages", wsId] }); }
   };
 
+  const exportStages = () => {
+    const arr = [...(stages ?? [])].sort((a, b) => a.position - b.position)
+      .map((s) => ({ name: s.name, color: s.color, stage_type: s.stage_type, position: s.position }));
+    const payload = { version: 1, kind: "pipeline_stages", pipeline_name: pipeline?.name ?? "pipeline", stages: arr };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pipeline-${(pipeline?.name ?? "preset").toLowerCase().replace(/\s+/g, "-")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Pipeline preset exported");
+  };
+
+  const importStages = async (file: File, mode: "replace" | "append") => {
+    if (!pipeId || !wsId) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const incoming: Array<{ name: string; color?: string; stage_type?: string; position?: number }> =
+        Array.isArray(parsed?.stages) ? parsed.stages : Array.isArray(parsed) ? parsed : [];
+      if (!incoming.length) { toast.error("No stages found in file"); return; }
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+
+      if (mode === "replace") {
+        const { count } = await supabase.from("deals").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId);
+        if ((count ?? 0) > 0) {
+          toast.error(`Can't replace: ${count} deal(s) still reference current stages. Use "Append" or move deals first.`);
+          return;
+        }
+        if (!confirm("Replace ALL existing stages with imported preset?")) return;
+        const ids = (stages ?? []).map((s) => s.id);
+        if (ids.length) await supabase.from("pipeline_stages").delete().in("id", ids);
+      }
+
+      const basePos = mode === "append"
+        ? ((stages ?? []).reduce((m, s) => Math.max(m, s.position), -1)) + 1
+        : 0;
+      const rows = incoming.map((s, i) => ({
+        pipeline_id: pipeId,
+        workspace_id: wsId,
+        user_id: u.user!.id,
+        name: String(s.name ?? "Stage").slice(0, 80),
+        color: typeof s.color === "string" && /^#[0-9a-f]{3,8}$/i.test(s.color) ? s.color : "#64748b",
+        position: basePos + i,
+        stage_type: (["open", "won", "lost"].includes(String(s.stage_type)) ? s.stage_type : "open") as "open" | "won" | "lost",
+      }));
+      const { error } = await supabase.from("pipeline_stages").insert(rows);
+      if (error) { toast.error(error.message); return; }
+      toast.success(`Imported ${rows.length} stage(s)`);
+      refetchStages();
+      qc.invalidateQueries({ queryKey: ["stages", wsId] });
+    } catch (e: any) {
+      toast.error(`Import failed: ${e?.message ?? "invalid file"}`);
+    }
+  };
+
   useEffect(() => {
     if (open && pipeline) hydrate(pipeline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -839,9 +897,33 @@ export default function PipelineConfigSheet({
         <section className="mt-6 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Stages</h3>
-            <Button size="sm" variant="outline" onClick={addStage}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> Add stage
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="ghost" onClick={exportStages} disabled={!(stages ?? []).length} title="Download stages as a JSON preset">
+                <Upload className="w-3.5 h-3.5 mr-1 rotate-180" /> Export
+              </Button>
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const mode = (stages ?? []).length === 0
+                      ? "replace"
+                      : (confirm("OK = Replace all stages with preset.\nCancel = Append preset stages after existing.") ? "replace" : "append");
+                    await importStages(f, mode);
+                    e.target.value = "";
+                  }}
+                />
+                <Button asChild size="sm" variant="ghost" title="Load stages from a JSON preset">
+                  <span><Upload className="w-3.5 h-3.5 mr-1" /> Import</span>
+                </Button>
+              </label>
+              <Button size="sm" variant="outline" onClick={addStage}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Add stage
+              </Button>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             Reorder, recolor, rename or remove the columns visible on this board.
