@@ -66,6 +66,26 @@ function resolveColumnIndex(spec: string | undefined, headers: string[]): number
   return -1;
 }
 
+function chunks<T>(items: T[], size = 400): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+async function bulkInsertLeadImports(admin: any, rows: Record<string, unknown>[]) {
+  for (const part of chunks(rows, 400)) {
+    const { error } = await admin.from("lead_imports").insert(part);
+    if (!error) continue;
+
+    // A concurrent/manual sync can race on the source+row unique index. Fall
+    // back to row-by-row so one duplicate does not discard the whole chunk.
+    for (const row of part) {
+      const { error: rowErr } = await admin.from("lead_imports").insert(row);
+      if (rowErr && rowErr.code !== "23505") console.error("lead_import_insert_failed", rowErr.message);
+    }
+  }
+}
+
 // Sync logic for one source. Returns a result object.
 async function syncOne(admin: any, source: any): Promise<Record<string, unknown>> {
   if (source.kind !== "google_sheet") return { source_id: source.id, error: "Not a Google Sheet source" };
@@ -256,6 +276,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
     const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
+    const leadImportRows: Record<string, unknown>[] = [];
 
     // Cache resolved owning-pipeline names so we don't lookup the same name
     // 200 times for a Sheet that's full of duplicates of the other pipeline.
@@ -269,7 +290,12 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       return n;
     };
 
-    // 3. Validate + dedupe + import
+    const normalizedRows: any[] = [];
+    const phonesToCheck = new Set<string>();
+
+    // 3. Validate rows first, then dedupe in bulk. The old implementation did
+    // 2 database lookups + 1 insert per row, which timed out on 1k+ row sheets.
+    const preparedRows: any[] = [];
     for (let i = 0; i < newRows.length; i++) {
       const sheetRowNumber = startIdx + i + 1; // 1-based
       const row = newRows[i] ?? [];
@@ -292,57 +318,114 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
 
       lastProcessedRow = sheetRowNumber;
 
-      // Skip Meta test-lead rows entirely
       if (isTestLeadValue(phoneRaw) || isTestLeadValue(nameRawCell)) {
-        rejected++;
-        testLeadCount++;
-        await admin.from("lead_imports").insert({
-          workspace_id: source.workspace_id,
-          pipeline_id: source.pipeline_id,
-          batch_id: batch.id,
-          source_connection_id: source.id,
-          external_id: externalId,
-          phone: String(phoneRaw ?? "").slice(0, 32),
-          name,
-          payload,
-          status: "invalid",
-          error: "Test lead (skipped)",
+        preparedRows.push({
+          externalId,
+          type: "test",
+          row: {
+            workspace_id: source.workspace_id,
+            pipeline_id: source.pipeline_id,
+            batch_id: batch.id,
+            source_connection_id: source.id,
+            external_id: externalId,
+            phone: String(phoneRaw ?? "").slice(0, 32),
+            name,
+            payload,
+            status: "invalid",
+            error: "Test lead (skipped)",
+          },
         });
         continue;
       }
 
       const phoneResult = normalizePhone(phoneRaw, defaultCC);
       if (!phoneResult.ok) {
-        rejected++;
-        if (phoneResult.status === "ambiguous") ambiguousCount++;
-        else invalidCount++;
-        await admin.from("lead_imports").insert({
-          workspace_id: source.workspace_id,
-          pipeline_id: source.pipeline_id,
-          batch_id: batch.id,
-          source_connection_id: source.id,
-          external_id: externalId,
-          phone: String(phoneRaw ?? "").slice(0, 32),
-          name,
-          payload,
-          status: "invalid",
-          error: phoneResult.reason,
+        preparedRows.push({
+          externalId,
+          type: phoneResult.status === "needs_review" ? "ambiguous" : "invalid",
+          row: {
+            workspace_id: source.workspace_id,
+            pipeline_id: source.pipeline_id,
+            batch_id: batch.id,
+            source_connection_id: source.id,
+            external_id: externalId,
+            phone: String(phoneRaw ?? "").slice(0, 32),
+            name,
+            payload,
+            status: "invalid",
+            error: phoneResult.reason,
+          },
         });
         continue;
       }
-      const phone = phoneResult.phone;
 
-      // Owning-pipeline rule: a conversation sticks to the pipeline that
-      // created it. If the same phone re-appears via a source wired to a
-      // DIFFERENT pipeline, we record a duplicate row pointing at the existing
-      // conversation and surface "owned by <pipeline>" so the operator can see
-      // why it was not first-touched again.
-      const { data: existingConv } = await admin
+      preparedRows.push({
+        externalId,
+        type: "valid",
+        phone: phoneResult.phone,
+        name,
+        payload,
+      });
+    }
+
+    const existingExternalIds = new Set<string>();
+    for (const part of chunks(preparedRows.map((r) => r.externalId), 400)) {
+      const { data } = await admin
+        .from("lead_imports")
+        .select("external_id")
+        .eq("source_connection_id", source.id)
+        .in("external_id", part);
+      for (const row of data ?? []) if (row.external_id) existingExternalIds.add(row.external_id);
+    }
+
+    for (const item of preparedRows) {
+      if (existingExternalIds.has(item.externalId)) {
+        rejected++;
+        duplicateCount++;
+        continue;
+      }
+      if (item.type === "test") {
+        rejected++;
+        testLeadCount++;
+        leadImportRows.push(item.row);
+        continue;
+      }
+      if (item.type === "invalid" || item.type === "ambiguous") {
+        rejected++;
+        if (item.type === "ambiguous") ambiguousCount++;
+        else invalidCount++;
+        leadImportRows.push(item.row);
+        continue;
+      }
+      normalizedRows.push(item);
+      phonesToCheck.add(item.phone);
+    }
+
+    const phones = Array.from(phonesToCheck);
+    const existingConvsByPhone = new Map<string, any>();
+    for (const part of chunks(phones, 400)) {
+      const { data } = await admin
         .from("conversations")
-        .select("id, pipeline_id")
+        .select("id, pipeline_id, contact_phone")
         .eq("workspace_id", source.workspace_id)
-        .eq("contact_phone", phone)
-        .maybeSingle();
+        .in("contact_phone", part);
+      for (const conv of data ?? []) existingConvsByPhone.set(conv.contact_phone, conv);
+    }
+
+    const existingLeadPhones = new Set<string>();
+    for (const part of chunks(phones, 400)) {
+      const { data } = await admin
+        .from("lead_imports")
+        .select("phone")
+        .eq("workspace_id", source.workspace_id)
+        .eq("pipeline_id", source.pipeline_id)
+        .in("phone", part);
+      for (const lead of data ?? []) existingLeadPhones.add(lead.phone);
+    }
+
+    const seenThisRun = new Set<string>();
+    for (const item of normalizedRows) {
+      const existingConv = existingConvsByPhone.get(item.phone);
       if (existingConv) {
         rejected++;
         duplicateCount++;
@@ -351,15 +434,15 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
           crossPipelineDuplicateCount++;
           errMsg = `phone owned by pipeline ${await ownerName(existingConv.pipeline_id)}`;
         }
-        await admin.from("lead_imports").insert({
+        leadImportRows.push({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
           source_connection_id: source.id,
-          external_id: externalId,
-          phone,
-          name,
-          payload,
+          external_id: item.externalId,
+          phone: item.phone,
+          name: item.name,
+          payload: item.payload,
           conversation_id: existingConv.id,
           status: "duplicate",
           error: errMsg,
@@ -367,53 +450,39 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         continue;
       }
 
-      // Per-pipeline lead_imports dedupe (avoid re-importing the same phone
-      // twice into the SAME pipeline on a re-sync before the conversation
-      // exists). Scope is intentionally per-pipeline now — the old
-      // workspace-wide check leaked across Warm/Reactivation pipelines.
-      const { data: existingLead } = await admin
-        .from("lead_imports")
-        .select("id")
-        .eq("workspace_id", source.workspace_id)
-        .eq("pipeline_id", source.pipeline_id)
-        .eq("phone", phone)
-        .limit(1)
-        .maybeSingle();
-      if (existingLead) {
+      if (existingLeadPhones.has(item.phone) || seenThisRun.has(item.phone)) {
         rejected++;
         duplicateCount++;
-        await admin.from("lead_imports").insert({
+        leadImportRows.push({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
           source_connection_id: source.id,
-          external_id: externalId,
-          phone,
-          name,
-          payload,
+          external_id: item.externalId,
+          phone: item.phone,
+          name: item.name,
+          payload: item.payload,
           status: "duplicate",
         });
         continue;
       }
 
-      const { error: impErr } = await admin.from("lead_imports").insert({
+      leadImportRows.push({
         workspace_id: source.workspace_id,
         pipeline_id: source.pipeline_id,
         batch_id: batch.id,
         source_connection_id: source.id,
-        external_id: externalId,
-        phone,
-        name,
-        payload,
+        external_id: item.externalId,
+        phone: item.phone,
+        name: item.name,
+        payload: item.payload,
         status: initialStatus,
       });
-      if (impErr) {
-        rejected++;
-        invalidCount++;
-        continue;
-      }
       accepted++;
+      seenThisRun.add(item.phone);
     }
+
+    await bulkInsertLeadImports(admin, leadImportRows);
 
     // 4. Close batch + update source cursor
     await admin
