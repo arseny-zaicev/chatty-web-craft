@@ -719,6 +719,36 @@ export default function LaunchWizard() {
     });
   }, [mappedRecipients, activeLogical, variableNames, audienceSource, sampleDbRowsQ.data, mapping]);
 
+  // ----- Snapshot fingerprint -----
+  // A campaign is "still valid for launch" while these inputs are unchanged.
+  // The user explicitly confirms a snapshot by clicking the badge; subsequent edits
+  // invalidate it. No 30-min expiry: if nothing changed, the snapshot stays valid
+  // regardless of time elapsed.
+  const snapshotFingerprint = useMemo(() => {
+    const parts = {
+      a: dbBatchId || `paste:${recipients.length}`,
+      t: activeLogical?.key ?? "",
+      n: [...activeNumbers.map((n) => n.id)].sort(),
+      m: Object.entries(mapping).sort(([a], [b]) => a.localeCompare(b)),
+    };
+    return btoa(unescape(encodeURIComponent(JSON.stringify(parts)))).slice(0, 16);
+  }, [dbBatchId, recipients.length, activeLogical?.key, activeNumbers, mapping]);
+  const snapshotKey = `launch-snapshot:${workspace?.id ?? ""}:${dbBatchId || "paste"}`;
+  const [confirmedSnapshot, setConfirmedSnapshot] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return sessionStorage.getItem(snapshotKey) ?? "";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setConfirmedSnapshot(sessionStorage.getItem(snapshotKey) ?? "");
+    }
+  }, [snapshotKey]);
+  const snapshotValid = confirmedSnapshot === snapshotFingerprint && snapshotFingerprint.length > 0;
+  const confirmSnapshot = () => {
+    sessionStorage.setItem(snapshotKey, snapshotFingerprint);
+    setConfirmedSnapshot(snapshotFingerprint);
+  };
+
   // ----- Launch -----
   const launch = useMutation({
     mutationFn: async () => {
@@ -1823,6 +1853,24 @@ export default function LaunchWizard() {
               onSnapshotChange={setDispatchState}
             />
           )}
+          <div className={`text-xs rounded-md border px-2.5 py-2 flex items-start gap-2 ${snapshotValid ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400"}`}>
+            <div className="flex-1">
+              <div className="font-medium">
+                {snapshotValid ? "Snapshot reviewed ✓" : "Snapshot not yet confirmed"}
+              </div>
+              <div className="opacity-80 mt-0.5">
+                Fingerprint <code className="font-mono">{snapshotFingerprint}</code>.{" "}
+                {snapshotValid
+                  ? "Batch, template, senders and mapping unchanged since you confirmed — no re-prepare needed regardless of how long you wait to launch."
+                  : "Click 'Mark snapshot reviewed' once the inputs look right. Editing any of them invalidates the snapshot."}
+              </div>
+            </div>
+            {!snapshotValid && (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" onClick={confirmSnapshot}>
+                Mark reviewed
+              </Button>
+            )}
+          </div>
           <Button
             className="w-full"
             onClick={() => launch.mutate()}

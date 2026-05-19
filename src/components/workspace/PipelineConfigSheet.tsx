@@ -32,8 +32,27 @@ import {
   X,
   Loader2,
   AlertTriangle,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
+
+type Stage = {
+  id: string;
+  pipeline_id: string;
+  workspace_id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  position: number;
+  stage_type: "open" | "won" | "lost";
+};
+
+const STAGE_COLORS = [
+  "#64748b", "#94a3b8", "#10b981", "#f59e0b", "#6366f1",
+  "#3b82f6", "#ef4444", "#dc2626", "#059669", "#a855f7", "#ec4899",
+];
 
 type Pipeline = {
   id: string;
@@ -254,6 +273,66 @@ export default function PipelineConfigSheet({
       };
     },
   });
+
+  const { data: stages, refetch: refetchStages } = useQuery({
+    queryKey: ["pipeline-stages", pipeId],
+    enabled: Boolean(pipeId && open),
+    queryFn: async (): Promise<Stage[]> => {
+      const { data } = await supabase
+        .from("pipeline_stages")
+        .select("id, pipeline_id, workspace_id, user_id, name, color, position, stage_type")
+        .eq("pipeline_id", pipeId!)
+        .order("position");
+      return (data ?? []) as Stage[];
+    },
+  });
+
+  const addStage = async () => {
+    if (!pipeId || !wsId) return;
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const nextPos = ((stages ?? []).reduce((m, s) => Math.max(m, s.position), -1)) + 1;
+    const { error } = await supabase.from("pipeline_stages").insert({
+      pipeline_id: pipeId, workspace_id: wsId, user_id: u.user.id,
+      name: "New stage", color: "#64748b", position: nextPos, stage_type: "open",
+    });
+    if (error) return toast.error(error.message);
+    refetchStages();
+  };
+  const renameStage = async (id: string, name: string) => {
+    const { error } = await supabase.from("pipeline_stages").update({ name }).eq("id", id);
+    if (error) toast.error(error.message); else refetchStages();
+  };
+  const colorStage = async (id: string, color: string) => {
+    const { error } = await supabase.from("pipeline_stages").update({ color }).eq("id", id);
+    if (error) toast.error(error.message); else refetchStages();
+  };
+  const moveStage = async (id: string, dir: -1 | 1) => {
+    const arr = [...(stages ?? [])].sort((a, b) => a.position - b.position);
+    const idx = arr.findIndex((s) => s.id === id);
+    const swap = arr[idx + dir];
+    if (!swap) return;
+    await Promise.all([
+      supabase.from("pipeline_stages").update({ position: swap.position }).eq("id", id),
+      supabase.from("pipeline_stages").update({ position: arr[idx].position }).eq("id", swap.id),
+    ]);
+    refetchStages();
+    qc.invalidateQueries({ queryKey: ["stages", wsId] });
+  };
+  const deleteStage = async (s: Stage) => {
+    // Refuse if any deals reference this stage
+    const { count } = await supabase
+      .from("deals")
+      .select("id", { count: "exact", head: true })
+      .eq("stage_id", s.id);
+    if ((count ?? 0) > 0) {
+      toast.error(`Can't delete: ${count} deal(s) still in "${s.name}". Move them first.`);
+      return;
+    }
+    if (!confirm(`Delete stage "${s.name}"?`)) return;
+    const { error } = await supabase.from("pipeline_stages").delete().eq("id", s.id);
+    if (error) toast.error(error.message); else { toast.success("Stage deleted"); refetchStages(); qc.invalidateQueries({ queryKey: ["stages", wsId] }); }
+  };
 
   useEffect(() => {
     if (open && pipeline) hydrate(pipeline);
@@ -646,6 +725,77 @@ export default function PipelineConfigSheet({
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* Stages */}
+        <section className="mt-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Stages</h3>
+            <Button size="sm" variant="outline" onClick={addStage}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add stage
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Reorder, recolor, rename or remove the columns visible on this board.
+          </p>
+          <div className="rounded-lg border border-border divide-y divide-border">
+            {(stages ?? []).length === 0 && (
+              <div className="p-3 text-xs text-muted-foreground text-center">No stages yet.</div>
+            )}
+            {(stages ?? []).map((s, i) => (
+              <div key={s.id} className="p-2 flex items-center gap-2">
+                <GripVertical className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => moveStage(s.id, -1)}>
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === (stages ?? []).length - 1} onClick={() => moveStage(s.id, 1)}>
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </Button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="w-5 h-5 rounded border border-border shrink-0"
+                    style={{ backgroundColor: s.color }}
+                    title="Change color"
+                    onClick={(e) => {
+                      const pop = e.currentTarget.nextElementSibling as HTMLElement | null;
+                      if (pop) pop.classList.toggle("hidden");
+                    }}
+                  />
+                  <div className="hidden absolute z-10 mt-1 left-0 rounded-md border border-border bg-popover p-1.5 grid grid-cols-6 gap-1 shadow-md">
+                    {STAGE_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className="w-5 h-5 rounded border border-border"
+                        style={{ backgroundColor: c }}
+                        onClick={(ev) => { colorStage(s.id, c); (ev.currentTarget.parentElement as HTMLElement).classList.add("hidden"); }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <Input
+                  defaultValue={s.name}
+                  onBlur={(e) => { if (e.target.value.trim() && e.target.value !== s.name) renameStage(s.id, e.target.value.trim()); }}
+                  className="h-7 text-xs flex-1"
+                />
+                <Select value={s.stage_type} onValueChange={async (v) => {
+                  const { error } = await supabase.from("pipeline_stages").update({ stage_type: v as "open" | "won" | "lost" }).eq("id", s.id);
+                  if (error) toast.error(error.message); else refetchStages();
+                }}>
+                  <SelectTrigger className="h-7 w-20 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="won">Won</SelectItem>
+                    <SelectItem value="lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteStage(s)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ))}
           </div>
         </section>
 

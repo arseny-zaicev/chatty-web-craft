@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from "sonner";
 import {
   audienceKeys, parseAudienceFile, detectPhoneColumn, uploadBatch, type ParsedAudience,
+  fetchBatches, parseStaticValues, type AudienceBatch,
 } from "@/lib/audienceData";
 import { fetchLaunchEssentials, type Template } from "@/lib/launchData";
 
@@ -63,6 +64,7 @@ export function SmartUploadDialog({
   const [step, setStep] = useState<Step>("input");
   const [campaignType, setCampaignType] = useState<"marketing" | "utility">("marketing");
   const [templateName, setTemplateName] = useState<string>("");
+  const [reuseBatchId, setReuseBatchId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedAudience | null>(null);
   const [pastedCopy, setPastedCopy] = useState("");
@@ -75,6 +77,22 @@ export function SmartUploadDialog({
   const [phoneColumn, setPhoneColumn] = useState<string>("");
   const [mapping, setMapping] = useState<Record<string, string>>({});
 
+  // Batches with static-value notes — reusable across uploads (no cache bleed: each batch
+  // keeps its own snapshot in audience_batches.notes).
+  const batchesQ = useQuery({
+    queryKey: ["smart-upload-batches", workspaceId],
+    queryFn: () => fetchBatches(workspaceId),
+    enabled: open,
+  });
+  const reusableBatches = useMemo<AudienceBatch[]>(() => {
+    return (batchesQ.data ?? []).filter((b) => Object.keys(parseStaticValues(b.notes)).length > 0);
+  }, [batchesQ.data]);
+  const reuseStatic = useMemo<Record<string, string>>(() => {
+    if (!reuseBatchId) return {};
+    const b = (batchesQ.data ?? []).find((x) => x.id === reuseBatchId);
+    return parseStaticValues(b?.notes ?? null);
+  }, [reuseBatchId, batchesQ.data]);
+
   const selectedTpl = templateOptions.find((t) => t.name === templateName) ?? null;
   const expectedFields = selectedTpl?.vars ?? [];
 
@@ -82,6 +100,7 @@ export function SmartUploadDialog({
     setStep("input");
     setCampaignType("marketing");
     setTemplateName("");
+    setReuseBatchId("");
     setFile(null);
     setParsed(null);
     setPastedCopy("");
@@ -136,6 +155,12 @@ export function SmartUploadDialog({
         return;
       }
       const r = json as AnalyzeResult;
+      // Per-batch isolation: if operator picked a reuse-source batch, that batch's
+      // static values OVERRIDE the AI-detected ones for this new batch. Each batch
+      // still keeps its own snapshot in audience_batches.notes (no shared cache).
+      if (Object.keys(reuseStatic).length > 0) {
+        r.static_values = { ...r.static_values, ...reuseStatic };
+      }
       setResult(r);
       setName(r.suggested_name);
       const top = Object.entries(r.country_distribution ?? {}).sort((a, b) => b[1] - a[1])[0];
@@ -240,6 +265,37 @@ export function SmartUploadDialog({
             {selectedTpl && expectedFields.length > 0 && (
               <div className="text-[11px] text-muted-foreground">
                 Variables: {expectedFields.map((v) => <code key={v} className="mr-1">{v}</code>)}
+              </div>
+            )}
+
+            {reusableBatches.length > 0 && (
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Reuse static values from prior batch (optional)
+                </label>
+                <Select value={reuseBatchId || "__none"} onValueChange={(v) => setReuseBatchId(v === "__none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Don't reuse" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— don't reuse, let AI decide —</SelectItem>
+                    {reusableBatches.map((b) => {
+                      const sv = parseStaticValues(b.notes);
+                      const keys = Object.keys(sv).join(", ");
+                      return (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name} · {keys}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {reuseBatchId && Object.keys(reuseStatic).length > 0 && (
+                  <div className="mt-1 rounded border border-border bg-muted/20 px-2 py-1 text-[10px] text-muted-foreground">
+                    Will pre-fill: {Object.entries(reuseStatic).map(([k, v]) => (
+                      <code key={k} className="mr-1.5">{k}={v}</code>
+                    ))}
+                    . Each batch keeps its own snapshot — no cross-batch bleed.
+                  </div>
+                )}
               </div>
             )}
 
