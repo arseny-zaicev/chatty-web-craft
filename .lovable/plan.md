@@ -1,119 +1,83 @@
-# Fitpreneur 2-pipeline setup — mirror Launch wizard UX + first-name normalization
+## Three problems, one coordinated fix
 
-## What you actually said
+### Problem 1 — Lead routing: pipeline pulls leads from disconnected sources
 
-1. *"Сделай как в Launch — одно поле, где выбираю либо группу либо одиночный шаблон, и сразу видно к какому аккаунту шаблон."*
-2. *"Нормализуй имя — брать только первое нормальное имя, без рандомных букв и мусора."* (screenshot: `Jessi` cursive, `halil aslan` gothic, `St`, `lukas`, `memo`, `No Gi Judo & Sambo`, etc.)
+**Root cause (confirmed by DB):**
+- `lead-dispatch` selects `lead_imports` filtered by `pipeline_id` + status (`pending/awaiting_manual/queued`), but does NOT filter by an active `source_connection_id`.
+- When a Google Sheet source is disconnected/replaced, the FK is `ON DELETE SET NULL`, so 100+ rows from the old "Fitpreneur Old Leads until 17th of may" batch remain in `lead_imports` with `source_connection_id = NULL` and `status` still in the dispatchable set.
+- Result: the new "Fitpreneur Outbound Leads" pipeline silently inherits the old reactivation queue and sends to numbers like Bes Sa / Gerald Gautsch that are not in the current sheet.
 
-That's it. Nothing else changes.
+**Fix:**
 
----
+1. **DB migration** — partial index + helper view for fast active-source filtering. Add a `lead_imports.is_orphan` generated check (queryable) and a NOT VALID FK trigger to mark NULL `source_connection_id` rows as orphan candidates.
+2. **`supabase/functions/lead-dispatch/index.ts`** — change the lead query to:
+   - Join `source_connections sc` and require `sc.status = 'active'` AND `sc.pipeline_id = lead_imports.pipeline_id`.
+   - Legacy rows where `source_connection_id IS NULL` are only processed if the pipeline currently has at least one active `webhook`/`api`/`manual` source (Sheets-only pipelines skip them).
+   - Skipped orphan leads are flipped to `status='skipped', error='orphaned_source'` and logged once to `pipeline_events`.
+3. **One-time backfill** (insert tool, after approval) — for every `lead_imports` row that is currently `pending/awaiting_manual/queued` AND its `source_connection_id` is NULL AND the pipeline has no NULL-source-compatible connection, set status to `skipped`, error `orphaned_source`. Affects ~96 rows from the old batch.
+4. **Source disconnect UX** — when the user removes/replaces a Sheets source in `PipelineConfigSheet`, show a confirm: "There are N queued leads tied to this source. Discard them? / Keep them?". Default = discard. Implemented as a small RPC `purge_pending_leads_for_source(source_id)`.
+5. **Pipeline header chip** — show `queued · awaiting · sent today / cap` so user sees the queue size before pressing Resume.
 
-## Root cause of confusion (verified in DB)
+### Problem 2 — Delivery status is wrong / not updating in UI
 
-Fitpreneur has 3 senders, 3 logical templates each, all named differently per sender:
+**Root cause (confirmed by DB):**
+- Gerald Gautsch: Gupshup returned `failed` (code 4003, "template did not match"). `whatsapp_message_events` recorded `failed`, but `campaign_recipients.status` stayed `sent` because the webhook handler's lookup by `provider_message_id` missed the recipient (race / mismatch).
+- Bes Sa: `campaign_recipients` correctly flipped to `failed`, but `lead_imports.status` stayed `sent` — there is no cascade from recipients → lead_imports on failure.
+- Net effect: UI shows "sent" for messages that WhatsApp itself rejected, daily cap is consumed by failures, and the user has no way to know.
 
-```
-PramodElemOrgNum2  →  fe_daily        fe_reactivation   8hrs_followup
-Yasim              →  dail_leads_fe   rea_fe            8hrsfe
-Yasin              →  daily_fe        reactiv_fe        followup8hrs
-template_groups for this workspace: 0
-```
+**Fix:**
 
-PipelineConfigSheet currently shows two separate dropdowns ("Single template" vs "Template group") side by side, with a flat list of template names and no sender attribution. Operator can't tell what belongs where, and the groups dropdown is empty because no groups were ever created for this workspace.
+1. **`supabase/functions/whatsapp-webhook/index.ts`** — on every `failed/rejected/error` event:
+   - Look up the recipient by `provider_message_id` with a 3× retry (200/500/1500 ms) to cover the insert race.
+   - If found: `UPDATE campaign_recipients SET status='failed', error_code=…, error_message=…`.
+   - Cascade: `UPDATE lead_imports SET status='failed', error=… WHERE campaign_recipient_id = recipient.id`.
+   - Add a DB trigger `sync_lead_import_status_from_recipient` as a belt-and-suspenders safeguard so any future code path that flips `campaign_recipients.status` automatically cascades to `lead_imports`.
+2. **Backfill (insert tool)** — for the last 30 days, take every `whatsapp_message_events` row with `event_type IN ('failed','rejected','error')`, find its `campaign_recipients` by `provider_message_id`, flip recipient → `failed` and cascade to `lead_imports`. Expected to fix Gerald and any silent failures since launch.
+3. **Realtime UI** — `LeadCard` / pipeline list:
+   - Subscribe to `campaign_recipients` and `whatsapp_message_events` for the open lead, so status flips appear without reload.
+   - Show a "Delivery" block with the real event chain: `queued → sent → delivered → read` OR `failed (code 4003: template mismatch)`. Source of truth = latest `whatsapp_message_events` row, not `lead_imports.status`.
+   - Pipeline counter (queued/sent/replied) recomputed from recipients + events, not from `lead_imports`.
 
-LaunchWizard already solved this exact problem with `groupLogicalTemplates(templates, templateGroups)` → one unified "logical template" dropdown that lists groups + singles together, with a group icon, variant count, and a `Manage groups` button next to it. The plan is to port that pattern into PipelineConfigSheet.
+### Problem 3 — Phone `+6643601497` not normalized
 
----
+**Root cause (confirmed by DB):**
+- Row was imported on 2026-05-17 (old "Fitpreneur Old Leads until 17th of may" batch) with `source_connection_id = NULL`, no `default_country_code` and no `_phone_raw` payload.
+- Number is 10 digits — for Thailand (+66) the correct mobile is 11 digits: leading `0` was likely stripped before reaching normalizer, or the import path bypassed `normalizePhone` entirely (this batch predates the current normalizer).
+- Today's normalizer (`supabase/functions/_shared/phone.ts`) WOULD flag this as `ambiguous` and refuse to send — but the row was stored before that rule existed, so it slips through `lead-dispatch` which only sees the final `phone` column.
 
-## Plan
+**Fix:**
 
-### 1. Mirror the Launch wizard template UX in `PipelineConfigSheet.tsx`
-
-Replace the current two-column "Single template / Template group" block (both first-touch and follow-up) with the same component pattern used in `LaunchWizard.tsx`:
-
-- One **"Logical template"** dropdown that lists:
-  - all template groups (with a `<Layers />` icon and `(N variants · group)` suffix)
-  - all single approved templates not covered by a group, each rendered as `template_name — SenderDisplayName` so it's instantly obvious which account owns it
-- A **`Manage groups`** button next to it, opening the existing `TemplateGroupsDialog` (already imported from `LaunchWizard.tsx`, just needs to be mounted in this component too).
-- A small per-sender readiness strip below the dropdown (reuse the existing `SenderVariantMatrix` already in this file) showing ✓/⨯ for each selected sender against the chosen logical template — so before clicking Save you see "all 3 senders have a variant" or "Yasin is missing".
-- When a group is chosen, persist `first_touch_template_group_id`; when a single template is chosen, persist `first_touch_template_id`. Same for follow-up. (Schema already supports both, mutation logic already in place — only the UI changes.)
-
-Wiring details:
-- Reuse `groupLogicalTemplates`, `Template`, and the existing `templateGroups` query that's already in `PipelineConfigSheet.tsx`.
-- Extend the `templates` query to also fetch `whatsapp_number_id`, then join client-side against `numbers` to render `name — senderLabel` for singles.
-- No backend changes. No schema changes.
-
-### 2. First-name normalization at import time
-
-Add a shared helper `supabase/functions/_shared/name.ts` with one function:
-
-```
-normalizeFirstName(raw: string | null): {
-  value: string | null,      // clean first name, Title-Case
-  raw: string | null,        // original cell as received
-  outcome: "ok" | "empty" | "unusable"
-}
-```
-
-Rules (deterministic, no AI):
-
-- Unicode-normalise with NFKD → strip combining marks → re-compose → maps cursive/script/gothic/fullwidth letters back to plain ASCII-ish (so `𝓙𝓮𝓼𝓼𝓲` → `Jessi`, `𝔥𝔞𝔩𝔦𝔩` → `halil`).
-- Strip emoji and zero-width characters.
-- Trim, collapse whitespace, take the **first token** only (so `Kevin Bo Grundmann` → `Kevin`, `No Gi Judo & Sambo` → `No` → rejected by next rule).
-- Reject as `unusable` if any of:
-  - length < 2 after cleanup (`St`, single letters, `E.`)
-  - contains digits
-  - is in a small banned list of obvious non-names (`gmbh`, `ug`, `kg`, `team`, `info`, `admin`, `test`, `no`, `kein`, `xxx`, common business words). List lives in the same file so it's easy to extend.
-  - whole token is lowercase **and** length ≤ 4 (catches `memo`, `lukas` is borderline → keep, see next rule)
-- Title-case the result (`lukas` → `Lukas`, `philipe` → `Philipe`).
-- Always preserve the original in `payload._first_name_raw` for audit.
-
-Wire it into both:
-- `supabase/functions/google-sheets-sync/index.ts` — replace the current `String(nameRawCell).slice(0, 200)` block.
-- `supabase/functions/lead-intake/index.ts` — same.
-
-Behaviour on `unusable`:
-- The lead is **still imported** (we don't want to lose a phone number), but `name` is stored as `NULL` and `payload._first_name_outcome = "unusable"`.
-- `lead-dispatch` already falls back to a neutral greeting when the WhatsApp template variable for first name is empty, so the first message just won't address the person by name instead of saying "Hi memo" or "Hi 𝓙𝓮𝓼𝓼𝓲".
-- Import counters returned by both functions get a new bucket: `name_unusable: N` alongside the existing `normalized / invalid / ambiguous / duplicate / test_lead` counts. Surface in `WorkspaceData.tsx` next to the other counts.
-
-### 3. (Tiny) Make the "Auto-send first message" toggle copy literal
-
-One-line label change in `PipelineConfigSheet.tsx`:
-`Auto first-touch` → `Auto-send first message when a lead is imported`.
-
-No behaviour change — the readiness checklist already blocks the toggle until everything is ready.
+1. **`supabase/functions/lead-dispatch/index.ts`** — before dispatching, re-validate each lead's `phone` with `normalizePhone(li.phone, sourceConn.default_country_code)`. If it returns `invalid` or `ambiguous`, flip the lead to `status='invalid'`, write `error='phone_revalidation_failed: <reason>'`, log to `pipeline_events`, and skip. This catches both this Thai number and any other legacy malformed rows.
+2. **Add `default_country_code` to `source_connections.config`** — already there for new sources via `google-sheets-sync`. Add it explicitly to `PipelineConfigSheet` UI (dropdown) so the operator MUST pick a fallback country when connecting a sheet.
+3. **One-time scan (read_query, then insert tool)** — find all `lead_imports` where `length(phone) <= 10` AND status is dispatchable, list them in a small admin view, and mark them `invalid` after user confirms. Expected ~few rows; Gerald is one of them.
+4. **UI surface** — in the pipeline lead list, invalid-phone leads get a yellow badge "Phone needs review" with the raw value and a quick-edit field, so the operator can fix and re-queue instead of losing the contact.
 
 ---
 
-## Files that will actually change
+### Files touched
 
-- `supabase/functions/_shared/name.ts` — **NEW**, ~60 LOC.
-- `supabase/functions/google-sheets-sync/index.ts` — use the helper, add `name_unusable` counter.
-- `supabase/functions/lead-intake/index.ts` — use the helper, add `name_unusable` counter.
-- `src/components/workspace/PipelineConfigSheet.tsx` — swap the template block for the Launch-wizard-style logical-template dropdown + Manage groups button + mount `TemplateGroupsDialog`; tiny label tweak.
-- `src/pages/workspace/WorkspaceData.tsx` — add the `Name unusable: N` count alongside existing counters.
+- `supabase/functions/lead-dispatch/index.ts` — active-source filter, phone re-validation, orphan handling
+- `supabase/functions/whatsapp-webhook/index.ts` — failure cascade, retry on lookup
+- `supabase/functions/_shared/phone.ts` — no changes (already correct)
+- DB migration:
+  - trigger `sync_lead_import_status_from_recipient`
+  - RPC `purge_pending_leads_for_source(uuid)`
+  - index on `lead_imports(pipeline_id, source_connection_id, status)`
+- DB backfill (insert tool, separate step): orphan leads + failed-event sync + invalid phones
+- `src/components/workspace/PipelineConfigSheet.tsx` — queue summary chip, country-code field, source-disconnect confirm, "Purge queue" button
+- `src/components/workspace/LeadCard.tsx` (or equivalent) — real delivery chain UI, realtime subscription
+- `src/components/workspace/PipelineLeadList.tsx` — "Phone needs review" badge, status from events
 
-No SQL migration. No changes to dispatch/follow-up/Slack/phone-normalisation runtime.
+### Order of execution
 
----
+1. Migration (triggers + indexes + RPC) — needs your approval.
+2. Edge function fixes (`lead-dispatch`, `whatsapp-webhook`) — deploy.
+3. Backfill three sets in one batch via the insert tool — needs your approval.
+4. UI changes in `PipelineConfigSheet`, `LeadCard`, lead list.
+5. Smoke test on the Fitpreneur Outbound Leads pipeline with `daily_cap=1`.
 
-## Out of scope
+### Questions before I start
 
-- No new admin pages, no redesign, no wizard changes.
-- No "auto-create groups for me" magic — operator clicks `Manage groups` once, sets them up, never thinks about it again per pipeline.
-- No name-normalisation backfill of existing rows. Only applies to new imports going forward. (If you want a one-off backfill SQL after testing, say so and I'll write it separately.)
-
----
-
-## What to manually test after I ship this
-
-1. Open Warm Leads pipeline for Fitpreneur → confirm the new single "Logical template" dropdown shows groups + singles, with `— senderLabel` suffix on singles.
-2. Click `Manage groups`, create `Daily leads` covering `fe_daily / dail_leads_fe / daily_fe`. Confirm it appears in the dropdown immediately with `(3 variants · group)`.
-3. Repeat for `Reactivation` and `8h follow-up`.
-4. Pick `Daily leads` as first-touch group, all 3 senders selected → sender readiness strip shows ✓✓✓.
-5. Toggle "Auto-send first message when a lead is imported" → save.
-6. Add a row to the Warm Sheet with name `𝓙𝓮𝓼𝓼𝓲` → confirm imported as `Jessi`. Add `memo` → confirm imported with `name = NULL` and `_first_name_raw = "memo"`. Add `Kevin Bo Grundmann` → confirm imported as `Kevin`.
-7. Confirm round-robin: 3 new leads → 3 different senders dispatched.
-8. Repeat the template-group step for the Reactivation pipeline with the `Reactivation` group.
+1. **Orphan leads (~96 rows)** — set them all to `skipped` immediately, or surface them in a "Review" tab first so you can rescue any that are legit?
+2. **Phone re-validation** — block sending and mark `invalid`, OR auto-prepend the source's `default_country_code` if it looks like a national number? (I recommend block + UI badge.)
+3. **Source disconnect default** — when removing a Sheets source, default to discard queued leads or keep them?
