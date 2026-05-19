@@ -44,6 +44,12 @@ Deno.test("buildTemplateParams: never returns empty string (would trigger #13100
   assertEquals(out, ["there", " "]);
 });
 
+Deno.test("buildTemplateParams: literal there templates use blank-safe first fallback", () => {
+  const tpl = { body: "Hey there {{1}}, Elena here", variables: ["name"] };
+  assertEquals(buildTemplateParams(tpl, { name: "" }), [" "]);
+  assertEquals(renderTemplateBody(tpl.body, tpl.variables, { name: "" }), "Hey there , Elena here");
+});
+
 Deno.test("renderTemplateBody: same fallback as params, ' ' renders as empty", () => {
   const body = "Hi {{1}}, your city is {{2}}.";
   const out = renderTemplateBody(body, ["name", "city"], { name: "", city: "" });
@@ -95,16 +101,15 @@ Deno.test("validateTemplateForLaunch: allows literal there before {{1}} when sel
   assertEquals(warnings.length, 0);
 });
 
-Deno.test("validateTemplateForLaunch: blocks literal there before {{1}} only when selected recipients miss names", () => {
-  assertThrows(() =>
-    validateTemplateForLaunch(
-      { name: "tpl", body: "Hey there {{1}}, Elena here", variables: ["name"] },
-      [
-        { variables: { name: "Toni" } },
-        { variables: { name: "" } },
-      ],
-    )
+Deno.test("validateTemplateForLaunch: warns but allows literal there before {{1}} when selected recipients miss names", () => {
+  const { warnings } = validateTemplateForLaunch(
+    { name: "tpl", body: "Hey there {{1}}, Elena here", variables: ["name"] },
+    [
+      { variables: { name: "Toni" } },
+      { variables: { name: "" } },
+    ],
   );
+  if (warnings.length === 0) throw new Error("expected warning");
 });
 
 Deno.test("validateTemplateForLaunch: passes clean data", () => {

@@ -30,6 +30,25 @@ export function resolveTemplateVar(
   return " ";
 }
 
+function templateHasLiteralThereBeforeFirstPlaceholder(body: string | null | undefined): boolean {
+  return /\bthere\s*\{\{\s*1\s*\}\}/i.test(String(body ?? ""));
+}
+
+function resolveTemplateVarForBody(
+  template: TemplateLike,
+  name: string,
+  index: number,
+  raw: unknown,
+): string {
+  const v = String(raw ?? "").trim();
+  if (v) return v;
+  // If the template already says "Hey there {{1}}", do NOT fall back to
+  // "there" again. A single-space param keeps WhatsApp/Gupshup happy and
+  // renders as "Hey there" instead of "Hey there there".
+  if (index === 0 && templateHasLiteralThereBeforeFirstPlaceholder(template.body)) return " ";
+  return resolveTemplateVar(name, index, raw);
+}
+
 /** Build the params[] array sent to Gupshup. Order matches template.variables. */
 export function buildTemplateParams(
   template: TemplateLike,
@@ -39,7 +58,7 @@ export function buildTemplateParams(
     ? (template.variables as string[])
     : [];
   return variableNames.map((key, idx) =>
-    resolveTemplateVar(key, idx, (values ?? {})[key]),
+    resolveTemplateVarForBody(template, key, idx, (values ?? {})[key]),
   );
 }
 
@@ -53,7 +72,7 @@ export function renderTemplateBody(
   let out = String(body);
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   variableNames.forEach((name, idx) => {
-    const v = resolveTemplateVar(name, idx, (values ?? {})[name]);
+    const v = resolveTemplateVarForBody({ body }, name, idx, (values ?? {})[name]);
     // For inbox display, " " (param fallback) renders as nothing.
     const displayed = v === " " ? "" : v;
     out = out.replace(new RegExp(escape(`{{${idx + 1}}}`), "g"), displayed);
@@ -90,11 +109,11 @@ export function validateTemplateForLaunch(
     );
   }
 
-  // 1b. "Hey there {{1}}" trap. This is only a real launch blocker when at
-  // least one selected recipient has an empty first variable. If every selected
-  // recipient has a name, the message renders as "Hey there Toni" and is safe.
+  // 1b. "Hey there {{1}}" is safe: params now send a single-space fallback
+  // for empty {{1}}, so nameless rows render as "Hey there" rather than
+  // "Hey there there". Count empties below only for operator warnings.
   const hasLiteralThereBeforeFirstPlaceholder =
-    variableNames.length > 0 && /\bthere\s*\{\{\s*1\s*\}\}/i.test(body);
+    variableNames.length > 0 && templateHasLiteralThereBeforeFirstPlaceholder(body);
 
   if (recipients.length === 0 || variableNames.length === 0) {
     return { warnings: [] };
@@ -113,8 +132,8 @@ export function validateTemplateForLaunch(
   const warnings: string[] = [];
 
   if (hasLiteralThereBeforeFirstPlaceholder && emptyByIdx[0] > 0) {
-    throw new Error(
-      `Template "${template.name ?? "?"}" has "there {{1}}" and ${emptyByIdx[0]} of ${total} selected recipients have no name. Those messages would render as "Hey there there". Fix the missing names or remove the literal "there" before {{1}}.`,
+    warnings.push(
+      `${emptyByIdx[0]} of ${total} recipients have no name. Template "${template.name ?? "?"}" already contains "there {{1}}", so those rows will render as "Hey there".`,
     );
   }
 
