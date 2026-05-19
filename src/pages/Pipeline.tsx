@@ -831,6 +831,7 @@ const StageColumn = ({
   stage,
   deals,
   total,
+  failedStageId,
   onDealClick,
   onOpenChat,
   conversationOf,
@@ -840,6 +841,7 @@ const StageColumn = ({
   stage: Stage;
   deals: Deal[];
   total: { count: number; sum: number };
+  failedStageId?: string | null;
   onDealClick: (id: string) => void;
   onOpenChat?: (conversationId: string) => void;
   conversationOf?: (d: Deal) => Conversation | null;
