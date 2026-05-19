@@ -74,13 +74,13 @@ async function fetchRecipientsFull(campaignIds: string[]): Promise<RecipientFull
 
 const fetchCampaignMeta = async (numberIds: string[], templateIds: string[]) => {
   const numbers = new Map<string, { id: string; phone_number: string; label: string | null }>();
-  const templates = new Map<string, { id: string; name: string }>();
+  const templates = new Map<string, { id: string; name: string; category: string | null }>();
   if (numberIds.length > 0) {
     const { data } = await supabase.from("whatsapp_numbers").select("id, phone_number, label, display_name").in("id", numberIds);
     (data ?? []).forEach((n: any) => numbers.set(n.id, n));
   }
   if (templateIds.length > 0) {
-    const { data } = await supabase.from("message_templates").select("id, name").in("id", templateIds);
+    const { data } = await supabase.from("message_templates").select("id, name, category").in("id", templateIds);
     (data ?? []).forEach((t: any) => templates.set(t.id, t));
   }
   return { numbers, templates };
