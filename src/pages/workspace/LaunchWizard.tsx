@@ -160,8 +160,8 @@ export default function LaunchWizard() {
 
   // Database batch source state
   const [dbBatchId, setDbBatchId] = useState<string>("");
-  const [dbAllUnused, setDbAllUnused] = useState(true);
-  const [dbQty, setDbQty] = useState<string>("100");
+  const [dbAllUnused, setDbAllUnused] = useState(false);
+  const [dbQty, setDbQty] = useState<string>("50");
 
   const [audience, setAudience] = useState("");
   const [audienceDirty, setAudienceDirty] = useState(false);
