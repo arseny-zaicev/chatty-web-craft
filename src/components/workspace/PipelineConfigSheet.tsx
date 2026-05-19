@@ -37,7 +37,10 @@ import {
   ArrowUp,
   ArrowDown,
   Layers,
+  ChevronDown,
+  BookOpen,
 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { groupLogicalTemplates, type Template as LaunchTemplate, type LogicalTemplate, type TemplateGroup as LaunchTemplateGroup } from "@/lib/launchData";
 import TemplateGroupsDialog from "@/components/workspace/TemplateGroupsDialog";
