@@ -381,8 +381,32 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
         })
         .eq("id", inboundAudit.id);
     }
+    await supabase.from("whatsapp_webhook_failures").insert({
+      reason: "message_insert_failed",
+      app_name: appName || null,
+      destination: destination || null,
+      source: source || null,
+      event_type: "message",
+      payload,
+      replay_status: "pending",
+    });
+    await markRaw(rawId, {
+      processing_status: "failed",
+      processed_at: new Date().toISOString(),
+      error_message: insertMessageError?.message ?? "message insert returned no id",
+      workspace_id: number.workspace_id,
+      whatsapp_number_id: number.id,
+    });
     return;
   }
+
+  await markRaw(rawId, {
+    processing_status: "processed",
+    processed_at: new Date().toISOString(),
+    message_id: insertedMessage.id,
+    workspace_id: number.workspace_id,
+    whatsapp_number_id: number.id,
+  });
 
   if (inboundAudit?.id) {
     await supabase
@@ -394,6 +418,7 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
       })
       .eq("id", inboundAudit.id);
   }
+
 
   // Apply automations: inbound_any + inbound_keyword + button_click
   const triggers: string[] = ["inbound_any"];
