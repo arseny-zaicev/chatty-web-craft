@@ -61,6 +61,7 @@ import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipeline
 import { markConversationRead } from "@/lib/inbox";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import RetryLeadButton from "@/components/workspace/RetryLeadButton";
 import CRM from "./CRM";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
