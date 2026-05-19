@@ -883,6 +883,7 @@ export type Database = {
           active_responder_at: string | null
           active_responder_id: string | null
           assigned_at: string | null
+          assigned_setter_id: string | null
           assigned_user_id: string | null
           contact_name: string | null
           contact_phone: string
@@ -908,6 +909,7 @@ export type Database = {
           active_responder_at?: string | null
           active_responder_id?: string | null
           assigned_at?: string | null
+          assigned_setter_id?: string | null
           assigned_user_id?: string | null
           contact_name?: string | null
           contact_phone: string
@@ -933,6 +935,7 @@ export type Database = {
           active_responder_at?: string | null
           active_responder_id?: string | null
           assigned_at?: string | null
+          assigned_setter_id?: string | null
           assigned_user_id?: string | null
           contact_name?: string | null
           contact_phone?: string
@@ -955,6 +958,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "conversations_assigned_setter_id_fkey"
+            columns: ["assigned_setter_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_setters"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversations_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
@@ -3160,6 +3170,50 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_setters: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string
+          external: boolean
+          id: string
+          is_active: boolean
+          linked_user_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name: string
+          external?: boolean
+          id?: string
+          is_active?: boolean
+          linked_user_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          external?: boolean
+          id?: string
+          is_active?: boolean
+          linked_user_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_setters_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           color: string
@@ -3905,6 +3959,31 @@ export type Database = {
       retry_lead_import: {
         Args: { p_lead_id: string; p_new_phone?: string }
         Returns: undefined
+      }
+      setter_performance: {
+        Args: {
+          _from: string
+          _pipeline_id?: string
+          _setter_id?: string
+          _to: string
+          _workspace_id: string
+        }
+        Returns: {
+          active_chats: number
+          avatar_url: string
+          avg_first_response_seconds: number
+          avg_reply_seconds: number
+          conv_booked: number
+          conv_closed: number
+          conv_showed: number
+          display_name: string
+          is_external: boolean
+          linked_user_id: string
+          median_first_response_seconds: number
+          median_reply_seconds: number
+          replies_in_window: number
+          setter_id: string
+        }[]
       }
       should_notify_lead_reply: {
         Args: { _conversation_id: string; _reply_text: string }

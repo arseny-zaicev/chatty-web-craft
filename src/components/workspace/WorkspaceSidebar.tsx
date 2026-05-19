@@ -1,6 +1,6 @@
 import { NavLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, LayoutDashboard, Inbox, KanbanSquare, Megaphone, Rocket, Loader2, BookOpen, Settings as SettingsIcon, Database, FolderOpen } from "lucide-react";
+import { Building2, LayoutDashboard, Inbox, KanbanSquare, Megaphone, Rocket, Loader2, BookOpen, Settings as SettingsIcon, Database, FolderOpen, BarChart3 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +21,7 @@ const OPS_TABS: Tab[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard, perm: "perm_overview", end: true },
   { key: "inbox", label: "Inbox", icon: Inbox, perm: "perm_inbox" },
   { key: "pipeline", label: "Pipeline", icon: KanbanSquare, perm: "perm_pipeline" },
+  { key: "stats", label: "Stats", icon: BarChart3, perm: "perm_inbox" },
   { key: "campaigns", label: "Campaigns", icon: Megaphone, perm: "perm_campaigns_view" },
   { key: "data", label: "Data", icon: Database, perm: "perm_data" },
   { key: "materials", label: "Materials", icon: FolderOpen, perm: "perm_materials" },

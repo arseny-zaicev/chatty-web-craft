@@ -110,6 +110,7 @@ const Pipeline = lazyWithRetry(() => import("./pages/Pipeline"));
 
 const WorkspaceLayout = lazyWithRetry(() => import("./pages/workspace/WorkspaceLayout"));
 const WorkspaceSection = lazyWithRetry(() => import("./pages/workspace/WorkspaceSection"));
+const WorkspaceStats = lazyWithRetry(() => import("./pages/workspace/WorkspaceStats"));
 const WorkspaceOverview = lazyWithRetry(() => import("./pages/workspace/WorkspaceOverview"));
 
 const WorkspaceSettings = lazyWithRetry(() => import("./pages/workspace/WorkspaceSettings"));
@@ -219,6 +220,7 @@ const App = () => (
                 <Route path=":slug/data" element={<WorkspaceSection section="data" />} />
                 <Route path=":slug/data/profiles" element={<WorkspacePrepProfiles />} />
                 <Route path=":slug/reporting" element={<Navigate to=".." replace relative="path" />} />
+                <Route path=":slug/stats" element={<WorkspaceStats />} />
                 <Route path=":slug/settings" element={<WorkspaceSettings />} />
                 <Route path=":slug/launch" element={<LaunchWizard />} />
                 <Route path=":slug/roadmap" element={<Roadmap />} />
