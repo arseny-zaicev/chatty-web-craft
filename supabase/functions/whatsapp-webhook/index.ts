@@ -765,27 +765,79 @@ async function handleStatus(payload: Record<string, unknown>) {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  let rawId: string | null = null;
+  let payload: Record<string, unknown> | null = null;
+
   try {
-    const payload = await req.json();
-    const type = (payload.type as string) ?? "";
+    payload = await req.json() as Record<string, unknown>;
+  } catch (err) {
+    console.error("Webhook JSON parse error", err);
+    return new Response(JSON.stringify({ ok: false, error: "invalid json" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // RAW-FIRST CAPTURE: persist the full payload BEFORE any business logic.
+  // Guarantees that no inbound webhook can ever silently disappear, even if
+  // the handler throws, the DB rejects an insert, or a downstream call fails.
+  try {
+    const type = String((payload as any).type ?? "");
+    const inner = ((payload as any).payload ?? {}) as Record<string, unknown>;
+    const sender = (inner.sender ?? {}) as Record<string, unknown>;
+    const appName = String((payload as any).app ?? inner.app ?? "").trim() || null;
+    const destination = stripToDigits(String(inner.destination ?? (payload as any).destination ?? "")) || null;
+    const source = stripToDigits(String(inner.source ?? sender.phone ?? (payload as any).source ?? "")) || null;
+    const providerMessageId = (inner.id as string) ?? null;
+
+    const { data: rawRow, error: rawErr } = await supabase
+      .from("whatsapp_webhook_raw")
+      .insert({
+        type: type || null,
+        app_name: appName,
+        destination,
+        source,
+        provider_message_id: providerMessageId,
+        payload,
+        processing_status: "received",
+      })
+      .select("id")
+      .maybeSingle();
+    if (rawErr) console.error("whatsapp_webhook_raw insert failed", rawErr);
+    rawId = rawRow?.id ?? null;
+  } catch (err) {
+    console.error("Raw capture failed (continuing)", err);
+  }
+
+  try {
+    const type = String((payload as any).type ?? "");
     console.log("Gupshup webhook event", type);
 
     if (type === "message") {
-      await handleInbound(payload);
+      await handleInbound(payload, rawId);
     } else if (type === "message-event" || type === "user-event") {
       await handleStatus(payload);
+      await markRaw(rawId, { processing_status: "processed", processed_at: new Date().toISOString() });
     } else {
       console.log("Unhandled type", type, JSON.stringify(payload).slice(0, 500));
+      await markRaw(rawId, { processing_status: "skipped", processed_at: new Date().toISOString(), error_message: `unhandled type: ${type}` });
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ ok: true, raw_id: rawId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "unknown";
-    console.error("Webhook error", msg);
+    const stack = err instanceof Error ? err.stack ?? null : null;
+    console.error("Webhook error", msg, stack);
+    await markRaw(rawId, {
+      processing_status: "failed",
+      processed_at: new Date().toISOString(),
+      error_message: msg,
+      error_stack: stack,
+    });
     // Return 200 anyway so Gupshup doesn't keep retrying on parse errors
-    return new Response(JSON.stringify({ ok: false, error: msg }), {
+    return new Response(JSON.stringify({ ok: false, error: msg, raw_id: rawId }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
