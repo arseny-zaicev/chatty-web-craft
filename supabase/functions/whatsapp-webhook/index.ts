@@ -169,6 +169,7 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
       payload,
       replay_status: "pending",
     });
+    await markRaw(rawId, { processing_status: "failed", processed_at: new Date().toISOString(), error_message: `no_number_match:${reason}` });
     return;
   }
   console.log("Matched inbound whatsapp_number", {
