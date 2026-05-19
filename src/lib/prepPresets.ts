@@ -63,11 +63,39 @@ export const NAME_FALLBACK_PHRASES = [
 
 export const PREP_PRESETS: PrepPreset[] = [
   {
+    id: "utility_per_row_name_company",
+    name: "Utility Per-row - Name + Company",
+    campaignType: "utility",
+    blurb: "Name AND company change per recipient. Use when the template references the lead's own company (e.g. \"Hey {{1}}, saw {{2}} is hiring...\").",
+    recommendedFor: "Utility templates where {{1}} = first name and {{2}} = the recipient's company name (both per row).",
+    requiredSourceFields: ["phone", "first_name", "company"],
+    optionalSourceFields: ["city", "industry"],
+    variables: [
+      { key: "var_1", kind: "per_row", description: "First name", example: "Ahmed", source: "first_name", fallback: "there" },
+      { key: "var_2", kind: "per_row", description: "Company name", example: "Acme Trading", source: "company", fallback: "your company" },
+    ],
+    isRecommended: true,
+  },
+  {
+    id: "utility_per_row_name_company_static",
+    name: "Utility Per-row - Name + Company + 1 static",
+    campaignType: "utility",
+    blurb: "Name (per row) + Company (per row) + 1 campaign-static line pasted from Materials.",
+    recommendedFor: "Utility templates with {{1}} = name, {{2}} = the recipient's company, {{3}} = same pitch line for everyone.",
+    requiredSourceFields: ["phone", "first_name", "company"],
+    optionalSourceFields: ["city", "industry"],
+    variables: [
+      { key: "var_1", kind: "per_row", description: "First name", example: "Ahmed", source: "first_name", fallback: "there" },
+      { key: "var_2", kind: "per_row", description: "Company name", example: "Acme Trading", source: "company", fallback: "your company" },
+      { key: "var_3", kind: "campaign_static", description: "Pitch sentence - same for everyone", example: "We have a quick option that may be a fit." },
+    ],
+  },
+  {
     id: "utility_basic_3",
-    name: "Utility Basic - 3 vars",
+    name: "Utility Basic - 3 vars (1 per row + 2 static)",
     campaignType: "utility",
     blurb: "Name (per row) + 2 campaign-static lines pasted from Materials.",
-    recommendedFor: "Standard utility template with 3 placeholders.",
+    recommendedFor: "Standard utility template with 3 placeholders where only the name changes per recipient.",
     requiredSourceFields: ["phone", "first_name"],
     optionalSourceFields: ["company", "city"],
     variables: [
@@ -75,7 +103,6 @@ export const PREP_PRESETS: PrepPreset[] = [
       { key: "var_2", kind: "campaign_static", description: "Short context line - same for everyone", example: "your recent inquiry" },
       { key: "var_3", kind: "campaign_static", description: "Long pitch sentence - same for everyone", example: "We have a quick option that may be a fit." },
     ],
-    isRecommended: true,
   },
   {
     id: "utility_personalized_proof",
