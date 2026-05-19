@@ -297,6 +297,10 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
                     <SelectItem value="inbound_keyword">Keyword in reply</SelectItem>
                     <SelectItem value="button_click">Button click</SelectItem>
                     <SelectItem value="follow_up_sent">Follow-up sent (auto)</SelectItem>
+                    <SelectItem value="time_no_inbound">No reply for X time</SelectItem>
+                    <SelectItem value="time_in_stage">Stuck in stage for X time</SelectItem>
+                    <SelectItem value="conversation_assigned">Chat assigned (any setter)</SelectItem>
+                    <SelectItem value="conversation_claimed_self">Setter claimed chat themself</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -323,6 +327,58 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
                   onChange={(e) => setTriggerValue(e.target.value)}
                   placeholder="e.g. interested, info, tell me more"
                 />
+              </div>
+            )}
+
+            {isTimeBased && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[11px] text-muted-foreground">Delay</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="h-9"
+                    value={delayValue}
+                    onChange={(e) => setDelayValue(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">Unit</label>
+                  <Select value={delayUnit} onValueChange={(v) => setDelayUnit(v as typeof delayUnit)}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="minutes">Minutes</SelectItem>
+                      <SelectItem value="hours">Hours</SelectItem>
+                      <SelectItem value="days">Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">While in stage</label>
+                  <Select value={sourceStageId} onValueChange={setSourceStageId}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Pick source stage" /></SelectTrigger>
+                    <SelectContent>
+                      {stages.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {isAssignment && (
+              <div>
+                <label className="text-[11px] text-muted-foreground">Only when card is in stage (optional)</label>
+                <Select value={sourceStageId || "__any__"} onValueChange={(v) => setSourceStageId(v === "__any__" ? "" : v)}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">Any stage</SelectItem>
+                    {stages.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
