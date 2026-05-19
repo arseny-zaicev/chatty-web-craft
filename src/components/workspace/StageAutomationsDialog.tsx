@@ -175,7 +175,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
 
   const stageById = new Map(stages.map((s) => [s.id, s]));
   const triggerLabel = (t: TriggerKind) =>
-    t === "inbound_any" ? "Any inbound reply" : t === "inbound_keyword" ? "Keyword in reply" : "Button click";
+    t === "inbound_any" ? "Any inbound reply" : t === "inbound_keyword" ? "Keyword in reply" : t === "follow_up_sent" ? "Follow-up sent" : "Button click";
 
   const formatValue = (r: Automation) => {
     if (!r.trigger_value) return null;
