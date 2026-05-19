@@ -1797,13 +1797,16 @@ export default function LaunchWizard() {
             </div>
           )}
           {staticQaIssues.length > 0 && (
-            <div className="text-xs text-rose-600 flex items-start gap-1.5">
+            <div className={`text-xs flex items-start gap-1.5 ${staticQaBlockers.length > 0 ? "text-rose-600" : "text-amber-600"}`}>
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <div>
-                <b>Audience data quality:</b>
+                <b>{staticQaBlockers.length > 0 ? "Audience data quality (blocking):" : "Audience data quality (warning):"}</b>
                 <ul className="list-disc pl-4 mt-0.5">
                   {staticQaIssues.map((i) => <li key={i.key}><span className="font-mono">{i.key}</span>: {i.reason}</li>)}
                 </ul>
+                {staticQaBlockers.length === 0 && (
+                  <p className="mt-1 opacity-80">Launch is allowed — only some sampled rows drifted. Re-prepare if you want strict consistency.</p>
+                )}
               </div>
             </div>
           )}
