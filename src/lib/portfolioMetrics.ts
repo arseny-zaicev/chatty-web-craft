@@ -26,6 +26,7 @@ export type WorkspaceMetrics = {
   active_campaign_name: string | null;
   active_campaign_status: "running" | "scheduled" | null;
   active_campaign_sent: number;
+  active_campaign_delivered: number;
   active_campaign_total: number;
   active_campaign_kind: "marketing" | "utility" | "manual" | string | null;
   is_sending_now: boolean;
@@ -75,7 +76,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     // v_metrics_today: one row per workspace - safe to sum.
     supabase.from("v_metrics_today").select("workspace_id, sent_today, delivered_today, replies_today"),
     // v_metrics_today_by_campaign: per-campaign sent for active-group rollup.
-    supabase.from("v_metrics_today_by_campaign").select("workspace_id, campaign_id, sent_today"),
+    supabase.from("v_metrics_today_by_campaign").select("workspace_id, campaign_id, sent_today, delivered_today"),
     // Recent recipient activity per workspace -> drives is_sending_now.
     supabase
       .from("campaign_recipients")
@@ -104,6 +105,7 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
         active_campaign_name: null,
         active_campaign_status: null,
         active_campaign_sent: 0,
+        active_campaign_delivered: 0,
         active_campaign_total: 0,
         active_campaign_kind: null,
         is_sending_now: false,
@@ -141,10 +143,12 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
 
   // Per-campaign sent for active-group rollup.
   const sentByWsCampaign = new Map<string, number>(); // key = ws|campaign
+  const deliveredByWsCampaign = new Map<string, number>();
   (metricsByCampaign ?? []).forEach((r: any) => {
     if (!r.workspace_id || !r.campaign_id) return;
     const k = `${r.workspace_id}|${r.campaign_id}`;
     sentByWsCampaign.set(k, (sentByWsCampaign.get(k) ?? 0) + (r.sent_today ?? 0));
+    deliveredByWsCampaign.set(k, (deliveredByWsCampaign.get(k) ?? 0) + (r.delivered_today ?? 0));
   });
 
   // Recent activity per (workspace, campaign) for sending-now detection.
@@ -212,7 +216,9 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     m.active_campaign_status = grp.status;
     m.active_campaign_kind = grp.kind;
     const todaySent = sentByWsCampaign.get(`${wsId}|${c.id}`) ?? 0;
+    const todayDelivered = deliveredByWsCampaign.get(`${wsId}|${c.id}`) ?? 0;
     m.active_campaign_sent += todaySent;
+    m.active_campaign_delivered += todayDelivered;
     m.active_campaign_total += c.total_recipients ?? 0;
   });
 
@@ -363,6 +369,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     active_campaign_name: null,
     active_campaign_status: null,
     active_campaign_sent: 0,
+    active_campaign_delivered: 0,
     active_campaign_total: 0,
     active_campaign_kind: null,
     is_sending_now: false,

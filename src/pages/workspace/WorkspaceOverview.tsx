@@ -82,8 +82,7 @@ export default function WorkspaceOverview() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi icon={MessageSquare} label="Unread replies" value={data.unread_replies} accent={data.unread_replies > 0 ? "text-emerald-500" : undefined} />
         <Kpi icon={Megaphone} label="Active campaigns" value={data.active_campaigns} />
-        {canManage && <Kpi icon={Send} label="Sent today" value={data.sent_today} />}
-        {canManage && <Kpi icon={Send} label="Delivered today" value={data.delivered_today} />}
+        {canManage && <Kpi icon={CheckCircle2} label="Delivered messages" value={data.delivered_today} />}
         <Kpi icon={MessageSquare} label="Replies today" value={data.replies_today} />
         {canManage && <Kpi icon={Phone} label="Numbers ready" value={`${data.numbers_ready}/${data.numbers_total}`} />}
       </div>
@@ -117,7 +116,7 @@ export default function WorkspaceOverview() {
                       <div className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}</div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-muted-foreground">{c.sent_count}/{c.total}</span>
+                      <span className="text-xs text-muted-foreground">Total {c.total}</span>
                       <Badge variant="outline" className="capitalize text-xs">{c.status}</Badge>
                     </div>
                   </div>
@@ -226,7 +225,7 @@ function ActiveCampaignCard({ group, slug }: { group: ReturnType<typeof groupCam
           <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
             <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
           </div>
-          <span className="text-xs text-muted-foreground tabular-nums shrink-0">{group.sent.toLocaleString()}/{group.total.toLocaleString()} · {pct}%</span>
+          <span className="text-xs text-muted-foreground tabular-nums shrink-0">{pct}% processed</span>
         </div>
         <div>
           <Button asChild size="sm" variant="ghost" className="px-0">

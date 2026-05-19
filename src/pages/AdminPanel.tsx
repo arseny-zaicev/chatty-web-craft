@@ -241,8 +241,7 @@ function WorkspacesDashboard({ workspaces, isLoading }: { workspaces: Workspace[
         <Kpi icon={Building2} label="Clients" value={t?.clients ?? workspaces.length} />
         <Kpi icon={Megaphone} label="Active campaigns" value={t?.active_campaigns ?? 0} />
         <Kpi icon={MessageSquare} label="Unread replies" value={t?.unread_replies ?? 0} accent={t && t.unread_replies > 0 ? "text-emerald-500" : undefined} />
-        <Kpi icon={Send} label="Sent today" value={t?.sent_today ?? 0} />
-        <Kpi icon={Send} label="Delivered today" value={t?.delivered_today ?? 0} />
+        <Kpi icon={CheckCircle2} label="Delivered messages" value={t?.delivered_today ?? 0} />
         <Kpi icon={MessageSquare} label="Replies today" value={t?.replies_today ?? 0} />
         <Kpi icon={Calendar} label="Booked today" value={t?.booked_calls_today ?? 0} />
         <Kpi icon={AlertTriangle} label="Issues" value={t?.issues ?? 0} accent={t && t.issues > 0 ? "text-amber-500" : undefined} />
@@ -387,9 +386,9 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
             </>
           ) : m?.active_campaign_name ? (
             (() => {
-              const sent = m.active_campaign_sent ?? 0;
+              const delivered = m.active_campaign_delivered ?? 0;
               const total = m.active_campaign_total ?? 0;
-              const pct = total > 0 ? Math.min(100, Math.round((sent / total) * 100)) : 0;
+              const pct = total > 0 ? Math.min(100, Math.round((delivered / total) * 100)) : 0;
               const sendingNow = !!m.is_sending_now;
               const isRunning = m.active_campaign_status === "running";
               const label = sendingNow ? "Sending now" : isRunning ? "Campaign running" : "Next campaign";
@@ -404,8 +403,8 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
                         <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
                       </div>
                       <div className="text-xs text-muted-foreground mt-1 tabular-nums">
-                        {pct}% sent · {sent.toLocaleString()}/{total.toLocaleString()}
-                        {isRunning ? ` · ${m.sent_today ?? 0} today` : m.next_launch ? ` · starts ${formatDateShort(m.next_launch)}` : ""}
+                        {pct}% delivered · {delivered.toLocaleString()}/{total.toLocaleString()}
+                        {isRunning ? ` · ${m.delivered_today ?? 0} today` : m.next_launch ? ` · starts ${formatDateShort(m.next_launch)}` : ""}
                       </div>
                     </>
                   )}
@@ -428,7 +427,7 @@ function ClientCard({ ws, m }: { ws: Workspace; m: PortfolioSnapshot["byWorkspac
         <div className="grid grid-cols-3 gap-2 text-center">
           <MiniStat label="Numbers" value={`${numbersActive}/${numbersTotal}`} />
           <MiniStat label="Unread" value={unread} highlight={unread > 0} />
-          <MiniStat label="Sent today" value={m?.sent_today ?? 0} />
+          <MiniStat label="Delivered" value={m?.delivered_today ?? 0} />
         </div>
 
         <div className="flex items-center gap-2 mt-auto">
