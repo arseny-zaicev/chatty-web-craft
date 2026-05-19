@@ -1,125 +1,99 @@
+# Technical Audit — CRM, Pipeline, Campaigns, Inbox
 
-# План: расширяемые автоматизации стадий
+Scope: 45k LOC frontend, 14k LOC edge functions, ~50 functions, single Supabase project. Findings tied to concrete files. No code changes.
 
-## Что есть сейчас
-В `Stage automations` диалоге (иконка молнии в Pipeline) уже работают 4 триггера: `button_click`, `inbound_keyword`, `inbound_any`, `follow_up_sent`. Они применяются в `whatsapp-webhook` (при входящем) и `follow-up-dispatch` (при отправке follow-up). Логика — pure text matching, без AI.
+## 1. Executive Summary
 
-То есть для кейса "любой ответ → стадия Replied" уже есть триггер `Any inbound reply` — нужно просто его добавить. Но не хватает двух важных классов:
+The app works but has crossed the "small-team prototype" threshold. The two main structural problems:
 
-1. **Time-based** — "N часов без ответа лида → No reply"
-2. **Assignment** — "оператор закрепил чат за собой → перенести в стадию"
+1. **Mega-files holding mixed concerns.** `CRM.tsx` (1116), `Pipeline.tsx` (1142), `LaunchWizard.tsx` (1950), `PipelineConfigSheet.tsx` (1590), `WorkspaceData.tsx` (1136), and `campaigns/index.ts` (2396) each combine UI, data-fetching, mutation, realtime, and business rules. They are now the dominant source of regression risk - every recent feature (49-prefix fix, automations, stage rules, slack throttle) had to be threaded through 3-5 of them.
+2. **Drifting backend conventions.** `normalizePhone` exists in 4 different forms across `_shared/phone.ts`, `whatsapp-webhook`, `campaigns`, and `audienceData.ts`. Slack dispatch is half cron-based, half trigger-based. `campaigns/index.ts` is a 2.4k-line action router that has absorbed launch, blast, prepare, kill-switch, runtime, templates, redistribute, retry, and process - this is where most silent failures will originate next.
 
-И всё это должно быть настраиваемо из UI.
+The frontend has 162 direct `supabase.from(...)` calls across 60 files and 103 ad-hoc `invalidateQueries` calls. There is no data-layer boundary - any page can read or mutate any table, which is why query-invalidation bugs (stale pipeline counts, stale stats) keep returning.
 
----
+Nothing here is on fire. But the next 2-3 features will get materially harder unless the worst hotspots are split.
 
-## Что добавляем
+## 2. Top Highest-Risk Technical Areas
 
-### 1. Новые типы триггеров (DB enum + UI)
+### R1. `supabase/functions/campaigns/index.ts` (2396 lines, 10+ actions)
+Single file routes `launch`, `blast`, `prepare`, `kill_switch`, `runtime_status`, `upsert_template`, `sync_templates`, `sync_templates_all`, `pause/resume/cancel`, `redistribute`, `retry_failed`, `process`. Local `normalizePhone` diverges from `_shared/phone.ts` (no country-code repair) - leads inserted by `campaigns` will not get the `49` prefix fix that `lead-intake` got. High blast radius: any edit risks every campaign action.
 
-| Триггер | Когда срабатывает | Параметры |
-|---|---|---|
-| `time_no_inbound` | прошло X минут с последнего исходящего, а входящего так и нет | delay_minutes, опц. source_stage_id |
-| `time_in_stage` | карточка висит в стадии X дольше Y минут (без условий на сообщения) | delay_minutes, source_stage_id |
-| `conversation_assigned` | у чата появился `assigned_user_id` (любой сеттер) | опц. source_stage_id |
-| `conversation_claimed_self` | сеттер сам себя поставил (assigned_user_id = тот, кто менял) | опц. source_stage_id |
+### R2. `src/pages/CRM.tsx` (1116 lines, 22 useState, 2 realtime channels)
+Number filter, starred/replied/unread/my filters, pipeline filter, sort, conversations list, messages, draft, sending, search, assignment, pinning, marking read - all in one component with derived state recomputed on every render. The two `useRealtimeTable` calls write directly into local `conversations`/`messages` arrays while react-query keeps a separate cache. Source of "list doesn't refresh" and "unread count wrong" classes of bugs.
 
-Существующие триггеры остаются как есть.
+### R3. `src/pages/Pipeline.tsx` (1142 lines)
+DnD, stage CRUD, deal CRUD, automations dialog, conversation peek, assignment, multi-pipeline switching in one file. Recent `49`-prefix fix had to be applied to `deals.contact_phone` separately from `leads.phone` because the two paths don't share normalization. Cross-pipeline moves go through `moveDealToPipeline` but stage automations resolve targets independently - drift risk.
 
-Плюс ко всем триггерам — необязательный фильтр `source_stage_id`: "правило срабатывает только если карточка сейчас в этой стадии". Это даёт каскад: "Leads sent → 8h без ответа → No reply", "No reply → 24h без ответа → Disqualified", и т.д.
+### R4. `src/pages/workspace/LaunchWizard.tsx` (1950 lines, 39 useState)
+Largest page in the app. Combines audience selection, prep profile picking, template validation, sender allocation, schedule editing, dry-run, launch. This is where operators report the most "I clicked launch and nothing happened" silent failures - errors are caught and toasted but launch state is not persisted, so a refresh loses everything.
 
-### 2. Изменения в БД
+### R5. `src/components/workspace/PipelineConfigSheet.tsx` (1590 lines, 34 useState)
+Stage editing, color editing, ordering, automations preview, pipeline rename, archive, defaults - all in one sheet. Overlaps heavily with `StageAutomationsDialog.tsx` (459) and `PipelinesView.tsx` (418). When a stage rule misbehaves it is unclear which of the three owns the truth.
 
-```sql
--- Расширяем enum
-ALTER TYPE automation_trigger ADD VALUE 'time_no_inbound';
-ALTER TYPE automation_trigger ADD VALUE 'time_in_stage';
-ALTER TYPE automation_trigger ADD VALUE 'conversation_assigned';
-ALTER TYPE automation_trigger ADD VALUE 'conversation_claimed_self';
+### R6. Phone normalization sprawl
+- `supabase/functions/_shared/phone.ts` (247 lines, the "correct" one)
+- `supabase/functions/whatsapp-webhook/index.ts:15` (local copy)
+- `supabase/functions/campaigns/index.ts:24` (local copy)
+- `src/lib/audienceData.ts:80` (frontend copy)
+Each handles `49` prefix differently. This is why the same lead can appear with `1...` in deals and `491...` in conversations. Highest-leverage cleanup in the codebase.
 
-ALTER TABLE stage_automations
-  ADD COLUMN delay_minutes integer,
-  ADD COLUMN source_stage_id uuid REFERENCES pipeline_stages(id) ON DELETE CASCADE;
+### R7. Slack pipeline (half cron, half trigger)
+`slack-dispatch` (452 lines) is now invoked both by cron and by a DB trigger with a 10s throttle (added last session). `slack-inbox-watch`, `slack-pipeline-digest`, `slack-morning-digest`, `slack-evening-digest`, `slack-payout-post` each format their own blocks - `_shared/slackBlocks.ts` exists but is not consistently used. Risk: duplicate or missing notifications when the trigger fires while the cron is mid-run.
+
+### R8. Frontend data layer (no boundary)
+162 `supabase.from(...)` calls across 60 components/pages. 103 `invalidateQueries`. `crmKeys` in `crmData.ts` is the only structured key namespace; everything else uses ad-hoc string arrays. Stats pages that "don't refresh" are almost always missing an invalidation in one of the 60 callsites.
+
+### R9. `fetchCrmBase` does a 50k-row scan for replied flags
+`src/lib/crmData.ts:140-148` pulls up to 50,000 conversation ids with `last_inbound_at not null` on every CRM mount, just to build a Set. This is the single largest payload the frontend pulls. Will degrade visibly past ~10-20k conversations.
+
+### R10. `useRealtimeTable` + local state pattern
+`CRM.tsx` and `Pipeline.tsx` mutate local arrays from realtime payloads while react-query holds a parallel cache. There is no merge strategy when the cached fetch returns a row that realtime already mutated. Operators occasionally see a card "snap back" - this is why.
+
+## 3. Quick Wins (1-2 hours each)
+
+- **Delete the 3 local `normalizePhone` copies**, import `_shared/phone.ts` everywhere. Single file change in `whatsapp-webhook`, `campaigns`, and align `src/lib/audienceData.ts` behavior. Immediately closes the 49-prefix drift class of bugs.
+- **Extract `fetchCrmBase`'s replied-set query** into a server-side view or a `select count` + boolean column, dropping the 50k-id pull. 30-min change, large frontend speedup.
+- **Add a single `data/` module per domain** (`data/conversations.ts`, `data/deals.ts`, `data/campaigns.ts`) that wraps the existing supabase calls. Don't rewrite pages yet - just funnel new code through them and freeze `supabase.from()` in pages.
+- **Standardize query keys.** Extend the `crmKeys` pattern to `pipelineKeys`, `campaignKeys`, `statsKeys`. Removes the "which string did I invalidate" guesswork.
+- **Move the 4 inline phone-fix SQL fragments** (now in migrations + edge functions) into a `repair_phone(text, text)` SQL function. One source of truth, callable from triggers and from edge.
+- **Add explicit `console.error` with action name** at every `catch` in `campaigns/index.ts`. Right now 30 try blocks share generic toasts - operators have no breadcrumb when launch silently no-ops.
+
+## 4. Medium Cleanup / Refactor Tasks
+
+- **Split `campaigns/index.ts`** into one folder per action: `campaigns/_router.ts` + `actions/launch.ts`, `actions/blast.ts`, `actions/templates.ts`, `actions/runtime.ts`, `actions/retry.ts`. Share `_shared/template.ts` and `_shared/phone.ts`. This is the single most leveraged backend refactor.
+- **Extract `CRM.tsx` into**: `CRMShell.tsx` (layout + filters), `ConversationList.tsx`, `ConversationView.tsx` (messages + composer), `useConversationsQuery`, `useConversationRealtime` (with proper react-query merge). Cuts 22 useState to ~6 per component.
+- **Extract `Pipeline.tsx` into**: `PipelineBoard.tsx` (DnD only), `DealCard.tsx`, `StageColumn.tsx`, `useDealMutations` (move/create/update/delete with consistent invalidation). Stage CRUD moves entirely to `PipelineConfigSheet`.
+- **Collapse `PipelineConfigSheet` + `StageAutomationsDialog` + `PipelinesView`** into a coherent `pipeline-config/` folder with one source of truth for stage rules. Today each holds its own copy of the rule preview formatter.
+- **LaunchWizard persistence.** Persist wizard step + draft into `launch_drafts` table or session storage. Today a refresh loses 20 minutes of operator work. This is operator clarity, not just code hygiene.
+- **Consolidate Slack senders.** `_shared/slackBlocks.ts` should own all block formatting; the 6 slack-* functions become thin "select events + format + post" wrappers. Resolves the duplicate-notification risk from trigger+cron overlap.
+- **Observability pass.** Standardize an `edgeLog(fn, action, level, fields)` helper in `_shared/`, replace the 175 ad-hoc `console.log` calls. Then `supabase--edge_function_logs` becomes actually useful for debugging launches and webhook drops.
+
+## 5. Do NOT Touch Yet
+
+- **`supabase/functions/_shared/template.ts`** - it's working, well-shaped, and feeds 3 functions. Leave it.
+- **`useRealtimeTable.ts`** - the hook itself is fine; the problem is how `CRM.tsx`/`Pipeline.tsx` consume it. Fix the callers, not the hook.
+- **`crmData.ts` shape** - the `crmKeys` namespace is the right pattern to copy outward. Don't refactor it, extend it.
+- **`whatsapp-webhook/index.ts handleInbound`** (lines 48-535) - long, but it's a single linear pipeline with real edge cases (country prefix repair, recent-pipeline lookup, status mapping). Splitting it prematurely will lose context. Revisit only after `_shared/phone.ts` is the sole normalizer.
+- **`audience-ai-prepare`, `classify-replies`, `ops-assistant`** - AI-touching functions are fine in size and isolated.
+- **`supabase/integrations/supabase/types.ts`** - auto-generated, never edit.
+- **All landing/marketing pages** (`Index`, `Apply`, `Book`, `WhatsAppApply`, `SellerLeads*`, `BrandAssets`, `Privacy`, `Terms`) - out of CRM scope, no need to refactor for this audit.
+
+## 6. Recommended Implementation Order
+
+Each step is independently shippable and unblocks the next.
+
+```text
+Step 1  Phone normalization unification           (quick win, foundational)
+Step 2  Standardize query keys + add data/ wrappers (no behavior change)
+Step 3  Replace fetchCrmBase replied-set scan     (visible perf win)
+Step 4  Split campaigns/index.ts into actions/    (highest backend leverage)
+Step 5  Edge logging helper + audit campaigns/wb  (observability before next split)
+Step 6  Split CRM.tsx (list / view / hooks)      
+Step 7  Split Pipeline.tsx + consolidate config sheet/automations
+Step 8  LaunchWizard persistence + split into steps
+Step 9  Slack consolidation + dedupe trigger/cron
 ```
 
-`trigger_value` оставляем для совместимости (keywords/button text). Новые поля используются только для новых триггеров.
-
-### 3. Новая edge function: `automation-time-watchdog`
-
-Запускается по cron каждые 5 минут. Один проход:
-
-- Берёт все активные правила с триггером `time_no_inbound` или `time_in_stage`.
-- Для каждого правила джойнит `deals` + `conversations` в нужном pipeline:
-  - **time_no_inbound**: `deal.stage_id = source_stage_id` (если задана), `conversations.last_inbound_at IS NULL OR last_inbound_at < last_outbound_at`, и с момента последнего исходящего (или из messages MAX(created_at где direction='outbound')) прошло >= delay_minutes.
-  - **time_in_stage**: `deal.stage_id = source_stage_id`, `deal.updated_at < now() - delay_minutes`.
-- Двигает `deals.stage_id` → `target_stage_id`. Идемпотентно (после переноса условия уже не выполнятся).
-- Лимит 500 карточек за проход, чтобы не задерживать cron.
-
-Cron job (через `supabase/insert`, не миграция — содержит anon key):
-```sql
-SELECT cron.schedule(
-  'automation-time-watchdog-every-5min',
-  '*/5 * * * *',
-  $$SELECT net.http_post(url:='...automation-time-watchdog', headers:='...', body:='{}')$$
-);
-```
-
-### 4. Триггер на назначение чата
-
-DB trigger на `conversations` AFTER UPDATE OF `assigned_user_id`: если новое значение не NULL и отличается от старого — вызвать `apply_assignment_automations(conversation_id, assigned_user_id, prev_user_id)`.
-
-Функция (security definer):
-- Берёт `deals.stage_id` и `pipeline_id` по `conversation_id`.
-- Ищет активные правила `conversation_assigned` / `conversation_claimed_self` для этого `pipeline_id`, где `source_stage_id IS NULL` или равно текущему стейджу.
-- Для `conversation_claimed_self` — проверяет, что назначающий = назначаемый (передаём `auth.uid()` из триггера; для серверных апдейтов триггер игнорируется).
-- Двигает `deals.stage_id` → `target_stage_id`.
-
-Это даёт мгновенную реакцию без cron.
-
-### 5. UI: StageAutomationsDialog
-
-Расширяем существующий диалог (`src/components/workspace/StageAutomationsDialog.tsx`):
-
-- В `<Select>` триггера добавляем 4 новых пункта с русскими/EN лейблами.
-- Условный рендеринг доп. полей:
-  - Time-based → `<Input type="number">` для часов/минут + dropdown единицы + опц. `Source stage` selector.
-  - Assignment → опц. `Source stage` selector + чекбокс "Only when claimed by self".
-- В списке существующих правил — показываем в человекочитаемом виде: "После 8h без ответа в `Leads sent` → `No reply`", "Чат назначен (в любой стадии) → `Aktive Chats`".
-
-Презеты быстрые добавляем:
-- "8h no reply → No reply" (если такая стадия есть в pipeline)
-- "Assigned → Active chats" (если такая стадия есть)
-
----
-
-## Технические детали
-
-**Файлы:**
-- Миграция: новые enum values, колонки, DB trigger + функция, RLS не меняем.
-- Insert (не миграция): cron job для watchdog.
-- `supabase/functions/automation-time-watchdog/index.ts` (новая).
-- `supabase/functions/whatsapp-webhook/index.ts` — не трогаем (inbound_any уже есть).
-- `src/components/workspace/StageAutomationsDialog.tsx` — расширяем форму и рендер списка.
-
-**Edge cases:**
-- Idempotency: после переноса карточки условие уже не выполняется (стадия поменялась), повторно не двинет.
-- Cross-pipeline target: используем тот же `resolveTargetStage` подход что в whatsapp-webhook (имя/stage_type fallback). Для time-watchdog это менее критично — обычно правила pipeline-scoped.
-- Не двигаем карточки из won/lost стейджей — это терминальные.
-- `time_no_inbound` нужно last_outbound. Если в `conversations` нет такого поля — считаем по `MAX(messages.created_at) WHERE direction='outbound'` (один LATERAL JOIN, индекс по `(conversation_id, direction, created_at desc)` уже есть).
-
-**Безопасность:**
-- DB trigger на conversations выполняется в контексте пользователя — `claimed_self` детектируется через `auth.uid()`.
-- Watchdog edge function использует service role и сама проверяет workspace scope каждого правила.
-
----
-
-## Что увидит пользователь
-
-В диалоге `Stage automations` появятся новые типы триггеров — он сам сможет собирать сценарии вида:
-
-- "Любой ответ → Replied" (уже доступно сегодня — `Any inbound reply`)
-- "8 часов без ответа из `Leads sent` → `No reply`"
-- "Закрепил за собой чат → `Aktive Chats Dencas`"
-- "24 часа в `No reply` → `Disqualifiziert`"
-
-Без кода, без поддержки.
+Steps 1-3 are ~1 day total and remove most of the "stale data / wrong number" complaint class.
+Steps 4-5 are ~2-3 days and make the backend debuggable.
+Steps 6-9 are the real architectural work, ~1-2 weeks, and should be done in that order because each later step depends on the data-layer boundary established in step 2.
