@@ -7,9 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity, BarChart3, Pencil, Layers } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Users, Link2, Copy, Check, X, Mail, Clock, Activity, Pencil, Layers, Shield } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PERM_KEYS, type PermKey } from "@/lib/workspaceRole";
+
+type MemberPermissions = Record<PermKey, boolean>;
 
 type Member = {
   id: string;
@@ -17,6 +20,7 @@ type Member = {
   role: string;
   can_view_stats: boolean;
   allowed_pipeline_ids: string[] | null;
+  permissions?: MemberPermissions;
   joined_at: string | null;
   invited_at: string | null;
   membership_created_at: string | null;
@@ -27,6 +31,19 @@ type Member = {
   last_seen_at: string | null;
   minutes_30d: number;
   sessions_30d: number;
+};
+
+const PERM_LABELS: Record<PermKey, string> = {
+  perm_overview: "Overview",
+  perm_inbox: "Inbox",
+  perm_pipeline: "Pipeline",
+  perm_campaigns_view: "Campaigns",
+  perm_quick_replies_use: "Quick replies (use)",
+  perm_quick_replies_manage: "Quick replies (manage shared)",
+  perm_settings: "Settings",
+  perm_data: "Data",
+  perm_materials: "Materials",
+  perm_launch: "Launch campaigns",
 };
 
 type WsPipeline = { id: string; name: string; color: string | null };
