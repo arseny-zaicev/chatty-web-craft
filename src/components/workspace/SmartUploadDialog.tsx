@@ -64,6 +64,7 @@ export function SmartUploadDialog({
   const [step, setStep] = useState<Step>("input");
   const [campaignType, setCampaignType] = useState<"marketing" | "utility">("marketing");
   const [templateName, setTemplateName] = useState<string>("");
+  const [reuseBatchId, setReuseBatchId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedAudience | null>(null);
   const [pastedCopy, setPastedCopy] = useState("");
@@ -75,6 +76,22 @@ export function SmartUploadDialog({
   const [country, setCountry] = useState("");
   const [phoneColumn, setPhoneColumn] = useState<string>("");
   const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  // Batches with static-value notes — reusable across uploads (no cache bleed: each batch
+  // keeps its own snapshot in audience_batches.notes).
+  const batchesQ = useQuery({
+    queryKey: ["smart-upload-batches", workspaceId],
+    queryFn: () => fetchBatches(workspaceId),
+    enabled: open,
+  });
+  const reusableBatches = useMemo<AudienceBatch[]>(() => {
+    return (batchesQ.data ?? []).filter((b) => Object.keys(parseStaticValues(b.notes)).length > 0);
+  }, [batchesQ.data]);
+  const reuseStatic = useMemo<Record<string, string>>(() => {
+    if (!reuseBatchId) return {};
+    const b = (batchesQ.data ?? []).find((x) => x.id === reuseBatchId);
+    return parseStaticValues(b?.notes ?? null);
+  }, [reuseBatchId, batchesQ.data]);
 
   const selectedTpl = templateOptions.find((t) => t.name === templateName) ?? null;
   const expectedFields = selectedTpl?.vars ?? [];
