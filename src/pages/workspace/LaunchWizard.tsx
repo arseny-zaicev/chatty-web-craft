@@ -606,6 +606,33 @@ export default function LaunchWizard() {
     () => audienceSource === "database" ? parseStaticValues(dbBatch?.notes) : {},
     [audienceSource, dbBatch?.notes],
   );
+
+  // Auto-seed __static mapping for DB batches where the preset declared
+  // campaign-static var_N values AND every sampled row already carries that
+  // exact value in derived_payload. Recognises preset-prepared static variables
+  // as "resolved" instead of leaving them as "unmapped". (Plan §D.)
+  useEffect(() => {
+    if (audienceSource !== "database") return;
+    if (!variableNames.length) return;
+    const rows = sampleDbRowsQ.data ?? [];
+    if (!Object.keys(expectedStaticValues).length || rows.length === 0) return;
+    setMapping((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      variableNames.forEach((v) => {
+        if (next[v]) return;
+        const key = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v.toLowerCase()}`;
+        const exp = expectedStaticValues[key];
+        if (!exp) return;
+        const allMatch = rows.every((r) => String(r.derived_payload?.[key] ?? "").trim() === exp.trim());
+        if (allMatch) {
+          next[v] = `__static:${exp}`;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [audienceSource, variableNames, expectedStaticValues, sampleDbRowsQ.data]);
   const staticQaIssues = useMemo(() => {
     if (audienceSource !== "database") return [] as Array<{ key: string; reason: string }>;
     const rows = sampleDbRowsQ.data ?? [];
