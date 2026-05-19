@@ -184,12 +184,24 @@ export function buildPresetPrompt(
 
   return `You are preparing a WhatsApp audience batch for the "${ctx.workspaceName}" workspace.
 
+===========================================================================
+INSERT TARGET — READ THIS FIRST
+  Personal Supabase project (NOT Lovable Cloud):
+    project ref:  ${PERSONAL_SUPABASE_PROJECT_REF}
+    project url:  ${PERSONAL_SUPABASE_URL}
+    table:        public.audience_rows
+    workspace_id: ${ctx.workspaceId}
+    batch_id:     ${ctx.batchId ?? "<MISSING — create the batch first from the Data page, then re-copy this prompt>"}
+  DO NOT insert into the Lovable Cloud project (xglfamaaotmwulglwcui).
+  Use the batch_id above as-is. Do NOT create a new batch.
+===========================================================================
+
 PRESET: ${preset.name}
 Campaign type: ${preset.campaignType}
 ${preset.blurb}
 
 GOAL
-Take the raw rows the operator gives you and produce a clean, validated dataset for direct insertion into public.audience_rows. Do NOT ask follow-up questions. Use the rules below as-is.
+Take the raw rows the operator gives you and produce a clean, validated dataset for direct insertion into public.audience_rows on the PERSONAL Supabase project above (ref ${PERSONAL_SUPABASE_PROJECT_REF}). Do NOT ask follow-up questions. Use the rules below as-is.
 
 REQUIRED SOURCE FIELDS (must be present)
   ${preset.requiredSourceFields.join(", ")}
@@ -235,19 +247,19 @@ EXPECTED COUNTS (report at the end)
   - total_invalid
   - total_duplicates
 
-INSERT TARGET (PERSONAL Supabase project — NOT Lovable Cloud)
-  project ref: ${PERSONAL_SUPABASE_PROJECT_REF}
-  project url: ${PERSONAL_SUPABASE_URL}
-  table: public.audience_rows
+INSERT TARGET REMINDER (same as banner at top)
+  project ref:  ${PERSONAL_SUPABASE_PROJECT_REF}   (PERSONAL — NOT Lovable Cloud xglfamaa...)
+  project url:  ${PERSONAL_SUPABASE_URL}
+  table:        public.audience_rows
   workspace_id: ${ctx.workspaceId}
-  batch_id: ${ctx.batchId ?? "<MISSING - create the batch first from the Data page>"}
-  preset: ${preset.id}
+  batch_id:     ${ctx.batchId ?? "<MISSING — create the batch first from the Data page>"}
+  preset:       ${preset.id}
 
 BEFORE INSERT (CRITICAL — prevents the 0-unused stub-batch problem)
-  If a batch with the same name "YYYY-MM-DD | COUNTRY | AUDIENCE" already
-  exists in Lovable Cloud for this workspace, REUSE its batch_id.
-  Never ask the operator to "create another batch" — duplicates show up in
-  the Launch wizard and block the operator from selecting the real one.
+  Use the batch_id printed above as-is. Do NOT create a new batch and do NOT
+  ask the operator to create another one. Duplicate batches with the same
+  name show up in the Launch wizard and block the operator from selecting
+  the real populated batch.
 
 WORKFLOW FOR CODEX
   1. Parse the raw input the operator pasted.
