@@ -732,7 +732,7 @@ export default function LaunchWizard() {
       m: Object.entries(mapping).sort(([a], [b]) => a.localeCompare(b)),
     };
     return btoa(unescape(encodeURIComponent(JSON.stringify(parts)))).slice(0, 16);
-  }, [dbBatchId, recipients.length, activeLogical?.id, activeNumbers, mapping]);
+  }, [dbBatchId, recipients.length, activeLogical?.key, activeNumbers, mapping]);
   const snapshotKey = `launch-snapshot:${workspace?.id ?? ""}:${dbBatchId || "paste"}`;
   const [confirmedSnapshot, setConfirmedSnapshot] = useState<string>(() => {
     if (typeof window === "undefined") return "";
