@@ -344,7 +344,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         continue;
       }
 
-      const phoneResult = normalizePhone(phoneRaw, defaultCC);
+      const phoneResult = normalizePhone(phoneRaw, ccListForPhone.length ? ccListForPhone : defaultCC);
       if (!phoneResult.ok) {
         preparedRows.push({
           externalId,
