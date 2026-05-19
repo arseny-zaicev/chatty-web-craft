@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Search, FileText, Copy, Check, MessageSquare, Phone, Globe, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { crmKeys, fetchCampaignBase } from "@/lib/crmData";
+import { crmKeys, fetchCampaignBase, senderFullLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
