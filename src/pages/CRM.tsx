@@ -405,6 +405,11 @@ const CRM = ({
       if (payload.eventType === "INSERT") {
         const newMsg = payload.new as Message;
         setMessages((prev) => (prev.find((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+        // Conversation is open: keep it marked as read, even if a new inbound message arrives.
+        if (newMsg.direction === "inbound" && activeId) {
+          setConversations((cs) => cs.map((c) => (c.id === activeId ? { ...c, unread_count: 0 } : c)));
+          void markConversationRead(activeId).catch(() => {});
+        }
       } else if (payload.eventType === "UPDATE") {
         const updated = payload.new as Message;
         setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
