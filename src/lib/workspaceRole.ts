@@ -14,6 +14,8 @@ export const PERM_KEYS = [
   "perm_data",
   "perm_materials",
   "perm_launch",
+  "perm_stats",
+  "perm_stats_all",
 ] as const;
 export type PermKey = (typeof PERM_KEYS)[number];
 
