@@ -174,6 +174,19 @@ export default function PipelineConfigSheet({
     },
   });
 
+  const { data: templateGroups } = useQuery({
+    queryKey: ["pipeline-template-groups", wsId],
+    enabled: Boolean(wsId && open),
+    queryFn: async (): Promise<TemplateGroup[]> => {
+      const { data } = await supabase
+        .from("template_groups")
+        .select("id, name, template_names")
+        .eq("workspace_id", wsId)
+        .order("name");
+      return (data ?? []) as TemplateGroup[];
+    },
+  });
+
   const { data: numbers, refetch: refetchNumbers } = useQuery({
     queryKey: ["pipeline-numbers", wsId],
     enabled: Boolean(wsId && open),
