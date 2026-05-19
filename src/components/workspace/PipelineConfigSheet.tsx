@@ -335,6 +335,15 @@ export default function PipelineConfigSheet({
     },
   });
 
+  // Sender label lookup for "template_name — SenderName" rendering.
+  const senderLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of numbers ?? []) {
+      m.set(n.id, friendlySenderLabel({ display_name: n.display_name, phone_number: n.phone_number }) || `+${n.phone_number}`);
+    }
+    return m;
+  }, [numbers]);
+
   const { data: sources, refetch: refetchSources } = useQuery({
     queryKey: ["pipeline-sources", pipeId],
     enabled: Boolean(pipeId && open),
