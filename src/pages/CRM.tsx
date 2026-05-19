@@ -417,6 +417,26 @@ const CRM = ({
     };
   }, [activeId]);
 
+  // Refetch messages when the tab regains focus — covers cases where the realtime
+  // socket was suspended (backgrounded tab, network blip) and an INSERT was missed.
+  useEffect(() => {
+    if (!activeId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchConversationMessages(activeId)
+          .then((data) => setMessages(data as Message[]))
+          .catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [activeId]);
+
+
   // Realtime messages for active conversation - INSERT for new messages, UPDATE for status changes (sent -> failed, etc.)
   useRealtimeTable<Message>(
     {
