@@ -180,6 +180,8 @@ const PERM_TO_SEG: Record<PermKey, string> = {
   perm_materials: "materials",
   perm_settings: "settings",
   perm_launch: "launch",
+  perm_stats: "stats",
+  perm_stats_all: "stats",
 };
 
 function RoleGuardedOutlet({ workspace }: { workspace?: Workspace }) {
