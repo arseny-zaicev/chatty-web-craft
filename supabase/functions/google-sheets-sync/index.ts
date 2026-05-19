@@ -247,6 +247,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     let testLeadCount = 0;
     let duplicateCount = 0;
     let crossPipelineDuplicateCount = 0;
+    let nameUnusableCount = 0;
     let lastProcessedRow = lastSyncedRow;
     const initialStatus = pipeline.auto_outreach_enabled ? "pending" : "awaiting_manual";
     const defaultCC = cfg.default_country_code ? String(cfg.default_country_code) : null;
