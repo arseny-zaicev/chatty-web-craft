@@ -6,6 +6,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { acquireJobLock } from "../_shared/jobLock.ts";
 import { normalizePhone } from "../_shared/phone.ts";
+import { normalizeName } from "../_shared/name.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -72,6 +73,8 @@ type Pipeline = {
   follow_up_curfew_end: string;       // 'HH:MM' or 'HH:MM:SS'
   follow_up_resume_at: string;        // 'HH:MM' or 'HH:MM:SS'
   follow_up_timezone: string;
+  expected_country_codes: string[] | null;
+  failed_stage_id: string | null;
 };
 type Lead = {
   id: string; pipeline_id: string; workspace_id: string; phone: string; name: string | null;
@@ -83,8 +86,13 @@ type Lead = {
 function buildVariables(tpl: { variables: any } | null, lead: Lead): Record<string, string> {
   const vars = Array.isArray(tpl?.variables) ? tpl!.variables : [];
   const payload = (lead.payload && typeof lead.payload === "object") ? lead.payload : {};
-  const firstName = (lead.name || (payload as any).full_name || (payload as any).name || "")
-    .toString().trim().split(/\s+/)[0] || "there";
+  // Prefer payload.first_name (set by normalizer at import); fall back to
+  // normalizing lead.name / payload.full_name / payload.name on the fly.
+  const payloadFirst = (payload as any).first_name;
+  const payloadFull = (payload as any).full_name;
+  const candidate = payloadFirst || payloadFull || lead.name || (payload as any).name || "";
+  const norm = normalizeName(candidate);
+  const firstName = norm.first || "there";
   const out: Record<string, string> = {};
   for (const key of vars) {
     const k = String(key);
@@ -96,7 +104,6 @@ function buildVariables(tpl: { variables: any } | null, lead: Lead): Record<stri
       out[k] = firstName; // safe non-empty fallback
     }
   }
-  // Mirror useful payload fields for downstream UI/metadata (kept in variables JSONB).
   const passthrough = [
     "company_name", "email", "form_name", "campaign_name", "adset_name", "ad_name",
     "do_you_currently_own_or_manage_a_meta_business_manager?",
@@ -275,23 +282,25 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     console.log(`[lead-dispatch] pipeline=${pipeline.id} orphans_skipped=${orphanIds.length}`);
   }
 
-  // Re-validate phone (catches legacy rows imported before normalizer was strict,
-  // e.g. 10-digit Thai numbers without a country code).
+  // Re-validate phone with pipeline-level expected country codes (DE/AT/CH etc.).
+  // Source-level cc (if set) takes precedence and is added on top of pipeline list.
+  const pipelineCcs = Array.isArray(pipeline.expected_country_codes)
+    ? pipeline.expected_country_codes : [];
   const invalidIds: string[] = [];
+  const needsReviewUpdates: Array<{ id: string; error: string }> = [];
   const valid: any[] = [];
   for (const l of eligible) {
-    const cc = l.source_connection_id ? sourceCcById.get(l.source_connection_id) : null;
-    const r = normalizePhone(l.phone, cc ?? undefined);
-    if (!r.ok || r.phone !== String(l.phone)) {
-      if (!r.ok) {
-        invalidIds.push(l.id);
-        continue;
-      }
-      // Normalizer would have produced a different canonical form -> stored value is suspicious.
-      // Trust normalizer; update phone on the row so we send to the correct number.
-      l.phone = r.phone;
+    const srcCc = l.source_connection_id ? sourceCcById.get(l.source_connection_id) : null;
+    const ccList = [...(srcCc ? [srcCc] : []), ...pipelineCcs];
+    const r = normalizePhone(l.phone, ccList.length ? ccList : null);
+    if (r.ok) {
+      if (r.phone !== String(l.phone)) l.phone = r.phone; // adopt normalized form
+      valid.push(l);
+    } else if (r.status === "needs_review") {
+      needsReviewUpdates.push({ id: l.id, error: `needs_review: ${r.reason}` });
+    } else {
+      invalidIds.push(l.id);
     }
-    valid.push(l);
   }
   if (invalidIds.length) {
     await admin
@@ -300,6 +309,18 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
       .in("id", invalidIds)
       .in("status", ["pending", "awaiting_manual"]);
     console.log(`[lead-dispatch] pipeline=${pipeline.id} invalid_phones=${invalidIds.length}`);
+  }
+  if (needsReviewUpdates.length) {
+    // Park them in awaiting_manual so dispatcher stops touching them but UI
+    // can surface a "needs review" badge for the operator.
+    for (const u of needsReviewUpdates) {
+      await admin
+        .from("lead_imports")
+        .update({ status: "awaiting_manual", error: u.error })
+        .eq("id", u.id)
+        .in("status", ["pending"]);
+    }
+    console.log(`[lead-dispatch] pipeline=${pipeline.id} needs_review=${needsReviewUpdates.length}`);
   }
   const leads = valid;
   console.log(`[lead-dispatch] pipeline=${pipeline.id} claimable=${leads.length} senders_ready=${numbers.length} senders_skipped=${skippedForTemplate.length}`);
@@ -587,7 +608,7 @@ Deno.serve(async (req) => {
 
     const { data: pipelines } = await admin
       .from("pipelines")
-      .select("id, user_id, workspace_id, name, auto_outreach_enabled, first_touch_template_id, first_touch_template_group_id, default_sender_number_ids, sending_window, daily_cap, slack_channel_id, follow_up_enabled, follow_up_delay_minutes, follow_up_curfew_end, follow_up_resume_at, follow_up_timezone")
+      .select("id, user_id, workspace_id, name, auto_outreach_enabled, first_touch_template_id, first_touch_template_group_id, default_sender_number_ids, sending_window, daily_cap, slack_channel_id, follow_up_enabled, follow_up_delay_minutes, follow_up_curfew_end, follow_up_resume_at, follow_up_timezone, expected_country_codes, failed_stage_id")
       .in("id", pipelineIds)
       .eq("auto_outreach_enabled", true);
 

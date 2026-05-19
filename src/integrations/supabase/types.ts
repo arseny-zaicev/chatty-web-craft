@@ -2096,6 +2096,8 @@ export type Database = {
           created_at: string
           daily_cap: number | null
           default_sender_number_ids: string[]
+          expected_country_codes: string[]
+          failed_stage_id: string | null
           first_touch_template_group_id: string | null
           first_touch_template_id: string | null
           follow_up_curfew_end: string
@@ -2121,6 +2123,8 @@ export type Database = {
           created_at?: string
           daily_cap?: number | null
           default_sender_number_ids?: string[]
+          expected_country_codes?: string[]
+          failed_stage_id?: string | null
           first_touch_template_group_id?: string | null
           first_touch_template_id?: string | null
           follow_up_curfew_end?: string
@@ -2146,6 +2150,8 @@ export type Database = {
           created_at?: string
           daily_cap?: number | null
           default_sender_number_ids?: string[]
+          expected_country_codes?: string[]
+          failed_stage_id?: string | null
           first_touch_template_group_id?: string | null
           first_touch_template_id?: string | null
           follow_up_curfew_end?: string
@@ -2166,6 +2172,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pipelines_failed_stage_id_fkey"
+            columns: ["failed_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pipelines_first_touch_template_group_id_fkey"
             columns: ["first_touch_template_group_id"]

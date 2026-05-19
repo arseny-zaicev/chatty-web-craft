@@ -77,6 +77,8 @@ type Pipeline = {
   follow_up_curfew_end?: string;
   follow_up_resume_at?: string;
   follow_up_timezone?: string;
+  expected_country_codes?: string[] | null;
+  failed_stage_id?: string | null;
 };
 
 type TemplateGroup = { id: string; name: string; template_names: string[] };
@@ -246,6 +248,10 @@ export default function PipelineConfigSheet({
   const [followUpResumeAt, setFollowUpResumeAt] = useState<string>("09:00");
   const [followUpTz, setFollowUpTz] = useState<string>("Europe/Berlin");
 
+  // Phone normalization + failed routing
+  const [expectedCcs, setExpectedCcs] = useState<string[]>([]);
+  const [failedStageId, setFailedStageId] = useState<string>("");
+
   const [showNewSource, setShowNewSource] = useState(false);
   const [newSourceKind, setNewSourceKind] = useState<SourceKind>("google_sheet");
   const [newSourceName, setNewSourceName] = useState("");
@@ -272,6 +278,8 @@ export default function PipelineConfigSheet({
     setFollowUpCurfewEnd(trimTime(p.follow_up_curfew_end) || "20:00");
     setFollowUpResumeAt(trimTime(p.follow_up_resume_at) || "09:00");
     setFollowUpTz(p.follow_up_timezone ?? "Europe/Berlin");
+    setExpectedCcs(Array.isArray(p.expected_country_codes) ? p.expected_country_codes : []);
+    setFailedStageId(p.failed_stage_id ?? "");
   };
 
   const { data: templates } = useQuery({
@@ -582,6 +590,8 @@ export default function PipelineConfigSheet({
         follow_up_curfew_end: followUpCurfewEnd,
         follow_up_resume_at: followUpResumeAt,
         follow_up_timezone: followUpTz,
+        expected_country_codes: expectedCcs,
+        failed_stage_id: failedStageId || null,
       })
       .eq("id", pipeId);
     if (error) return toast.error(error.message);
@@ -1239,6 +1249,47 @@ export default function PipelineConfigSheet({
             <p className="text-[10px] text-muted-foreground">
               Sends between {winStart}-{winEnd} {timezone}.
             </p>
+          </div>
+        </section>
+
+        {/* Phone normalization + failed routing */}
+        <section className="mt-6 space-y-3">
+          <h3 className="text-sm font-semibold">Phone normalization & failed leads</h3>
+          <div className="rounded-lg border border-border p-3 space-y-3">
+            <div>
+              <Label className="text-xs">Expected country codes</Label>
+              <Input
+                value={expectedCcs.join(", ")}
+                onChange={(e) =>
+                  setExpectedCcs(
+                    e.target.value
+                      .split(/[,\s]+/)
+                      .map((s) => s.replace(/\D/g, ""))
+                      .filter(Boolean),
+                  )
+                }
+                placeholder="e.g. 49, 43, 41"
+                className="h-9"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Comma-separated dial codes without +. Used to fix numbers like "017612345" → "+4917612345". With multiple codes, length rules pick the right country (DE 10-11, AT 10-13, CH 9-10). Numbers we can't safely fix go to "needs review", not skipped.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs">Stage for failed sends (WhatsApp invalid → call)</Label>
+              <Select value={failedStageId || "_none"} onValueChange={(v) => setFailedStageId(v === "_none" ? "" : v)}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Don't move" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Don't move (keep current stage)</SelectItem>
+                  {(stages ?? []).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                When Gupshup reports a failed delivery (e.g. invalid WhatsApp number), the deal auto-moves here with the error reason in notes so an operator can call.
+              </p>
+            </div>
           </div>
         </section>
 
