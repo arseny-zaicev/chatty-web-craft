@@ -274,6 +274,66 @@ export default function PipelineConfigSheet({
     },
   });
 
+  const { data: stages, refetch: refetchStages } = useQuery({
+    queryKey: ["pipeline-stages", pipeId],
+    enabled: Boolean(pipeId && open),
+    queryFn: async (): Promise<Stage[]> => {
+      const { data } = await supabase
+        .from("pipeline_stages")
+        .select("id, pipeline_id, workspace_id, user_id, name, color, position, stage_type")
+        .eq("pipeline_id", pipeId!)
+        .order("position");
+      return (data ?? []) as Stage[];
+    },
+  });
+
+  const addStage = async () => {
+    if (!pipeId || !wsId) return;
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const nextPos = ((stages ?? []).reduce((m, s) => Math.max(m, s.position), -1)) + 1;
+    const { error } = await supabase.from("pipeline_stages").insert({
+      pipeline_id: pipeId, workspace_id: wsId, user_id: u.user.id,
+      name: "New stage", color: "#64748b", position: nextPos, stage_type: "open",
+    });
+    if (error) return toast.error(error.message);
+    refetchStages();
+  };
+  const renameStage = async (id: string, name: string) => {
+    const { error } = await supabase.from("pipeline_stages").update({ name }).eq("id", id);
+    if (error) toast.error(error.message); else refetchStages();
+  };
+  const colorStage = async (id: string, color: string) => {
+    const { error } = await supabase.from("pipeline_stages").update({ color }).eq("id", id);
+    if (error) toast.error(error.message); else refetchStages();
+  };
+  const moveStage = async (id: string, dir: -1 | 1) => {
+    const arr = [...(stages ?? [])].sort((a, b) => a.position - b.position);
+    const idx = arr.findIndex((s) => s.id === id);
+    const swap = arr[idx + dir];
+    if (!swap) return;
+    await Promise.all([
+      supabase.from("pipeline_stages").update({ position: swap.position }).eq("id", id),
+      supabase.from("pipeline_stages").update({ position: arr[idx].position }).eq("id", swap.id),
+    ]);
+    refetchStages();
+    qc.invalidateQueries({ queryKey: ["stages", wsId] });
+  };
+  const deleteStage = async (s: Stage) => {
+    // Refuse if any deals reference this stage
+    const { count } = await supabase
+      .from("deals")
+      .select("id", { count: "exact", head: true })
+      .eq("stage_id", s.id);
+    if ((count ?? 0) > 0) {
+      toast.error(`Can't delete: ${count} deal(s) still in "${s.name}". Move them first.`);
+      return;
+    }
+    if (!confirm(`Delete stage "${s.name}"?`)) return;
+    const { error } = await supabase.from("pipeline_stages").delete().eq("id", s.id);
+    if (error) toast.error(error.message); else { toast.success("Stage deleted"); refetchStages(); qc.invalidateQueries({ queryKey: ["stages", wsId] }); }
+  };
+
   useEffect(() => {
     if (open && pipeline) hydrate(pipeline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
