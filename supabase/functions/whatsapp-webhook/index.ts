@@ -56,10 +56,10 @@ async function handleInbound(payload: Record<string, unknown>) {
   const sender = (inner.sender ?? {}) as Record<string, unknown>;
   const msgPayload = (inner.payload ?? {}) as Record<string, unknown>;
   const appName = String(payload.app ?? inner.app ?? "").trim();
-  const destination = normalizePhone(String(
+  const destination = stripToDigits(String(
     inner.destination ?? payload.destination ?? ""
   ));
-  const source = normalizePhone(String(inner.source ?? sender.phone ?? payload.source ?? ""));
+  const source = stripToDigits(String(inner.source ?? sender.phone ?? payload.source ?? ""));
   if (!source) {
     console.warn("Missing source", { destination, source });
     return;
