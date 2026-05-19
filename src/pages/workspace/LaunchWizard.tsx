@@ -350,6 +350,8 @@ export default function LaunchWizard() {
     });
   }, [variableNames, mapping]);
 
+  // hollowVars is computed below (after sampleDbRowsQ is declared).
+
   // Sample value preview for each variable (uses first available recipient/db row)
   const variablePreviewValue = (v: string): string => {
     const src = mapping[v];
@@ -687,6 +689,27 @@ export default function LaunchWizard() {
 
   // Back-compat alias kept for the UI block below.
   const staticQaIssues = staticQaWarnings;
+
+  // Hollow mapping: variable is mapped to a column but EVERY sampled DB row
+  // resolves to empty -> the wizard says "mapped" but the launch will fall
+  // back to "there". Block before that becomes "Hey there there".
+  const hollowVars = useMemo(() => {
+    if (audienceSource !== "database") return [] as string[];
+    const rows = sampleDbRowsQ.data ?? [];
+    if (rows.length === 0) return [];
+    const out: string[] = [];
+    for (const v of variableNames) {
+      const src = mapping[v];
+      if (!src || src.startsWith("__static:")) continue;
+      const allEmpty = rows.every((r) => {
+        const fromPayload = String((r.payload as any)?.[src] ?? "").trim();
+        const fromDerived = String((r.derived_payload as any)?.[src] ?? "").trim();
+        return !fromPayload && !fromDerived;
+      });
+      if (allEmpty) out.push(v);
+    }
+    return out;
+  }, [audienceSource, variableNames, mapping, sampleDbRowsQ.data]);
 
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
@@ -1764,6 +1787,14 @@ export default function LaunchWizard() {
                     </div>
                   </div>
                 )}
+                {hollowVars.length > 0 && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 text-destructive px-3 py-2 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <b>Mapping is hollow.</b> {hollowVars.map((v) => `{${v}}`).join(", ")} {hollowVars.length === 1 ? "is" : "are"} mapped to a column but ALL sampled rows have it empty in both <code className="font-mono">payload</code> and <code className="font-mono">derived_payload</code>. The launch will render "Hey there there". Re-prepare the audience (or re-pull from personal Supabase) so the column actually has data.
+                    </div>
+                  </div>
+                )}
                 {previewSamples.map((s, i) => (
                   <div key={i} className="rounded-md border border-border bg-card/30 p-3">
                     <div className="flex items-center justify-between mb-1.5">
@@ -1884,7 +1915,7 @@ export default function LaunchWizard() {
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0 || staticQaBlockers.length > 0 || (isMarketing && (!dispatchState.ok || !dispatchState.signature))}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0 || hollowVars.length > 0 || staticQaBlockers.length > 0 || (isMarketing && (!dispatchState.ok || !dispatchState.signature))}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>
