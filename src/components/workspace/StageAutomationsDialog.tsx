@@ -427,12 +427,14 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
             {rules.map((r) => {
               const stage = stageById.get(r.target_stage_id);
               const valueLabel = formatValue(r);
+              const sourceLabel = formatSourceStage(r);
               return (
                 <div key={r.id} className="p-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">
                       {triggerLabel(r.trigger)}
                       {valueLabel && <span className="text-muted-foreground"> · {valueLabel}</span>}
+                      {sourceLabel && <span className="text-muted-foreground"> · in "{sourceLabel}"</span>}
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                       → moves to
