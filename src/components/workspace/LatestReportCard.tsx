@@ -46,7 +46,7 @@ export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; s
   }
   if (!data) return null;
 
-  const { campaign, insight } = data;
+  const { campaign, insight, delivered } = data;
   const totals = (insight?.metrics as { totals?: Totals } | null)?.totals;
   const summary = insight?.summary_md ?? null;
   const summaryShort = summary ? summary.split("\n").slice(0, 6).join("\n") : null;
@@ -66,8 +66,9 @@ export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; s
       </CardHeader>
       <CardContent className="space-y-3">
         {totals ? (
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
             <Mini label="Sent" value={totals.sent} />
+            <Mini label="Delivered" value={delivered} tone="good" />
             <Mini label="Replied" value={totals.replied} />
             <Mini label="Positive" value={totals.positive} tone="good" />
             <Mini label="Meeting" value={totals.meeting} tone="good" />
