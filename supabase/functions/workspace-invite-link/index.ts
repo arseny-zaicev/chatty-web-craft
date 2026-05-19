@@ -249,7 +249,7 @@ Deno.serve(async (req) => {
       // total sign-ins (auth metadata), and 30-day active minutes / sessions.
       const { data: rows, error: memErr } = await admin
         .from("workspace_members")
-        .select("id, user_id, role, can_view_stats, allowed_pipeline_ids, created_at, invited_at, joined_at")
+        .select("id, user_id, role, can_view_stats, allowed_pipeline_ids, created_at, invited_at, joined_at, perm_overview, perm_inbox, perm_pipeline, perm_campaigns_view, perm_quick_replies_use, perm_quick_replies_manage, perm_settings, perm_data, perm_materials, perm_launch")
         .eq("workspace_id", workspace_id)
         .order("created_at", { ascending: true });
       if (memErr) return json({ error: memErr.message }, 500);
@@ -296,16 +296,24 @@ Deno.serve(async (req) => {
         actByUser.set(a.user_id, cur);
       }
 
+      const PERM_KEYS = [
+        "perm_overview","perm_inbox","perm_pipeline","perm_campaigns_view",
+        "perm_quick_replies_use","perm_quick_replies_manage",
+        "perm_settings","perm_data","perm_materials","perm_launch",
+      ] as const;
       const members = (rows ?? []).map((r) => {
         const auth = authById.get(r.user_id) ?? { email: null, last_sign_in_at: null, created_at: null };
         const prof = profileById.get(r.user_id) ?? { full_name: null };
         const a = actByUser.get(r.user_id) ?? { minutes: 0, sessions: 0, last_seen: null };
+        const permissions: Record<string, boolean> = {};
+        for (const k of PERM_KEYS) permissions[k] = Boolean((r as Record<string, unknown>)[k]);
         return {
           id: r.id,
           user_id: r.user_id,
           role: r.role,
           can_view_stats: Boolean((r as { can_view_stats?: boolean }).can_view_stats),
           allowed_pipeline_ids: ((r as { allowed_pipeline_ids?: string[] | null }).allowed_pipeline_ids ?? null) as string[] | null,
+          permissions,
           joined_at: (r as { joined_at?: string | null }).joined_at ?? null,
           invited_at: (r as { invited_at?: string | null }).invited_at ?? r.created_at,
           membership_created_at: r.created_at,
