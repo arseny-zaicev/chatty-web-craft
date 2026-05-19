@@ -229,7 +229,6 @@ Deno.serve(async (req) => {
         }
         if (!campaignId) { skipped++; continue; }
 
-        const conv = convMap.get(row.conversation_id);
         const phone = conv?.contact_phone;
         if (!phone) { skipped++; continue; }
 
