@@ -473,7 +473,7 @@ export function SmartUploadDialog({
               <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button onClick={analyze} disabled={analyzing || !parsed}>
                 {analyzing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
-                Analyze with AI
+                {reuseBatchId && Object.keys(reuseStatic).length > 0 ? "Reuse without AI" : "Analyze with AI"}
               </Button>
             </>
           )}
