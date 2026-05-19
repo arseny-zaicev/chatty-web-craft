@@ -523,7 +523,7 @@ function CampaignDetail({
           label="Delivered"
           value={totals.delivered.toLocaleString()}
           tone="good"
-          sub={totals.sent > 0 ? `${Math.round((totals.delivered / totals.sent) * 100)}% of sent` : undefined}
+          subtitle={totals.sent > 0 ? `${Math.round((totals.delivered / totals.sent) * 100)}% of sent` : undefined}
         />
         <Stat label="Pending" value={totals.pending.toLocaleString()} />
         <Stat label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "bad" : undefined} />
