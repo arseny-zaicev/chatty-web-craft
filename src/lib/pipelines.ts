@@ -85,6 +85,114 @@ export async function createPipeline(
   return data as Pipeline;
 }
 
+/**
+ * Duplicate an existing pipeline (config + stages + automations) into a target
+ * workspace. Auto-outreach and sender numbers are reset so the copy doesn't
+ * start sending by accident.
+ */
+export async function duplicatePipeline(
+  sourceId: string,
+  targetWorkspaceId: string,
+  newName: string,
+  newColor?: string,
+): Promise<Pipeline> {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) throw new Error("Not authenticated");
+
+  const { data: src, error: srcErr } = await supabase
+    .from("pipelines")
+    .select("*")
+    .eq("id", sourceId)
+    .single();
+  if (srcErr || !src) throw srcErr ?? new Error("Source pipeline not found");
+
+  const { data: lastPos } = await supabase
+    .from("pipelines")
+    .select("position")
+    .eq("workspace_id", targetWorkspaceId)
+    .order("position", { ascending: false })
+    .limit(1);
+  const nextPos = (lastPos?.[0]?.position ?? -1) + 1;
+
+  // Copy config but reset risky fields
+  const insertRow: any = {
+    workspace_id: targetWorkspaceId,
+    user_id: u.user.id,
+    name: newName.trim() || `${src.name} (copy)`,
+    color: newColor || src.color,
+    position: nextPos,
+    is_default: false,
+    auto_outreach_enabled: false,
+    default_sender_number_ids: [],
+    first_touch_template_id: src.first_touch_template_id,
+    first_touch_template_group_id: (src as any).first_touch_template_group_id ?? null,
+    sending_window: src.sending_window,
+    daily_cap: src.daily_cap,
+    expected_country_codes: (src as any).expected_country_codes ?? [],
+    slack_channel_id: src.slack_channel_id,
+  };
+
+  const { data: created, error: insErr } = await supabase
+    .from("pipelines")
+    .insert(insertRow)
+    .select("*")
+    .single();
+  if (insErr || !created) throw insErr ?? new Error("Failed to create pipeline");
+
+  // Copy stages
+  const { data: stages } = await supabase
+    .from("pipeline_stages")
+    .select("id, name, color, stage_type, position")
+    .eq("pipeline_id", sourceId)
+    .order("position");
+
+  const stageIdMap: Record<string, string> = {};
+  if (stages && stages.length) {
+    const rows = stages.map((s) => ({
+      workspace_id: targetWorkspaceId,
+      user_id: u.user!.id,
+      pipeline_id: created.id,
+      name: s.name,
+      color: s.color,
+      stage_type: s.stage_type,
+      position: s.position,
+    }));
+    const { data: inserted, error: stErr } = await supabase
+      .from("pipeline_stages")
+      .insert(rows)
+      .select("id, name, position");
+    if (stErr) throw stErr;
+    // Pair by (name + position) since insert order matches input order
+    (inserted ?? []).forEach((dst, i) => {
+      const srcStage = stages[i];
+      if (srcStage) stageIdMap[srcStage.id] = dst.id;
+    });
+
+    // Copy stage_automations targeting these stages
+    const { data: autos } = await supabase
+      .from("stage_automations")
+      .select("trigger, trigger_value, target_stage_id, is_active")
+      .in("target_stage_id", stages.map((s) => s.id));
+    if (autos && autos.length) {
+      const autoRows = autos
+        .filter((a) => stageIdMap[a.target_stage_id])
+        .map((a) => ({
+          workspace_id: targetWorkspaceId,
+          user_id: u.user!.id,
+          trigger: a.trigger,
+          trigger_value: a.trigger_value,
+          target_stage_id: stageIdMap[a.target_stage_id],
+          is_active: a.is_active,
+        }));
+      if (autoRows.length) {
+        await supabase.from("stage_automations").insert(autoRows);
+      }
+    }
+  }
+
+  return created as Pipeline;
+}
+
 export async function updatePipeline(id: string, patch: Partial<Pick<Pipeline, "name" | "color" | "position">>) {
   const { error } = await supabase.from("pipelines").update(patch).eq("id", id);
   if (error) throw error;

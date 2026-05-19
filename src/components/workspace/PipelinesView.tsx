@@ -21,9 +21,12 @@ import {
   updatePipeline,
   deletePipeline,
   setDefaultPipeline,
+  duplicatePipeline,
 } from "@/lib/pipelines";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspaceAccess } from "@/lib/workspaceRole";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Copy } from "lucide-react";
 
 const COLOR_PRESETS = [
   "#6366f1", "#3b82f6", "#10b981", "#f59e0b",
@@ -65,11 +68,28 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(COLOR_PRESETS[0]);
+  const [copyFromId, setCopyFromId] = useState<string>("");
+  const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const [deleting, setDeleting] = useState<Pipeline | null>(null);
   const [configuring, setConfiguring] = useState<Pipeline | null>(null);
+
+  // All pipelines across workspaces the current user has access to — used as
+  // source candidates for "Copy from existing pipeline".
+  const { data: allPipelines = [] } = useQuery({
+    queryKey: ["all-pipelines-for-copy"],
+    enabled: showNew && canManage,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pipelines")
+        .select("id, name, workspace_id, workspaces(name)")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const { data: sourceCounts = {} } = useQuery({
     queryKey: ["pipelines", workspaceId, "source-counts"],
@@ -104,14 +124,22 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
       toast.error("A pipeline with this name already exists");
       return;
     }
+    setCreating(true);
     try {
-      await createPipeline(workspaceId, { name, color: newColor });
-      toast.success("Pipeline created");
+      if (copyFromId) {
+        await duplicatePipeline(copyFromId, workspaceId, name, newColor);
+        toast.success("Pipeline duplicated (auto-outreach OFF, no senders attached)");
+      } else {
+        await createPipeline(workspaceId, { name, color: newColor });
+        toast.success("Pipeline created");
+      }
       setShowNew(false);
       setNewName("");
       setNewColor(COLOR_PRESETS[0]);
+      setCopyFromId("");
       invalidate();
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    finally { setCreating(false); }
   };
 
   const startEdit = (p: Pipeline) => {
@@ -247,6 +275,26 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
                     <Button
                       size="icon"
                       variant="ghost"
+                      className="h-8 w-8"
+                      title="Duplicate into this workspace"
+                      onClick={async () => {
+                        try {
+                          let candidate = `${p.name} (copy)`;
+                          let n = 2;
+                          while (nameExists(candidate)) { candidate = `${p.name} (copy ${n++})`; }
+                          await duplicatePipeline(p.id, workspaceId, candidate, p.color);
+                          toast.success("Pipeline duplicated");
+                          invalidate();
+                        } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                      }}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
                       className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => setDeleting(p)}
                       disabled={p.is_default}
@@ -270,9 +318,30 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New pipeline</DialogTitle>
-          <DialogDescription>Creates an independent board pre-seeded with default stages.</DialogDescription>
+          <DialogDescription>Creates an independent board pre-seeded with default stages, or duplicate an existing pipeline from any workspace you have access to.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Copy from existing pipeline (optional)</label>
+              <Select value={copyFromId || "__none__"} onValueChange={(v) => setCopyFromId(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Start blank with default stages" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="__none__">Start blank with default stages</SelectItem>
+                  {allPipelines.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.workspaces?.name ? `${p.workspaces.name} · ` : ""}{p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {copyFromId && (
+                <p className="text-[11px] text-muted-foreground">
+                  Copies stages, automations, sending window, daily cap and template group. Auto-outreach stays OFF and sender numbers are NOT copied - attach them after review.
+                </p>
+              )}
+            </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Name</label>
               <Input
@@ -313,7 +382,10 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!newName.trim()}>Create</Button>
+            <Button onClick={handleCreate} disabled={!newName.trim() || creating}>
+              {creating ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+              {copyFromId ? "Duplicate" : "Create"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
