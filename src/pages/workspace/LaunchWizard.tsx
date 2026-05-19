@@ -739,16 +739,18 @@ export default function LaunchWizard() {
       const rows = sampleDbRowsQ.data ?? [];
       return rows.map((r) => {
         const vals: Record<string, string> = {};
-        for (const v of variableNames) {
+        for (let i = 0; i < variableNames.length; i++) {
+          const v = variableNames[i];
           const src = mapping[v];
           let raw = "";
           if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
           else if (src) raw = String(r.payload?.[src] ?? r.derived_payload?.[src] ?? "");
-          // Fallback: if no mapping, try derived_payload["var_<v>"] (handles {{1}} -> var_1 etc.)
           if (!raw) {
             const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
             raw = String(r.derived_payload?.[dpKey] ?? r.derived_payload?.[v] ?? "");
           }
+          // First variable: also try common name fields on payload (first_name, etc.)
+          if (!raw && i === 0) raw = pickNameFromPayload(r.payload);
           vals[v] = raw;
         }
         // First variable falls back to "there" automatically, so don't flag it.
