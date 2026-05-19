@@ -244,6 +244,11 @@ Deno.serve(async (req) => {
         total: rawLeads.length,
         accepted,
         rejected,
+        invalid: invalidCount,
+        ambiguous: ambiguousCount,
+        duplicate: duplicateCount,
+        cross_pipeline_duplicate: crossPipelineDuplicateCount,
+        skipped_test_lead: testLeadCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
     });
@@ -259,6 +264,11 @@ Deno.serve(async (req) => {
       total: rawLeads.length,
       accepted,
       rejected,
+      invalid: invalidCount,
+      ambiguous: ambiguousCount,
+      duplicate: duplicateCount,
+      cross_pipeline_duplicate: crossPipelineDuplicateCount,
+      skipped_test_lead: testLeadCount,
     });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
