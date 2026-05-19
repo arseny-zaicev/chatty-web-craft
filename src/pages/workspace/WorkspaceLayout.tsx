@@ -150,7 +150,10 @@ function RoleGuardedOutlet({ workspace }: { workspace?: Workspace }) {
   if (isLoading) return <WorkspaceMainFallback />;
   const role = access?.role;
   const seg = location.pathname.split("/").filter(Boolean)[2];
-  const managerOnly = seg === "library" || seg === "settings" || seg === "data" || seg === "materials";
+  // `library` is intentionally NOT manager-only: clients and members must be able
+  // to manage their own personal quick-replies. Write-scope (workspace vs personal)
+  // is enforced inside WorkspaceLibrary itself + RLS on workspace_saved_replies.
+  const managerOnly = seg === "settings" || seg === "data" || seg === "materials";
   const adminOnly = seg === "launch";
   const statsGated = seg === "overview" || seg === "campaigns" || !seg; // root → overview
   if (adminOnly && !isAdmin(role)) {
