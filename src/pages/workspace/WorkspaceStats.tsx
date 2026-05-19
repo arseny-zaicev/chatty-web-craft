@@ -26,7 +26,7 @@ const fmtSeconds = (s: number | null | undefined) => {
 
 export default function WorkspaceStats() {
   const { workspace } = useOutletContext<WorkspaceContext>();
-  const { user } = useRequireAuth();
+  const userId = useRequireAuth();
   const { data: access } = useWorkspaceAccess(workspace?.id);
   const canViewAll = Boolean(access?.canManageSettings || access?.isAdmin || access?.isOwner);
 
