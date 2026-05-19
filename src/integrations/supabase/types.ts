@@ -3887,10 +3887,12 @@ export type Database = {
         Args: { p_idle_minutes?: number }
         Returns: number
       }
-      reap_stuck_sending_recipients: {
-        Args: { p_idle_minutes?: number }
-        Returns: number
-      }
+      reap_stuck_sending_recipients:
+        | { Args: { p_idle_minutes?: number }; Returns: number }
+        | {
+            Args: { p_dispatch_modes?: string[]; p_idle_minutes?: number }
+            Returns: number
+          }
       recompute_payout_run: {
         Args: { _run_id: string }
         Returns: {
