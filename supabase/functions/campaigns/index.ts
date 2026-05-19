@@ -403,7 +403,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   const cleanRecipientsAll = recipients
     .map((r: any) => ({
-      contact_phone: normalizePhone(r.phone || r.contact_phone),
+      contact_phone: stripToDigits(r.phone || r.contact_phone),
       contact_name: String(r.name || r.contact_name || "").trim().slice(0, 160) || null,
       variables: typeof r.variables === "object" && r.variables ? r.variables : {},
       conversation_id: typeof r.conversation_id === "string" && uuidRegex.test(r.conversation_id) ? r.conversation_id : null,
