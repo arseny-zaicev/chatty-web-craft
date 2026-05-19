@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
       inserted += slice.length;
     }
 
-    return new Response(JSON.stringify({ inserted, pulled: allRows.length }), {
+    return new Response(JSON.stringify({ inserted, pulled: allRows.length, backfilled_var_1 }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
