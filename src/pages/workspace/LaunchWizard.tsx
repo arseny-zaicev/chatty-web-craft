@@ -1945,16 +1945,37 @@ export default function LaunchWizard() {
               </Button>
             )}
           </div>
-          <Button
-            className="w-full"
-            onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0 || hollowVars.length > 0 || staticQaBlockers.length > 0 || (isMarketing && (!dispatchState.ok || !dispatchState.signature))}
-          >
-            <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
-          </Button>
-          <p className="text-[11px] text-muted-foreground">
-            {resolution.ok.length > 1 ? `One campaign across ${resolution.ok.length} numbers (recipients distributed automatically).` : "Single campaign."}
-          </p>
+          {(() => {
+            const reasons: string[] = [];
+            if (resolution.missing.length > 0) reasons.push(`${resolution.missing.length} number(s) missing template variant`);
+            if (recipients.length === 0) reasons.push("No recipients loaded");
+            if (!activeLogical) reasons.push("No template selected");
+            if (activeNumbers.length === 0) reasons.push("No sender number selected");
+            if (!pipelineId) reasons.push("Pipeline not selected (Step 7)");
+            if (unmappedVars.length > 0) reasons.push(`${unmappedVars.length} unmapped variable(s): ${unmappedVars.map(v => `{${v}}`).join(" ")}`);
+            if (hollowVars.length > 0) reasons.push(`${hollowVars.length} variable(s) map to empty column(s)`);
+            if (staticQaBlockers.length > 0) reasons.push(`${staticQaBlockers.length} audience QA blocker(s)`);
+            if (isMarketing && (!dispatchState.ok || !dispatchState.signature)) reasons.push("Dispatch snapshot not ready — press 'Prepare snapshot' above");
+            const disabled = launch.isPending || reasons.length > 0;
+            return (
+              <>
+                <Button className="w-full" onClick={() => launch.mutate()} disabled={disabled}>
+                  <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
+                </Button>
+                {reasons.length > 0 && (
+                  <div className="text-xs rounded-md border border-rose-500/30 bg-rose-500/5 text-rose-700 dark:text-rose-400 px-2.5 py-2">
+                    <div className="font-medium mb-1">Launch blocked by:</div>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {reasons.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  {resolution.ok.length > 1 ? `One campaign across ${resolution.ok.length} numbers (recipients distributed automatically).` : "Single campaign."}
+                </p>
+              </>
+            );
+          })()}
         </aside>
       </div>
 
