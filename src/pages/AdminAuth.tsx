@@ -64,7 +64,10 @@ const AdminAuth = () => {
       }
 
       if (data.user) {
-        const { data: factors } = await supabase.auth.mfa.listFactors();
+        const { data: factors } = await withTimeout(
+          supabase.auth.mfa.listFactors(),
+          "2FA check timed out. Try again.",
+        );
         const verified = factors?.totp?.find((f) => f.status === "verified");
         if (!verified) {
           toast.success("Welcome. Set up 2FA to continue.");

@@ -96,16 +96,13 @@ const AdminPanel = () => {
     const check = () => {
       if (inFlight) return inFlight;
       inFlight = (async () => {
-        const [{ data: { session } }, r] = await Promise.all([
-          supabase.auth.getSession(),
-          evaluateAdminAccess(),
-        ]);
+        const r = await evaluateAdminAccess();
         if (!mounted) return;
-        setUser(session?.user ?? null);
         if (r.state === "redirect") {
           if (r.reason === "not-admin") toast.error("Access denied. Admin only.");
           navigate(r.to);
         } else {
+          setUser(r.user);
           setAuthChecked(true);
         }
       })().finally(() => { inFlight = null; });
