@@ -1098,7 +1098,7 @@ export default function LaunchWizard() {
                           checked={selected}
                           onChange={() => toggleNumber(n.id)}
                         />
-                        <span className="truncate flex-1">{friendlySenderLabel(n)}</span>
+                        <span className="truncate flex-1" title={senderFullLabel(n)}>{senderFullLabel(n)}</span>
                         {activeLogical && (
                           hasVariant
                             ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">ready</Badge>
