@@ -125,9 +125,24 @@ Deno.serve(async (req) => {
     inviteUrl.searchParams.set("wid", ws.id);
     const redirectTo = inviteUrl.toString();
 
+    const ensureUnsubscribeToken = async (recipient: string): Promise<string> => {
+      const { data: existingTok } = await admin
+        .from("email_unsubscribe_tokens")
+        .select("token")
+        .eq("email", recipient)
+        .maybeSingle();
+      if (existingTok?.token) return existingTok.token as string;
+      const token = crypto.randomUUID().replace(/-/g, "");
+      await admin
+        .from("email_unsubscribe_tokens")
+        .insert({ email: recipient, token });
+      return token;
+    };
+
     const enqueueDirectInvite = async (confirmationUrl: string, reason: string) => {
       const messageId = crypto.randomUUID();
       const emailContent = buildInviteEmail({ workspaceName: ws.name ?? "ISKRA", confirmationUrl });
+      const unsubscribeToken = await ensureUnsubscribeToken(targetEmail);
       await admin.from("email_send_log").insert({
         message_id: messageId,
         template_name: "invite",
@@ -148,6 +163,7 @@ Deno.serve(async (req) => {
           purpose: "transactional",
           label: "invite",
           idempotency_key: messageId,
+          unsubscribe_token: unsubscribeToken,
           queued_at: new Date().toISOString(),
         },
       });
