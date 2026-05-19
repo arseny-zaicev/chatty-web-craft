@@ -2099,6 +2099,54 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_webhook_deliveries: {
+        Row: {
+          attempts: number
+          created_at: string
+          deal_id: string | null
+          error: string | null
+          event_type: string
+          id: string
+          payload: Json
+          pipeline_id: string
+          response_body: string | null
+          response_status: number | null
+          sent_at: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          deal_id?: string | null
+          error?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          pipeline_id: string
+          response_body?: string | null
+          response_status?: number | null
+          sent_at?: string | null
+          status?: string
+          workspace_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          deal_id?: string | null
+          error?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          pipeline_id?: string
+          response_body?: string | null
+          response_status?: number | null
+          sent_at?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       pipelines: {
         Row: {
           auto_outreach_enabled: boolean
@@ -2126,6 +2174,7 @@ export type Database = {
           updated_at: string
           user_id: string
           workspace_id: string
+          zapier_webhook_url: string | null
         }
         Insert: {
           auto_outreach_enabled?: boolean
@@ -2153,6 +2202,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           workspace_id: string
+          zapier_webhook_url?: string | null
         }
         Update: {
           auto_outreach_enabled?: boolean
@@ -2180,6 +2230,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           workspace_id?: string
+          zapier_webhook_url?: string | null
         }
         Relationships: [
           {
