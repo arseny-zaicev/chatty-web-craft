@@ -210,15 +210,38 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     if (flag && flag.value === false) {
       return json({ error: "Marketing instant mode is globally disabled", code: "instant_mode_disabled" }, 409);
     }
-    // marketing_instant requires a prepared snapshot. Fresh launches (no
-    // reuseCampaignId) cannot run instantly — they must go through prepare
-    // first so the operator sees blockers/warnings and the snapshot signature
-    // is locked. (Paced mode is unchanged.)
+    // marketing_instant requires a prepared snapshot. For fresh launches
+    // (no reuseCampaignId / no campaign row yet) we accept a `snapshot_signature`
+    // returned by action=prepare and re-verify it deterministically from the
+    // same inputs. This avoids a chicken-and-egg deadlock (a fresh campaign
+    // has no id until launch creates one). Paced mode is unchanged.
     if (!reuseCampaignId) {
-      return json({
-        error: "marketing_instant requires a prepared campaign. Call action=prepare first, then action=launch with the campaign_id.",
-        code: "must_prepare",
-      }, 409);
+      const providedSig: string | null = typeof body.snapshot_signature === "string" && body.snapshot_signature.startsWith("sha256:") ? body.snapshot_signature : null;
+      if (!providedSig) {
+        return json({
+          error: "marketing_instant requires a prepared snapshot. Click 'Prepare' in Dispatch control first.",
+          code: "must_prepare",
+        }, 409);
+      }
+      const nIds = [...new Set(rawNumbers.map((n) => n.number_id))];
+      const tIds = [...new Set(rawNumbers.map((n) => n.template_id))];
+      const expectedSig = await computeSnapshotSignature({
+        numberIds: nIds,
+        templateIds: tIds,
+        audienceCount: recipients.length,
+        windowStart,
+        windowEnd,
+        perNumberQuota,
+        maxInflightPerNumber,
+        maxInflightPerCampaign,
+      });
+      if (expectedSig !== providedSig) {
+        return json({
+          error: "Snapshot is stale - inputs changed after prepare. Click 'Prepare' again.",
+          code: "must_prepare",
+          must_reprepare: true,
+        }, 409);
+      }
     }
   }
 
