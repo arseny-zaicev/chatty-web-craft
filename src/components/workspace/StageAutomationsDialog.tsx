@@ -19,6 +19,7 @@ type Automation = {
   target_stage_id: string;
   is_active: boolean;
   workspace_id: string | null;
+  pipeline_id: string | null;
 };
 
 type TemplateRow = {
@@ -31,10 +32,11 @@ type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   workspaceId?: string;
+  pipelineId?: string | null;
   stages: Stage[];
 };
 
-const automationsKey = (wsId?: string) => ["pipeline", "automations", wsId ?? "none"] as const;
+const automationsKey = (wsId?: string, pipelineId?: string | null) => ["pipeline", "automations", wsId ?? "none", pipelineId ?? "none"] as const;
 const templatesWithButtonsKey = (wsId?: string) => ["pipeline", "templates-buttons", wsId ?? "none"] as const;
 
 const PRESETS: Record<"positive" | "negative" | "block", string[]> = {
@@ -62,7 +64,7 @@ const PRESET_LABEL: Record<keyof typeof PRESETS, string> = {
   block: "Block / opt-out",
 };
 
-export default function StageAutomationsDialog({ open, onOpenChange, workspaceId, stages }: Props) {
+export default function StageAutomationsDialog({ open, onOpenChange, workspaceId, pipelineId, stages }: Props) {
   const qc = useQueryClient();
   const [trigger, setTrigger] = useState<TriggerKind>("inbound_keyword");
   const [triggerValue, setTriggerValue] = useState("");
@@ -72,18 +74,19 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
   const [pickedButtonText, setPickedButtonText] = useState<string>("");
 
   const { data: rules = [], isLoading } = useQuery({
-    queryKey: automationsKey(workspaceId),
+    queryKey: automationsKey(workspaceId, pipelineId),
     queryFn: async (): Promise<Automation[]> => {
       let q = supabase
         .from("stage_automations")
-        .select("id, trigger, trigger_value, target_stage_id, is_active, workspace_id")
+        .select("id, trigger, trigger_value, target_stage_id, is_active, workspace_id, pipeline_id")
         .order("created_at", { ascending: false });
       if (workspaceId) q = q.eq("workspace_id", workspaceId);
+      if (pipelineId) q = q.eq("pipeline_id", pipelineId);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as Automation[];
     },
-    enabled: open,
+    enabled: open && Boolean(pipelineId),
   });
 
   const { data: templates = [] } = useQuery({
@@ -106,11 +109,12 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
     const { error } = await supabase.from("stage_automations").insert({
       user_id: u.user.id,
       workspace_id: workspaceId ?? null,
+      pipeline_id: pipelineId ?? null,
       trigger: params.trigger,
       trigger_value: params.value,
       target_stage_id: params.targetStageId,
       is_active: true,
-    });
+    } as any);
     if (error) throw error;
   };
 
@@ -133,7 +137,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
       toast.success("Automation added");
       setTriggerValue("");
       setPickedButtonText("");
-      qc.invalidateQueries({ queryKey: automationsKey(workspaceId) });
+      qc.invalidateQueries({ queryKey: automationsKey(workspaceId, pipelineId) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -149,7 +153,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
     },
     onSuccess: () => {
       toast.success("Preset rule added");
-      qc.invalidateQueries({ queryKey: automationsKey(workspaceId) });
+      qc.invalidateQueries({ queryKey: automationsKey(workspaceId, pipelineId) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -159,7 +163,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
       const { error } = await supabase.from("stage_automations").update({ is_active: !r.is_active }).eq("id", r.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: automationsKey(workspaceId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: automationsKey(workspaceId, pipelineId) }),
   });
 
   const remove = useMutation({
@@ -169,7 +173,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
     },
     onSuccess: () => {
       toast.success("Removed");
-      qc.invalidateQueries({ queryKey: automationsKey(workspaceId) });
+      qc.invalidateQueries({ queryKey: automationsKey(workspaceId, pipelineId) });
     },
   });
 

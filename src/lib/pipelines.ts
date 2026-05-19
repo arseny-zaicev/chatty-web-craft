@@ -179,11 +179,12 @@ export async function duplicatePipeline(
         .map((a) => ({
           workspace_id: targetWorkspaceId,
           user_id: u.user!.id,
+          pipeline_id: created.id,
           trigger: a.trigger,
           trigger_value: a.trigger_value,
           target_stage_id: stageIdMap[a.target_stage_id],
           is_active: a.is_active,
-        }));
+        } as any));
       if (autoRows.length) {
         await supabase.from("stage_automations").insert(autoRows);
       }

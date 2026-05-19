@@ -266,6 +266,7 @@ Deno.serve(async (req) => {
             .from("stage_automations")
             .select("target_stage_id")
             .eq("workspace_id", p.workspace_id)
+            .eq("pipeline_id", p.id)
             .eq("trigger", "follow_up_sent")
             .eq("is_active", true);
           if (autos && autos.length > 0) {
