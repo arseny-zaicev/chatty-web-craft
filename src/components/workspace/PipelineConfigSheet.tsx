@@ -1143,6 +1143,20 @@ export default function PipelineConfigSheet({
                 </Select>
               </div>
             </div>
+            {followUpGroupId && wsId && (() => {
+              const g = (templateGroups ?? []).find((x) => x.id === followUpGroupId);
+              if (!g) return null;
+              const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
+              return (
+                <SenderVariantMatrix
+                  workspaceId={wsId}
+                  groupId={g.id}
+                  groupName={g.name}
+                  templateNames={g.template_names || []}
+                  senders={selected}
+                />
+              );
+            })()}
 
             <div className="grid grid-cols-4 gap-2">
               <div>
