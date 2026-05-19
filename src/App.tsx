@@ -94,6 +94,7 @@ const OpsAssistant = lazyWithRetry(() => import("./pages/admin/OpsAssistant"));
 const OpsPerformance = lazyWithRetry(() => import("./pages/admin/OpsPerformance"));
 const FinanceRunDetail = lazyWithRetry(() => import("./pages/admin/FinanceRunDetail"));
 const Reconciliation = lazyWithRetry(() => import("./pages/admin/Reconciliation"));
+const WebhookDLQ = lazyWithRetry(() => import("./pages/admin/WebhookDLQ"));
 const Partners = lazyWithRetry(() => import("./pages/admin/Partners"));
 const PartnerDetail = lazyWithRetry(() => import("./pages/admin/PartnerDetail"));
 const BusinessManagers = lazyWithRetry(() => import("./pages/admin/BusinessManagers"));
