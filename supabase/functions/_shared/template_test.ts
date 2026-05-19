@@ -84,6 +84,29 @@ Deno.test("validateTemplateForLaunch: soft-warns when all names empty", () => {
   if (warnings.length === 0) throw new Error("expected warning");
 });
 
+Deno.test("validateTemplateForLaunch: allows literal there before {{1}} when selected recipients have names", () => {
+  const { warnings } = validateTemplateForLaunch(
+    { name: "tpl", body: "Hey there {{1}}, Elena here", variables: ["name"] },
+    [
+      { variables: { name: "Toni" } },
+      { variables: { name: "Chris" } },
+    ],
+  );
+  assertEquals(warnings.length, 0);
+});
+
+Deno.test("validateTemplateForLaunch: blocks literal there before {{1}} only when selected recipients miss names", () => {
+  assertThrows(() =>
+    validateTemplateForLaunch(
+      { name: "tpl", body: "Hey there {{1}}, Elena here", variables: ["name"] },
+      [
+        { variables: { name: "Toni" } },
+        { variables: { name: "" } },
+      ],
+    )
+  );
+});
+
 Deno.test("validateTemplateForLaunch: passes clean data", () => {
   const { warnings } = validateTemplateForLaunch(
     { name: "tpl", body: "Hi {{1}} from {{2}}", variables: ["name", "city"] },
