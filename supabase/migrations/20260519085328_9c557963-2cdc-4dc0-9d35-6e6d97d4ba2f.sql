@@ -1,0 +1,1 @@
+ALTER TYPE public.automation_trigger ADD VALUE IF NOT EXISTS 'follow_up_sent';
