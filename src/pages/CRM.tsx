@@ -50,6 +50,7 @@ type Message = {
   status: string;
   created_at: string;
   sent_by_user_id: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 const CRM = ({
