@@ -41,18 +41,18 @@ type Pipeline = {
   name: string;
   auto_outreach_enabled: boolean;
   first_touch_template_id: string | null;
-  first_touch_template_group_id: string | null;
+  first_touch_template_group_id?: string | null;
   default_sender_number_ids: string[];
   slack_channel_id: string | null;
   daily_cap: number | null;
   sending_window: { start?: string; end?: string; timezone?: string } | null;
-  follow_up_enabled: boolean;
-  follow_up_template_id: string | null;
-  follow_up_template_group_id: string | null;
-  follow_up_delay_minutes: number;
-  follow_up_curfew_end: string;
-  follow_up_resume_at: string;
-  follow_up_timezone: string;
+  follow_up_enabled?: boolean;
+  follow_up_template_id?: string | null;
+  follow_up_template_group_id?: string | null;
+  follow_up_delay_minutes?: number;
+  follow_up_curfew_end?: string;
+  follow_up_resume_at?: string;
+  follow_up_timezone?: string;
 };
 
 type TemplateGroup = { id: string; name: string; template_names: string[] };
