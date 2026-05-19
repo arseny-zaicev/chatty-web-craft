@@ -133,7 +133,16 @@ export const PREP_PRESETS: PrepPreset[] = [
 
 export const getPresetById = (id: string) => PREP_PRESETS.find((p) => p.id === id) ?? null;
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+/**
+ * Codex prep prompts insert audience rows into Arseny's PERSONAL Supabase project,
+ * NOT into Lovable Cloud. The Lovable Cloud edge function `import-audience-from-personal`
+ * then pulls the prepared rows into this workspace.
+ *
+ * Hardcoded by design — do NOT swap this for VITE_SUPABASE_URL (which points at
+ * Lovable Cloud `xglfamaa...`). See mem://reference/data-sources.
+ */
+const PERSONAL_SUPABASE_PROJECT_REF = "pdoddfoyrutakwemejpe";
+const PERSONAL_SUPABASE_URL = `https://${PERSONAL_SUPABASE_PROJECT_REF}.supabase.co`;
 
 /**
  * Map of campaign_static var key -> exact text for this batch.
