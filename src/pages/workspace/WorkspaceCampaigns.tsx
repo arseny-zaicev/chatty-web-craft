@@ -260,15 +260,32 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                         {[template?.name, numberLabel, formatDistanceToNow(new Date(g.created_at), { addSuffix: true })].filter(Boolean).join(" · ")}
                       </div>
                     )}
-                    <div className="md:hidden mt-2 flex items-center gap-2">
-                      <ProgressBar value={g.sent} total={g.total} className="flex-1" />
-                      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
-                    </div>
+                    {(() => {
+                      const lc = groupLiveCounts.get(g.key);
+                      // Live count is the truth (includes recipients that flipped
+                      // straight to 'replied' without passing through 'sent').
+                      // Fall back to the cached counter only if RPC hasn't loaded yet.
+                      const liveSent = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                      return (
+                        <>
+                          <div className="md:hidden mt-2 flex items-center gap-2">
+                            <ProgressBar value={liveSent} total={g.total} className="flex-1" />
+                            <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{liveSent.toLocaleString()}/{g.total.toLocaleString()}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
-                  <div className="hidden md:flex items-center gap-3 shrink-0 w-[180px]">
-                    <ProgressBar value={g.sent} total={g.total} className="flex-1" />
-                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-[80px] text-right">{g.sent.toLocaleString()}/{g.total.toLocaleString()}</span>
-                  </div>
+                  {(() => {
+                    const lc = groupLiveCounts.get(g.key);
+                    const liveSent = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                    return (
+                      <div className="hidden md:flex items-center gap-3 shrink-0 w-[180px]">
+                        <ProgressBar value={liveSent} total={g.total} className="flex-1" />
+                        <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-[80px] text-right">{liveSent.toLocaleString()}/{g.total.toLocaleString()}</span>
+                      </div>
+                    );
+                  })()}
                   {(() => {
                     const lc = groupLiveCounts.get(g.key);
                     const sentForRate = Math.max(lc?.sent ?? 0, g.sent ?? 0);
@@ -309,6 +326,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     group={g}
                     canManage={canManage}
                     numberById={numberById}
+                    liveCounts={groupLiveCounts.get(g.key)}
                   />
                 )}
               </div>
