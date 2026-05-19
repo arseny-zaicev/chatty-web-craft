@@ -30,7 +30,7 @@ export function resolveTemplateVar(
   return " ";
 }
 
-function hasLiteralThereBeforeFirstPlaceholder(body: string | null | undefined): boolean {
+function templateHasLiteralThereBeforeFirstPlaceholder(body: string | null | undefined): boolean {
   return /\bthere\s*\{\{\s*1\s*\}\}/i.test(String(body ?? ""));
 }
 
@@ -45,7 +45,7 @@ function resolveTemplateVarForBody(
   // If the template already says "Hey there {{1}}", do NOT fall back to
   // "there" again. A single-space param keeps WhatsApp/Gupshup happy and
   // renders as "Hey there" instead of "Hey there there".
-  if (index === 0 && hasLiteralThereBeforeFirstPlaceholder(template.body)) return " ";
+  if (index === 0 && templateHasLiteralThereBeforeFirstPlaceholder(template.body)) return " ";
   return resolveTemplateVar(name, index, raw);
 }
 
@@ -113,7 +113,7 @@ export function validateTemplateForLaunch(
   // for empty {{1}}, so nameless rows render as "Hey there" rather than
   // "Hey there there". Count empties below only for operator warnings.
   const hasLiteralThereBeforeFirstPlaceholder =
-    variableNames.length > 0 && hasLiteralThereBeforeFirstPlaceholder(body);
+    variableNames.length > 0 && templateHasLiteralThereBeforeFirstPlaceholder(body);
 
   if (recipients.length === 0 || variableNames.length === 0) {
     return { warnings: [] };
