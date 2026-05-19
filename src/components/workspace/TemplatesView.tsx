@@ -181,7 +181,7 @@ export default function TemplatesView({ workspaceId }: { workspaceId: string }) 
           <SelectContent>
             <SelectItem value="all">All numbers</SelectItem>
             {numbers.map((n) => (
-              <SelectItem key={n.id} value={n.id}>{n.display_name ?? `+${n.phone_number}`}</SelectItem>
+              <SelectItem key={n.id} value={n.id}>{senderFullLabel(n)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
