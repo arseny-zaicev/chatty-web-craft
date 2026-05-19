@@ -237,7 +237,12 @@ function PresetsSection({
   };
 
   const buildBatchName = (country: string, audience: string) => {
-    const date = new Date().toISOString().slice(0, 10);
+    // Dubai workspace time (matches buildCampaignName) — never raw UTC, otherwise
+    // batches created before 04:00 GST end up dated "yesterday".
+    const date = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dubai",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
     const c = country.trim().toUpperCase() || "ALL";
     const a = audience.trim() || "AUDIENCE";
     return `${date} | ${c} | ${a}`;
