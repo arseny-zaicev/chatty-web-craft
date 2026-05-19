@@ -279,7 +279,9 @@ export default function PipelineConfigSheet({
     setFollowUpCurfewEnd(trimTime(p.follow_up_curfew_end) || "20:00");
     setFollowUpResumeAt(trimTime(p.follow_up_resume_at) || "09:00");
     setFollowUpTz(p.follow_up_timezone ?? "Europe/Berlin");
-    setExpectedCcs(Array.isArray(p.expected_country_codes) ? p.expected_country_codes : []);
+    const ccs = Array.isArray(p.expected_country_codes) ? p.expected_country_codes : [];
+    setExpectedCcs(ccs);
+    setExpectedCcsText(ccs.join(", "));
     setFailedStageId(p.failed_stage_id ?? "");
   };
 
