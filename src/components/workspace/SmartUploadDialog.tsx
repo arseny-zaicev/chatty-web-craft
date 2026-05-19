@@ -268,6 +268,37 @@ export function SmartUploadDialog({
               </div>
             )}
 
+            {reusableBatches.length > 0 && (
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Reuse static values from prior batch (optional)
+                </label>
+                <Select value={reuseBatchId || "__none"} onValueChange={(v) => setReuseBatchId(v === "__none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Don't reuse" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— don't reuse, let AI decide —</SelectItem>
+                    {reusableBatches.map((b) => {
+                      const sv = parseStaticValues(b.notes);
+                      const keys = Object.keys(sv).join(", ");
+                      return (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name} · {keys}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {reuseBatchId && Object.keys(reuseStatic).length > 0 && (
+                  <div className="mt-1 rounded border border-border bg-muted/20 px-2 py-1 text-[10px] text-muted-foreground">
+                    Will pre-fill: {Object.entries(reuseStatic).map(([k, v]) => (
+                      <code key={k} className="mr-1.5">{k}={v}</code>
+                    ))}
+                    . Each batch keeps its own snapshot — no cross-batch bleed.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="text-xs text-muted-foreground">File (CSV / XLSX / TSV)</label>
               <input
