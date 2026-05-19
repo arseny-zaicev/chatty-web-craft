@@ -504,6 +504,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       stage={stage}
                       deals={stageDeals}
                       total={totals}
+                      failedStageId={failedStageId}
                       onDealClick={(id) => setActiveDealId(id)}
                       onOpenChat={(convId) => setChatConversationId(convId)}
                       conversationOf={(d) => (d.conversation_id ? convById.get(d.conversation_id) ?? null : null)}
