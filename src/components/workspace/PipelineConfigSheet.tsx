@@ -118,6 +118,96 @@ function extractSpreadsheetId(input: string): string {
   return input.trim();
 }
 
+// Sender × variant approval matrix.
+// Renders one row per selected sender in the pipeline pool. For each row it
+// shows the variant name from this template group that targets that sender,
+// plus the approval status the WhatsApp BSP currently reports
+// (Approved / Pending / Missing / Paused).
+function SenderVariantMatrix({
+  workspaceId,
+  groupId,
+  groupName,
+  templateNames,
+  senders,
+}: {
+  workspaceId: string;
+  groupId: string;
+  groupName: string;
+  templateNames: string[];
+  senders: WaNumber[];
+}) {
+  const { data: variants } = useQuery({
+    queryKey: ["template-group-variants", workspaceId, groupId, templateNames.join("|")],
+    enabled: Boolean(workspaceId && groupId && templateNames.length && senders.length),
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("message_templates")
+        .select("name, status, whatsapp_number_id")
+        .eq("workspace_id", workspaceId)
+        .in("name", templateNames);
+      return (data ?? []) as { name: string; status: string; whatsapp_number_id: string }[];
+    },
+  });
+
+  if (!senders.length) {
+    return (
+      <p className="text-[10px] text-muted-foreground mt-1">
+        Pick sender numbers below — the matrix will show which approved variant routes to each.
+      </p>
+    );
+  }
+
+  const byNumber = new Map<string, { name: string; status: string }>();
+  for (const v of variants ?? []) {
+    // Prefer an approved variant if multiple exist for the same number.
+    const cur = byNumber.get(v.whatsapp_number_id);
+    if (!cur || (v.status === "approved" && cur.status !== "approved")) {
+      byNumber.set(v.whatsapp_number_id, { name: v.name, status: v.status });
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-border bg-muted/20 px-2 py-1.5">
+      <div className="text-[10px] text-muted-foreground mb-1">
+        Sender × variant for group <span className="font-medium text-foreground">{groupName}</span>
+      </div>
+      <div className="space-y-1">
+        {senders.map((n) => {
+          const v = byNumber.get(n.id);
+          const senderPaused = !n.is_active || !["active", "ready"].includes(n.status);
+          let label = "Missing";
+          let cls = "bg-red-500/15 text-red-700 border-red-500/40";
+          if (senderPaused) {
+            label = "Sender paused";
+            cls = "bg-zinc-500/15 text-zinc-700 border-zinc-500/40";
+          } else if (v) {
+            if (v.status === "approved") { label = "Approved"; cls = "bg-emerald-500/15 text-emerald-700 border-emerald-500/40"; }
+            else if (v.status === "pending") { label = "Pending"; cls = "bg-amber-500/15 text-amber-800 border-amber-500/40"; }
+            else if (v.status === "rejected") { label = "Rejected"; cls = "bg-red-500/15 text-red-700 border-red-500/40"; }
+            else { label = v.status; cls = "bg-zinc-500/15 text-zinc-700 border-zinc-500/40"; }
+          }
+          return (
+            <div key={n.id} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="font-mono truncate">
+                {n.display_name ? `${n.display_name} (+${n.phone_number})` : `+${n.phone_number}`}
+              </span>
+              <span className="flex items-center gap-1.5 shrink-0">
+                <code className="text-[10px] text-muted-foreground truncate max-w-[10rem]">
+                  {v?.name ?? "—"}
+                </code>
+                <span className={`px-1.5 py-0.5 rounded border text-[10px] ${cls}`}>{label}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-1">
+        Senders without an Approved variant in this group are silent-skipped at send time.
+      </p>
+    </div>
+  );
+}
+
 export default function PipelineConfigSheet({
   pipeline,
   open,
