@@ -185,8 +185,11 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     if (!pipeline) return { error: "Pipeline missing" };
 
     // 1. Read whole sheet (A:Z is enough for MVP, ~26 cols).
-    const range = `${sheetName}!A:Z`;
-    const sheetUrl = `${GATEWAY_URL}/spreadsheets/${spreadsheetId}/values/${range}`;
+    // Sheet names with spaces/special chars (e.g. "PPC-Overview (1)") MUST be wrapped in single quotes.
+    const needsQuote = /[^A-Za-z0-9_]/.test(sheetName);
+    const quotedSheet = needsQuote ? `'${sheetName.replace(/'/g, "''")}'` : sheetName;
+    const range = `${quotedSheet}!A:Z`;
+    const sheetUrl = `${GATEWAY_URL}/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
     const sheetResp = await fetch(sheetUrl, {
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
