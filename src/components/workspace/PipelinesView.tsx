@@ -124,14 +124,22 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
       toast.error("A pipeline with this name already exists");
       return;
     }
+    setCreating(true);
     try {
-      await createPipeline(workspaceId, { name, color: newColor });
-      toast.success("Pipeline created");
+      if (copyFromId) {
+        await duplicatePipeline(copyFromId, workspaceId, name, newColor);
+        toast.success("Pipeline duplicated (auto-outreach OFF, no senders attached)");
+      } else {
+        await createPipeline(workspaceId, { name, color: newColor });
+        toast.success("Pipeline created");
+      }
       setShowNew(false);
       setNewName("");
       setNewColor(COLOR_PRESETS[0]);
+      setCopyFromId("");
       invalidate();
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    finally { setCreating(false); }
   };
 
   const startEdit = (p: Pipeline) => {
