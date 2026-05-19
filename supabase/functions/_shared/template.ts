@@ -90,6 +90,15 @@ export function validateTemplateForLaunch(
     );
   }
 
+  // 1b. "Hey there {{1}}" trap: literal "there" immediately before {{1}} means
+  // the empty-name fallback ("there") will double up. Block before launch.
+  // Matches: "there {{1}}", "there{{1}}", case-insensitive, word-bounded.
+  if (variableNames.length > 0 && /\bthere\s*\{\{\s*1\s*\}\}/i.test(body)) {
+    throw new Error(
+      `Template "${template.name ?? "?"}" contains "there {{1}}". When a recipient has no name, {{1}} falls back to "there" and the message reads "Hey there there". Edit the template to drop the literal "there" before the placeholder.`,
+    );
+  }
+
   if (recipients.length === 0 || variableNames.length === 0) {
     return { warnings: [] };
   }
