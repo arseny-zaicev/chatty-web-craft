@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { visibleRefetchInterval } from "@/lib/visibleRefetchInterval";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -110,7 +111,8 @@ export default function PartnerDetail() {
       return (data ?? []) as any[];
     },
     enabled: numberIds.length > 0,
-    refetchInterval: 30_000,
+    refetchInterval: visibleRefetchInterval(30_000),
+    refetchIntervalInBackground: false,
   });
 
   const liveByNum = useMemo(() => {

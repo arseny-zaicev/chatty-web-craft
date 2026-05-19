@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { visibleRefetchInterval } from "@/lib/visibleRefetchInterval";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -374,7 +375,8 @@ export default function PipelineConfigSheet({
   const { data: counters } = useQuery({
     queryKey: ["pipeline-lead-counters", pipeId],
     enabled: Boolean(pipeId && open),
-    refetchInterval: 15_000,
+    refetchInterval: visibleRefetchInterval(15_000),
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
       const base = supabase.from("lead_imports").select("id", { count: "exact", head: true }).eq("pipeline_id", pipeId!);
