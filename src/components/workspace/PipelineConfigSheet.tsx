@@ -32,8 +32,27 @@ import {
   X,
   Loader2,
   AlertTriangle,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
+
+type Stage = {
+  id: string;
+  pipeline_id: string;
+  workspace_id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  position: number;
+  stage_type: "open" | "won" | "lost";
+};
+
+const STAGE_COLORS = [
+  "#64748b", "#94a3b8", "#10b981", "#f59e0b", "#6366f1",
+  "#3b82f6", "#ef4444", "#dc2626", "#059669", "#a855f7", "#ec4899",
+];
 
 type Pipeline = {
   id: string;
