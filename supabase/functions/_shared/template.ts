@@ -30,6 +30,25 @@ export function resolveTemplateVar(
   return " ";
 }
 
+function hasLiteralThereBeforeFirstPlaceholder(body: string | null | undefined): boolean {
+  return /\bthere\s*\{\{\s*1\s*\}\}/i.test(String(body ?? ""));
+}
+
+function resolveTemplateVarForBody(
+  template: TemplateLike,
+  name: string,
+  index: number,
+  raw: unknown,
+): string {
+  const v = String(raw ?? "").trim();
+  if (v) return v;
+  // If the template already says "Hey there {{1}}", do NOT fall back to
+  // "there" again. A single-space param keeps WhatsApp/Gupshup happy and
+  // renders as "Hey there" instead of "Hey there there".
+  if (index === 0 && hasLiteralThereBeforeFirstPlaceholder(template.body)) return " ";
+  return resolveTemplateVar(name, index, raw);
+}
+
 /** Build the params[] array sent to Gupshup. Order matches template.variables. */
 export function buildTemplateParams(
   template: TemplateLike,
@@ -39,7 +58,7 @@ export function buildTemplateParams(
     ? (template.variables as string[])
     : [];
   return variableNames.map((key, idx) =>
-    resolveTemplateVar(key, idx, (values ?? {})[key]),
+    resolveTemplateVarForBody(template, key, idx, (values ?? {})[key]),
   );
 }
 
@@ -53,7 +72,7 @@ export function renderTemplateBody(
   let out = String(body);
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   variableNames.forEach((name, idx) => {
-    const v = resolveTemplateVar(name, idx, (values ?? {})[name]);
+    const v = resolveTemplateVarForBody({ body }, name, idx, (values ?? {})[name]);
     // For inbox display, " " (param fallback) renders as nothing.
     const displayed = v === " " ? "" : v;
     out = out.replace(new RegExp(escape(`{{${idx + 1}}}`), "g"), displayed);
