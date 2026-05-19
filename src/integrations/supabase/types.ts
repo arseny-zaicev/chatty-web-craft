@@ -2960,6 +2960,69 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_webhook_raw: {
+        Row: {
+          app_name: string | null
+          destination: string | null
+          error_message: string | null
+          error_stack: string | null
+          id: string
+          last_retried_at: string | null
+          last_retried_by: string | null
+          message_id: string | null
+          payload: Json
+          processed_at: string | null
+          processing_status: string
+          provider_message_id: string | null
+          received_at: string
+          retry_count: number
+          source: string | null
+          type: string | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          app_name?: string | null
+          destination?: string | null
+          error_message?: string | null
+          error_stack?: string | null
+          id?: string
+          last_retried_at?: string | null
+          last_retried_by?: string | null
+          message_id?: string | null
+          payload: Json
+          processed_at?: string | null
+          processing_status?: string
+          provider_message_id?: string | null
+          received_at?: string
+          retry_count?: number
+          source?: string | null
+          type?: string | null
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          app_name?: string | null
+          destination?: string | null
+          error_message?: string | null
+          error_stack?: string | null
+          id?: string
+          last_retried_at?: string | null
+          last_retried_by?: string | null
+          message_id?: string | null
+          payload?: Json
+          processed_at?: string | null
+          processing_status?: string
+          provider_message_id?: string | null
+          received_at?: string
+          retry_count?: number
+          source?: string | null
+          type?: string | null
+          whatsapp_number_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       workspace_billing_rates: {
         Row: {
           created_at: string
@@ -3651,6 +3714,7 @@ export type Database = {
         Args: { _pipeline_id: string; _user_id: string; _workspace_id: string }
         Returns: boolean
       }
+      cleanup_whatsapp_webhook_raw: { Args: never; Returns: undefined }
       count_sent_today_for_number: {
         Args: { _number_id: string }
         Returns: number

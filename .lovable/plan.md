@@ -1,111 +1,80 @@
-## Что строим
-На странице пайплайна (PipelineConfigSheet) - новая секция **Zapier webhook**. Менеджер вставляет URL вида `https://hooks.zapier.com/hooks/catch/...`, и при любой смене стадии сделки в этом пайплайне мы автоматически POST-им JSON-payload на этот URL. Триггер - сама БД (trigger + pg_net), без правок клиентского кода. Затраты на токены нулевые.
+## Что случилось (короткая диагностика)
 
-## БД (одна миграция)
+Email от Oscar реально пришёл к нам в виде webhook от Gupshup (поэтому ты и клиент видели его в preview/realtime), но **не сохранился в `messages`** и теперь его нигде нет в БД.
 
-```sql
--- 1. Поле для URL на пайплайне
-ALTER TABLE public.pipelines
-  ADD COLUMN zapier_webhook_url text;
+Корневая причина в `supabase/functions/whatsapp-webhook/index.ts`:
 
--- 2. Лог отправок (для отладки и retry)
-CREATE TABLE public.pipeline_webhook_deliveries (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  pipeline_id uuid NOT NULL,
-  workspace_id uuid NOT NULL,
-  deal_id uuid,
-  event_type text NOT NULL,         -- 'deal.stage_changed'
-  payload jsonb NOT NULL,
-  status text NOT NULL DEFAULT 'pending',  -- pending|sent|failed
-  response_status int,
-  error text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  sent_at timestamptz
-);
-ALTER TABLE public.pipeline_webhook_deliveries ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Managers view deliveries" ON public.pipeline_webhook_deliveries
-  FOR SELECT TO authenticated
-  USING (is_workspace_manager(workspace_id, auth.uid()));
+1. **Сырая payload пишется в `whatsapp_message_events` ТОЛЬКО после** успешного матчинга `whatsapp_number` (строка 184). Если матчинг провалился по причине отличной от `no_match` (например исключение раньше, ambiguous, ошибка БД) — payload теряется.
+2. **Любой `throw`** до строки 184 = тишина. Handler ловит всё в `catch` (строка 746) и **возвращает 200**, чтобы Gupshup не ретраил. Никакой записи payload не остаётся.
+3. **Realtime фронта** мог показать сообщение из временного in-memory state (preview) ещё до того, как INSERT в `messages` действительно прошёл/откатился.
+4. Нет таблицы "сырой архив всего входящего" — есть только `whatsapp_webhook_failures` (узкий case) и `whatsapp_message_events` (после матчинга).
 
--- 3. Триггер на смену стадии
-CREATE OR REPLACE FUNCTION public.enqueue_pipeline_webhook_on_stage_change()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE
-  v_url text;
-  v_pipeline_id uuid;
-  v_old_stage record;
-  v_new_stage record;
-BEGIN
-  IF NEW.stage_id IS NOT DISTINCT FROM OLD.stage_id THEN RETURN NEW; END IF;
-  SELECT pipeline_id INTO v_pipeline_id FROM pipeline_stages WHERE id = NEW.stage_id;
-  IF v_pipeline_id IS NULL THEN RETURN NEW; END IF;
-  SELECT zapier_webhook_url INTO v_url FROM pipelines WHERE id = v_pipeline_id;
-  IF v_url IS NULL OR length(v_url) < 10 THEN RETURN NEW; END IF;
-  SELECT id, name, stage_type INTO v_new_stage FROM pipeline_stages WHERE id = NEW.stage_id;
-  SELECT id, name, stage_type INTO v_old_stage FROM pipeline_stages WHERE id = OLD.stage_id;
+## План: чтобы это больше никогда не повторилось
 
-  INSERT INTO pipeline_webhook_deliveries (pipeline_id, workspace_id, deal_id, event_type, payload)
-  VALUES (
-    v_pipeline_id, NEW.workspace_id, NEW.id, 'deal.stage_changed',
-    jsonb_build_object(
-      'event', 'deal.stage_changed',
-      'occurred_at', now(),
-      'pipeline_id', v_pipeline_id,
-      'deal', jsonb_build_object(
-        'id', NEW.id, 'title', NEW.title,
-        'contact_name', NEW.contact_name, 'contact_phone', NEW.contact_phone,
-        'amount', NEW.amount, 'currency', NEW.currency,
-        'conversation_id', NEW.conversation_id
-      ),
-      'from_stage', jsonb_build_object('id', v_old_stage.id, 'name', v_old_stage.name, 'type', v_old_stage.stage_type),
-      'to_stage',   jsonb_build_object('id', v_new_stage.id, 'name', v_new_stage.name, 'type', v_new_stage.stage_type)
-    )
-  );
-  RETURN NEW;
-END $$;
+### 1. Raw-first capture (главное)
 
-CREATE TRIGGER trg_deal_stage_change_webhook
-AFTER UPDATE OF stage_id ON public.deals
-FOR EACH ROW EXECUTE FUNCTION public.enqueue_pipeline_webhook_on_stage_change();
+Новая таблица `whatsapp_webhook_raw`:
+- `id, received_at, type, app_name, destination, source, provider_message_id, payload jsonb, processing_status (received|processed|failed|skipped), processed_at, error_message, retry_count, message_id (nullable FK)`
+- Индексы по `received_at`, `provider_message_id`, `processing_status`, `(app_name, source)`.
+- RLS: только service role + workspace owners (read-only по своему workspace).
+
+В `whatsapp-webhook/index.ts` **самой первой операцией** после `req.json()` пишем полный payload в `whatsapp_webhook_raw` со статусом `received`. Только после этого вызываем `handleInbound/handleStatus`. В конце апдейтим строку до `processed` (с `message_id`) или `failed` (с `error_message` + stack).
+
+Это гарантирует: **что бы ни упало дальше — у нас всегда есть сырой JSON**.
+
+### 2. Глобальный try/catch вокруг каждого хэндлера
+
+Сейчас исключения внутри `handleInbound` всплывают в верхний `catch`, но `whatsapp_message_events` уже не запишется. Оборачиваем `handleInbound`/`handleStatus` в свой try/catch, который при ошибке апдейтит `whatsapp_webhook_raw` в `failed` с `error_message + stack`, и только потом отдаём 200 Gupshup.
+
+### 3. Снять silent-swallow на этапе INSERT messages
+
+Сейчас если `messages.insert` падает — мы логируем и `return`. Добавляем: 
+- запись в `whatsapp_webhook_raw.error_message`,
+- запись в `whatsapp_webhook_failures` с reason=`message_insert_failed`,
+- **алерт в Slack** (через существующий `slack-dispatch`) на канал ops.
+
+### 4. Replay-кнопка в админке
+
+Страница `/admin` → новая вкладка **Webhook DLQ**:
+- Список `whatsapp_webhook_raw` где `processing_status in ('failed','received' старше 5 минут)`.
+- Колонки: time (GST), app, destination, type, preview body, status, error.
+- Кнопки **Replay** (повторно прогнать через handler) и **View raw JSON**.
+- Поиск по номеру / app / тексту в payload.
+
+### 5. Retention + поиск
+
+- `whatsapp_webhook_raw` хранится **90 дней** (cron-задача удаляет старше).
+- View `v_whatsapp_inbound_search` объединяет `messages` + `whatsapp_webhook_raw` (где `message_id is null`) чтобы из UI Inbox можно было найти "пришло-но-не-сохранилось".
+
+### 6. Health-watchdog
+
+Расширить существующий `health-watchdog`: если за последние 15 мин в `whatsapp_webhook_raw` есть >0 строк со статусом `failed` или "застрявших" в `received` → Slack alert + помечать workspace в UI красным баннером "⚠ Возможна потеря входящих, проверь Webhook DLQ".
+
+### 7. Realtime честность
+
+На фронте (Inbox) перестать показывать сообщение из realtime preview если потом не приходит подтверждение из `messages` за N секунд — вместо тихого исчезновения показывать toast "Сообщение получено, но не сохранилось — открой Webhook DLQ".
+
+### Технические детали
+
+```text
+Request flow ПОСЛЕ фикса:
+  Gupshup → webhook
+    ├─ 1. INSERT whatsapp_webhook_raw (status=received)   ← НИКОГДА не падает молча
+    ├─ 2. try { handleInbound/handleStatus }
+    │     └─ INSERT messages → UPDATE raw.status=processed, message_id=...
+    ├─ 3. catch → UPDATE raw.status=failed + error + stack
+    │            + INSERT whatsapp_webhook_failures
+    │            + Slack alert
+    └─ 4. return 200
 ```
 
-## Edge function `dispatch-pipeline-webhooks`
-- Берёт из `pipeline_webhook_deliveries` все `status='pending'`, по каждой POST-ит payload на `pipelines.zapier_webhook_url`, фиксирует `sent`/`failed` + `response_status`.
-- `verify_jwt = false`, вызывается cron'ом каждую минуту через `pg_net.http_post`.
-- При 4xx (особенно 410 - Zapier удалил Zap) - помечаем `failed`, не ретраим. При 5xx/timeout - оставляем `pending` (повторим), максимум 5 попыток.
+Миграции: 1 новая таблица + 1 view + 1 cron retention. Никакого breaking change для существующего кода — `whatsapp_message_events` и `whatsapp_webhook_failures` остаются как были.
 
-## Cron
-```sql
-SELECT cron.schedule('dispatch-pipeline-webhooks', '* * * * *', $$
-  SELECT net.http_post(
-    url := 'https://xglfamaaotmwulglwcui.supabase.co/functions/v1/dispatch-pipeline-webhooks',
-    headers := '{"Content-Type":"application/json","apikey":"<anon>"}'::jsonb,
-    body := '{}'::jsonb
-  );
-$$);
-```
-(применяется через insert-tool с настоящим anon key, не миграцией)
+### Что это даёт
 
-## UI - `PipelineConfigSheet.tsx`
-Новый блок **"Zapier webhook"**:
-- Input "Webhook URL" (placeholder: `https://hooks.zapier.com/hooks/catch/…`)
-- Кнопка **"Send test"** - дёргает новую функцию `test-pipeline-webhook` с фейковым payload, показывает HTTP-статус.
-- Маленькая ссылка "Last 10 deliveries" - открывает popover с последними записями из `pipeline_webhook_deliveries` (статус, ответ, время в GST).
-- Подсказка: "Triggers on every stage change for deals in this pipeline. Set up a 'Catch Hook' trigger in Zapier and copy the URL here."
+- 100% входящих payload-ов сохраняются **до** любой бизнес-логики.
+- Любая потеря **видна** в UI и алертится в Slack в течение 15 мин.
+- Любое потерянное сообщение можно **переиграть одним кликом** из админки.
+- Для Oscar конкретно — сообщение уже потеряно (raw таблицы тогда не было), но единственный шанс достать его теперь это Gupshup Provider API (опция #1 из прошлого ответа). Этим планом мы закрываем дыру, чтобы такого больше не было.
 
-## Безопасность
-- URL виден только менеджерам workspace (как и все настройки пайплайна).
-- Доменный allowlist в edge-функции: `hooks.zapier.com`, `hook.eu1.make.com`, `hook.us1.make.com` (Make тоже подходит). Любой другой хост - отказываем с понятной ошибкой в UI.
-- В payload **не** включаем `body` сообщений, только метаданные сделки + стадии.
-
-## Что НЕ делаем сейчас
-- Не делаем deal.created/won/lost - пользователь выбрал "любая смена стадии" (won/lost будут видны через `to_stage.type`).
-- Не делаем inbound (FB Lead Ads -> наш пайплайн) - откажемся отдельно, если попросит.
-- Не подключаем FB CAPI напрямую - Zapier этим занимается.
-
-## Файлы
-- миграция (создание поля, таблицы, функции, триггера)
-- `supabase/functions/dispatch-pipeline-webhooks/index.ts`
-- `supabase/functions/test-pipeline-webhook/index.ts`
-- `src/components/workspace/PipelineConfigSheet.tsx` (новый блок Zapier)
-- insert-tool: cron schedule
+Подтверди план — реализую миграцию + правки в edge function + UI вкладку DLQ.
