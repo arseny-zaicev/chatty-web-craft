@@ -243,6 +243,44 @@ export default function Reconciliation() {
           </Card>
         )}
 
+        {/* Overlapping payout runs — drift in this period directly affects these payouts */}
+        {overlappingRuns.length > 0 && (
+          <Card className={driftyRun ? "border-destructive/50 bg-destructive/5" : "border-border"}>
+            <CardContent className="pt-6 space-y-3">
+              <div className="flex items-start gap-3">
+                {driftyRun
+                  ? <AlertTriangle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+                  : <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />}
+                <div className="text-sm">
+                  <b>{overlappingRuns.length} payout run{overlappingRuns.length === 1 ? "" : "s"}</b> overlap this period
+                  {driftyRun ? ". Resolve the drift before approving them." : "."}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {overlappingRuns.map(r => {
+                  const tone =
+                    r.status === "paid" ? "bg-emerald-100 text-emerald-800" :
+                    r.status === "approved" ? "bg-blue-100 text-blue-800" :
+                    r.status === "draft" ? "bg-amber-100 text-amber-800" :
+                    "bg-secondary";
+                  return (
+                    <Link key={r.id} to={`/admin/partners/${r.partner_id}?run=${r.id}`}
+                      className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs hover:bg-muted transition-colors">
+                      <Badge variant="secondary" className={tone}>{r.status}</Badge>
+                      <span className="font-mono">{r.period_from} → {r.period_to}</span>
+                      <span className="text-muted-foreground">{r.role}</span>
+                      <span className="font-semibold">${Number(r.total_payout_usd ?? 0).toFixed(2)}</span>
+                      {r.auto_generated && <span className="text-[10px] uppercase text-muted-foreground">auto</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+
+
         {/* Daily breakdown */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
