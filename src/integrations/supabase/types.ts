@@ -3013,6 +3013,16 @@ export type Database = {
           id: string
           invited_at: string | null
           joined_at: string | null
+          perm_campaigns_view: boolean
+          perm_data: boolean
+          perm_inbox: boolean
+          perm_launch: boolean
+          perm_materials: boolean
+          perm_overview: boolean
+          perm_pipeline: boolean
+          perm_quick_replies_manage: boolean
+          perm_quick_replies_use: boolean
+          perm_settings: boolean
           role: string
           user_id: string
           workspace_id: string
@@ -3024,6 +3034,16 @@ export type Database = {
           id?: string
           invited_at?: string | null
           joined_at?: string | null
+          perm_campaigns_view?: boolean
+          perm_data?: boolean
+          perm_inbox?: boolean
+          perm_launch?: boolean
+          perm_materials?: boolean
+          perm_overview?: boolean
+          perm_pipeline?: boolean
+          perm_quick_replies_manage?: boolean
+          perm_quick_replies_use?: boolean
+          perm_settings?: boolean
           role?: string
           user_id: string
           workspace_id: string
@@ -3035,6 +3055,16 @@ export type Database = {
           id?: string
           invited_at?: string | null
           joined_at?: string | null
+          perm_campaigns_view?: boolean
+          perm_data?: boolean
+          perm_inbox?: boolean
+          perm_launch?: boolean
+          perm_materials?: boolean
+          perm_overview?: boolean
+          perm_pipeline?: boolean
+          perm_quick_replies_manage?: boolean
+          perm_quick_replies_use?: boolean
+          perm_settings?: boolean
           role?: string
           user_id?: string
           workspace_id?: string
@@ -3580,6 +3610,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      has_workspace_permission: {
+        Args: { _perm: string; _user_id: string; _workspace_id: string }
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
