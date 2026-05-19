@@ -3,6 +3,7 @@
 // Cron: every 15 minutes.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { acquireJobLock } from "../_shared/jobLock.ts";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ function todayInTz(tz: string | null): string {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("campaign-day-rollover", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -248,4 +249,4 @@ Deno.serve(async (req) => {
   } finally {
     await release();
   }
-});
+}));

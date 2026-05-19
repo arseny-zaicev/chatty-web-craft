@@ -5,6 +5,7 @@
 //     classifications since the snapshot's `generated_at`, throttled to
 //     once per 30 min per campaign.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +18,7 @@ const MAX_PER_TICK = 5;
 const REGEN_THROTTLE_MIN = 30;
 const REGEN_THRESHOLD = 10;
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("auto-generate-insights", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -136,4 +137,4 @@ Deno.serve(async (req) => {
   }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

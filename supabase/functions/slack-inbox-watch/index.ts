@@ -1,6 +1,7 @@
 // Detects unread spikes per workspace and enqueues an inbox_unread_spike Slack event.
 // Cron: every 30 minutes. Honors quiet hours 22:00-09:00 UAE. Cooldown 2h per workspace.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +24,7 @@ function isQuietHourUAE(now = new Date()): boolean {
   return uaeHour >= 22 || uaeHour < 9;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("slack-inbox-watch", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const supabase = createClient(
@@ -162,4 +163,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ queued, scanned: workspaces?.length || 0 }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

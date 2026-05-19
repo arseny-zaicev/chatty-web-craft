@@ -2,6 +2,7 @@
 // Runs on cron (every 3-5 minutes). Idempotent — uses a debounce table to avoid spam.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { postSlack } from "../_shared/slackBlocks.ts";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +23,7 @@ const HEARTBEAT_MAX_AGE_MIN: Record<string, number> = {
 };
 const INBOUND_SILENCE_MIN = 90; // widened to avoid off-peak false positives
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("health-watchdog", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(
@@ -211,4 +212,4 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

@@ -4,6 +4,7 @@
 //
 // Triggered by pg_cron every 5 minutes. Idempotent on Gmail message id.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -187,7 +188,7 @@ function parseWabaId(text: string): string | null {
   return m ? m[1] : null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("gupshup-mail-poll", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   if (!LOVABLE_API_KEY || !GMAIL_KEY) {
@@ -323,4 +324,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ scanned, inserted, alerts, dropped }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));

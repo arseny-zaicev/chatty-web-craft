@@ -10,13 +10,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { acquireJobLock } from "../_shared/jobLock.ts";
 import { sendSlackMessage, SLACK_BOOKINGS_CHANNEL } from "../_shared/slack.ts";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("reply-notification-watchdog", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const admin = createClient(
@@ -130,4 +131,4 @@ Deno.serve(async (req) => {
   } finally {
     await release();
   }
-});
+}));

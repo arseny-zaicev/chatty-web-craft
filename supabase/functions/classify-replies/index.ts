@@ -3,6 +3,7 @@
 // Designed to be called from cron-heartbeat / pg_cron every ~15 minutes.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { cronGuard } from "../_shared/cronGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,7 +69,7 @@ async function classify(messages: { direction: string; body: string | null }[]):
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(cronGuard("classify-replies", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const admin = createClient(
@@ -166,4 +167,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, processed, scanned: toProcess.length }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-});
+}));
