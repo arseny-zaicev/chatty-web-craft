@@ -843,6 +843,7 @@ export default function LaunchWizard() {
           dispatch_mode: isMarketing ? dispatchState.mode : "paced",
           max_inflight_per_number: dispatchState.maxInflightPerNumber,
           max_inflight_per_campaign: dispatchState.maxInflightPerCampaign,
+          snapshot_signature: isMarketing ? dispatchState.signature : null,
         },
       });
 
