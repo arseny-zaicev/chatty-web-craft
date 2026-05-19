@@ -260,6 +260,54 @@ Deno.serve(async (req) => {
         const { data: c } = await admin.from("campaigns").select("total_recipients").eq("id", campaignId).single();
         await admin.from("campaigns").update({ total_recipients: (c?.total_recipients || 0) + 1 }).eq("id", campaignId);
 
+        // Fire follow_up_sent stage automations (best-effort).
+        try {
+          const { data: autos } = await admin
+            .from("stage_automations")
+            .select("target_stage_id")
+            .eq("workspace_id", p.workspace_id)
+            .eq("trigger", "follow_up_sent")
+            .eq("is_active", true);
+          if (autos && autos.length > 0) {
+            // Resolve a target stage that belongs to this pipeline (by id, or by name match).
+            let targetStageId: string | null = null;
+            for (const a of autos as any[]) {
+              const { data: st } = await admin
+                .from("pipeline_stages")
+                .select("id, name, pipeline_id, stage_type")
+                .eq("id", a.target_stage_id)
+                .maybeSingle();
+              if (!st) continue;
+              if ((st as any).pipeline_id === p.id) { targetStageId = (st as any).id; break; }
+              const { data: byName } = await admin
+                .from("pipeline_stages")
+                .select("id")
+                .eq("pipeline_id", p.id)
+                .ilike("name", (st as any).name ?? "")
+                .maybeSingle();
+              if (byName?.id) { targetStageId = byName.id; break; }
+              if ((st as any).stage_type) {
+                const { data: byType } = await admin
+                  .from("pipeline_stages")
+                  .select("id")
+                  .eq("pipeline_id", p.id)
+                  .eq("stage_type", (st as any).stage_type)
+                  .order("position", { ascending: true })
+                  .limit(1)
+                  .maybeSingle();
+                if (byType?.id) { targetStageId = byType.id; break; }
+              }
+            }
+            if (targetStageId) {
+              await admin
+                .from("deals")
+                .update({ stage_id: targetStageId, updated_at: new Date().toISOString() })
+                .eq("conversation_id", row.conversation_id)
+                .eq("pipeline_id", p.id);
+            }
+          }
+        } catch (_e) { /* swallow automation errors */ }
+
         dispatched++;
       }
 
