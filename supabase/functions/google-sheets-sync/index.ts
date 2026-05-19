@@ -66,6 +66,26 @@ function resolveColumnIndex(spec: string | undefined, headers: string[]): number
   return -1;
 }
 
+function chunks<T>(items: T[], size = 400): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+async function bulkInsertLeadImports(admin: any, rows: Record<string, unknown>[]) {
+  for (const part of chunks(rows, 400)) {
+    const { error } = await admin.from("lead_imports").insert(part);
+    if (!error) continue;
+
+    // A concurrent/manual sync can race on the source+row unique index. Fall
+    // back to row-by-row so one duplicate does not discard the whole chunk.
+    for (const row of part) {
+      const { error: rowErr } = await admin.from("lead_imports").insert(row);
+      if (rowErr && rowErr.code !== "23505") console.error("lead_import_insert_failed", rowErr.message);
+    }
+  }
+}
+
 // Sync logic for one source. Returns a result object.
 async function syncOne(admin: any, source: any): Promise<Record<string, unknown>> {
   if (source.kind !== "google_sheet") return { source_id: source.id, error: "Not a Google Sheet source" };
