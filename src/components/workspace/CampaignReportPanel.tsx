@@ -205,9 +205,10 @@ export function CampaignReportPanel({
 
       {/* Live KPI strip — always visible, polled every 30s, never read from cached snapshot */}
       {liveTotals && (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+        <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 mb-3">
           <KpiMini label="Total" value={liveTotals.total} />
           <KpiMini label="Sent" value={liveTotals.sent} tone="good" />
+          <KpiMini label="Delivered" value={liveTotals.delivered} tone="good" />
           <KpiMini label="Failed" value={liveTotals.failed} tone={liveTotals.failed > 0 ? "bad" : undefined} />
           <KpiMini label="Replied" value={liveTotals.replied} />
           <KpiMini label="Positive" value={liveTotals.positive} tone="good" />
