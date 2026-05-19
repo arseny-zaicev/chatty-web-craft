@@ -10,7 +10,7 @@ import { Loader2, Plus, Trash2, Zap, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { Stage } from "@/lib/crmData";
 
-type TriggerKind = "button_click" | "inbound_keyword" | "inbound_any";
+type TriggerKind = "button_click" | "inbound_keyword" | "inbound_any" | "follow_up_sent";
 
 type Automation = {
   id: string;
@@ -175,7 +175,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
 
   const stageById = new Map(stages.map((s) => [s.id, s]));
   const triggerLabel = (t: TriggerKind) =>
-    t === "inbound_any" ? "Any inbound reply" : t === "inbound_keyword" ? "Keyword in reply" : "Button click";
+    t === "inbound_any" ? "Any inbound reply" : t === "inbound_keyword" ? "Keyword in reply" : t === "follow_up_sent" ? "Follow-up sent" : "Button click";
 
   const formatValue = (r: Automation) => {
     if (!r.trigger_value) return null;
@@ -231,6 +231,7 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
                     <SelectItem value="inbound_any">Any inbound reply</SelectItem>
                     <SelectItem value="inbound_keyword">Keyword in reply</SelectItem>
                     <SelectItem value="button_click">Button click</SelectItem>
+                    <SelectItem value="follow_up_sent">Follow-up sent (auto)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

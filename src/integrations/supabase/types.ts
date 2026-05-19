@@ -3974,7 +3974,11 @@ export type Database = {
       app_role: "owner" | "manager" | "viewer"
       audience_row_usage: "unused" | "reserved" | "scheduled" | "used"
       audience_row_validation: "valid" | "invalid" | "duplicate"
-      automation_trigger: "button_click" | "inbound_keyword" | "inbound_any"
+      automation_trigger:
+        | "button_click"
+        | "inbound_keyword"
+        | "inbound_any"
+        | "follow_up_sent"
       campaign_recipient_status:
         | "pending"
         | "scheduled"
@@ -4172,7 +4176,12 @@ export const Constants = {
       app_role: ["owner", "manager", "viewer"],
       audience_row_usage: ["unused", "reserved", "scheduled", "used"],
       audience_row_validation: ["valid", "invalid", "duplicate"],
-      automation_trigger: ["button_click", "inbound_keyword", "inbound_any"],
+      automation_trigger: [
+        "button_click",
+        "inbound_keyword",
+        "inbound_any",
+        "follow_up_sent",
+      ],
       campaign_recipient_status: [
         "pending",
         "scheduled",
