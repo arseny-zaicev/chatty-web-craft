@@ -10,7 +10,15 @@ import { Loader2, Plus, Trash2, Zap, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { Stage } from "@/lib/crmData";
 
-type TriggerKind = "button_click" | "inbound_keyword" | "inbound_any" | "follow_up_sent";
+type TriggerKind =
+  | "button_click"
+  | "inbound_keyword"
+  | "inbound_any"
+  | "follow_up_sent"
+  | "time_no_inbound"
+  | "time_in_stage"
+  | "conversation_assigned"
+  | "conversation_claimed_self";
 
 type Automation = {
   id: string;
@@ -20,6 +28,8 @@ type Automation = {
   is_active: boolean;
   workspace_id: string | null;
   pipeline_id: string | null;
+  delay_minutes: number | null;
+  source_stage_id: string | null;
 };
 
 type TemplateRow = {
