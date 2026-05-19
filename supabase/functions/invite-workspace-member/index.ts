@@ -9,6 +9,42 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+const SENDER_DOMAIN = "notify.iskra.ae";
+const FROM_ADDRESS = `ISKRA <noreply@${SENDER_DOMAIN}>`;
+
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+const buildInviteEmail = ({ workspaceName, confirmationUrl }: { workspaceName: string; confirmationUrl: string }) => {
+  const safeWorkspace = escapeHtml(workspaceName || "your workspace");
+  const safeUrl = escapeHtml(confirmationUrl);
+  const subject = `You've been invited to ${workspaceName || "ISKRA"}`;
+  const text = `You've been invited to join ${workspaceName || "your workspace"} on ISKRA. Accept the invitation: ${confirmationUrl}`;
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#18332f;">
+  <div style="padding:32px 16px;">
+    <div style="max-width:560px;margin:0 auto;background:#f7f0df;border:1px solid #e3d7bd;border-radius:16px;overflow:hidden;">
+      <div style="padding:30px 32px 28px;">
+        <div style="font-size:18px;font-weight:700;letter-spacing:0;color:#18332f;margin-bottom:28px;">ISKRA</div>
+        <div style="font-size:12px;text-transform:uppercase;letter-spacing:1.4px;color:#0f5c4d;margin-bottom:12px;">${safeWorkspace} · Invitation</div>
+        <h1 style="font-size:30px;line-height:36px;margin:0 0 14px;color:#18332f;font-weight:700;letter-spacing:0;">You've been invited</h1>
+        <p style="font-size:16px;line-height:25px;margin:0 0 24px;color:#4c625d;">You've been invited to join the ${safeWorkspace} workspace on ISKRA. Accept the invitation to set your password and sign in.</p>
+        <div style="margin:28px 0;"><a href="${safeUrl}" style="display:inline-block;background:#0f5c4d;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;line-height:20px;padding:13px 22px;border-radius:10px;">Accept invitation</a></div>
+        <p style="font-size:13px;line-height:21px;margin:0;color:#6f7f7a;">If you weren't expecting this, you can safely ignore this email - no account will be created.</p>
+        <div style="margin-top:28px;padding-top:18px;border-top:1px solid #e3d7bd;font-size:12px;color:#6f7f7a;line-height:19px;text-align:center;">ISKRA · iskra.ae</div>
+      </div>
+    </div>
+  </div>
+</body></html>`;
+  return { subject, html, text };
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -89,70 +125,78 @@ Deno.serve(async (req) => {
     inviteUrl.searchParams.set("wid", ws.id);
     const redirectTo = inviteUrl.toString();
 
-    // Helper: send a workspace invitation to an existing auth user without
-    // presenting it as a password reset. The auth email hook renders this
-    // magic-link event with the invite template whenever redirectTo points at
-    // /accept-invite.
-    const anonClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
-    const sendMagicInvite = async (reason: "existing_user" | "resend") => {
-      const { error } = await anonClient.auth.signInWithOtp({
-        email: targetEmail,
-        options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
+    const enqueueDirectInvite = async (confirmationUrl: string, reason: string) => {
+      const messageId = crypto.randomUUID();
+      const emailContent = buildInviteEmail({ workspaceName: ws.name ?? "ISKRA", confirmationUrl });
+      await admin.from("email_send_log").insert({
+        message_id: messageId,
+        template_name: "invite",
+        recipient_email: targetEmail,
+        status: "pending",
+        metadata: { workspace_id, reason, source: "invite-workspace-member" },
+      });
+      const { error } = await admin.rpc("enqueue_email", {
+        queue_name: "auth_emails",
+        payload: {
+          message_id: messageId,
+          to: targetEmail,
+          from: FROM_ADDRESS,
+          sender_domain: SENDER_DOMAIN,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          text: emailContent.text,
+          purpose: "transactional",
+          label: "invite",
+          idempotency_key: messageId,
+          queued_at: new Date().toISOString(),
+        },
       });
       if (error) {
-        console.error("signInWithOtp invite failed", { email, reason, redirectTo, error: error.message });
+        await admin.from("email_send_log").insert({
+          message_id: messageId,
+          template_name: "invite",
+          recipient_email: targetEmail,
+          status: "failed",
+          error_message: "Failed to enqueue invitation email",
+          metadata: { workspace_id, reason, source: "invite-workspace-member" },
+        });
+        console.error("Direct workspace invite enqueue failed", { email, reason, error: error.message });
         return { ok: false, error: error.message, reason };
       }
       invited = true;
-      console.log("Magic-link workspace invite email requested", { email, reason, redirectTo });
+      console.log("Direct workspace invite email queued", { email, reason, messageId });
       return { ok: true, reason };
     };
 
-    // Fallback for newly-created users when inviteUserByEmail cannot be used.
-    // The recovery mechanism is internal only; auth-email-hook renders it as a
-    // workspace invitation for /accept-invite links.
-    const sendRecoveryInvite = async (reason: "invite_fallback") => {
-      const { error } = await anonClient.auth.resetPasswordForEmail(targetEmail, { redirectTo });
-      if (error) {
-        console.error("resetPasswordForEmail failed", { email, reason, redirectTo, error: error.message });
-        return { ok: false, error: error.message, reason };
+    const generateActionLink = async (type: "invite" | "magiclink" | "recovery") => {
+      const { data, error } = await admin.auth.admin.generateLink({
+        type,
+        email: targetEmail,
+        options: { redirectTo },
+      });
+      if (error || !data?.properties?.action_link || !data.user) {
+        return { error: error?.message ?? "Could not generate invitation link" };
       }
-      invited = true;
-      console.log("Recovery-backed workspace invite email requested", { email, reason, redirectTo });
-      return { ok: true, reason };
+      return { user: data.user, actionLink: data.properties.action_link };
     };
 
     if (existing) {
       invitedUserId = existing.id;
-      // Existing user (e.g. previously created via fallback or re-invite) -
-      // make sure they actually receive an actionable email.
-      const magicInvite = await sendMagicInvite(action === "resend" ? "resend" : "existing_user");
-      if (!magicInvite.ok) return json({ error: `Invite email could not be sent: ${magicInvite.error}`, code: "email_delivery_request_failed" }, 502);
+      // Bypass built-in auth email sending entirely. We only generate the
+      // action link, then send it through the project's queued email pipeline.
+      const linkType = existing.last_sign_in_at ? "magiclink" : "recovery";
+      const link = await generateActionLink(linkType);
+      if (link.error || !link.actionLink) return json({ error: `Invite link could not be generated: ${link.error}`, code: "invite_link_generation_failed" }, 502);
+      const queued = await enqueueDirectInvite(link.actionLink, action === "resend" ? "resend" : `existing_${linkType}`);
+      if (!queued.ok) return json({ error: `Invite email could not be queued: ${queued.error}`, code: "email_delivery_queue_failed" }, 502);
     } else {
-      const { data: invite, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(targetEmail, {
-        redirectTo,
-      });
-      if (inviteErr || !invite?.user) {
-        console.warn("inviteUserByEmail failed, falling back to createUser", inviteErr?.message);
-        // Fallback: create a user with a random password, then trigger a
-        // recovery email so they can set their own password.
-        const tempPassword = crypto.randomUUID() + "Aa1!";
-        const { data: created, error: createErr } = await admin.auth.admin.createUser({
-          email: targetEmail,
-          password: tempPassword,
-          email_confirm: true,
-        });
-        if (createErr || !created?.user) {
-          return json({ error: createErr?.message ?? "Could not create user" }, 500);
-        }
-        invitedUserId = created.user.id;
-        const recovery = await sendRecoveryInvite("invite_fallback");
-        if (!recovery.ok) return json({ error: `Invite email could not be sent: ${recovery.error}`, code: "email_delivery_request_failed", user_id: invitedUserId }, 502);
-      } else {
-        invitedUserId = invite.user.id;
-        invited = true;
-        console.log("Auth invite email requested", { email, redirectTo });
+      const invite = await generateActionLink("invite");
+      if (invite.error || !invite.user || !invite.actionLink) {
+        return json({ error: `Invite link could not be generated: ${invite.error}`, code: "invite_link_generation_failed" }, 502);
       }
+      invitedUserId = invite.user.id;
+      const queued = await enqueueDirectInvite(invite.actionLink, "new_user_invite");
+      if (!queued.ok) return json({ error: `Invite email could not be queued: ${queued.error}`, code: "email_delivery_queue_failed", user_id: invitedUserId }, 502);
     }
 
     if (!invitedUserId) return json({ error: "User id missing" }, 500);
