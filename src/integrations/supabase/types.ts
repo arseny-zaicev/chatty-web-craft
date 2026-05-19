@@ -2319,6 +2319,21 @@ export type Database = {
         }
         Relationships: []
       }
+      slack_dispatch_kick: {
+        Row: {
+          id: boolean
+          last_kicked_at: string
+        }
+        Insert: {
+          id?: boolean
+          last_kicked_at?: string
+        }
+        Update: {
+          id?: boolean
+          last_kicked_at?: string
+        }
+        Relationships: []
+      }
       slack_event_queue: {
         Row: {
           attempts: number
