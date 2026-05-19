@@ -61,6 +61,7 @@ import { fetchPipelines, pipelinesKey, moveDealToPipeline } from "@/lib/pipeline
 import { markConversationRead } from "@/lib/inbox";
 import { useRequireAuth } from "@/hooks/useAuthSession";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import RetryLeadButton from "@/components/workspace/RetryLeadButton";
 import CRM from "./CRM";
 
 const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; embedded?: boolean } = {}) => {
@@ -76,6 +77,8 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
   const defaultPipeline = pipelines.find((p) => p.is_default) ?? pipelines[0] ?? null;
   const selectedPipelineId =
     (urlPipeline && pipelines.some((p) => p.id === urlPipeline)) ? urlPipeline : defaultPipeline?.id ?? null;
+  const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId) ?? null;
+  const failedStageId = (selectedPipeline as unknown as { failed_stage_id?: string | null } | null)?.failed_stage_id ?? null;
   // Sync URL to default once pipelines load
   useEffect(() => {
     if (!urlPipeline && defaultPipeline) {
@@ -501,6 +504,7 @@ const Pipeline = ({ workspaceId, embedded = false }: { workspaceId?: string; emb
                       stage={stage}
                       deals={stageDeals}
                       total={totals}
+                      failedStageId={failedStageId}
                       onDealClick={(id) => setActiveDealId(id)}
                       onOpenChat={(convId) => setChatConversationId(convId)}
                       conversationOf={(d) => (d.conversation_id ? convById.get(d.conversation_id) ?? null : null)}
@@ -827,6 +831,7 @@ const StageColumn = ({
   stage,
   deals,
   total,
+  failedStageId,
   onDealClick,
   onOpenChat,
   conversationOf,
@@ -836,6 +841,7 @@ const StageColumn = ({
   stage: Stage;
   deals: Deal[];
   total: { count: number; sum: number };
+  failedStageId?: string | null;
   onDealClick: (id: string) => void;
   onOpenChat?: (conversationId: string) => void;
   conversationOf?: (d: Deal) => Conversation | null;
@@ -906,6 +912,7 @@ const StageColumn = ({
             onOpenChat={onOpenChat}
             conversation={conversationOf?.(d) ?? null}
             assignee={assigneeOf?.(d) ?? null}
+            isFailedStage={!!failedStageId && d.stage_id === failedStageId}
           />
         ))}
         {deals.length === 0 && (
@@ -924,12 +931,14 @@ const DraggableDeal = ({
   onOpenChat,
   conversation,
   assignee,
+  isFailedStage,
 }: {
   deal: Deal;
   onClick: () => void;
   onOpenChat?: (conversationId: string) => void;
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
+  isFailedStage?: boolean;
 }) => {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: deal.id });
   const style: React.CSSProperties = {
@@ -949,6 +958,7 @@ const DraggableDeal = ({
         onOpenChat={onOpenChat}
         conversation={conversation}
         assignee={assignee}
+        isFailedStage={isFailedStage}
       />
     </div>
   );
@@ -960,12 +970,14 @@ const DealCard = ({
   onOpenChat,
   conversation,
   assignee,
+  isFailedStage,
 }: {
   deal: Deal;
   dragging?: boolean;
   onOpenChat?: (conversationId: string) => void;
   conversation?: Conversation | null;
   assignee?: AssigneeLite;
+  isFailedStage?: boolean;
 }) => {
   const phone = deal.contact_phone ?? conversation?.contact_phone ?? null;
   const convId = deal.conversation_id ?? conversation?.id ?? null;
@@ -1029,26 +1041,31 @@ const DealCard = ({
           ${Number(deal.amount).toLocaleString()}
         </div>
       )}
-      {(convId || phone) && (
-        <div className="mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-          {convId && onOpenChat && (
-            <button
-              onClick={openChat}
-              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
-              title="Open chat"
-            >
-              <MessageSquare className="w-3 h-3" /> Chat
-            </button>
+      {(convId || phone || isFailedStage) && (
+        <div className="mt-2 flex items-center gap-1 flex-wrap">
+          {isFailedStage && (
+            <RetryLeadButton dealId={deal.id} initialPhone={phone} />
           )}
-          {phone && (
-            <button
-              onClick={copyPhone}
-              className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
-              title="Copy phone"
-            >
-              <Copy className="w-3 h-3" /> Copy
-            </button>
-          )}
+          <div className={`flex items-center gap-1 ${isFailedStage ? "" : "opacity-0 group-hover:opacity-100"} transition`}>
+            {convId && onOpenChat && (
+              <button
+                onClick={openChat}
+                className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+                title="Open chat"
+              >
+                <MessageSquare className="w-3 h-3" /> Chat
+              </button>
+            )}
+            {phone && (
+              <button
+                onClick={copyPhone}
+                className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary/40 flex items-center gap-1"
+                title="Copy phone"
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

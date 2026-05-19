@@ -3868,6 +3868,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      retry_lead_import: {
+        Args: { p_lead_id: string; p_new_phone?: string }
+        Returns: undefined
+      }
       should_notify_lead_reply: {
         Args: { _conversation_id: string; _reply_text: string }
         Returns: boolean
