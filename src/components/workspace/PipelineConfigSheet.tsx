@@ -688,7 +688,7 @@ export default function PipelineConfigSheet({
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <Label className="text-xs">First-touch template</Label>
+                <Label className="text-xs">First-touch template / group</Label>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -701,15 +701,42 @@ export default function PipelineConfigSheet({
                     : <><RefreshCw className="w-3 h-3 mr-1" />Refresh from Gupshup</>}
                 </Button>
               </div>
-              <Select value={templateId || "none"} onValueChange={(v) => setTemplateId(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {(templates ?? []).map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Single template (one sender)</div>
+                  <Select
+                    value={templateId || "none"}
+                    onValueChange={(v) => { setTemplateId(v === "none" ? "" : v); if (v !== "none") setTemplateGroupId(""); }}
+                    disabled={Boolean(templateGroupId)}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {(templates ?? []).map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Template group (shared pool)</div>
+                  <Select
+                    value={templateGroupId || "none"}
+                    onValueChange={(v) => { setTemplateGroupId(v === "none" ? "" : v); if (v !== "none") setTemplateId(""); }}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {(templateGroups ?? []).map((g) => (
+                        <SelectItem key={g.id} value={g.id}>{g.name} ({g.template_names.length})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                A template group routes to whichever sender has its approved variant. Use this when 2+ numbers share the same outreach.
+              </p>
             </div>
 
             <div>
