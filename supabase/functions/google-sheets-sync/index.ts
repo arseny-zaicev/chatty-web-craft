@@ -199,7 +199,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
 
     const { data: pipeline } = await admin
       .from("pipelines")
-      .select("id, auto_outreach_enabled, slack_channel_id")
+      .select("id, auto_outreach_enabled, slack_channel_id, expected_country_codes")
       .eq("id", source.pipeline_id)
       .maybeSingle();
     if (!pipeline) return { error: "Pipeline missing" };
