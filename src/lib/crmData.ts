@@ -43,6 +43,7 @@ export type Conversation = Pick<
   | "contact_name"
   | "last_message_text"
   | "last_message_at"
+  | "last_inbound_at"
   | "unread_count"
   | "whatsapp_number_id"
   | "workspace_id"
