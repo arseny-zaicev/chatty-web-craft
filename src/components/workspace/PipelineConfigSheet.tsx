@@ -114,6 +114,7 @@ export default function PipelineConfigSheet({
 
   const [autoOutreach, setAutoOutreach] = useState(false);
   const [templateId, setTemplateId] = useState<string>("");
+  const [templateGroupId, setTemplateGroupId] = useState<string>("");
   const [senderIds, setSenderIds] = useState<string[]>([]);
   const [slackChannel, setSlackChannel] = useState("");
   const [dailyCap, setDailyCap] = useState<string>("");
@@ -122,6 +123,15 @@ export default function PipelineConfigSheet({
   const [timezone, setTimezone] = useState<string>("Asia/Kolkata");
   const [syncingTemplates, setSyncingTemplates] = useState(false);
 
+  // Follow-up
+  const [followUpEnabled, setFollowUpEnabled] = useState(false);
+  const [followUpTemplateId, setFollowUpTemplateId] = useState<string>("");
+  const [followUpGroupId, setFollowUpGroupId] = useState<string>("");
+  const [followUpDelayMin, setFollowUpDelayMin] = useState<string>("480");
+  const [followUpCurfewEnd, setFollowUpCurfewEnd] = useState<string>("20:00");
+  const [followUpResumeAt, setFollowUpResumeAt] = useState<string>("09:00");
+  const [followUpTz, setFollowUpTz] = useState<string>("Europe/Berlin");
+
   const [showNewSource, setShowNewSource] = useState(false);
   const [newSourceKind, setNewSourceKind] = useState<SourceKind>("google_sheet");
   const [newSourceName, setNewSourceName] = useState("");
@@ -129,15 +139,25 @@ export default function PipelineConfigSheet({
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const trimTime = (v?: string | null) => (v ? String(v).slice(0, 5) : "");
+
   const hydrate = (p: Pipeline) => {
     setAutoOutreach(Boolean(p.auto_outreach_enabled));
     setTemplateId(p.first_touch_template_id ?? "");
+    setTemplateGroupId(p.first_touch_template_group_id ?? "");
     setSenderIds(p.default_sender_number_ids ?? []);
     setSlackChannel(p.slack_channel_id ?? "");
     setDailyCap(p.daily_cap ? String(p.daily_cap) : "");
     setWinStart(p.sending_window?.start ?? "09:00");
     setWinEnd(p.sending_window?.end ?? "18:00");
     setTimezone(p.sending_window?.timezone ?? "Asia/Kolkata");
+    setFollowUpEnabled(Boolean(p.follow_up_enabled));
+    setFollowUpTemplateId(p.follow_up_template_id ?? "");
+    setFollowUpGroupId(p.follow_up_template_group_id ?? "");
+    setFollowUpDelayMin(String(p.follow_up_delay_minutes ?? 480));
+    setFollowUpCurfewEnd(trimTime(p.follow_up_curfew_end) || "20:00");
+    setFollowUpResumeAt(trimTime(p.follow_up_resume_at) || "09:00");
+    setFollowUpTz(p.follow_up_timezone ?? "Europe/Berlin");
   };
 
   const { data: templates } = useQuery({
