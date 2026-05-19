@@ -977,6 +977,20 @@ export default function PipelineConfigSheet({
               <p className="text-[10px] text-muted-foreground mt-1">
                 A template group routes to whichever sender has its approved variant. Use this when 2+ numbers share the same outreach.
               </p>
+              {templateGroupId && wsId && (() => {
+                const g = (templateGroups ?? []).find((x) => x.id === templateGroupId);
+                if (!g) return null;
+                const selected = (numbers ?? []).filter((n) => senderIds.includes(n.id));
+                return (
+                  <SenderVariantMatrix
+                    workspaceId={wsId}
+                    groupId={g.id}
+                    groupName={g.name}
+                    templateNames={g.template_names || []}
+                    senders={selected}
+                  />
+                );
+              })()}
             </div>
 
             <div>
