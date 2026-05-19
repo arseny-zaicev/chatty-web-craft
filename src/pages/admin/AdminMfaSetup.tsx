@@ -26,7 +26,12 @@ export default function AdminMfaSetup() {
         return;
       }
       // Clean up any unverified factors from previous attempts
-      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const { data: factors, error: listErr } = await supabase.auth.mfa.listFactors();
+      if (listErr) {
+        toast.error("Auth service is unavailable. Refresh in a moment.");
+        setLoading(false);
+        return;
+      }
       const verified = factors?.totp?.find((f) => f.status === "verified");
       if (verified) {
         navigate("/admin/mfa-verify");
