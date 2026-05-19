@@ -2432,9 +2432,11 @@ export type Database = {
       stage_automations: {
         Row: {
           created_at: string
+          delay_minutes: number | null
           id: string
           is_active: boolean
           pipeline_id: string | null
+          source_stage_id: string | null
           target_stage_id: string
           trigger: Database["public"]["Enums"]["automation_trigger"]
           trigger_value: string | null
@@ -2444,9 +2446,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delay_minutes?: number | null
           id?: string
           is_active?: boolean
           pipeline_id?: string | null
+          source_stage_id?: string | null
           target_stage_id: string
           trigger: Database["public"]["Enums"]["automation_trigger"]
           trigger_value?: string | null
@@ -2456,9 +2460,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delay_minutes?: number | null
           id?: string
           is_active?: boolean
           pipeline_id?: string | null
+          source_stage_id?: string | null
           target_stage_id?: string
           trigger?: Database["public"]["Enums"]["automation_trigger"]
           trigger_value?: string | null
@@ -2472,6 +2478,13 @@ export type Database = {
             columns: ["pipeline_id"]
             isOneToOne: false
             referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stage_automations_source_stage_id_fkey"
+            columns: ["source_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
             referencedColumns: ["id"]
           },
           {
@@ -3494,6 +3507,15 @@ export type Database = {
           recipients_sent: number
         }[]
       }
+      apply_assignment_automations: {
+        Args: {
+          _actor: string
+          _conversation_id: string
+          _new_assignee: string
+          _prev_assignee: string
+        }
+        Returns: undefined
+      }
       approve_payout_run: {
         Args: { _run_id: string }
         Returns: {
@@ -4083,6 +4105,10 @@ export type Database = {
         | "inbound_keyword"
         | "inbound_any"
         | "follow_up_sent"
+        | "time_no_inbound"
+        | "time_in_stage"
+        | "conversation_assigned"
+        | "conversation_claimed_self"
       campaign_recipient_status:
         | "pending"
         | "scheduled"
@@ -4285,6 +4311,10 @@ export const Constants = {
         "inbound_keyword",
         "inbound_any",
         "follow_up_sent",
+        "time_no_inbound",
+        "time_in_stage",
+        "conversation_assigned",
+        "conversation_claimed_self",
       ],
       campaign_recipient_status: [
         "pending",
