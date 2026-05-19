@@ -1004,7 +1004,7 @@ export default function LaunchWizard() {
                             const variant = activeLogical.variantByNumber.get(n.id);
                             return (
                               <div key={n.id} className="grid grid-cols-[1fr_1.4fr_auto_auto] gap-2 px-2 py-1.5 text-xs items-center">
-                                <div className="truncate">{friendlySenderLabel(n)}</div>
+                                <div className="truncate" title={senderFullLabel(n)}>{senderFullLabel(n)}</div>
                                 <div className="truncate font-mono text-[11px]">
                                   {variant?.name ?? <span className="text-amber-600">- missing -</span>}
                                 </div>
