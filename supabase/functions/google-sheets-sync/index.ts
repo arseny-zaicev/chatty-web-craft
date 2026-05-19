@@ -185,11 +185,13 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     if (!pipeline) return { error: "Pipeline missing" };
 
     // 1. Read whole sheet (A:Z is enough for MVP, ~26 cols).
-    // Sheet names with spaces/special chars (e.g. "PPC-Overview (1)") MUST be wrapped in single quotes.
+    // Sheet names with spaces/special chars (e.g. "PPC-Overview (1)") MUST be wrapped in single quotes
+    // and URL-encoded. Keep the `:` raw — Sheets API rejects %3A in ranges.
     const needsQuote = /[^A-Za-z0-9_]/.test(sheetName);
     const quotedSheet = needsQuote ? `'${sheetName.replace(/'/g, "''")}'` : sheetName;
     const range = `${quotedSheet}!A:Z`;
-    const sheetUrl = `${GATEWAY_URL}/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
+    const encodedRange = encodeURIComponent(range).replace(/%3A/gi, ":").replace(/%21/g, "!");
+    const sheetUrl = `${GATEWAY_URL}/spreadsheets/${spreadsheetId}/values/${encodedRange}`;
     const sheetResp = await fetch(sheetUrl, {
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
