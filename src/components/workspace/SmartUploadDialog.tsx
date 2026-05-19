@@ -100,6 +100,7 @@ export function SmartUploadDialog({
     setStep("input");
     setCampaignType("marketing");
     setTemplateName("");
+    setReuseBatchId("");
     setFile(null);
     setParsed(null);
     setPastedCopy("");
