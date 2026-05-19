@@ -133,7 +133,16 @@ export const PREP_PRESETS: PrepPreset[] = [
 
 export const getPresetById = (id: string) => PREP_PRESETS.find((p) => p.id === id) ?? null;
 
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+/**
+ * Codex prep prompts insert audience rows into Arseny's PERSONAL Supabase project,
+ * NOT into Lovable Cloud. The Lovable Cloud edge function `import-audience-from-personal`
+ * then pulls the prepared rows into this workspace.
+ *
+ * Hardcoded by design — do NOT swap this for VITE_SUPABASE_URL (which points at
+ * Lovable Cloud `xglfamaa...`). See mem://reference/data-sources.
+ */
+const PERSONAL_SUPABASE_PROJECT_REF = "pdoddfoyrutakwemejpe";
+const PERSONAL_SUPABASE_URL = `https://${PERSONAL_SUPABASE_PROJECT_REF}.supabase.co`;
 
 /**
  * Map of campaign_static var key -> exact text for this batch.
@@ -226,18 +235,20 @@ EXPECTED COUNTS (report at the end)
   - total_invalid
   - total_duplicates
 
-INSERT TARGET (Supabase / Lovable Cloud)
+INSERT TARGET (PERSONAL Supabase project — NOT Lovable Cloud)
+  project ref: ${PERSONAL_SUPABASE_PROJECT_REF}
+  project url: ${PERSONAL_SUPABASE_URL}
   table: public.audience_rows
   workspace_id: ${ctx.workspaceId}
   batch_id: ${ctx.batchId ?? "<MISSING - create the batch first from the Data page>"}
   preset: ${preset.id}
-${SUPABASE_URL ? `  project url: ${SUPABASE_URL}` : ""}
 
 WORKFLOW FOR CODEX
   1. Parse the raw input the operator pasted.
   2. Apply validation + dedupe rules above.
   3. Build derived_payload: per_row vars from the source columns, campaign_static vars copied byte-for-byte.
   4. Run the SANITY CHECK above. If any campaign_static check fails, STOP.
-  5. Insert the rows into public.audience_rows for the workspace_id and batch_id above.
-  6. Print the expected counts so the operator can refresh the Data page and launch.`;
+  5. Insert the rows into public.audience_rows in the PERSONAL Supabase project above (NOT into Lovable Cloud).
+  6. Tell the operator to open the Data page and click "Pull from my Supabase" — that runs the \`import-audience-from-personal\` edge function on Lovable Cloud, which copies the rows into the workspace.
+  7. Print the expected counts so the operator can verify before launching.`;
 }

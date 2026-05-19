@@ -33,7 +33,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
-import { friendlySenderLabel } from "@/lib/crmData";
+import { friendlySenderLabel, senderFullLabel } from "@/lib/crmData";
 import DispatchControlPanel, { type DispatchMode } from "@/components/workspace/DispatchControlPanel";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
@@ -293,6 +293,9 @@ export default function LaunchWizard() {
       return changed ? next : prev;
     });
   }, [variableNames, columns]);
+
+  // Auto-seed for DB-prepared static variables lives further down, right after
+  // `expectedStaticValues` and `sampleDbRowsQ` are declared (search: "Auto-seed __static").
 
   // Classify each variable by data source: per-row column, same-for-all static, or unset.
   const variableSourceKind = (v: string): "per_row" | "static" | "missing" => {
@@ -603,7 +606,38 @@ export default function LaunchWizard() {
     () => audienceSource === "database" ? parseStaticValues(dbBatch?.notes) : {},
     [audienceSource, dbBatch?.notes],
   );
-  const staticQaIssues = useMemo(() => {
+
+  // Auto-seed __static mapping for DB batches where the preset declared
+  // campaign-static var_N values AND every sampled row already carries that
+  // exact value in derived_payload. Recognises preset-prepared static variables
+  // as "resolved" instead of leaving them as "unmapped". (Plan §D.)
+  useEffect(() => {
+    if (audienceSource !== "database") return;
+    if (!variableNames.length) return;
+    const rows = sampleDbRowsQ.data ?? [];
+    if (!Object.keys(expectedStaticValues).length || rows.length === 0) return;
+    setMapping((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      variableNames.forEach((v) => {
+        if (next[v]) return;
+        const key = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v.toLowerCase()}`;
+        const exp = expectedStaticValues[key];
+        if (!exp) return;
+        const allMatch = rows.every((r) => String(r.derived_payload?.[key] ?? "").trim() === exp.trim());
+        if (allMatch) {
+          next[v] = `__static:${exp}`;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [audienceSource, variableNames, expectedStaticValues, sampleDbRowsQ.data]);
+  // Two severity levels (Plan §D/§7):
+  //   warnings → show but DO NOT block launch
+  //   blockers → block launch (ONLY when every sampled row mismatches an expected
+  //              static value — that's a true preset bug, not normal drift)
+  const staticQaWarnings = useMemo(() => {
     if (audienceSource !== "database") return [] as Array<{ key: string; reason: string }>;
     const rows = sampleDbRowsQ.data ?? [];
     if (rows.length === 0) return [];
@@ -613,21 +647,37 @@ export default function LaunchWizard() {
       const got = rows.map((r) => String(r.derived_payload?.[key] ?? ""));
       const bad = got.find((g) => g.trim() !== expected.trim());
       if (bad !== undefined) {
-        out.push({ key, reason: `Expected campaign-static "${expected.slice(0, 60)}${expected.length > 60 ? "..." : ""}", found "${bad.slice(0, 60)}${bad.length > 60 ? "..." : ""}" in audience rows. Re-prepare the batch.` });
+        out.push({ key, reason: `Expected campaign-static "${expected.slice(0, 60)}${expected.length > 60 ? "..." : ""}", found "${bad.slice(0, 60)}${bad.length > 60 ? "..." : ""}" in some sampled rows.` });
       }
     }
-    // Even without expected values, flag obvious name-fallbacks landing in var_2/var_3.
     if (Object.keys(expectedStaticValues).length === 0 && rows.length > 0) {
       for (const k of Object.keys(rows[0].derived_payload ?? {})) {
         if (k === "var_1") continue;
         const vals = rows.map((r) => String(r.derived_payload?.[k] ?? "").trim().toLowerCase());
         if (vals.every((v) => banned.has(v))) {
-          out.push({ key: k, reason: `Every sampled row has name-fallback text in ${k}. Re-prepare with campaign-static copy from Materials.` });
+          out.push({ key: k, reason: `Every sampled row has name-fallback text in ${k}. Likely a prep mistake — re-prepare with copy from Materials.` });
         }
       }
     }
     return out;
   }, [audienceSource, expectedStaticValues, sampleDbRowsQ.data]);
+
+  const staticQaBlockers = useMemo(() => {
+    // Only HARD-block when EVERY sampled row mismatches an expected value
+    // (preset bug). Single-row drift just warns.
+    if (audienceSource !== "database") return [] as Array<{ key: string; reason: string }>;
+    const rows = sampleDbRowsQ.data ?? [];
+    if (rows.length === 0) return [];
+    const out: Array<{ key: string; reason: string }> = [];
+    for (const [key, expected] of Object.entries(expectedStaticValues)) {
+      const allBad = rows.every((r) => String(r.derived_payload?.[key] ?? "").trim() !== expected.trim());
+      if (allBad) out.push({ key, reason: `Every sampled row mismatches expected static value for ${key}. Re-prepare the batch.` });
+    }
+    return out;
+  }, [audienceSource, expectedStaticValues, sampleDbRowsQ.data]);
+
+  // Back-compat alias kept for the UI block below.
+  const staticQaIssues = staticQaWarnings;
 
   // ----- Preview samples -----
   const previewSamples = useMemo(() => {
@@ -1004,7 +1054,7 @@ export default function LaunchWizard() {
                             const variant = activeLogical.variantByNumber.get(n.id);
                             return (
                               <div key={n.id} className="grid grid-cols-[1fr_1.4fr_auto_auto] gap-2 px-2 py-1.5 text-xs items-center">
-                                <div className="truncate">{friendlySenderLabel(n)}</div>
+                                <div className="truncate" title={senderFullLabel(n)}>{senderFullLabel(n)}</div>
                                 <div className="truncate font-mono text-[11px]">
                                   {variant?.name ?? <span className="text-amber-600">- missing -</span>}
                                 </div>
@@ -1098,7 +1148,7 @@ export default function LaunchWizard() {
                           checked={selected}
                           onChange={() => toggleNumber(n.id)}
                         />
-                        <span className="truncate flex-1">{friendlySenderLabel(n)}</span>
+                        <span className="truncate flex-1" title={senderFullLabel(n)}>{senderFullLabel(n)}</span>
                         {activeLogical && (
                           hasVariant
                             ? <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600">ready</Badge>
@@ -1747,13 +1797,16 @@ export default function LaunchWizard() {
             </div>
           )}
           {staticQaIssues.length > 0 && (
-            <div className="text-xs text-rose-600 flex items-start gap-1.5">
+            <div className={`text-xs flex items-start gap-1.5 ${staticQaBlockers.length > 0 ? "text-rose-600" : "text-amber-600"}`}>
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <div>
-                <b>Audience data quality:</b>
+                <b>{staticQaBlockers.length > 0 ? "Audience data quality (blocking):" : "Audience data quality (warning):"}</b>
                 <ul className="list-disc pl-4 mt-0.5">
                   {staticQaIssues.map((i) => <li key={i.key}><span className="font-mono">{i.key}</span>: {i.reason}</li>)}
                 </ul>
+                {staticQaBlockers.length === 0 && (
+                  <p className="mt-1 opacity-80">Launch is allowed — only some sampled rows drifted. Re-prepare if you want strict consistency.</p>
+                )}
               </div>
             </div>
           )}
@@ -1773,7 +1826,7 @@ export default function LaunchWizard() {
           <Button
             className="w-full"
             onClick={() => launch.mutate()}
-            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0 || staticQaIssues.length > 0}
+            disabled={launch.isPending || resolution.missing.length > 0 || recipients.length === 0 || !activeLogical || activeNumbers.length === 0 || !pipelineId || unmappedVars.length > 0 || staticQaBlockers.length > 0}
           >
             <Play className="w-4 h-4 mr-1" />{launch.isPending ? "Launching..." : "Launch now"}
           </Button>

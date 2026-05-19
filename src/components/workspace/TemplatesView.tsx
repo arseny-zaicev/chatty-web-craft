@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Search, FileText, Copy, Check, MessageSquare, Phone, Globe, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { crmKeys, fetchCampaignBase } from "@/lib/crmData";
+import { crmKeys, fetchCampaignBase, senderFullLabel } from "@/lib/crmData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,7 +28,7 @@ type TemplateRow = {
   provider_template_id: string | null;
 };
 
-type NumberRow = { id: string; phone_number: string; display_name: string | null };
+type NumberRow = { id: string; phone_number: string; display_name: string | null; provider_app_id: string | null; label: string | null };
 
 const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", dot: "bg-emerald-500" },
@@ -181,7 +181,7 @@ export default function TemplatesView({ workspaceId }: { workspaceId: string }) 
           <SelectContent>
             <SelectItem value="all">All numbers</SelectItem>
             {numbers.map((n) => (
-              <SelectItem key={n.id} value={n.id}>{n.display_name ?? `+${n.phone_number}`}</SelectItem>
+              <SelectItem key={n.id} value={n.id}>{senderFullLabel(n)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -269,16 +269,36 @@ export default function TemplatesView({ workspaceId }: { workspaceId: string }) 
                   </div>
                 )}
 
-                <div className="px-4 py-2.5 border-t border-border/60 bg-muted/20 text-[11px] text-muted-foreground flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 truncate">
+                <div className="px-4 py-2.5 border-t border-border/60 bg-muted/20 text-[11px] text-muted-foreground flex items-start justify-between gap-2">
+                  <div className="flex flex-col gap-0.5 min-w-0">
                     {number && (
                       <>
-                        <Phone className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{number.display_name ?? `+${number.phone_number}`}</span>
+                        <button
+                          onClick={() => copy(`+${number.phone_number}`, `${t.id}-phone`)}
+                          className="font-mono text-foreground/90 hover:text-primary text-left truncate"
+                          title="Click to copy phone"
+                        >+{number.phone_number}</button>
+                        {number.display_name && (
+                          <span className="truncate">{number.display_name}</span>
+                        )}
+                        {(number.provider_app_id || number.label) && (
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-muted-foreground/80">
+                            {number.provider_app_id && (
+                              <button
+                                onClick={() => copy(number.provider_app_id!, `${t.id}-app`)}
+                                className="font-mono hover:text-primary"
+                                title="Click to copy app id"
+                              >app:{number.provider_app_id}</button>
+                            )}
+                            {number.label && (
+                              <span className="font-mono">fleet:{number.label}</span>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
-                  <div className="shrink-0">
+                  <div className="shrink-0 whitespace-nowrap">
                     {t.synced_at ? `Synced ${format(new Date(t.synced_at), "MMM d, HH:mm")}` : "Not synced"}
                   </div>
                 </div>
