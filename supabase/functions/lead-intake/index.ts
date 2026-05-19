@@ -240,6 +240,7 @@ Deno.serve(async (req) => {
         duplicate: duplicateCount,
         cross_pipeline_duplicate: crossPipelineDuplicateCount,
         skipped_test_lead: testLeadCount,
+        name_unusable: nameUnusableCount,
         slack_channel_id: pipeline.slack_channel_id,
       },
     });
@@ -260,6 +261,7 @@ Deno.serve(async (req) => {
       duplicate: duplicateCount,
       cross_pipeline_duplicate: crossPipelineDuplicateCount,
       skipped_test_lead: testLeadCount,
+      name_unusable: nameUnusableCount,
     });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
