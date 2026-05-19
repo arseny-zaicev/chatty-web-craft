@@ -439,12 +439,15 @@ function CampaignDetail({
   }, [days, todayKey, showAllDays]);
   const hiddenCount = days.length - visibleDays.length;
 
-  // Authoritative totals from campaigns rows (not capped recipient query).
+  // Authoritative totals: prefer the live RPC (includes recipients that flipped
+  // straight to 'replied' without passing through 'sent'); fall back to the
+  // cached counter if the RPC hasn't loaded yet.
+  const liveSent = Math.max(liveCounts?.sent ?? 0, group.sent ?? 0);
   const totals = {
     total: group.total,
-    sent: group.sent,
+    sent: liveSent,
     failed: group.failed,
-    pending: Math.max(0, group.total - group.sent - group.failed),
+    pending: Math.max(0, group.total - liveSent - group.failed),
     today: group.today,
   };
 
