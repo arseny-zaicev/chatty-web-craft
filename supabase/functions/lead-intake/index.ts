@@ -65,10 +65,18 @@ Deno.serve(async (req) => {
     // Resolve pipeline + workspace defaults for first-touch
     const { data: pipeline } = await admin
       .from("pipelines")
-      .select("id, workspace_id, auto_outreach_enabled, first_touch_template_id, default_sender_number_ids, slack_channel_id")
+      .select("id, workspace_id, auto_outreach_enabled, first_touch_template_id, default_sender_number_ids, slack_channel_id, expected_country_codes")
       .eq("id", source.pipeline_id)
       .maybeSingle();
     if (!pipeline) return json({ error: "Pipeline missing" }, 410);
+
+    // Combined CC list passed to phone normalizer: source default first, then pipeline-level.
+    const pipelineCcs: string[] = Array.isArray((pipeline as any).expected_country_codes)
+      ? ((pipeline as any).expected_country_codes as string[]) : [];
+    const ccListForPhone: string[] = [
+      ...(defaultCC ? [defaultCC] : []),
+      ...pipelineCcs.filter((c) => c && c !== defaultCC),
+    ];
 
     const body = await req.json().catch(() => ({}));
     const rawLeads: LeadInput[] = Array.isArray(body?.leads)
@@ -108,7 +116,7 @@ Deno.serve(async (req) => {
 
     // 2. Validate + dedupe + import each row
     for (const raw of rawLeads) {
-      const phoneResult = normalizePhone(raw?.phone, defaultCC);
+      const phoneResult = normalizePhone(raw?.phone, ccListForPhone.length ? ccListForPhone : defaultCC);
       const nameResult = normalizeFirstName(raw?.name);
       const name = nameResult.value;
       if (nameResult.outcome === "unusable") nameUnusableCount++;
