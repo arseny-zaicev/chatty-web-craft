@@ -1,102 +1,96 @@
+## Что я нашёл (короткий диагноз)
 
-## Что уже есть в БД (хорошие новости)
+**1. Таблицу видит правильно.** Google Sheet sync прочитал все 1369 строк, парсит `vorname` + `telefonnummer`, страна по умолчанию +49.
 
-- `conversations.assigned_user_id`, `assigned_at`, `active_responder_id`
-- `conversations.first_human_reply_at`, `last_human_reply_at`, `waiting_since`, `last_inbound_at`
-- Триггер `touch_conversation_reply_timing` уже считает все эти тайминги при каждом сообщении
-- RPC `ops_operator_performance(_from, _to)` уже возвращает median first response, median reply time, активные/назначенные чаты, конверсии в meeting и т.д. (но `admin only`)
-- `workspace_members` + `is_workspace_manager()` для прав
+**2. Откуда взялись "812 дубликатов".** Это НЕ настоящие дубли по телефону внутри таблицы (таких всего 15 номеров / 21 строка). Это артефакт того, что edge-функция `google-sheets-sync` запускалась 10 раз подряд (09:16 → 09:24), первые запуски частично писали записи в `lead_imports` со status `duplicate` из-за гонки, и теперь у нас в БД зашумлено: 812 строк со статусом `duplicate`, хотя реально занятых телефонов всего ~70 (49 — это вчерашняя ручная рассылка + 21 настоящий внутрисетовый дубль).
 
-Значит, костяк готов — нужно только расширить роли, поправить RPC под workspace и собрать UI.
+   Результат: **в очередь auto-dispatch попали только 495 лидов** из 1368. Остальные 812 заблокированы статусом `duplicate` и dispatcher их не возьмёт.
 
----
+**3. Настройки пайплайна НЕ сохранены.** В БД для `Reactivation Leads / DE` сейчас: `auto_outreach_enabled = false`, `daily_cap = NULL`, `default_sender_number_ids = []`, `first_touch_template_group_id = NULL`, `sending_window.timezone = Asia/Kolkata`. На твоём скрине открыта форма с правильными значениями (FE Reactivaiton Leads group, 3 sender'а, 08-20 Europe/Berlin, daily cap 50) - но кнопка "Save changes" ещё не нажата (либо нажата и не дошло). Без `auto_outreach_enabled = true` dispatcher этот пайплайн не трогает вообще.
 
-## 1. Сеттеры — модель (и user-сеттеры, и внешние метки)
-
-- Новая enum-роль `setter` в `app_role` (если ещё нет — добавить).
-- Новая таблица `workspace_setters` — для внешних людей без логина:
-  - `id`, `workspace_id`, `display_name`, `avatar_url`, `external` (bool), `linked_user_id` nullable, `is_active`
-  - Если `linked_user_id` есть → это участник workspace; если нет → просто метка
-- На `conversations` добавить `assigned_setter_id uuid` (ссылка на `workspace_setters.id`). Старый `assigned_user_id` остаётся для обратной совместимости и автозаполняется из `linked_user_id`.
-- Триггер: при `INSERT/UPDATE` assigned_setter_id → подставлять `assigned_user_id`, ставить `assigned_at = now()`.
-
-## 2. Назначение в Inbox (ручное)
-
-- В заголовке открытого чата — поповер «Assign to» со списком активных сеттеров workspace, поиск, аватары, очистка.
-- Записывает в `conversations.assigned_setter_id`.
-- В карточке чата в списке — маленький аватар назначенного сеттера справа.
-
-## 3. Фильтры по сеттеру
-
-- В Inbox-баре фильтров (рядом с All pipelines / All numbers) — новый селект **Assignee**: «Все», «Не назначены», список сеттеров, «Только мои» (если текущий user — сеттер).
-- В Pipeline-вью — такой же селект над колонками; фильтрует deals по `conversation.assigned_setter_id`.
-- В обоих местах счётчики (Unread, Replied, Negative) пересчитываются по выбранному сеттеру.
-
-## 4. Управление сеттерами
-
-- В Settings → Team новый раздел **Setters**:
-  - Список с avatar + name + статус (Active / Paused) + чьи чаты ведёт (счётчик)
-  - «Add setter» → выбрать из workspace members **или** ввести имя вручную (external)
-  - Toggle active/paused, edit, remove
-- Доступно только manager/owner workspace.
-
-## 5. Stats-таб
-
-Новый пункт сайдбара воркспейса — **Stats**. Открывается всем участникам workspace, но данные показываются по правилам:
-
-- **Toggle сверху**: `Me` (мои метрики) / `Team` (все сеттеры).
-  - `Team` доступен только manager/owner; обычный сеттер этот переключатель не видит.
-- **Time range**: Last 24h / 7d / 30d / Custom (default 7d, Dubai tz).
-- **Pipeline filter**: All / конкретный пайплайн.
-
-### Метрики (на сеттера и в сумме):
-
-1. **Active chats** — конверсии где `assigned_setter_id = X` и стадия `open`
-2. **Avg first response time** — медиана/среднее (`first_human_reply_at − first inbound`) для чатов сеттера в окне
-3. **Avg reply time in dialog** — медиана (`outbound human − предшествующий inbound`) по всем парам в окне
-4. **Stage conversions** — сколько лидов сеттер довёл до Booked / Showed / Closed (берём из истории `deals` + текущей стадии)
-
-Плюс таблица «Per setter» с этими 4 колонками + сортировка.
-
-### Технически:
-
-- Новый RPC `setter_performance(_workspace_id, _from, _to, _pipeline_id, _setter_id)`:
-  - SECURITY DEFINER
-  - Если `_setter_id` указан → проверяем, что caller это либо сам сеттер (по `linked_user_id`), либо `is_workspace_manager`
-  - Если NULL → только manager/owner
-  - Использует ту же логику что `ops_operator_performance`, но с фильтром по workspace и `assigned_setter_id`
-
-### Share
-
-Для v1 — никакого публичного токена. Сеттер логинится в свой workspace и видит **только** свои цифры; manager видит всех. Это закрывает запрос «я могу выбрать — он видит только своё или всё».
-(Публичный share-link можно добавить позже отдельной задачей.)
+**4. Daily cap считается неправильно для "50 доставленных".** В `lead-dispatch/index.ts` лимит = `count of (queued, sent, replied, failed) WHERE scheduled_at >= today (UTC)`. Проблемы:
+   - `failed` считается → если 10 упали, dispatcher всё равно остановится на 40 успешных.
+   - День считается по UTC, а не по Europe/Berlin (окно 08-20 Berlin).
 
 ---
 
-## Файлы
+## Что я предлагаю сделать (за один заход)
 
-**Миграция:**
-- `workspace_setters` table + RLS
-- `conversations.assigned_setter_id` + триггер sync с `assigned_user_id`
-- `setter_performance(...)` RPC
+### Step 1. Почистить мусор в `lead_imports` для этого источника
 
-**Backend:** edge-функции не нужны — всё через RPC.
+```text
+For source_connection_id = 2c28bdf7-... (Reactivation Leads / DE):
+  - Reset status to 'awaiting_manual' for rows where:
+      status = 'duplicate'
+      AND conversation_id IS NULL   ← т.е. вчера руками не отправляли
+      AND phone NOT IN (already-used-yesterday phones from 49 convs)
+      AND phone не повторяется внутри самой таблицы (оставить первую, остальные duplicate)
+  - Keep status = 'duplicate' для тех 49 номеров, которым вчера отправил руками.
+  - Keep status = 'invalid' для 61 битого номера.
+```
 
-**Frontend (новое/правки):**
-- `src/components/workspace/AssigneeFilter.tsx` — переиспользуемый селект (Inbox + Pipeline)
-- `src/components/workspace/AssignSetterPopover.tsx` — назначение в чате
-- `src/components/workspace/SettersSettings.tsx` — управление в Settings → Team
-- `src/pages/workspace/WorkspaceStats.tsx` — новая страница Stats
-- `src/lib/setters.ts` — fetch/mutate helpers
-- Правки: `WorkspaceSidebar.tsx` (новый пункт Stats), `Pipeline.tsx`, `WorkspaceOverview.tsx`/Inbox, `src/lib/inbox.ts` (фильтр по сеттеру в запросе)
+Ожидаемый результат: ~1258 лидов в `awaiting_manual`, 49 `duplicate` (вчерашние), 61 `invalid`. Эти 1258 dispatcher будет автоматически разносить по 50/день.
+
+### Step 2. Сохранить настройки пайплайна
+
+Применю напрямую SQL-апдейтом (то, что у тебя на скрине, но БД пока не видит):
+
+```text
+pipeline Reactivation Leads / DE:
+  auto_outreach_enabled = true
+  first_touch_template_group_id = <FE - Reactivaiton Leads - First message group_id>
+  default_sender_number_ids = [PramodElemOrgNum2, Yasim, Yasin]
+  sending_window = { start: '08:00', end: '20:00', timezone: 'Europe/Berlin' }
+  daily_cap = 50
+  expected_country_codes = ['49']
+  slack_channel_id = <текущий>
+```
+
+Параллельно гляну, почему UI-кнопка "Save changes" возможно не сработала (проверю в network logs после твоего следующего клика).
+
+### Step 3. Исправить semantics "50 доставленных/день"
+
+В `supabase/functions/lead-dispatch/index.ts`:
+- Убрать `failed` из счётчика дневного лимита → останется `(queued, sent, replied)`.
+- Считать день по `sending_window.timezone` пайплайна, а не по UTC.
+- Считать по `sent_at` (момент доставки), а не `scheduled_at`, чтобы зашедулинные на сейчас, но ещё не отправленные, не "съедали" квоту.
+
+Эффект: если за день 10 шт упали в `failed`, dispatcher возьмёт ещё 10 awaiting_manual, пока не наберёт 50 реальных `sent` в окне 08-20 Berlin.
+
+### Step 4. Визуализация для тебя (как понять что всё ок)
+
+Добавлю в Pipeline view (для FE workspace) маленький бейдж рядом с названием пайплайна:
+```text
+Reactivation Leads / DE  · Auto ON · 12/50 today · 1246 queued
+```
+- `12/50 today` — сколько уже доставлено сегодня в окне 08-20 Berlin / лимит.
+- `1246 queued` — сколько ещё ждёт в awaiting_manual.
+- Цвет: зелёный (running), жёлтый (paused), серый (auto off).
+
+Кликабельно → открывает Dispatch Control Panel с детализацией: split по номерам, последние отправки, ошибки.
 
 ---
 
-## Что НЕ делаем в этом круге
+## Что НЕ войдёт в этот заход
 
-- Авто round-robin распределение
-- Авто-назначение по стадии
-- Публичная share-ссылка на Stats без логина
-- SLA / алерты по медленным сеттерам
+- Изменения логики `google-sheets-sync` (чтобы предотвратить повтор гонки). Сейчас 1 раз почистим вручную, потом надо отдельно укрепить функцию (lock + idempotency).
+- Round-robin справедливость по сеттерам/номерам — там есть отдельный механизм allocation, не трогаем.
+- Уведомления в Slack про "10 failed подряд / health" — отдельная задача.
 
-Если ок — пишу миграцию и код за раз.
+---
+
+## Технические детали
+
+**Файлы, которые трону:**
+- `supabase/functions/lead-dispatch/index.ts` — поправить daily-cap query (строки ~217-225).
+- `src/components/workspace/PipelineList.tsx` (или эквивалент) — добавить бейдж со статусом.
+- Новый helper-хук `useLivePipelineStats(pipelineId)` в `src/lib/pipelines.ts` — `lead_imports` counters + realtime подписка.
+
+**SQL-операции (через insert-tool, не migration):**
+- 1 UPDATE по `lead_imports` (cleanup).
+- 1 UPDATE по `pipelines` (config).
+
+**Подтверждения которые нужны от тебя перед стартом:**
+1. **OK почистить 763 строки `duplicate` → `awaiting_manual`** (всё кроме 49 вчерашних номеров и 21 внутрисетового дубля)?
+2. **OK применить настройки пайплайна напрямую SQL** (как на твоём скрине), не дожидаясь пока ты сохранишь руками?
+3. **OK поменять semantics "50 = доставленных, не отправленных"** в коде dispatcher?

@@ -47,6 +47,14 @@ const dateAtTzToUTC = (dateStr: string, hhmm: string, tz: string, isEnd = false)
 };
 const dayKey = (ms: number, tz: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms));
+const startOfLocalDayUtc = (now: Date, tz: string): Date => {
+  try {
+    const key = dayKey(now.getTime(), tz); // "YYYY-MM-DD" in tz
+    return dateAtTzToUTC(key, "00:00", tz);
+  } catch {
+    const d = new Date(now); d.setUTCHours(0, 0, 0, 0); return d;
+  }
+};
 const exponentialGap = (ratePerSec: number) => {
   if (ratePerSec <= 0) return 0;
   const u = Math.max(1e-9, Math.random());
@@ -211,16 +219,20 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
     }).then(() => {}, () => {});
   }
 
-  // Daily cap check (per pipeline, per UTC day)
-  const todayStart = new Date(); todayStart.setUTCHours(0, 0, 0, 0);
+  // Daily cap check (per pipeline). Day boundary uses the pipeline's
+  // sending_window.timezone so "50/day" matches the client's local day, not
+  // UTC. We count only successfully-delivered rows (sent + replied) — failures
+  // and still-queued attempts do NOT consume quota, so 50 = 50 actually-sent.
+  const pipelineTz = (pipeline.sending_window as any)?.timezone || "UTC";
+  const todayStart = startOfLocalDayUtc(new Date(), pipelineTz);
   let availableCapacity = Number.MAX_SAFE_INTEGER;
   if (pipeline.daily_cap && pipeline.daily_cap > 0) {
     const { count } = await admin
       .from("lead_imports")
       .select("id", { count: "exact", head: true })
       .eq("pipeline_id", pipeline.id)
-      .in("status", ["queued", "sent", "replied", "failed"])
-      .gte("scheduled_at", todayStart.toISOString());
+      .in("status", ["sent", "replied"])
+      .gte("sent_at", todayStart.toISOString());
     availableCapacity = Math.max(0, pipeline.daily_cap - (count || 0));
   }
   if (availableCapacity === 0) {
