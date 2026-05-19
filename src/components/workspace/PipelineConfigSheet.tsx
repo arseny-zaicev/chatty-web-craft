@@ -1298,21 +1298,27 @@ export default function PipelineConfigSheet({
 
             <div className="grid grid-cols-4 gap-2">
               <div>
-                <Label className="text-xs">Delay (minutes)</Label>
+                <Label className="text-xs">
+                  Delay (minutes)
+                  <span className="ml-1 text-muted-foreground font-normal">
+                    {(() => { const m = parseInt(followUpDelayMin, 10); if (!m || m < 1) return ""; const h = Math.floor(m / 60); const r = m % 60; return `≈ ${h ? `${h}h` : ""}${r ? ` ${r}m` : (h ? "" : `${m}m`)}`; })()}
+                  </span>
+                </Label>
                 <Input
                   type="number"
                   min={1}
                   value={followUpDelayMin}
                   onChange={(e) => setFollowUpDelayMin(e.target.value)}
                   className="h-9"
+                  placeholder="480 = 8h"
                 />
               </div>
               <div>
-                <Label className="text-xs">Curfew start</Label>
+                <Label className="text-xs" title="Quiet hours begin. Follow-ups due during the quiet window wait until 'Resume at'.">Curfew start</Label>
                 <Input type="time" value={followUpCurfewEnd} onChange={(e) => setFollowUpCurfewEnd(e.target.value)} className="h-9" />
               </div>
               <div>
-                <Label className="text-xs">Resume at</Label>
+                <Label className="text-xs" title="Quiet hours end. Follow-ups queued overnight go out at this time.">Resume at</Label>
                 <Input type="time" value={followUpResumeAt} onChange={(e) => setFollowUpResumeAt(e.target.value)} className="h-9" />
               </div>
               <div>
