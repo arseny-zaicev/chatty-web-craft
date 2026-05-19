@@ -382,7 +382,10 @@ export default function PipelinesView({ workspaceId }: { workspaceId: string }) 
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!newName.trim()}>Create</Button>
+            <Button onClick={handleCreate} disabled={!newName.trim() || creating}>
+              {creating ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+              {copyFromId ? "Duplicate" : "Create"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
