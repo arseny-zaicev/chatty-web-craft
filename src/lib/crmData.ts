@@ -18,6 +18,24 @@ export const friendlySenderLabel = (n: Pick<WhatsAppNumber, "display_name" | "ph
   return `+${n.phone_number}`;
 };
 
+/** Operator-facing FULL sender identifier. Used in template inspection, launch
+ * sender picker, CRM/inbox headers — anywhere an operator may need to copy the
+ * exact number, Gupshup app id, or fleet label into another tool.
+ * Always shows full +E.164 phone; no truncation of app_id; only omits null fields. */
+export const senderFullLabel = (
+  n: Pick<WhatsAppNumber, "display_name" | "phone_number" | "provider_app_id" | "label"> | null | undefined,
+): string => {
+  if (!n) return "WhatsApp";
+  const parts: string[] = [`+${n.phone_number}`];
+  const d = n.display_name?.trim();
+  if (d) parts.push(d);
+  const app = n.provider_app_id?.trim();
+  if (app) parts.push(`app:${app}`);
+  const lbl = n.label?.trim();
+  if (lbl) parts.push(`fleet:${lbl}`);
+  return parts.join(" · ");
+};
+
 export type Conversation = Pick<
   Tables<"conversations">,
   | "id"
