@@ -44,6 +44,8 @@ const PERM_LABELS: Record<PermKey, string> = {
   perm_data: "Data",
   perm_materials: "Materials",
   perm_launch: "Launch campaigns",
+  perm_stats: "Stats",
+  perm_stats_all: "Stats - see whole team",
 };
 
 type WsPipeline = { id: string; name: string; color: string | null };
