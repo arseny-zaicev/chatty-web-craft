@@ -9,37 +9,37 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
 
 const ADMIN_EMAIL = "arseny@iskra.ae";
-const AUTH_TIMEOUT_MS = 15000;
-const AUTH_HEALTH_TIMEOUT_MS = 3000;
-const AUTH_HEALTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/health`;
+const AUTH_TIMEOUT_MS = 30000;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : String(error ?? "");
 
-const isNetworkFetchError = (error: unknown) =>
-  getErrorMessage(error).toLowerCase().includes("failed to fetch");
+const isRetriableAuthIssue = (error: unknown) => {
+  const message = getErrorMessage(error).toLowerCase();
+  return [
+    "failed to fetch",
+    "timed out",
+    "timeout",
+    "request_timeout",
+    "context deadline",
+    "couldn't start a new transaction",
+    "server error",
+    "500",
+    "504",
+  ].some((needle) => message.includes(needle));
+};
 
-const assertAuthReachable = async () => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AUTH_HEALTH_TIMEOUT_MS);
-
-  try {
-    await fetch(AUTH_HEALTH_URL, {
-      method: "GET",
-      headers: {
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      signal: controller.signal,
-      cache: "no-store",
+const clearLocalAuthState = () => {
+  const projectRef = new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split(".")[0];
+  const authKeyFragments = [`sb-${projectRef}-auth-token`, "supabase.auth.token"];
+  [localStorage, sessionStorage].forEach((storage) => {
+    authKeyFragments.forEach((fragment) => {
+      Object.keys(storage)
+        .filter((key) => key.includes(fragment))
+        .forEach((key) => storage.removeItem(key));
     });
-  } catch (error) {
-    throw new Error(
-      "Can't reach the auth server from this browser. Check VPN, ad blocker, DNS, or network, then retry.",
-    );
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  });
 };
 
 const withTimeout = async <T,>(promise: Promise<T>, message = "Login request timed out. Try again.") => {
@@ -57,13 +57,21 @@ const withTimeout = async <T,>(promise: Promise<T>, message = "Login request tim
 };
 
 const signInWithRetry = async (email: string, password: string) => {
-  try {
-    return await withTimeout(supabase.auth.signInWithPassword({ email, password }));
-  } catch (error) {
-    if (!isNetworkFetchError(error)) throw error;
-    await delay(800);
-    return withTimeout(supabase.auth.signInWithPassword({ email, password }));
+  let lastResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>> | null = null;
+
+  for (const waitMs of [0, 900, 2200]) {
+    if (waitMs) await delay(waitMs);
+
+    try {
+      const result = await withTimeout(supabase.auth.signInWithPassword({ email, password }));
+      if (!result.error || !isRetriableAuthIssue(result.error)) return result;
+      lastResult = result;
+    } catch (error) {
+      if (!isRetriableAuthIssue(error) || waitMs === 2200) throw error;
+    }
   }
+
+  return lastResult ?? withTimeout(supabase.auth.signInWithPassword({ email, password }));
 };
 
 const AdminAuth = () => {
@@ -92,7 +100,7 @@ const AdminAuth = () => {
     setIsLoading(true);
 
     try {
-      await assertAuthReachable();
+      clearLocalAuthState();
       const { data, error } = await signInWithRetry(normalizedEmail, password);
 
       if (error) {
