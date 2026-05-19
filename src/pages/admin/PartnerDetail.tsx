@@ -191,8 +191,11 @@ export default function PartnerDetail() {
           <Stat label="Restricted #" value={String(restrictedNums)} alert={restrictedNums > 0} />
           <Stat label="Blocked #" value={String(blockedNums)} alert={blockedNums > 0} />
           <Stat label="Sent today" value={(pm?.sent_today ?? 0).toLocaleString()} />
+          <Stat label="Delivered today" value={(pm?.delivered_today ?? 0).toLocaleString()} />
           <Stat label="Sent all-time" value={(pm?.sent_alltime ?? 0).toLocaleString()} />
+          <Stat label="Delivered all-time" value={(pm?.delivered_alltime ?? 0).toLocaleString()} />
           <Stat label="Sent 7d" value={sent7dTotal.toLocaleString()} />
+          <Stat label="Delivered 7d" value={delivered7dTotal.toLocaleString()} />
           <Stat label="Open payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
           <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
         </div>
