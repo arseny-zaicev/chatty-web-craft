@@ -691,6 +691,22 @@ export default function LaunchWizard() {
   // Back-compat alias kept for the UI block below.
   const staticQaIssues = staticQaWarnings;
 
+  // Name fallback keys for the first variable (idx 0). If a row has nothing
+  // for the mapped source but has e.g. payload.first_name, use that. This
+  // matches what the import edge function backfills and prevents the launch
+  // from rendering "Hey there there" just because derived_payload was empty.
+  const NAME_KEYS = ["first_name", "firstname", "given_name", "givenname", "name", "fullname", "full_name"];
+  const pickNameFromPayload = (payload: any): string => {
+    if (!payload || typeof payload !== "object") return "";
+    const lc: Record<string, any> = {};
+    for (const k of Object.keys(payload)) lc[k.toLowerCase()] = payload[k];
+    for (const k of NAME_KEYS) {
+      const v = String(lc[k] ?? "").trim();
+      if (v) return v.split(/\s+/)[0];
+    }
+    return "";
+  };
+
   // Hollow mapping: variable is mapped to a column but EVERY sampled DB row
   // resolves to empty -> the wizard says "mapped" but the launch will fall
   // back to "there". Block before that becomes "Hey there there".
@@ -699,13 +715,16 @@ export default function LaunchWizard() {
     const rows = sampleDbRowsQ.data ?? [];
     if (rows.length === 0) return [];
     const out: string[] = [];
-    for (const v of variableNames) {
+    for (let i = 0; i < variableNames.length; i++) {
+      const v = variableNames[i];
       const src = mapping[v];
       if (!src || src.startsWith("__static:")) continue;
       const allEmpty = rows.every((r) => {
         const fromPayload = String((r.payload as any)?.[src] ?? "").trim();
         const fromDerived = String((r.derived_payload as any)?.[src] ?? "").trim();
-        return !fromPayload && !fromDerived;
+        if (fromPayload || fromDerived) return false;
+        if (i === 0 && pickNameFromPayload(r.payload)) return false;
+        return true;
       });
       if (allEmpty) out.push(v);
     }
@@ -720,16 +739,18 @@ export default function LaunchWizard() {
       const rows = sampleDbRowsQ.data ?? [];
       return rows.map((r) => {
         const vals: Record<string, string> = {};
-        for (const v of variableNames) {
+        for (let i = 0; i < variableNames.length; i++) {
+          const v = variableNames[i];
           const src = mapping[v];
           let raw = "";
           if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
           else if (src) raw = String(r.payload?.[src] ?? r.derived_payload?.[src] ?? "");
-          // Fallback: if no mapping, try derived_payload["var_<v>"] (handles {{1}} -> var_1 etc.)
           if (!raw) {
             const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
             raw = String(r.derived_payload?.[dpKey] ?? r.derived_payload?.[v] ?? "");
           }
+          // First variable: also try common name fields on payload (first_name, etc.)
+          if (!raw && i === 0) raw = pickNameFromPayload(r.payload);
           vals[v] = raw;
         }
         // First variable falls back to "there" automatically, so don't flag it.
@@ -828,7 +849,8 @@ export default function LaunchWizard() {
         const built: Recipient[] = reserved.map((r) => {
           const vars: Record<string, string> = {};
           const dp: Record<string, string> = (r as any).derived_payload ?? {};
-          for (const v of variableNames) {
+          for (let i = 0; i < variableNames.length; i++) {
+            const v = variableNames[i];
             const src = mapping[v];
             let raw = "";
             if (src && src.startsWith("__static:")) raw = src.slice("__static:".length);
@@ -837,6 +859,7 @@ export default function LaunchWizard() {
               const dpKey = v.toLowerCase().startsWith("var_") ? v.toLowerCase() : `var_${v}`;
               raw = String(dp?.[dpKey] ?? dp?.[v] ?? "");
             }
+            if (!raw && i === 0) raw = pickNameFromPayload(r.payload);
             vars[v] = raw;
           }
           rowIdByPhone.set(r.phone, r.id);
