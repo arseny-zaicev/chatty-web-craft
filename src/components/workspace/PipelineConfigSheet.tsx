@@ -1254,6 +1254,7 @@ function SheetSourceConfig({
   const [phoneCol, setPhoneCol] = useState<string>(cfg.phone_column || "phone");
   const [nameCol, setNameCol] = useState<string>(cfg.name_column || "name");
   const [headerRow, setHeaderRow] = useState<string>(String(cfg.header_row ?? 1));
+  const [defaultCC, setDefaultCC] = useState<string>(String(cfg.default_country_code ?? ""));
 
   useEffect(() => {
     if (editing) {
@@ -1262,6 +1263,7 @@ function SheetSourceConfig({
       setPhoneCol(cfg.phone_column || "phone");
       setNameCol(cfg.name_column || "name");
       setHeaderRow(String(cfg.header_row ?? 1));
+      setDefaultCC(String(cfg.default_country_code ?? ""));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
