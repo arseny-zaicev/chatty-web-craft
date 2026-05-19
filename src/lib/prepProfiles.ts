@@ -301,12 +301,12 @@ OUTPUT (one JSON array; one object per valid row)
   }
 ]
 
-INSERT TARGET (PERSONAL Supabase project — NOT Lovable Cloud)
-  project ref: pdoddfoyrutakwemejpe
-  project url: https://pdoddfoyrutakwemejpe.supabase.co
-  table: public.audience_rows
-  workspace_id: ${ctx.workspaceId}
-  batch_id: ${ctx.batchId ?? "<paste the batch id from the Data page>"}
+INSERT TARGET REMINDER (same as banner at top)
+  project ref:     pdoddfoyrutakwemejpe   (PERSONAL — NOT Lovable Cloud xglfamaa...)
+  project url:     https://pdoddfoyrutakwemejpe.supabase.co
+  table:           public.audience_rows
+  workspace_id:    ${ctx.workspaceId}
+  batch_id:        ${ctx.batchId ?? "<paste the batch id from the Data page>"}
   prep_profile_id: ${profile.id}
 
   After inserting, tell the operator to open the Data page and click
@@ -315,11 +315,10 @@ INSERT TARGET (PERSONAL Supabase project — NOT Lovable Cloud)
   Do NOT insert directly into the Lovable Cloud project (xglfamaaotmwulglwcui).
 
 BEFORE INSERT (CRITICAL — prevents the 0-unused stub-batch problem)
-  If a batch with the same name "YYYY-MM-DD | COUNTRY | AUDIENCE" already
-  exists in Lovable Cloud for this workspace, REUSE its batch_id.
-  Never ask the operator to "create another batch" just because today's
-  preset is different — duplicates show up in the Launch wizard and
-  block the operator from selecting the real one.
+  Use the batch_id printed above as-is. Do NOT create a new batch and do
+  NOT ask the operator to create another one. Duplicate batches with the
+  same name show up in the Launch wizard and block the operator from
+  selecting the real populated batch.
 
 SANITY CHECK BEFORE INSERT
   For var_2 and above, count distinct values across all valid rows.
