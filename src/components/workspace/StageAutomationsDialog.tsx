@@ -10,7 +10,15 @@ import { Loader2, Plus, Trash2, Zap, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { Stage } from "@/lib/crmData";
 
-type TriggerKind = "button_click" | "inbound_keyword" | "inbound_any" | "follow_up_sent";
+type TriggerKind =
+  | "button_click"
+  | "inbound_keyword"
+  | "inbound_any"
+  | "follow_up_sent"
+  | "time_no_inbound"
+  | "time_in_stage"
+  | "conversation_assigned"
+  | "conversation_claimed_self";
 
 type Automation = {
   id: string;
@@ -20,6 +28,8 @@ type Automation = {
   is_active: boolean;
   workspace_id: string | null;
   pipeline_id: string | null;
+  delay_minutes: number | null;
+  source_stage_id: string | null;
 };
 
 type TemplateRow = {
@@ -72,13 +82,17 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
   // For button_click trigger
   const [pickedTemplateId, setPickedTemplateId] = useState<string>("");
   const [pickedButtonText, setPickedButtonText] = useState<string>("");
+  // For time-based + assignment triggers
+  const [delayValue, setDelayValue] = useState<string>("8");
+  const [delayUnit, setDelayUnit] = useState<"minutes" | "hours" | "days">("hours");
+  const [sourceStageId, setSourceStageId] = useState<string>("");
 
   const { data: rules = [], isLoading } = useQuery({
     queryKey: automationsKey(workspaceId, pipelineId),
     queryFn: async (): Promise<Automation[]> => {
       let q = supabase
         .from("stage_automations")
-        .select("id, trigger, trigger_value, target_stage_id, is_active, workspace_id, pipeline_id")
+        .select("id, trigger, trigger_value, target_stage_id, is_active, workspace_id, pipeline_id, delay_minutes, source_stage_id")
         .order("created_at", { ascending: false });
       if (workspaceId) q = q.eq("workspace_id", workspaceId);
       if (pipelineId) q = q.eq("pipeline_id", pipelineId);
@@ -103,7 +117,13 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
 
   const pickedTemplate = useMemo(() => templates.find((t) => t.id === pickedTemplateId), [templates, pickedTemplateId]);
 
-  const insertRule = async (params: { trigger: TriggerKind; value: string | null; targetStageId: string }) => {
+  const insertRule = async (params: {
+    trigger: TriggerKind;
+    value: string | null;
+    targetStageId: string;
+    delayMinutes?: number | null;
+    sourceStageId?: string | null;
+  }) => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) throw new Error("Not authenticated");
     const { error } = await supabase.from("stage_automations").insert({
@@ -113,15 +133,22 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
       trigger: params.trigger,
       trigger_value: params.value,
       target_stage_id: params.targetStageId,
+      delay_minutes: params.delayMinutes ?? null,
+      source_stage_id: params.sourceStageId ?? null,
       is_active: true,
     } as any);
     if (error) throw error;
   };
 
+  const isTimeBased = trigger === "time_no_inbound" || trigger === "time_in_stage";
+  const isAssignment = trigger === "conversation_assigned" || trigger === "conversation_claimed_self";
+
   const create = useMutation({
     mutationFn: async () => {
       if (!stageId) throw new Error("Pick a target stage");
       let value: string | null = null;
+      let delayMinutes: number | null = null;
+      let sourceStage: string | null = null;
       if (trigger === "inbound_keyword") {
         const list = triggerValue.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
         if (list.length === 0) throw new Error("Add at least one keyword");
@@ -130,8 +157,18 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
         const txt = pickedButtonText.trim();
         if (!txt) throw new Error("Pick a button from the template");
         value = txt;
+      } else if (isTimeBased) {
+        const n = Number(delayValue);
+        if (!Number.isFinite(n) || n <= 0) throw new Error("Enter a positive delay");
+        if (!sourceStageId) throw new Error("Pick the source stage to watch");
+        if (sourceStageId === stageId) throw new Error("Source and target stages must differ");
+        const mult = delayUnit === "minutes" ? 1 : delayUnit === "hours" ? 60 : 1440;
+        delayMinutes = Math.round(n * mult);
+        sourceStage = sourceStageId;
+      } else if (isAssignment) {
+        sourceStage = sourceStageId || null;
       }
-      await insertRule({ trigger, value, targetStageId: stageId });
+      await insertRule({ trigger, value, targetStageId: stageId, delayMinutes, sourceStageId: sourceStage });
     },
     onSuccess: () => {
       toast.success("Automation added");
@@ -178,10 +215,29 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
   });
 
   const stageById = new Map(stages.map((s) => [s.id, s]));
-  const triggerLabel = (t: TriggerKind) =>
-    t === "inbound_any" ? "Any inbound reply" : t === "inbound_keyword" ? "Keyword in reply" : t === "follow_up_sent" ? "Follow-up sent" : "Button click";
+  const triggerLabel = (t: TriggerKind) => {
+    switch (t) {
+      case "inbound_any": return "Any inbound reply";
+      case "inbound_keyword": return "Keyword in reply";
+      case "follow_up_sent": return "Follow-up sent";
+      case "button_click": return "Button click";
+      case "time_no_inbound": return "No reply for";
+      case "time_in_stage": return "Stuck in stage for";
+      case "conversation_assigned": return "Chat assigned to a setter";
+      case "conversation_claimed_self": return "Setter claimed chat themself";
+    }
+  };
+
+  const formatDelay = (mins: number) => {
+    if (mins % 1440 === 0) return `${mins / 1440}d`;
+    if (mins % 60 === 0) return `${mins / 60}h`;
+    return `${mins}m`;
+  };
 
   const formatValue = (r: Automation) => {
+    if (r.trigger === "time_no_inbound" || r.trigger === "time_in_stage") {
+      return r.delay_minutes ? formatDelay(r.delay_minutes) : null;
+    }
     if (!r.trigger_value) return null;
     if (r.trigger === "inbound_keyword") {
       const parts = r.trigger_value.split("|");
@@ -189,6 +245,11 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
       return `${parts.slice(0, 3).map((p) => `"${p}"`).join(", ")} +${parts.length - 3} more`;
     }
     return `"${r.trigger_value}"`;
+  };
+
+  const formatSourceStage = (r: Automation) => {
+    if (!r.source_stage_id) return null;
+    return stageById.get(r.source_stage_id)?.name ?? null;
   };
 
   return (
@@ -236,6 +297,10 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
                     <SelectItem value="inbound_keyword">Keyword in reply</SelectItem>
                     <SelectItem value="button_click">Button click</SelectItem>
                     <SelectItem value="follow_up_sent">Follow-up sent (auto)</SelectItem>
+                    <SelectItem value="time_no_inbound">No reply for X time</SelectItem>
+                    <SelectItem value="time_in_stage">Stuck in stage for X time</SelectItem>
+                    <SelectItem value="conversation_assigned">Chat assigned (any setter)</SelectItem>
+                    <SelectItem value="conversation_claimed_self">Setter claimed chat themself</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -262,6 +327,58 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
                   onChange={(e) => setTriggerValue(e.target.value)}
                   placeholder="e.g. interested, info, tell me more"
                 />
+              </div>
+            )}
+
+            {isTimeBased && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[11px] text-muted-foreground">Delay</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="h-9"
+                    value={delayValue}
+                    onChange={(e) => setDelayValue(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">Unit</label>
+                  <Select value={delayUnit} onValueChange={(v) => setDelayUnit(v as typeof delayUnit)}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="minutes">Minutes</SelectItem>
+                      <SelectItem value="hours">Hours</SelectItem>
+                      <SelectItem value="days">Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">While in stage</label>
+                  <Select value={sourceStageId} onValueChange={setSourceStageId}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Pick source stage" /></SelectTrigger>
+                    <SelectContent>
+                      {stages.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {isAssignment && (
+              <div>
+                <label className="text-[11px] text-muted-foreground">Only when card is in stage (optional)</label>
+                <Select value={sourceStageId || "__any__"} onValueChange={(v) => setSourceStageId(v === "__any__" ? "" : v)}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">Any stage</SelectItem>
+                    {stages.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
@@ -310,12 +427,14 @@ export default function StageAutomationsDialog({ open, onOpenChange, workspaceId
             {rules.map((r) => {
               const stage = stageById.get(r.target_stage_id);
               const valueLabel = formatValue(r);
+              const sourceLabel = formatSourceStage(r);
               return (
                 <div key={r.id} className="p-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">
                       {triggerLabel(r.trigger)}
                       {valueLabel && <span className="text-muted-foreground"> · {valueLabel}</span>}
+                      {sourceLabel && <span className="text-muted-foreground"> · in "{sourceLabel}"</span>}
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                       → moves to
