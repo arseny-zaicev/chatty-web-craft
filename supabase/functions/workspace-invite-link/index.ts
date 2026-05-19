@@ -181,6 +181,19 @@ Deno.serve(async (req) => {
       const memberPipes = linkPipes && linkPipes.length > 0 ? linkPipes : null;
 
       if (!existingMem) {
+        const defaultPerms = link.role === "manager"
+          ? {
+              perm_overview: true, perm_inbox: true, perm_pipeline: true,
+              perm_campaigns_view: true, perm_quick_replies_use: true,
+              perm_quick_replies_manage: true, perm_settings: true,
+              perm_data: true, perm_materials: true, perm_launch: true,
+            }
+          : {
+              perm_overview: false, perm_inbox: true, perm_pipeline: true,
+              perm_campaigns_view: false, perm_quick_replies_use: true,
+              perm_quick_replies_manage: false, perm_settings: false,
+              perm_data: false, perm_materials: false, perm_launch: false,
+            };
         const { error: insErr } = await admin
           .from("workspace_members")
           .insert({
@@ -190,6 +203,7 @@ Deno.serve(async (req) => {
             allowed_pipeline_ids: memberPipes,
             invited_at: new Date().toISOString(),
             joined_at: new Date().toISOString(),
+            ...defaultPerms,
           });
         if (insErr) return json({ error: insErr.message }, 500);
 
