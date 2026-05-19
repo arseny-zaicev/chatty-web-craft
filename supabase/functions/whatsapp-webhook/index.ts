@@ -181,6 +181,18 @@ async function handleInbound(payload: Record<string, unknown>) {
   const mediaUrl = (msgPayload.url as string) ?? null;
   const providerMessageId = (inner.id as string) ?? null;
 
+  const { data: inboundAudit } = await supabase
+    .from("whatsapp_message_events")
+    .insert({
+      event_type: "inbound_message_received",
+      provider_message_id: providerMessageId,
+      workspace_id: number.workspace_id,
+      whatsapp_number_id: number.id,
+      raw: payload,
+    })
+    .select("id")
+    .maybeSingle();
+
   // Upsert conversation
   const { data: existing } = await supabase
     .from("conversations")
@@ -319,7 +331,7 @@ async function handleInbound(payload: Record<string, unknown>) {
   }
 
   // Insert message
-  await supabase.from("messages").insert({
+  const { data: insertedMessage, error: insertMessageError } = await supabase.from("messages").insert({
     user_id: number.user_id,
     conversation_id: conversationId,
     direction: "inbound",
@@ -341,7 +353,38 @@ async function handleInbound(payload: Record<string, unknown>) {
       campaign_recipient_id: recipient?.id ?? null,
       campaign_id: recipient?.campaign_id ?? null,
     },
-  });
+  }).select("id").maybeSingle();
+
+  if (insertMessageError || !insertedMessage?.id) {
+    console.error("Failed to persist inbound message", {
+      error: insertMessageError,
+      conversationId,
+      providerMessageId,
+      source,
+      appName,
+    });
+    if (inboundAudit?.id) {
+      await supabase
+        .from("whatsapp_message_events")
+        .update({
+          event_type: "inbound_message_persist_failed",
+          error_message: insertMessageError?.message ?? "message insert returned no id",
+        })
+        .eq("id", inboundAudit.id);
+    }
+    return;
+  }
+
+  if (inboundAudit?.id) {
+    await supabase
+      .from("whatsapp_message_events")
+      .update({
+        event_type: "inbound_message_persisted",
+        message_id: insertedMessage.id,
+        campaign_recipient_id: recipient?.id ?? null,
+      })
+      .eq("id", inboundAudit.id);
+  }
 
   // Apply automations: inbound_any + inbound_keyword + button_click
   const triggers: string[] = ["inbound_any"];
