@@ -197,6 +197,7 @@ const App = () => (
               <Route path="/admin/finance/partners/:id" element={<RedirectPartnerDetail />} />
               <Route path="/admin/finance/runs/:id" element={<FinanceRunDetail />} />
               <Route path="/admin/reconciliation" element={<Reconciliation />} />
+              <Route path="/admin/webhook-dlq" element={<WebhookDLQ />} />
               <Route path="/tv/:token" element={<OpsLive />} />
               <Route path="/apply" element={<Apply />} />
               <Route path="/seller-leads/apply" element={<SellerLeadsApply />} />
