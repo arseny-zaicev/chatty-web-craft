@@ -293,7 +293,8 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
     const normalizedRows: any[] = [];
     const phonesToCheck = new Set<string>();
 
-    // 3. Validate + dedupe + import
+    // 3. Validate rows first, then dedupe in bulk. The old implementation did
+    // 2 database lookups + 1 insert per row, which timed out on 1k+ row sheets.
     for (let i = 0; i < newRows.length; i++) {
       const sheetRowNumber = startIdx + i + 1; // 1-based
       const row = newRows[i] ?? [];
@@ -320,7 +321,7 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       if (isTestLeadValue(phoneRaw) || isTestLeadValue(nameRawCell)) {
         rejected++;
         testLeadCount++;
-        await admin.from("lead_imports").insert({
+        leadImportRows.push({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
@@ -338,9 +339,9 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       const phoneResult = normalizePhone(phoneRaw, defaultCC);
       if (!phoneResult.ok) {
         rejected++;
-        if (phoneResult.status === "ambiguous") ambiguousCount++;
+        if (phoneResult.status === "needs_review") ambiguousCount++;
         else invalidCount++;
-        await admin.from("lead_imports").insert({
+        leadImportRows.push({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
@@ -355,18 +356,35 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
         continue;
       }
       const phone = phoneResult.phone;
+      normalizedRows.push({ sheetRowNumber, externalId, phone, name, payload });
+      phonesToCheck.add(phone);
+    }
 
-      // Owning-pipeline rule: a conversation sticks to the pipeline that
-      // created it. If the same phone re-appears via a source wired to a
-      // DIFFERENT pipeline, we record a duplicate row pointing at the existing
-      // conversation and surface "owned by <pipeline>" so the operator can see
-      // why it was not first-touched again.
-      const { data: existingConv } = await admin
+    const phones = Array.from(phonesToCheck);
+    const existingConvsByPhone = new Map<string, any>();
+    for (const part of chunks(phones, 400)) {
+      const { data } = await admin
         .from("conversations")
-        .select("id, pipeline_id")
+        .select("id, pipeline_id, contact_phone")
         .eq("workspace_id", source.workspace_id)
-        .eq("contact_phone", phone)
-        .maybeSingle();
+        .in("contact_phone", part);
+      for (const conv of data ?? []) existingConvsByPhone.set(conv.contact_phone, conv);
+    }
+
+    const existingLeadPhones = new Set<string>();
+    for (const part of chunks(phones, 400)) {
+      const { data } = await admin
+        .from("lead_imports")
+        .select("phone")
+        .eq("workspace_id", source.workspace_id)
+        .eq("pipeline_id", source.pipeline_id)
+        .in("phone", part);
+      for (const lead of data ?? []) existingLeadPhones.add(lead.phone);
+    }
+
+    const seenThisRun = new Set<string>();
+    for (const item of normalizedRows) {
+      const existingConv = existingConvsByPhone.get(item.phone);
       if (existingConv) {
         rejected++;
         duplicateCount++;
@@ -375,15 +393,15 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
           crossPipelineDuplicateCount++;
           errMsg = `phone owned by pipeline ${await ownerName(existingConv.pipeline_id)}`;
         }
-        await admin.from("lead_imports").insert({
+        leadImportRows.push({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
           source_connection_id: source.id,
-          external_id: externalId,
-          phone,
-          name,
-          payload,
+          external_id: item.externalId,
+          phone: item.phone,
+          name: item.name,
+          payload: item.payload,
           conversation_id: existingConv.id,
           status: "duplicate",
           error: errMsg,
@@ -395,49 +413,39 @@ async function runSync(admin: any, source: any): Promise<Record<string, unknown>
       // twice into the SAME pipeline on a re-sync before the conversation
       // exists). Scope is intentionally per-pipeline now — the old
       // workspace-wide check leaked across Warm/Reactivation pipelines.
-      const { data: existingLead } = await admin
-        .from("lead_imports")
-        .select("id")
-        .eq("workspace_id", source.workspace_id)
-        .eq("pipeline_id", source.pipeline_id)
-        .eq("phone", phone)
-        .limit(1)
-        .maybeSingle();
-      if (existingLead) {
+      if (existingLeadPhones.has(item.phone) || seenThisRun.has(item.phone)) {
         rejected++;
         duplicateCount++;
-        await admin.from("lead_imports").insert({
+        leadImportRows.push({
           workspace_id: source.workspace_id,
           pipeline_id: source.pipeline_id,
           batch_id: batch.id,
           source_connection_id: source.id,
-          external_id: externalId,
-          phone,
-          name,
-          payload,
+          external_id: item.externalId,
+          phone: item.phone,
+          name: item.name,
+          payload: item.payload,
           status: "duplicate",
         });
         continue;
       }
 
-      const { error: impErr } = await admin.from("lead_imports").insert({
+      leadImportRows.push({
         workspace_id: source.workspace_id,
         pipeline_id: source.pipeline_id,
         batch_id: batch.id,
         source_connection_id: source.id,
-        external_id: externalId,
-        phone,
-        name,
-        payload,
+        external_id: item.externalId,
+        phone: item.phone,
+        name: item.name,
+        payload: item.payload,
         status: initialStatus,
       });
-      if (impErr) {
-        rejected++;
-        invalidCount++;
-        continue;
-      }
       accepted++;
+      seenThisRun.add(item.phone);
     }
+
+    await bulkInsertLeadImports(admin, leadImportRows);
 
     // 4. Close batch + update source cursor
     await admin
