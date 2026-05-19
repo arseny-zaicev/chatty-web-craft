@@ -47,6 +47,14 @@ const dateAtTzToUTC = (dateStr: string, hhmm: string, tz: string, isEnd = false)
 };
 const dayKey = (ms: number, tz: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms));
+const startOfLocalDayUtc = (now: Date, tz: string): Date => {
+  try {
+    const key = dayKey(now.getTime(), tz); // "YYYY-MM-DD" in tz
+    return dateAtTzToUTC(key, "00:00", tz);
+  } catch {
+    const d = new Date(now); d.setUTCHours(0, 0, 0, 0); return d;
+  }
+};
 const exponentialGap = (ratePerSec: number) => {
   if (ratePerSec <= 0) return 0;
   const u = Math.max(1e-9, Math.random());
