@@ -334,16 +334,25 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   for (const nid of numberIds) {
     const nrow: any = numberRows.find((n: any) => n.id === nid);
     const dailyLimit = Math.max(1, Math.min(100000, Number(nrow?.daily_send_limit ?? 200)));
-    const cap = Math.max(1, Math.min(perNumberQuota, dailyLimit, _windowFitCapPre));
+    // Operator's per-campaign `per_number_quota` is AUTHORITATIVE.
+    // `daily_send_limit` (DB default 200) is a recommendation/warning surface
+    // only — it must NOT silently clamp the operator's explicit choice.
+    // FE/FM and other workspace-level hard ceilings are enforced separately
+    // via `workspace_send_guards` and remain intact.
+    const effectivePerNumber = perNumberQuota;
+    const cap = Math.max(1, Math.min(effectivePerNumber, _windowFitCapPre));
     perNumberCaps.set(nid, cap);
     capacityPerDay += cap;
     const sentToday = sentTodayByNumber.get(nid) ?? 0;
-    const remainingToday = Math.max(0, dailyLimit - sentToday);
+    const remainingToday = Math.max(0, effectivePerNumber - sentToday);
     capacityToday += Math.min(cap, remainingToday);
-    if (sentToday >= dailyLimit) {
-      capWarnings.push(`Number ${nrow?.phone_number || nid} already sent ${sentToday}/${dailyLimit} today — new recipients on this number would be deferred to tomorrow.`);
+    if (perNumberQuota > dailyLimit) {
+      capWarnings.push(`Number ${nrow?.phone_number || nid}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
+    }
+    if (sentToday >= effectivePerNumber) {
+      capWarnings.push(`Number ${nrow?.phone_number || nid} already sent ${sentToday}/${effectivePerNumber} today — new recipients on this number would be deferred to tomorrow.`);
     } else if (sentToday > 0 && cap > remainingToday) {
-      capWarnings.push(`Number ${nrow?.phone_number || nid} has ${remainingToday}/${dailyLimit} headroom today (already sent ${sentToday}); excess will spill to next day.`);
+      capWarnings.push(`Number ${nrow?.phone_number || nid} has ${remainingToday}/${effectivePerNumber} headroom today (already sent ${sentToday}); excess will spill to next day.`);
     }
   }
   const daysCount = Math.max(1, scheduledDates.length || 1);
