@@ -40,6 +40,7 @@ interface Snapshot {
   numbers: SnapshotNumber[];
   templates: Array<{ id: string; name: string; status: string }>;
   audience: { total: number; allocated: number };
+  capacity?: { per_day: number; today: number; total: number; truncated: number; days: number; per_number_caps: Record<string, number> };
   caps: { per_number_inflight: number; per_campaign_inflight: number; per_number_daily: number };
   window: { start: string; end: string; per_recipient_tz: boolean };
   blockers: string[];
