@@ -451,7 +451,7 @@ export default function FleetRegistry() {
             <Link
               to="/admin/number-ownership"
               className="text-[10px] px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/15"
-              title="Numbers without an active partner ownership row — payouts will skip these"
+              title="Numbers without an active partner ownership row - payouts will skip these"
             >
               ⚠ {ownershipUnassignedCount} without partner ownership
             </Link>
