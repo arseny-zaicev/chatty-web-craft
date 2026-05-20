@@ -912,6 +912,7 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   let sent = 0;
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
+  const skipCounters = { not_due: 0, over_budget: 0, pacing_gap: 0, claim_lost: 0, claimed: 0, paused: 0, backoff: 0, daily_cap: 0 };
 
   // ============= Per-number daily cap safety net =============
   // Pre-fetch daily_send_limit per number in this tick. Then count how many
