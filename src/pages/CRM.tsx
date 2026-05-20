@@ -26,6 +26,7 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { formatLocalTimeForPhone } from "@/lib/phoneTimezone";
 import ComposerInsertButton from "@/components/workspace/ComposerInsertButton";
+import QuickTemplatesButton from "@/components/workspace/QuickTemplatesButton";
 import AssigneeSelect from "@/components/workspace/AssigneeSelect";
 
 import { fetchWorkspaceMembers, memberDisplayName, workspaceMembersKey } from "@/lib/workspaceMembers";
