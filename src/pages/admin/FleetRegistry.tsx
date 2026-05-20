@@ -447,6 +447,15 @@ export default function FleetRegistry() {
               {unassignedCount} unassigned
             </Badge>
           )}
+          {ownershipUnassignedCount > 0 && (
+            <Link
+              to="/admin/number-ownership"
+              className="text-[10px] px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/15"
+              title="Numbers without an active partner ownership row — payouts will skip these"
+            >
+              ⚠ {ownershipUnassignedCount} without partner ownership
+            </Link>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
