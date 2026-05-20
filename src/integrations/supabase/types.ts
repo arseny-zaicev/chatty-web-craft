@@ -3576,6 +3576,16 @@ export type Database = {
           },
         ]
       }
+      inbound_health_gauge: {
+        Row: {
+          last_sweep_at: string | null
+          last_webhook_at: string | null
+          oldest_pending_age_min: number | null
+          pending_failures: number | null
+          stuck_received: number | null
+        }
+        Relationships: []
+      }
       v_metrics_alltime: {
         Row: {
           campaign_id: string | null
