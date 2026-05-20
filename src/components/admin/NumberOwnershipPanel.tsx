@@ -114,11 +114,11 @@ export function NumberOwnershipPanel({
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             )}
             {!isLoading && !rows?.length && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                   No numbers assigned to this partner. Use "+ Assign numbers" above.
                 </TableCell>
               </TableRow>
@@ -127,6 +127,17 @@ export function NumberOwnershipPanel({
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-xs">+{r.number?.phone_number || "?"}</TableCell>
                 <TableCell className="text-xs">{r.number?.display_name || "—"}</TableCell>
+                <TableCell>
+                  <NumberBmPicker
+                    numberId={r.whatsapp_number_id}
+                    currentBmId={r.number?.business_manager_id ?? null}
+                    workspaceId={r.number?.workspace_id ?? null}
+                    partnerId={partnerId}
+                    partnerDefaultRate={partnerDefaultRate}
+                    partnerRole={r.role}
+                    onChanged={invalidateAll}
+                  />
+                </TableCell>
                 <TableCell>
                   <Select
                     value={r.role}
