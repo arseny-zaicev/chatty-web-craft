@@ -13,6 +13,7 @@ import { Plus, History, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { InlineRateEditor } from "./InlineRateEditor";
+import { NumberBmPicker } from "./NumberBmPicker";
 
 const ROLES = ["provider", "referral", "manager"] as const;
 
