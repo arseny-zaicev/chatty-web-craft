@@ -209,6 +209,7 @@ const App = () => (
               <Route path="/admin/assistant" element={<OpsAssistant />} />
               <Route path="/admin/partners" element={<Partners />} />
               <Route path="/admin/partners/:id" element={<PartnerDetail />} />
+              <Route path="/admin/number-ownership" element={<NumberOwnership />} />
               <Route path="/admin/finance/partners" element={<Navigate to="/admin/partners" replace />} />
               <Route path="/admin/finance/partners/:id" element={<RedirectPartnerDetail />} />
               <Route path="/admin/finance/runs/:id" element={<FinanceRunDetail />} />
