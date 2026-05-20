@@ -276,12 +276,14 @@ Deno.serve(cronGuard("slack-dispatch", async (req) => {
           totals: { total: totalSum, sent: sentSum, failed: failedSum },
           parts, payload: evPayload,
         });
-        // Client channels only receive the end-of-day digest. Lifecycle noise
-        // (launched / scheduled / paused / resumed / completed / cancelled /
-        // failed) stays in OPS — clients don't need a ping for every batch we
-        // approve and send during the day.
+        // Clients see when a campaign starts (launched now or scheduled for
+        // later) and when it finishes (per-day completion + final completion).
+        // Internal noise (paused / resumed / cancelled / failed) stays in OPS.
         const CLIENT_VISIBLE_CAMPAIGN_EVENTS = new Set<string>([
+          "campaign_launched",
+          "campaign_scheduled",
           "campaign_day_completed",
+          "campaign_completed",
         ]);
         const shouldNotifyClient = CLIENT_VISIBLE_CAMPAIGN_EVENTS.has(ev.event_type);
 
