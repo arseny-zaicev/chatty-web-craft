@@ -369,6 +369,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   }
 
   const perNumberCaps = new Map<string, number>(Object.entries(contract.perNumberCaps));
+  const daysCount = contract.daysCount;
   const capacityPerDay = contract.capacityPerDay;
   const capacityToday = contract.capacityToday;
   const allocatedCapacity = contract.allocatedCapacity;
