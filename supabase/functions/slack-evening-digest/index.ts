@@ -21,24 +21,19 @@ Deno.serve(cronGuard("slack-evening-digest", async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { startUtc, endUtc } = todayUaeRangeUtc();
 
-  // Aggregate today's recipients by campaign
+  // Find campaigns that had any activity today (via recipients sent_at) — keeps
+  // the selector cheap, then read canonical truth for the actual day numbers.
   const { data: recips } = await supabase
     .from("campaign_recipients")
-    .select("campaign_id, status, sent_at, workspace_id")
+    .select("campaign_id")
     .gte("sent_at", startUtc)
     .lt("sent_at", endUtc)
     .in("status", ["sent", "failed", "delivered", "read"])
     .limit(50000);
 
-  const byCampaign = new Map<string, { sent: number; failed: number }>();
-  for (const r of recips || []) {
-    if (!r.campaign_id) continue;
-    const e = byCampaign.get(r.campaign_id) || { sent: 0, failed: 0 };
-    if (r.status === "failed") e.failed++; else e.sent++;
-    byCampaign.set(r.campaign_id, e);
-  }
+  const ids = Array.from(new Set((recips ?? []).map((r) => r.campaign_id).filter(Boolean) as string[]));
 
-  if (byCampaign.size === 0) {
+  if (ids.length === 0) {
     if (OPS_CAMPAIGNS) {
       const msg = buildDigestBlocks({ kind: "evening", ws: null, scope: "ops", rows: [], totals: { campaigns: 0, volume: 0, sent: 0, failed: 0 } });
       try { await postSlack(OPS_CAMPAIGNS, msg); } catch (e) { console.error(e); }
@@ -46,10 +41,20 @@ Deno.serve(cronGuard("slack-evening-digest", async (req) => {
     return new Response(JSON.stringify({ ok: true, empty: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const ids = Array.from(byCampaign.keys());
+  // Canonical truth for today's window
+  const { data: truth } = await supabase.rpc("campaign_metrics_for_range", {
+    p_campaign_ids: ids,
+    _from: startUtc,
+    _to: endUtc,
+  });
+  const byCampaign = new Map<string, { sent: number; failed: number }>();
+  for (const t of (truth ?? []) as Array<{ campaign_id: string; sent: number; failed: number }>) {
+    byCampaign.set(t.campaign_id, { sent: t.sent ?? 0, failed: t.failed ?? 0 });
+  }
+
   const { data: campaigns } = await supabase
     .from("campaigns")
-    .select("id, name, total_recipients, sent_count, failed_count, workspaces(id, name, slug, internal_code, slack_channel_id)")
+    .select("id, name, total_recipients, workspaces(id, name, slug, internal_code, slack_channel_id)")
     .in("id", ids);
 
   const rowsByWs = new Map<string, any[]>();
