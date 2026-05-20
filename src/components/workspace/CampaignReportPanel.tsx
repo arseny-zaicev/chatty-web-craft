@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { fetchCampaignTruth, sumCampaignTruth } from "@/lib/metrics";
 import {
   ChartContainer,
   ChartTooltip,
