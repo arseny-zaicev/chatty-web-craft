@@ -62,8 +62,9 @@ const newStats = (): Stats => ({ sent: 0, delivered: 0, read: 0, failed: 0, last
 const fetchAnalytics = async (period: Period) => {
   const periodDays = parseInt(period);
   const sinceIso = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString();
+  const untilIso = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
 
-  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }, { data: replyStats, error: rErr }] =
+  const [{ data: events, error: eErr }, { data: numbers }, { data: workspaces }, { data: campaigns }, { data: replyStats, error: rErr }, { data: canonicalRows, error: mErr }] =
     await Promise.all([
       supabase.from("whatsapp_message_events")
         .select("whatsapp_number_id, event_type, error_code, error_message, received_at, campaign_recipient_id")
@@ -72,14 +73,21 @@ const fetchAnalytics = async (period: Period) => {
         .limit(50000),
       supabase.from("whatsapp_numbers").select("id, phone_number, display_name, label, status, workspace_id, country_code, daily_send_limit"),
       supabase.from("workspaces").select("id, name, delivered_rate_usd"),
-      supabase.from("campaigns").select("id, name, status, total_recipients, sent_count, failed_count, created_at, workspace_id")
+      // Note: total_recipients still comes from row for "how many in audience"
+      // (intent), but sent/failed come from canonical event-based RPC below.
+      supabase.from("campaigns").select("id, name, status, total_recipients, created_at, workspace_id")
         .gte("created_at", sinceIso)
         .order("created_at", { ascending: false }),
       supabase.rpc("get_fleet_reply_stats", { _since: sinceIso }),
+      // CANONICAL truth for sent/delivered/failed per (workspace, number),
+      // event-based & dedup'd by provider_message_id. Single source so the
+      // fleet KPI strip reconciles with workspace KPIs and partner stats.
+      (supabase.rpc as any)("metrics_for_range", { _workspace_id: null, _from: sinceIso, _to: untilIso, _source: "all" }),
     ]);
 
   if (eErr) throw eErr;
   if (rErr) console.warn("reply stats error", rErr);
+  if (mErr) console.warn("metrics_for_range error", mErr);
 
   // Reply stats per number
   const replyByNumber = new Map<string, { sent_convos: number; replied_convos: number }>();
@@ -90,19 +98,37 @@ const fetchAnalytics = async (period: Period) => {
   const wsMap = new Map((workspaces ?? []).map((w) => [w.id, { name: w.name, rate: Number(w.delivered_rate_usd ?? 0) }]));
   const numberToWs = new Map((numbers ?? []).map((n) => [n.id, n.workspace_id]));
 
-  // Per-number aggregation
+  // Canonical per-number truth (sent/delivered/failed)
+  const canonicalByNumber = new Map<string, { sent: number; delivered: number; failed: number }>();
+  for (const r of (canonicalRows ?? []) as Array<{ whatsapp_number_id: string | null; sent: number; delivered: number; failed: number }>) {
+    if (!r.whatsapp_number_id) continue;
+    const cur = canonicalByNumber.get(r.whatsapp_number_id) ?? { sent: 0, delivered: 0, failed: 0 };
+    cur.sent += Number(r.sent ?? 0);
+    cur.delivered += Number(r.delivered ?? 0);
+    cur.failed += Number(r.failed ?? 0);
+    canonicalByNumber.set(r.whatsapp_number_id, cur);
+  }
+
+  // Read count + lastSent + hour heatmap still come from raw events; sent/
+  // delivered/failed are *overwritten* from canonical below to prevent the
+  // double-count we used to see when status flipped multiple times.
   const perNumber = new Map<string, Stats>();
   for (const e of (events ?? []) as EventRow[]) {
     if (!e.whatsapp_number_id) continue;
     const cur = perNumber.get(e.whatsapp_number_id) ?? newStats();
     if (e.event_type === "sent" || e.event_type === "enqueued") {
-      cur.sent += 1;
       if (!cur.lastSent || e.received_at > cur.lastSent) cur.lastSent = e.received_at;
     }
-    if (e.event_type === "delivered") cur.delivered += 1;
     if (e.event_type === "read") cur.read += 1;
-    if (e.event_type === "failed" || e.event_type === "error") cur.failed += 1;
     perNumber.set(e.whatsapp_number_id, cur);
+  }
+  // Overwrite sent/delivered/failed with canonical, dedup'd values.
+  for (const [nid, c] of canonicalByNumber) {
+    const cur = perNumber.get(nid) ?? newStats();
+    cur.sent = c.sent;
+    cur.delivered = c.delivered;
+    cur.failed = c.failed;
+    perNumber.set(nid, cur);
   }
 
   const numberRows = (numbers ?? []).map((n) => {
@@ -149,20 +175,21 @@ const fetchAnalytics = async (period: Period) => {
   }
   const clientRows = Array.from(perClient.values()).sort((a, b) => (b.delivered * b.rate) - (a.delivered * a.rate));
 
-  // Totals
-  let totSent = 0, totDelivered = 0, totRead = 0, totFailed = 0, totRevenue = 0;
+  // Totals — derived from canonical per-number truth (not raw events) so the
+  // KPI strip matches Per-client and Per-number tables exactly.
+  let totSent = 0, totDelivered = 0, totFailed = 0, totRevenue = 0;
+  for (const n of numberRows) {
+    totSent += n.sent;
+    totDelivered += n.delivered;
+    totFailed += n.failed;
+    const rate = n.workspace_id ? (wsMap.get(n.workspace_id)?.rate ?? 0) : 0;
+    totRevenue += n.delivered * rate;
+  }
+  // "Read" is a vanity metric and not part of the canonical sent/delivered/
+  // failed contract — keep it from raw events.
+  let totRead = 0;
   for (const e of (events ?? []) as EventRow[]) {
-    if (e.event_type === "sent" || e.event_type === "enqueued") totSent += 1;
-    else if (e.event_type === "delivered") {
-      totDelivered += 1;
-      const wsId = e.whatsapp_number_id ? numberToWs.get(e.whatsapp_number_id) : null;
-      if (wsId) {
-        const rate = wsMap.get(wsId)?.rate ?? 0;
-        totRevenue += rate;
-      }
-    }
-    else if (e.event_type === "read") totRead += 1;
-    else if (e.event_type === "failed" || e.event_type === "error") totFailed += 1;
+    if (e.event_type === "read") totRead += 1;
   }
 
   // Total reply stats (real conversations-based)
@@ -201,7 +228,7 @@ const fetchAnalytics = async (period: Period) => {
   }
   const topErrors = Array.from(errorMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([msg, count]) => ({ msg, count }));
 
-  // Hour heatmap
+  // Hour heatmap (activity, not truth)
   const hourBuckets = new Array(24).fill(0);
   for (const e of (events ?? []) as EventRow[]) {
     if (e.event_type !== "sent" && e.event_type !== "enqueued") continue;
@@ -209,17 +236,37 @@ const fetchAnalytics = async (period: Period) => {
     hourBuckets[h] += 1;
   }
 
-  const campaignRows: CampaignRow[] = (campaigns ?? []).map((c) => ({
-    id: c.id,
-    name: c.name,
-    status: c.status,
-    total_recipients: c.total_recipients,
-    sent_count: c.sent_count,
-    failed_count: c.failed_count,
-    created_at: c.created_at,
-    workspace_name: wsMap.get(c.workspace_id)?.name ?? "—",
-    reply_count: 0,
-  }));
+  // Campaign performance — canonical truth via campaign_metrics_for_range so
+  // sent/failed do not drift from CampaignReportPanel / WorkspaceCampaigns.
+  const campaignIds = (campaigns ?? []).map((c) => c.id);
+  let campaignTruth = new Map<string, { sent: number; delivered: number; failed: number; replied: number }>();
+  if (campaignIds.length) {
+    const { data: ctRows } = await (supabase.rpc as any)("campaign_metrics_for_range", {
+      p_campaign_ids: campaignIds,
+      _from: "1970-01-01T00:00:00Z",
+      _to: untilIso,
+    });
+    (ctRows ?? []).forEach((r: any) => {
+      campaignTruth.set(r.campaign_id, {
+        sent: Number(r.sent ?? 0), delivered: Number(r.delivered ?? 0),
+        failed: Number(r.failed ?? 0), replied: Number(r.replied ?? 0),
+      });
+    });
+  }
+  const campaignRows: CampaignRow[] = (campaigns ?? []).map((c) => {
+    const ct = campaignTruth.get(c.id);
+    return {
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      total_recipients: c.total_recipients,
+      sent_count: ct?.sent ?? 0,
+      failed_count: ct?.failed ?? 0,
+      created_at: c.created_at,
+      workspace_name: wsMap.get(c.workspace_id)?.name ?? "—",
+      reply_count: ct?.replied ?? 0,
+    };
+  });
 
   return {
     totals: { sent: totSent, delivered: totDelivered, read: totRead, failed: totFailed, activeNumbers, capacity: totalCap, revenue: totRevenue, sent_convos: totSentConvos, replied_convos: totRepliedConvos },
@@ -231,6 +278,7 @@ const fetchAnalytics = async (period: Period) => {
     fleetBreakdown,
   };
 };
+
 
 const fmtMoney = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
