@@ -245,7 +245,7 @@ export default function DispatchControlPanel({ prepareInput, onSnapshotChange }:
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="rounded-md border p-2">
               <div className="text-muted-foreground text-[10px] uppercase">Selected audience</div>
               <div className="font-medium">{snapshot.audience.total.toLocaleString()}</div>
@@ -254,7 +254,17 @@ export default function DispatchControlPanel({ prepareInput, onSnapshotChange }:
               <div className="text-muted-foreground text-[10px] uppercase">Allocated</div>
               <div className="font-medium">{snapshot.audience.allocated.toLocaleString()}</div>
             </div>
+            <div className="rounded-md border p-2">
+              <div className="text-muted-foreground text-[10px] uppercase">Capacity ({snapshot.capacity?.days ?? 1}d)</div>
+              <div className="font-medium">
+                {(snapshot.capacity?.total ?? snapshot.audience.allocated).toLocaleString()}
+                {snapshot.capacity && snapshot.capacity.truncated > 0 && (
+                  <span className="ml-1 text-[10px] text-rose-600">−{snapshot.capacity.truncated.toLocaleString()} truncated</span>
+                )}
+              </div>
+            </div>
           </div>
+
 
           <div>
             <div className="text-[11px] text-muted-foreground mb-1">Allocation per number</div>
