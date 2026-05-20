@@ -71,7 +71,7 @@ export function NumberOwnershipPanel({
       const ids = list.map(r => r.whatsapp_number_id);
       const { data: nums } = await supabase
         .from("whatsapp_numbers")
-        .select("id, phone_number, display_name, workspace_id, status")
+        .select("id, phone_number, display_name, workspace_id, status, business_manager_id")
         .in("id", ids);
       const byId = new Map((nums ?? []).map((n: any) => [n.id, n]));
       return list.map(r => ({ ...r, number: byId.get(r.whatsapp_number_id) })) as Ownership[];
