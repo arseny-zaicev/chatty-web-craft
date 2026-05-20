@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { baseName as splitBase } from "./campaigns";
+import { fetchCampaignTruth, sumCampaignTruth } from "./metrics";
 
 const startOfDayIso = () => {
   const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
