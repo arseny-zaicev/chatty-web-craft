@@ -64,7 +64,7 @@ Deno.serve(cronGuard("slack-evening-digest", async (req) => {
   for (const c of campaigns || []) {
     const ws = (c as any).workspaces;
     if (!ws) continue;
-    const day = byCampaign.get(c.id)!;
+    const day = byCampaign.get(c.id) ?? { sent: 0, failed: 0 };
     totalSent += day.sent; totalFailed += day.failed;
     const row = {
       workspace_name: brandTag(ws.name, ws.internal_code),
