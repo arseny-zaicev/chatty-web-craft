@@ -2092,6 +2092,7 @@ export type Database = {
       }
       pipeline_stages: {
         Row: {
+          assigned_setter_id: string | null
           color: string
           created_at: string
           id: string
@@ -2104,6 +2105,7 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          assigned_setter_id?: string | null
           color?: string
           created_at?: string
           id?: string
@@ -2116,6 +2118,7 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          assigned_setter_id?: string | null
           color?: string
           created_at?: string
           id?: string
@@ -2127,7 +2130,15 @@ export type Database = {
           user_id?: string
           workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_stages_assigned_setter_id_fkey"
+            columns: ["assigned_setter_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_setters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pipeline_webhook_deliveries: {
         Row: {

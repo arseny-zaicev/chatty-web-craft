@@ -1,97 +1,84 @@
-## Цель
+## Goal
 
-Закрыть три пункта по партнёрской системе, опираясь на канонический слой `number_ownership` + `v_payout_basis`. Главный фокус — удобство: назначить/переназначить номер на партнёра, поменять rate в любой момент, переименовать BM — всё в 1-2 клика, без миграций или ручного SQL.
+When a setter is assigned to a conversation (`conversations.assigned_setter_id`), automatically move that conversation's deal into the matching "Aktive Chats {Setter}" stage in the same pipeline. Mapping is explicit (per-stage dropdown), so it works for any client and survives renames.
 
----
+## Schema change
 
-## 1. UI для `number_ownership` (главный пункт)
+Add one nullable column:
 
-### A. На странице `PartnerDetail` — новая вкладка **"Numbers (truth)"**
+```
+ALTER TABLE public.pipeline_stages
+  ADD COLUMN assigned_setter_id uuid
+    REFERENCES public.workspace_setters(id) ON DELETE SET NULL;
 
-Это то, по чему реально идут выплаты. Отдельно от BMs (BMs остаются как операционная группировка).
+CREATE INDEX pipeline_stages_assigned_setter_idx
+  ON public.pipeline_stages(assigned_setter_id)
+  WHERE assigned_setter_id IS NOT NULL;
+```
 
-Таблица текущих активных назначений на этого партнёра (`effective_to IS NULL`):
+Sanity check at write time (trigger): if a row sets `assigned_setter_id`, the setter must belong to the same `workspace_id` as the stage. Reject otherwise.
 
-| Номер | Display name | Role | Rate $/deliv | Since | Workspace | Действия |
-|---|---|---|---|---|---|---|
-| +9715... | ISKRA-01 | provider | `0.0050` (inline editable) | Nov 1 | ISKRA | History · Unassign |
+## Trigger: conversation → deal stage
 
-- **Inline edit rate** — клик по rate → input → save → создаётся новая запись в `number_ownership` (закрываем старую через `effective_to=now()`, вставляем новую). История сохраняется.
-- **Inline edit role** — `provider` / `referral` / `manager` — то же самое: закрытие старой записи, новая.
-- **History кнопка** — открывает диалог со всеми предыдущими записями `number_ownership` для номера (от/до/rate/role/notes).
-- **Unassign** — закрывает текущую запись (`effective_to=now()`), номер уходит в пул "unassigned".
+`AFTER UPDATE OF assigned_setter_id ON public.conversations` (and `AFTER INSERT` for completeness). When `NEW.assigned_setter_id IS DISTINCT FROM OLD.assigned_setter_id` and not null:
 
-Кнопка **"+ Assign numbers"** — открывает диалог:
-- Список доступных номеров (по умолчанию unassigned + поиск по phone/name)
-- Чекбоксы для bulk-выбора
-- Выбор role + rate (применится ко всем)
-- На сохранение — для каждого: закрыть предыдущее активное назначение (если есть на другого партнёра), создать новое.
+1. Look up the target stage:
+   ```sql
+   SELECT id FROM pipeline_stages
+   WHERE pipeline_id = NEW.pipeline_id
+     AND assigned_setter_id = NEW.assigned_setter_id
+   LIMIT 1;
+   ```
+2. If found, update the deal linked to this conversation:
+   ```sql
+   UPDATE deals
+      SET stage_id = <target>, updated_at = now()
+    WHERE conversation_id = NEW.id
+      AND stage_id <> <target>;
+   ```
+3. If no matching stage, do nothing silently (so pipelines without per-setter columns are unaffected).
 
-### B. Глобальный экран `/admin/number-ownership`
+The trigger is `SECURITY DEFINER` so it works regardless of which role updated the conversation (webhook, cron, UI).
 
-Линк в Admin sidebar. Два таба:
+No backfill on schema migration. After the admin maps the three FB Media stages in the UI, a one-shot `UPDATE conversations SET assigned_setter_id = assigned_setter_id WHERE assigned_setter_id IS NOT NULL AND pipeline_id IN (...)` re-fires the trigger to align existing chats. I'll run that as a data update once mapping is saved.
 
-1. **Unassigned (17)** — все номера без активной записи. Bulk select → "Assign to partner" (партнёр + role + rate).
-2. **All assignments** — таблица всех активных, group by partner, с фильтром/поиском. Inline edit как выше.
+## UI: PipelineConfigSheet stage editor
 
-### C. Inline rename BM на странице PartnerDetail
+In `src/components/workspace/PipelineConfigSheet.tsx`, in the stage row, add a small "Setter" dropdown next to the existing name/color controls:
 
-В существующей таблице BMs — поле названия BM становится inline-editable (клик → input → enter saves). UPDATE `business_managers.name`. Также добавить inline edit для `meta_bm_id`.
+- Source: `fetchSetters(workspace_id)` filtered to active.
+- Options: "— none —" + each setter's `display_name`.
+- Writes `pipeline_stages.assigned_setter_id` directly.
+- Visual hint: when a stage has a setter mapped, show a tiny avatar/initial chip in the stage header on the Pipeline board too (so it's visible without opening config).
 
-### D. Inline edit BM-assignment rate
+Validation in UI: a setter can be mapped to at most one stage per pipeline. If user picks a setter already used in this pipeline, swap it (clear the previous stage's mapping) and toast "Moved Andre's column from X to Y".
 
-В той же таблице BMs добавить колонку "Rate" с inline editor. Это правит `bm_partner_assignments.rate_usd` через "закрыть старую → вставить новую" чтобы не ломать историю выплат за прошлые периоды.
+## What does NOT change
 
----
+- `assigned_setter_id` selection UI (`SetterAssignSelect`) stays as-is.
+- Manual drag of a card between columns still works; the trigger only fires on `assigned_setter_id` change, not on stage change.
+- Stages without `assigned_setter_id` (e.g. "No Reply", "Reply") behave exactly like before.
 
-## 2. Partner Payout screen (`v_payout_basis`)
+## Edge cases handled
 
-На той же `PartnerDetail` добавить вкладку **"Earnings (live)"** — читает напрямую из канонического truth-слоя, не зависит от runs/PDF.
+- Deal doesn't exist for the conversation yet → no-op (trigger skips silently).
+- Setter unassigned (`NULL`) → don't touch the deal (leaves it where the user put it).
+- Conversation moved to a different pipeline → trigger uses `NEW.pipeline_id`, so it looks up the stage in the right pipeline.
+- Setter deleted → ON DELETE SET NULL clears the mapping; future assignments to that pipeline won't move anything.
 
-UI:
-- Range picker (default last 7 days)
-- Сводная карточка: Total delivered, Total $ earned, # of numbers active
-- Таблица per-day per-number:
+## Files touched
 
-| Day | Number | Delivered | Rate | Earned |
-|---|---|---|---|---|
-| 2026-05-19 | +9715... | 245 | 0.005 | $1.225 |
+- New migration: add column + trigger + workspace-consistency check.
+- `src/components/workspace/PipelineConfigSheet.tsx`: setter dropdown per stage row.
+- `src/lib/pipelines.ts` (or inline in the sheet): tiny helper `setStageSetter(stageId, setterId)`.
+- `src/pages/Pipeline.tsx`: optional small avatar chip on stage header.
+- `src/integrations/supabase/types.ts`: regenerated automatically.
+- Data update after mapping is saved: re-trigger `assigned_setter_id` to align FB Media's existing conversations.
 
-- Footer total в USD.
+## Order of operations
 
-Запрос: join `v_payout_basis` с активным на момент дня `number_ownership` (используем `effective_from <= day AND (effective_to IS NULL OR effective_to > day)`), фильтр по `partner_id`.
-
-Это даёт партнёру (и админу) точный preview без генерации payout_run.
-
----
-
-## 3. Backfill 1,396 "unknown" events
-
-Это события `whatsapp_message_events` где `whatsapp_number_id IS NULL` — они выпадают из `v_payout_basis`. Варианты:
-
-- **Inbox-only** (рекомендация): пометить `source='inbox'` или специальный флаг, чтобы они навсегда не попали в payout. Это безопасно и обратимо.
-- **Backfill из messages.metadata** — если у нас есть provider_message_id, попробовать восстановить `whatsapp_number_id` через conversations/messages. Сделать один SQL-update.
-
-План: одной миграцией добавить попытку backfill из `messages` join `conversations.whatsapp_number_id`. То что не удалось — оставить как есть (не попадают в выплаты по дизайну view).
-
----
-
-## Технические детали
-
-- Все mutations идут через `supabase.from('number_ownership').insert/update` (admin RLS уже стоит).
-- История неизменяемая — никогда не UPDATE rate напрямую, всегда close + insert новой записи (через RPC `set_number_ownership(p_number, p_partner, p_role, p_rate, p_notes)`, который мы добавим).
-- Один RPC чтобы атомарно закрывать + открывать в транзакции.
-- UI компонент `<InlineRateEditor>` будет переиспользован в трёх местах.
-
----
-
-## Порядок реализации
-
-1. Миграция: RPC `set_number_ownership(...)` + RPC `partner_earnings_breakdown(...)` для экрана earnings.
-2. Frontend: вкладка "Numbers (truth)" + диалог "Assign numbers" на `PartnerDetail`.
-3. Frontend: глобальный экран `/admin/number-ownership`.
-4. Frontend: inline rename BM + inline edit BM-rate.
-5. Frontend: вкладка "Earnings (live)" на `PartnerDetail`.
-6. Backfill миграция для unknown events.
-
-Делать буду последовательно — каждый шаг это отдельный коммит, можно остановиться где угодно.
+1. Migration (column + trigger).
+2. UI dropdown in PipelineConfigSheet.
+3. You map the three FB Media stages to Andre/Katalin/Tobias.
+4. I run the one-shot re-fire so existing assigned chats jump into their columns.
+5. Optional: chip on stage header.
