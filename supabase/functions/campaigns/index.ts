@@ -220,6 +220,19 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       if (new Date(existing.prepared_expires_at).getTime() < Date.now()) {
         return json({ error: "Prepared snapshot expired. Re-prepare.", code: "stale_snapshot", must_reprepare: true }, 409);
       }
+      const expectedSig = await computeSnapshotSignature({
+        numberIds: [...new Set(rawNumbers.map((n) => n.number_id))],
+        templateIds: [...new Set(rawNumbers.map((n) => n.template_id))],
+        audienceCount: recipients.length,
+        windowStart,
+        windowEnd,
+        perNumberQuota,
+        maxInflightPerNumber,
+        maxInflightPerCampaign,
+      });
+      if (existing.prepared_signature !== expectedSig) {
+        return json({ error: "Prepared snapshot contract changed or inputs changed. Re-prepare.", code: "must_reprepare", must_reprepare: true }, 409);
+      }
     }
   }
   // Global instant kill switch.
