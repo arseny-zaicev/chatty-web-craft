@@ -203,6 +203,8 @@ export default function Partners() {
                           <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(pm?.delivered_alltime ?? 0).toLocaleString()}</span>
                           <span> / {(pm?.sent_alltime ?? 0).toLocaleString()}</span>
                         </TableCell>
+                        <TableCell className="tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">${(pm?.earned_today ?? 0).toFixed(2)}</TableCell>
+                        <TableCell className="tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">${(pm?.earned_alltime ?? 0).toFixed(2)}</TableCell>
                         <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
                         <TableCell className="font-mono text-xs">{p.referral_rate_usd > 0 ? `$${Number(p.referral_rate_usd).toFixed(4)}` : <span className="text-muted-foreground">-</span>}</TableCell>
                         <TableCell className={unpaid > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
