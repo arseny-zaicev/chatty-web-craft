@@ -140,7 +140,7 @@ Deno.serve(cronGuard("campaign-overflow-rebalance", async (req) => {
       );
     }
 
-    return new Response(JSON.stringify({ ok: true, clusters: clusters?.length ?? 0, reassigned: totalReassigned }), {
+    return new Response(JSON.stringify({ ok: true, clusters: clusters?.length ?? 0, reassigned: totalReassigned, skipped_instant: skippedInstant }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } finally {
