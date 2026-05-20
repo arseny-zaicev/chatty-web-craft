@@ -1080,13 +1080,13 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     const targetMs = new Date(recipient.scheduled_at).getTime();
     const waitMs = targetMs - Date.now();
     if (waitMs > 0) {
-      if (isCronMode) return; // never sleep inside cron
+      if (isCronMode) { skipCounters.not_due++; return; }
       const remainingBudget = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
       if (!isInstant && remainingBudget > 0) {
         await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
       }
     }
-    if (Date.now() - tickStartedAt > TICK_BUDGET_MS) return;
+    if (Date.now() - tickStartedAt > TICK_BUDGET_MS) { skipCounters.over_budget++; return; }
 
     // Daily-cap safety net (Dubai TZ). Bumps to tomorrow 09:00 if cap reached.
     const recNumId = recipient.whatsapp_number_id;
