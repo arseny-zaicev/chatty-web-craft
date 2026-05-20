@@ -877,7 +877,8 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   //     is already encoded in scheduled_at, do NOT re-apply per-row delays)
   //   - per-NUMBER concurrency (worker pool, instant hard-cap)
   //   - per-CAMPAIGN concurrency (max_inflight_per_campaign semaphore)
-  //   - per-NUMBER daily_send_limit SAFETY NET (whatsapp_numbers.daily_send_limit)
+  //   - per-CAMPAIGN per_number_quota safety net; explicit non-200
+  //     whatsapp_numbers.daily_send_limit remains a warning surface only.
   //   - canary abort + restriction detection
   //   - dispatcher heartbeat
   //
@@ -1086,16 +1087,14 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   const skipCounters = { not_due: 0, over_budget: 0, pacing_gap: 0, claim_lost: 0, claimed: 0, paused: 0, backoff: 0, daily_cap: 0 };
 
   // ============= Per-number daily cap safety net =============
-  // Pre-fetch daily_send_limit per number in this tick. Then count how many
-  // were already sent today (Dubai TZ) per number. We refuse to send a recipient
-  // whose number has reached its cap and bump the row to next day at 09:00 Dubai.
+  // Count how many were already sent today (Dubai TZ) per number. The runtime
+  // safety net uses the campaign's operator quota. A legacy/default
+  // whatsapp_numbers.daily_send_limit=200 must never create a hidden runtime cap.
   const numIdsInTick = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
   const dailyLimitByNum = new Map<string, number>();
   const sentTodayByNum = new Map<string, number>();
-  // Per-campaign operator-set quota. This is AUTHORITATIVE — it must not be
-  // silently overridden by `whatsapp_numbers.daily_send_limit` (DB default
-  // 200). FE/FM-style hard ceilings live in `workspace_send_guards` and are
-  // enforced separately below.
+  // Per-campaign operator-set quota. This is AUTHORITATIVE. FE/FM-style hard
+  // ceilings live in `workspace_send_guards` and are enforced separately.
   const quotaByCampaign = new Map<string, number>();
   const campaignIdsInTick = [...new Set((due ?? []).map((r: any) => r.campaign_id).filter(Boolean))];
   if (campaignIdsInTick.length > 0) {
@@ -1103,14 +1102,14 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       .from("campaigns")
       .select("id, per_number_quota")
       .in("id", campaignIdsInTick);
-    for (const c of crows ?? []) quotaByCampaign.set(c.id, Math.max(1, Number(c.per_number_quota ?? 200)));
+    for (const c of crows ?? []) quotaByCampaign.set(c.id, normalizePerNumberQuota(c.per_number_quota));
   }
   if (numIdsInTick.length > 0) {
     const { data: numRows } = await admin
       .from("whatsapp_numbers")
       .select("id, daily_send_limit")
       .in("id", numIdsInTick);
-    for (const n of numRows ?? []) dailyLimitByNum.set(n.id, Math.max(1, Number(n.daily_send_limit ?? 200)));
+    for (const n of numRows ?? []) dailyLimitByNum.set(n.id, explicitDailySendLimit(n.daily_send_limit) ?? 0);
     // Count sent today (Dubai) per number — single query.
     const dubaiTodayStartUtcMs = (() => {
       const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -1359,12 +1358,13 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     // Daily-cap safety net (Dubai TZ). Bumps to tomorrow 09:00 if cap reached.
     const recNumId = recipient.whatsapp_number_id;
     if (recNumId && dailyLimitByNum.has(recNumId)) {
-      const numLimit = dailyLimitByNum.get(recNumId)!;
-      const campQuota = quotaByCampaign.get(recipient.campaign_id) ?? numLimit;
-      // Effective per-number cap = max(operator quota, number's daily_send_limit).
-      // daily_send_limit (default 200) can NEVER silently reduce the operator's
-      // explicit choice. workspace_send_guards still kill-switch FE/FM.
-      const cap = Math.max(numLimit, campQuota);
+      const explicitNumLimit = dailyLimitByNum.get(recNumId) || 0;
+      const campQuota = quotaByCampaign.get(recipient.campaign_id) ?? explicitNumLimit;
+      // Effective per-number cap = operator quota. Only an explicitly-set,
+      // non-legacy number limit may raise the warning/safety surface; the
+      // old default 200 is treated as unset. workspace_send_guards still
+      // kill-switch FE/FM.
+      const cap = Math.max(explicitNumLimit, campQuota);
       const sentNow = sentTodayByNum.get(recNumId) ?? 0;
       if (sentNow >= cap) {
         const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
