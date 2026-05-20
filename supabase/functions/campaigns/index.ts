@@ -1149,9 +1149,9 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
         const since = Date.now() - lastMs;
         if (since < minGapMs) {
           const extra = minGapMs - since;
-          if (isCronMode) return; // never sleep in cron — let next tick handle it
+          if (isCronMode) { skipCounters.pacing_gap++; return; }
           const budgetLeft = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
-          if (extra > budgetLeft) return;
+          if (extra > budgetLeft) { skipCounters.pacing_gap++; return; }
           await new Promise((r) => setTimeout(r, extra));
         }
       }
@@ -1165,7 +1165,8 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       .eq("status", "scheduled")
       .select("id")
       .maybeSingle();
-    if (!locked) return;
+    if (!locked) { skipCounters.claim_lost++; return; }
+    skipCounters.claimed++;
     lastSentMs.set(pacingKey, Date.now());
 
     try {
