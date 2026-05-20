@@ -170,6 +170,47 @@ Deno.serve(cronGuard({ jobName: "health-watchdog", lock: true }, async (req) => 
       }
     }
 
+    // 7) Inbound recovery health — gauge published by inbound-recovery-sweep.
+    //    Fires when stuck/pending counts cross thresholds or the oldest
+    //    pending failure has been sitting too long. Read directly from the
+    //    underlying tables so we don't depend on the gauge view.
+    const stuckCutoff = new Date(Date.now() - 2 * 60_000).toISOString();
+    const { count: stuckRaw } = await supabase
+      .from("whatsapp_webhook_raw")
+      .select("id", { count: "exact", head: true })
+      .eq("processing_status", "received")
+      .lt("received_at", stuckCutoff);
+    if ((stuckRaw ?? 0) >= INBOUND_STUCK_RAW_THRESHOLD) {
+      alerts.push({
+        kind: "inbound_raw_stuck",
+        text: `:rotating_light: *Inbound recovery* — ${stuckRaw} webhook payload(s) stuck at \`received\` for >2 min. Reply persistence may be silently failing.\n\n_Hint: run \`inbound-recovery-sweep\` manually or check its edge logs._`,
+      });
+    }
+
+    const { count: pendingFails } = await supabase
+      .from("whatsapp_webhook_failures")
+      .select("id", { count: "exact", head: true })
+      .eq("replay_status", "pending");
+    const { data: oldestPending } = await supabase
+      .from("whatsapp_webhook_failures")
+      .select("created_at")
+      .eq("replay_status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const oldestAgeMin = oldestPending?.created_at
+      ? Math.round((Date.now() - new Date(oldestPending.created_at).getTime()) / 60_000)
+      : 0;
+    if (
+      (pendingFails ?? 0) >= INBOUND_PENDING_FAILURES_THRESHOLD ||
+      oldestAgeMin >= INBOUND_OLDEST_PENDING_AGE_MIN
+    ) {
+      alerts.push({
+        kind: "inbound_failures_backlog",
+        text: `:warning: *Inbound recovery* — ${pendingFails ?? 0} webhook failure(s) pending replay, oldest ${oldestAgeMin}m old (thresholds: ${INBOUND_PENDING_FAILURES_THRESHOLD}/${INBOUND_OLDEST_PENDING_AGE_MIN}m).\n\nMost common cause: a \`no_match\` row whose \`whatsapp_numbers.provider_app_id / label / phone_number\` doesn't match the Gupshup payload. Fix the number row, then run \`whatsapp-webhook-replay\`.`,
+      });
+    }
+
     // Debounce via system_alerts table
     const fired: string[] = [];
     for (const a of alerts) {
