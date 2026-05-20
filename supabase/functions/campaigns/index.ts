@@ -328,70 +328,57 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   if (cleanRecipientsAll.length === 0) return json({ error: "No valid phone numbers" }, 400);
 
-  // ============= CAPACITY-BOUND ALLOCATION (hard truncation) =============
-  // capacity = Σ(min(per_number_quota, windowFitCap)) × selected days.
-  // Anything beyond capacity is NOT inserted into campaign_recipients and stays
-  // free in the audience pool. No silent "send later", no future-day bucket.
-  const _wsMinPre = hhmmToMin(windowStart);
-  const _wsMaxPre = hhmmToMin(windowEnd);
-  const _windowSecondsPre = Math.max(60, (_wsMaxPre - _wsMinPre) * 60);
-  // P0.4: honor minDelay verbatim. Was `Math.max(60, ...)` which silently
-  // computed launch capacity as if a 30s campaign were a 60s one.
-  const _minGapPre = isBlastLaunch ? 1 : Math.max(1, minDelay || 1);
-  const _windowFitCapPre = (isBlastLaunch || minDelay <= 0)
-    ? perNumberQuota
-    : Math.max(1, Math.floor(_windowSecondsPre / _minGapPre));
-  const perNumberCaps = new Map<string, number>();
-  // Pre-fetch sent_today per number (Dubai TZ) so the launch knows real remaining
-  // headroom and refuses to silently push the rest to tomorrow.
-  const dubaiTodayStartIso = (() => {
-    const dubaiKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
-    return new Date(`${dubaiKey}T00:00:00+04:00`).toISOString();
-  })();
-  const sentTodayByNumber = new Map<string, number>();
-  for (const nid of numberIds) {
-    const { count } = await admin
-      .from("campaign_recipients")
-      .select("id", { count: "exact", head: true })
-      .eq("whatsapp_number_id", nid)
-      .gte("sent_at", dubaiTodayStartIso);
-    sentTodayByNumber.set(nid, count ?? 0);
-  }
-  let capacityPerDay = 0;
-  let capacityToday = 0;
-  const capWarnings: string[] = [];
-  for (const nid of numberIds) {
-    const nrow: any = numberRows.find((n: any) => n.id === nid);
-    const dailyLimit = explicitDailySendLimit(nrow?.daily_send_limit);
-    // Operator's per-campaign `per_number_quota` is AUTHORITATIVE.
-    // `daily_send_limit` (DB default 200) is a recommendation/warning surface
-    // only — it must NOT silently clamp the operator's explicit choice.
-    // FE/FM and other workspace-level hard ceilings are enforced separately
-    // via `workspace_send_guards` and remain intact.
-    const effectivePerNumber = perNumberQuota;
-    const cap = Math.max(1, Math.min(effectivePerNumber, _windowFitCapPre));
-    perNumberCaps.set(nid, cap);
-    capacityPerDay += cap;
-    const sentToday = sentTodayByNumber.get(nid) ?? 0;
-    const remainingToday = Math.max(0, effectivePerNumber - sentToday);
-    capacityToday += Math.min(cap, remainingToday);
-    if (dailyLimit !== null && perNumberQuota > dailyLimit) {
-      capWarnings.push(`Number ${nrow?.phone_number || nid}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
-    }
-    if (sentToday >= effectivePerNumber) {
-      capWarnings.push(`Number ${nrow?.phone_number || nid} already sent ${sentToday}/${effectivePerNumber} today — new recipients on this number would be deferred to tomorrow.`);
-    } else if (sentToday > 0 && cap > remainingToday) {
-      capWarnings.push(`Number ${nrow?.phone_number || nid} has ${remainingToday}/${effectivePerNumber} headroom today (already sent ${sentToday}); excess will spill to next day.`);
+  // ============= Canonical launch contract (slice 2) =============
+  // The resolver is now the SINGLE source of truth for:
+  //   - per-number window-fit cap + per-day & today capacity
+  //   - capacity-bound allocation / truncation
+  //   - workspace_send_guards hard caps + force_paced
+  //   - would-defer-to-next-day signal
+  //   - marketing_instant kill switch
+  // Inline duplicates that used to live here (capacity math, deferral check,
+  // workspace guard query) have been removed; we just translate the resolver's
+  // structured blockers into 409 responses.
+  const wsForGuard = numberRows[0].workspace_id;
+  const contract = await resolveLaunchContract(admin, {
+    numbers: rawNumbers,
+    audienceCount: cleanRecipientsAll.length,
+    perNumberQuota,
+    windowStart,
+    windowEnd,
+    scheduledDates,
+    dispatchMode,
+    minDelaySeconds: minDelay,
+    maxInflightPerNumber,
+    maxInflightPerCampaign,
+    respectRecipientTz: respectTz,
+    workspaceId: wsForGuard ?? null,
+  }, { includeKillSwitch: true });
+
+  // Workspace guard / kill-switch blockers from the resolver are NEVER bypassable
+  // by `force=true` — they are hard ceilings owned by ops.
+  const HARD_BLOCKER_CODES = new Set([
+    "workspace_guard_force_paced",
+    "workspace_guard_per_campaign_cap",
+    "workspace_guard_daily_cap",
+    "instant_mode_disabled",
+  ]);
+  for (const sb of contract.structuredBlockers) {
+    if (HARD_BLOCKER_CODES.has(sb.code)) {
+      return json({ error: sb.message, code: sb.code, ...(sb.meta ?? {}) }, 409);
     }
   }
-  const daysCount = Math.max(1, scheduledDates.length || 1);
-  const allocatedCapacity = capacityPerDay * daysCount;
+
+  const perNumberCaps = new Map<string, number>(Object.entries(contract.perNumberCaps));
+  const capacityPerDay = contract.capacityPerDay;
+  const capacityToday = contract.capacityToday;
+  const allocatedCapacity = contract.allocatedCapacity;
   const audienceTotalRequested = cleanRecipientsAll.length;
   const cleanRecipients = cleanRecipientsAll.slice(0, allocatedCapacity);
-  const truncatedCount = audienceTotalRequested - cleanRecipients.length;
+  const truncatedCount = contract.truncatedCount;
+  const capWarnings = contract.warnings;
 
   // Single-day launch crossing today's remaining quota? Block unless force=true.
-  if (scheduledDates.length <= 1 && capWarnings.length > 0 && cleanRecipients.length > capacityToday && body.force !== true) {
+  if (contract.wouldDeferToNextDay && body.force !== true) {
     return json({
       error: "Daily cap would defer recipients to tomorrow",
       code: "would_defer_to_next_day",
@@ -401,10 +388,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     }, 409);
   }
 
-  // Capacity-truncation guard: if the requested audience exceeds what the
-  // selected numbers × days × per-number-cap can deliver, refuse the launch
-  // unless explicitly forced. Without this, the silent slice(0, allocatedCapacity)
-  // drops thousands of recipients and the operator only finds out later.
+  // Capacity-truncation guard: refuse unless explicitly forced.
   if (truncatedCount > 0 && body.force !== true) {
     return json({
       error: "Audience exceeds capacity for the selected numbers and dates",
@@ -413,7 +397,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       capacity: allocatedCapacity,
       truncated: truncatedCount,
       numbers: numberIds.length,
-      days: daysCount,
+      days: contract.daysCount,
       per_number_quota: perNumberQuota,
       hint: `Add ${Math.ceil(truncatedCount / Math.max(1, perNumberQuota))} more day(s), or add more numbers, or split the audience.`,
     }, 409);
@@ -421,60 +405,6 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
 
-  // ============= Hard workspace send guardrails (FE/FM and similar) =============
-  // Refuses launch if workspace exceeds locked-down caps. Service-managed only;
-  // no client can bypass via UI inputs (table is service_role write).
-  const wsForGuard = number.workspace_id;
-  if (wsForGuard) {
-    const { data: wsGuard } = await admin
-      .from("workspace_send_guards")
-      .select("hard_daily_cap, hard_per_campaign_cap, force_paced")
-      .eq("workspace_id", wsForGuard)
-      .eq("enabled", true)
-      .maybeSingle();
-    if (wsGuard) {
-      if (wsGuard.force_paced && dispatchMode === "marketing_instant") {
-        return json({
-          error: "marketing_instant is disabled for this workspace by hard guardrail. Use paced mode.",
-          code: "workspace_guard_force_paced",
-        }, 409);
-      }
-      if (cleanRecipients.length > Number(wsGuard.hard_per_campaign_cap)) {
-        return json({
-          error: `Campaign size ${cleanRecipients.length} exceeds workspace hard per-campaign cap ${wsGuard.hard_per_campaign_cap}`,
-          code: "workspace_guard_per_campaign_cap",
-          requested: cleanRecipients.length,
-          cap: Number(wsGuard.hard_per_campaign_cap),
-        }, 409);
-      }
-      const dubaiTodayStartIsoGuard = (() => {
-        const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
-        return new Date(`${k}T00:00:00+04:00`).toISOString();
-      })();
-      const { count: wsSentToday } = await admin
-        .from("campaign_recipients")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", wsForGuard)
-        .gte("sent_at", dubaiTodayStartIsoGuard)
-        .not("sent_at", "is", null);
-      const { count: wsPending } = await admin
-        .from("campaign_recipients")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", wsForGuard)
-        .in("status", ["scheduled", "sending"]);
-      const planned = (wsSentToday ?? 0) + (wsPending ?? 0) + cleanRecipients.length;
-      if (planned > Number(wsGuard.hard_daily_cap)) {
-        return json({
-          error: `Planned workspace volume ${planned} exceeds hard daily cap ${wsGuard.hard_daily_cap}`,
-          code: "workspace_guard_daily_cap",
-          already_sent_today: wsSentToday ?? 0,
-          already_pending: wsPending ?? 0,
-          new_recipients: cleanRecipients.length,
-          cap: Number(wsGuard.hard_daily_cap),
-        }, 409);
-      }
-    }
-  }
 
 
 
