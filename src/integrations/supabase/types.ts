@@ -1659,6 +1659,7 @@ export type Database = {
           notes: string | null
           partner_id: string
           rate_usd: number
+          referrer_partner_id: string | null
           role: string
           source_bm_assignment_id: string | null
           whatsapp_number_id: string
@@ -1672,6 +1673,7 @@ export type Database = {
           notes?: string | null
           partner_id: string
           rate_usd?: number
+          referrer_partner_id?: string | null
           role?: string
           source_bm_assignment_id?: string | null
           whatsapp_number_id: string
@@ -1685,6 +1687,7 @@ export type Database = {
           notes?: string | null
           partner_id?: string
           rate_usd?: number
+          referrer_partner_id?: string | null
           role?: string
           source_bm_assignment_id?: string | null
           whatsapp_number_id?: string
@@ -1693,6 +1696,13 @@ export type Database = {
           {
             foreignKeyName: "number_ownership_partner_id_fkey"
             columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "number_ownership_referrer_partner_id_fkey"
+            columns: ["referrer_partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
             referencedColumns: ["id"]
@@ -4392,16 +4402,28 @@ export type Database = {
         Args: { p_lead_id: string; p_new_phone?: string }
         Returns: undefined
       }
-      set_number_ownership: {
-        Args: {
-          p_notes?: string
-          p_partner_id: string
-          p_rate_usd?: number
-          p_role?: string
-          p_whatsapp_number_id: string
-        }
-        Returns: string
-      }
+      set_number_ownership:
+        | {
+            Args: {
+              p_notes?: string
+              p_partner_id: string
+              p_rate_usd?: number
+              p_role?: string
+              p_whatsapp_number_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_notes?: string
+              p_partner_id: string
+              p_rate_usd?: number
+              p_referrer_partner_id?: string
+              p_role?: string
+              p_whatsapp_number_id: string
+            }
+            Returns: string
+          }
       setter_performance: {
         Args: {
           _from: string

@@ -1287,6 +1287,7 @@ function AddNumberDrawer({
           p_role: "provider",
           p_rate_usd: Number.isFinite(rate) ? rate : Number(providerPartner.default_payout_rate_usd ?? 0),
           p_notes: referrerPartner ? `referrer:${referrerPartner.name}` : null,
+          p_referrer_partner_id: referrerPartner?.id ?? null,
         });
         if (ownErr) throw new Error(`Number saved but ownership write failed: ${ownErr.message}`);
       } else if (savedNumberId && sourceKind === "own") {
