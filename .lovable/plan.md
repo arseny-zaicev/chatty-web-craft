@@ -1,127 +1,92 @@
+## Цель
 
-# Backend stabilization plan v4 (final, repo-scope explicit)
+В composer'е чата (CRM Inbox) добавить секцию **Templates** в Library popover - там только ты (global admin) можешь привязать утверждённые Meta-шаблоны / группы шаблонов. Цель - быстро открывать переписку после 24h окна, не рискуя отправить шаблон, не принадлежащий тому номеру, с которого идёт чат.
 
-## 1. Live inventory (source of truth)
+Ключевое: setter жмёт **одну кнопку** (например "Re-engage"), а система сама подбирает вариант шаблона под `conversation.whatsapp_number_id`. Если для этого номера в группе нет варианта - кнопка для этого чата неактивна с понятным tooltip.
 
-### Group 1 — Active cron in Cloud AND function in repo (patched this pass)
+---
 
-| jobname (Cloud) | schedule | repo function |
-|---|---|---|
-| `auto-generate-insights-15min` | `*/15 * * * *` | `auto-generate-insights` |
-| `classify-replies-15min` | `*/15 * * * *` | `classify-replies` |
-| `campaign-day-rollover-15m` | `*/15 * * * *` | `campaign-day-rollover` |
-| `campaign-overflow-rebalance-30m` | `*/30 * * * *` | `campaign-overflow-rebalance` |
-| `numbers-health-sync-every-15-min` | `*/15 * * * *` | `numbers-health-sync` |
-| `numbers-health-digest-every-6h` | `0 */6 * * *` | `numbers-health-digest` |
-| `gupshup-mail-poll-every-5min` | `*/5 * * * *` | `gupshup-mail-poll` |
-| `templates-status-sync-hourly` | `0 5-17 * * *` | `templates-status-sync` |
-| `reply-notification-watchdog-hourly` | `15 * * * *` | `reply-notification-watchdog` |
-| `slack-inbox-watch-every-30min` | `*/30 * * * *` | `slack-inbox-watch` |
-| `slack-morning-digest` | `0 5 * * *` | `slack-morning-digest` |
-| `slack-evening-digest` | `0 16 * * *` | `slack-evening-digest` |
-| `slack-pipeline-digest-evening` | `0 16 * * *` | `slack-pipeline-digest` |
+## Что уже есть (не строим заново)
 
-### Group 2 — Dormant in Cloud (no active cron) but function present in repo (patched this pass — safe before any future re-enable)
+- `template_groups` - таблица уже существует, и `TemplateGroupsDialog` умеет создавать/редактировать группы (имя + категория + список template names).
+- `groupLogicalTemplates()` в `src/lib/launchData.ts` строит `LogicalTemplate` с готовым `variantByNumber: Map<whatsapp_number_id, Template>` - то самое авто-определение, которое нужно. Используем без изменений.
+- `postGupshupTemplate` + `sendTemplate` + `buildTemplateParams` (из `_shared/template.ts`) - проверенный путь отправки template-message через Gupshup, сейчас живёт в `campaigns/index.ts`.
+- `ComposerInsertButton` (Library popover) и `CRM.tsx` `handleSend` - точка интеграции.
 
-`process-email-queue`, `campaigns`, `lead-dispatch`, `follow-up-dispatch`, `dispatch-pipeline-webhooks`, `slack-dispatch`, `google-sheets-sync`, `health-watchdog`, `automation-time-watchdog`.
+---
 
-### Group 3 — Cloud-only, NOT patched this pass (runbook only)
+## Что строим
 
-Verified against `supabase/functions/` tree: **none**. Every function referenced in current/historical cron is present in the repo. If a Cloud-only job is discovered later, it goes here and gets a runbook entry only — no code change in this pass.
+### 1. БД (миграция)
 
-### Group 4 — Webhook/RPC only (out of scope)
+Новая таблица `workspace_quick_template_groups` (admin-curated list - какие группы шаблонов показывать как quick reply в каком workspace, и в каком порядке):
 
-Skipped (not cron-driven, no overload risk): `whatsapp-webhook`, `whatsapp-webhook-replay`, `send-whatsapp`, `lead-intake`, `calendly-webhook`, `submit-form`, `auth-email-hook`, `init-admin`, `admin-clients`, `invite-workspace-member`, `workspace-invite-link`, `audience-ai-prepare`, `import-audience-from-personal`, `ops-assistant`, `pipeline-pause`, `tv-token`, `register-calendly-webhook`, `gupshup-set-callback`, `reconcile-messages`, `campaign-insights`, `campaign-report-export`, `campaign-report-pdf`, `manager-payout-report-pdf`, `payout-report-pdf`, `slack-payout-post`, `test-pipeline-webhook`, `generate-ai-seo-report`, `google-sheets`, `cron-heartbeat`.
+- `id`, `workspace_id`, `template_group_id` (FK на `template_groups.id`)
+- `label` (override - короткое имя кнопки, напр. "Re-engage")
+- `position int`, `created_by`, `created_at`
+- UNIQUE `(workspace_id, template_group_id)`
 
-**Implementation scope = Group 1 ∪ Group 2 = 22 functions, all present in repo.**
+RLS:
+- SELECT: любой `is_workspace_member(workspace_id, auth.uid())` - чтобы все сеттеры видели кнопки
+- INSERT/UPDATE/DELETE: только `is_admin(auth.uid())` (глобальный админ из `user_roles`) - никто кроме тебя не может менять список
 
-## 2. Three emergency stop paths
+Зачем отдельная таблица, а не флаг на `template_groups`: `template_groups` уже используется в Launch Wizard и не должна засоряться "только-для-инбокса" логикой. Эта таблица - чисто "белый список quick replies".
 
-### Path A — Env kill switch (always works, no DB needed)
-Secret `JOBS_KILLED`. Empty = no-op. `"all"`/`"*"` = stop everything. Comma list = stop only those. Checked at the top of `Deno.serve` before any DB call.
+### 2. Edge function: `send-whatsapp-template`
 
-```ts
-// _shared/jobKillSwitch.ts
-export function envKilled(jobName: string): boolean {
-  const v = (Deno.env.get("JOBS_KILLED") ?? "").trim().toLowerCase();
-  if (!v) return false;
-  if (v === "all" || v === "*") return true;
-  return v.split(",").map(s => s.trim()).includes(jobName.toLowerCase());
-}
-```
-Flip via Backend → Secrets. Takes effect on next cold start (~30s).
+Новая функция (рядом с `send-whatsapp`). Body: `{ conversation_id, template_group_id, variables? }`.
 
-### Path B — DB flag (simple, fail-open)
-Reuse `public.system_flags`, single row `key='jobs.disabled'`, value `{"all": false, "jobs": []}`. One supabase-js read with `AbortSignal.timeout(1500)`. Any error/timeout → return `false` (continue normally).
+Логика:
+1. Грузим conversation -> `workspace_id`, `whatsapp_number_id`, `contact_phone`, `contact_name`.
+2. Проверяем что user - workspace member.
+3. Проверяем что `(workspace_id, template_group_id)` есть в `workspace_quick_template_groups`. Иначе 403.
+4. Грузим все `message_templates` где `name IN (template_groups.template_names)` AND `workspace_id = X` AND `status = 'approved'`.
+5. Находим вариант где `whatsapp_number_id = conversation.whatsapp_number_id`. **Если не нашли - 400 с понятной ошибкой** ("No approved variant of group X for this number").
+6. Грузим `whatsapp_numbers` row для api key / app id / source / display_name.
+7. Дефолтные переменные: `{1}` = `contact_name || "there"` (используем `buildTemplateParams` из `_shared/template.ts` - та же fallback-логика что в кампаниях).
+8. Дёргаем `postGupshupTemplate` (логику копируем из `campaigns/index.ts` в `_shared/gupshup_send.ts` чтобы не дублировать; `campaigns/index.ts` тоже на неё переключаем).
+9. На успех - вставляем `messages` row (direction=outbound, body=rendered template body через `renderTemplateBody`, status=sent, provider_message_id) и обновляем `conversations.last_message_*`, как делает send-whatsapp. Это критично - без этого setter не увидит что отправил.
+10. Возвращаем `{ ok, message_id, debug }`.
 
-```ts
-export async function flagKilled(admin, jobName): Promise<boolean> {
-  try {
-    const { data } = await admin
-      .from("system_flags").select("value").eq("key", "jobs.disabled")
-      .abortSignal(AbortSignal.timeout(1500)).maybeSingle();
-    const v = data?.value as { all?: boolean; jobs?: string[] } | undefined;
-    if (!v) return false;
-    if (v.all === true) return true;
-    return Array.isArray(v.jobs) && v.jobs.includes(jobName);
-  } catch { return false; }
-}
-```
-No RPC, no statement_timeout, no extra plumbing.
+### 3. UI
 
-### Path C — Manual SQL unschedule (nuclear, in runbook)
-Paste-ready block targeting the 13 currently-active `jobname`s from Group 1, plus a template `WHERE jobname IN (...)` for anything re-scheduled later.
+**3a. Admin-only страница** "Quick reply templates" - под `/workspace/:slug/settings` (или в `WorkspaceSettings`, в новой вкладке "Templates quick replies"). Видна и редактируется только если `useWorkspaceRole().isAdmin === true`.
 
-Incident order: A → B → C.
+Содержит:
+- Список текущих quick template groups (drag-to-reorder, удалить)
+- Кнопка "Add group" -> select из `template_groups` этого workspace
+- Поле "Button label" (override)
+- Под каждой группой - mini-grid: для каждого активного `whatsapp_number` показываем "covered" (зелёная галочка с именем шаблона) / "missing" (красный warning). Так ты сразу видишь, на каком номере вариант не подцеплен. Использует `groupLogicalTemplates().variantByNumber`.
 
-## 3. Overlap protection
+**3b. Composer integration** в `CRM.tsx`:
 
-`acquireJobLock(admin, jobName)` (existing helper, fail-open) added to functions in **Group 1 ∪ Group 2** that don't already have it:
+Рядом с `ComposerInsertButton` добавляем новую кнопку **"Templates"** (открывается только если в workspace есть хоть одна quick group). Popover показывает список quick groups. Для текущего чата:
+- если `variantByNumber.has(conversation.whatsapp_number_id)` - кнопка активна, на hover показывает preview rendered body (через `renderTemplateBody` с `contact_name`).
+- иначе - disabled с tooltip "No approved variant for this number"
 
-- Already locked (keep as-is): `campaigns`, `lead-dispatch`, `slack-dispatch`, `follow-up-dispatch`.
-- Add lock to: `dispatch-pipeline-webhooks`, `process-email-queue`, `google-sheets-sync`, `health-watchdog`, `automation-time-watchdog`, `classify-replies`, `auto-generate-insights`, `numbers-health-sync`, `gupshup-mail-poll`.
+Клик -> вызывает `send-whatsapp-template` edge function -> на успех toast + сообщение сразу появляется в чате (realtime channel уже подписан).
 
-## 4. Operational per-run logging
+Никакого ввода переменных в первой версии - только `{1}=contact_name`. Если у шаблона >1 переменной и нет defaults - кнопка disabled с тултипом "Template has variables - not supported yet".
 
-New `_shared/jobRun.ts` exposes `withJobRun(name, fn)`. Body receives a mutable `run` object: `selected`, `processed`, `skipped(reason, n?)`. Always emits one structured line in `finally`:
+### 4. Авто-определение, о котором ты спрашивал
 
-```
-[job:NAME] status=ok selected=42 processed=40 skipped=2 skip_reasons={locked_row:1,no_number:1} duration_ms=1834
-[job:NAME] status=skipped reason=kill_switch_env duration_ms=2
-[job:NAME] status=skipped reason=kill_switch_flag duration_ms=8
-[job:NAME] status=skipped reason=locked duration_ms=14
-[job:NAME] status=failed err="..." duration_ms=5012 selected=42 processed=11
-```
+Делаем именно так как ты предложил: одна логическая группа -> много вариантов под разные номера -> при клике выбирается вариант чей `whatsapp_number_id` == `conversation.whatsapp_number_id`. Это исключает риск отправить чужой шаблон. Логика уже реализована в `groupLogicalTemplates()` и переиспользуется и в UI (показ доступности) и в edge function (фактический выбор).
 
-Applied to all 22 functions in scope.
+---
 
-## 5. Runbook
+## Порядок реализации
 
-`docs/runbook-backend-incident.md`:
-- Paths A/B/C with paste-ready commands
-- Full Group 1 jobname → repo function map (for Path C)
-- Group 2 list as "currently dormant — do not re-enable casually"
-- Group 3 placeholder ("Cloud-only jobs go here if discovered")
-- Grep commands for the new `[job:NAME]` log format
-- Pointer to the future re-enable plan (out of scope)
+1. Миграция `workspace_quick_template_groups` + RLS.
+2. Вынести `postGupshupTemplate` в `_shared/gupshup_send.ts`; `campaigns/index.ts` подключить оттуда (нулевые изменения поведения).
+3. Edge function `send-whatsapp-template`.
+4. Admin UI в `WorkspaceSettings` - вкладка "Quick reply templates" + coverage matrix.
+5. Кнопка "Templates" в composer (`CRM.tsx`) рядом с Library.
+6. Smoke test на реальном чате (Goflow / любой активный workspace).
 
-## 6. Out of scope (explicit)
+---
 
-- No `cron.schedule` calls. Zero re-enable.
-- No edits to Group 3 (empty today) or Group 4 functions.
-- No frontend, no product logic, no schema changes beyond seeding the kill-switch row.
+## Открытые вопросы перед реализацией
 
-## 7. Implementation order
-
-1. Migration: idempotent seed of `system_flags ('jobs.disabled', '{"all":false,"jobs":[]}')`.
-2. Add `_shared/jobKillSwitch.ts` + `_shared/jobRun.ts` (pure additions).
-3. Wire kill-switch + `withJobRun` into Group 1 functions (live in prod — protect first).
-4. Wire kill-switch + `withJobRun` + missing locks into Group 2 functions (safe-before-reenable).
-5. Write `docs/runbook-backend-incident.md`.
-6. Stop.
-
-## Technical notes
-
-- Lock helper fails open if `try_job_lock` RPC missing → safe to add the call before RPC exists.
-- All edits additive; healthy runs gain one cheap flag read + one log line.
-- Zero RLS or schema changes beyond the one seed row.
+1. **Где разместить admin UI** - отдельная вкладка в `WorkspaceSettings` или новый пункт в WorkspaceSidebar "Quick replies"? (рекомендую вкладка в Settings - меньше шума).
+2. **Кто видит кнопку Templates в composer** - все сеттеры или тоже только админ? (логика "сеттеры видят, ты курируешь" - кажется правильной, но подтверди).
+3. **Переменные шаблона**: ок ли на первой версии ограничиться `{1}=contact_name` и блокировать многопеременные шаблоны? Или нужно сразу окно ввода переменных?

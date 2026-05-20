@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Settings as SettingsIcon, Phone, FileText, Wrench, Users, Sparkles, KanbanSquare, UserCog } from "lucide-react";
+import { Settings as SettingsIcon, Phone, FileText, Wrench, Users, Sparkles, KanbanSquare, UserCog, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NumbersInventory from "@/components/workspace/NumbersInventory";
 import TemplatesView from "@/components/workspace/TemplatesView";
@@ -8,13 +8,17 @@ import TeamView from "@/components/workspace/TeamView";
 import SettersView from "@/components/workspace/SettersView";
 import BrandEditor from "@/components/workspace/BrandEditor";
 import PipelinesView from "@/components/workspace/PipelinesView";
+import QuickRepliesView from "@/components/workspace/QuickRepliesView";
+import { useWorkspaceAccess } from "@/lib/workspaceRole";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 
-type Tab = "team" | "setters" | "brand" | "pipelines" | "numbers" | "templates" | "debug";
+type Tab = "team" | "setters" | "brand" | "pipelines" | "numbers" | "templates" | "quick" | "debug";
 
 export default function WorkspaceSettings() {
   const { workspace } = useOutletContext<WorkspaceContext>();
   const [tab, setTab] = useState<Tab>("team");
+  const { data: access } = useWorkspaceAccess(workspace?.id);
+  const canManageQuick = Boolean(access?.permissions?.perm_quick_replies_manage);
 
   if (!workspace) return null;
 
@@ -30,6 +34,9 @@ export default function WorkspaceSettings() {
           <TabBtn active={tab === "pipelines"} onClick={() => setTab("pipelines")} icon={<KanbanSquare className="w-3.5 h-3.5" />}>Pipelines</TabBtn>
           <TabBtn active={tab === "numbers"} onClick={() => setTab("numbers")} icon={<Phone className="w-3.5 h-3.5" />}>Numbers</TabBtn>
           <TabBtn active={tab === "templates"} onClick={() => setTab("templates")} icon={<FileText className="w-3.5 h-3.5" />}>Templates</TabBtn>
+          {canManageQuick && (
+            <TabBtn active={tab === "quick"} onClick={() => setTab("quick")} icon={<Zap className="w-3.5 h-3.5" />}>Quick replies</TabBtn>
+          )}
           <TabBtn active={tab === "debug"} onClick={() => setTab("debug")} icon={<Wrench className="w-3.5 h-3.5" />}>Provider / Debug</TabBtn>
         </div>
       </div>
@@ -40,6 +47,7 @@ export default function WorkspaceSettings() {
         {tab === "pipelines" && <PipelinesView workspaceId={workspace.id} />}
         {tab === "numbers" && <NumbersInventory workspaceId={workspace.id} />}
         {tab === "templates" && <TemplatesView workspaceId={workspace.id} />}
+        {tab === "quick" && canManageQuick && <QuickRepliesView workspaceId={workspace.id} />}
         {tab === "debug" && (
           <div className="p-6 max-w-2xl space-y-3 text-sm">
             <div className="rounded-lg border border-border bg-card/30 p-4">
@@ -60,3 +68,4 @@ export default function WorkspaceSettings() {
 const TabBtn = ({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) => (
   <button onClick={onClick} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors", active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}>{icon}{children}</button>
 );
+

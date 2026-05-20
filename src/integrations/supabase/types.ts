@@ -3280,6 +3280,44 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_quick_template_groups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          position: number
+          template_group_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          position?: number
+          template_group_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          position?: number
+          template_group_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_quick_template_groups_template_group_id_fkey"
+            columns: ["template_group_id"]
+            isOneToOne: false
+            referencedRelation: "template_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_saved_replies: {
         Row: {
           body: string
