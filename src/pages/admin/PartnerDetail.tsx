@@ -253,6 +253,7 @@ export default function PartnerDetail() {
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead>BM</TableHead>
+                    <TableHead>BM rate</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Warm-up</TableHead>
