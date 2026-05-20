@@ -7,26 +7,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCampaignTruth } from "@/lib/metrics";
 
 type Totals = { total: number; sent: number; delivered?: number; failed: number; replied: number; positive: number; meeting: number };
 
 async function fetchLatestReport(workspaceId: string) {
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id, name, updated_at, sent_count, total_recipients")
+    .select("id, name, updated_at, total_recipients")
     .eq("workspace_id", workspaceId)
     .eq("status", "completed")
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!campaign) return null;
-  const [{ data: insight }, { data: live }] = await Promise.all([
+  const [{ data: insight }, truth] = await Promise.all([
     supabase.from("campaign_insights").select("summary_md, metrics, generated_at").eq("campaign_id", campaign.id).maybeSingle(),
-    supabase.rpc("campaign_live_counts", { p_campaign_ids: [campaign.id] }),
+    fetchCampaignTruth([campaign.id], "alltime"),
   ]);
-  const liveRow = Array.isArray(live) && live[0] ? (live[0] as any) : null;
-  const delivered = liveRow ? Number(liveRow.delivered_count ?? 0) : 0;
-  return { campaign, insight: insight ?? null, delivered };
+  const t = truth.get(campaign.id) ?? { sent: 0, delivered: 0, failed: 0, replied: 0 };
+  return { campaign, insight: insight ?? null, truth: t };
 }
 
 export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; slug: string }) {
