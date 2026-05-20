@@ -4208,6 +4208,17 @@ export type Database = {
           unassigned_referred: number
         }[]
       }
+      payout_ownership_drift_details: {
+        Args: never
+        Returns: {
+          assigned_ref: string
+          display_name: string
+          phone_number: string
+          provided_by: string
+          reason: string
+          whatsapp_number_id: string
+        }[]
+      }
       pending_classification_conversations: {
         Args: { _limit?: number }
         Returns: {
