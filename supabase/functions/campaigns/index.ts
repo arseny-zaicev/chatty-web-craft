@@ -1262,6 +1262,36 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       await logEvent(recipient, "skipped", "instant_mode_disabled");
       return;
     }
+
+    // Workspace hard guardrail (FE/FM and similar): refuse + engage kill switch
+    // when either workspace-daily-cap or per-campaign-cap is reached. Stops the
+    // campaign from claiming further rows this tick AND on the next tick.
+    const wsIdGuard = recipient.workspace_id as string | undefined;
+    const wsGuardCfg = wsIdGuard ? guardByWs.get(wsIdGuard) : undefined;
+    if (wsGuardCfg && wsIdGuard) {
+      const wsSent = sentTodayByWs.get(wsIdGuard) ?? 0;
+      if (wsSent >= wsGuardCfg.hard_daily_cap) {
+        await admin.from("campaigns").update({
+          kill_switch_at: new Date().toISOString(),
+          kill_switch_reason: `workspace_daily_cap_reached (${wsSent}/${wsGuardCfg.hard_daily_cap})`,
+          status: "paused",
+        }).eq("id", recipient.campaign_id).is("kill_switch_at", null);
+        await logEvent(recipient, "killed", "workspace_daily_cap_reached", { sent_today: wsSent, cap: wsGuardCfg.hard_daily_cap });
+        return;
+      }
+      const campSent = sentByCampaignGuarded.get(recipient.campaign_id) ?? 0;
+      if (campSent >= wsGuardCfg.hard_per_campaign_cap) {
+        await admin.from("campaigns").update({
+          kill_switch_at: new Date().toISOString(),
+          kill_switch_reason: `campaign_hard_cap_reached (${campSent}/${wsGuardCfg.hard_per_campaign_cap})`,
+          status: "paused",
+        }).eq("id", recipient.campaign_id).is("kill_switch_at", null);
+        await logEvent(recipient, "killed", "campaign_hard_cap_reached", { sent_campaign: campSent, cap: wsGuardCfg.hard_per_campaign_cap });
+        return;
+      }
+    }
+
+
     const numRow = camp.whatsapp_numbers ?? null;
     if (numRow?.paused_at) {
       await logEvent(recipient, "idle", "sender_paused", { paused_reason: numRow.paused_reason });
