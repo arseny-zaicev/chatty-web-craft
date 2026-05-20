@@ -1638,7 +1638,11 @@ export type Database = {
           effective_from: string
           effective_to: string | null
           id: string
+          notes: string | null
           partner_id: string
+          rate_usd: number
+          role: string
+          source_bm_assignment_id: string | null
           whatsapp_number_id: string
         }
         Insert: {
@@ -1647,7 +1651,11 @@ export type Database = {
           effective_from?: string
           effective_to?: string | null
           id?: string
+          notes?: string | null
           partner_id: string
+          rate_usd?: number
+          role?: string
+          source_bm_assignment_id?: string | null
           whatsapp_number_id: string
         }
         Update: {
@@ -1656,7 +1664,11 @@ export type Database = {
           effective_from?: string
           effective_to?: string | null
           id?: string
+          notes?: string | null
           partner_id?: string
+          rate_usd?: number
+          role?: string
+          source_bm_assignment_id?: string | null
           whatsapp_number_id?: string
         }
         Relationships: [
@@ -2751,6 +2763,7 @@ export type Database = {
           provider_message_id: string | null
           raw: Json
           received_at: string
+          source: string
           whatsapp_number_id: string | null
           workspace_id: string | null
         }
@@ -2765,6 +2778,7 @@ export type Database = {
           provider_message_id?: string | null
           raw?: Json
           received_at?: string
+          source?: string
           whatsapp_number_id?: string | null
           workspace_id?: string | null
         }
@@ -2779,6 +2793,7 @@ export type Database = {
           provider_message_id?: string | null
           raw?: Json
           received_at?: string
+          source?: string
           whatsapp_number_id?: string | null
           workspace_id?: string | null
         }
