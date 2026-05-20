@@ -14,6 +14,7 @@ import {
   BRAND, BRAND_COPY, drawHeader, drawFooter,
   fmtUsd, fmtRate, fmtDateRangeDxb,
 } from "../_shared/brand.ts";
+import { assertPayoutOwnershipClean } from "../_shared/payoutGate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
