@@ -271,6 +271,16 @@ export default function FleetRegistry() {
 
   // Canonical ownership truth (number_ownership). Drives the header health
   // badge so onboarding gaps surface here without visiting the ownership page.
+  //
+  // OWNERSHIP SEMANTICS (slice 3):
+  // - "Own" numbers (attribution.kind === "own") are house-owned and intentionally
+  //   live OUTSIDE the partner payout ledger. They must NOT appear in
+  //   "missing partner ownership" alerts - that was a false positive.
+  // - "Referred" numbers are payout-relevant: they MUST have an active
+  //   number_ownership row pointing at a real partner.
+  // - "Legacy mismatch" = a referred number whose free-text provided_by /
+  //   assigned_ref does not map to any known partner row (typos, old data).
+  //   Surfaced separately so ops can repair the attribution.
   const ownershipQuery = useQuery({
     queryKey: ["fleet-registry", "ownership-ids"],
     enabled: authChecked,
@@ -283,10 +293,32 @@ export default function FleetRegistry() {
       return new Set((data ?? []).map((r: any) => r.whatsapp_number_id as string));
     },
   });
+  const partnerNamesQuery = useQuery({
+    queryKey: ["fleet-registry", "partner-names"],
+    enabled: authChecked,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("partners").select("name");
+      if (error) throw error;
+      return new Set((data ?? []).map((p: any) => String(p.name ?? "").trim().toLowerCase()).filter(Boolean));
+    },
+  });
   const ownedNumberIds = ownershipQuery.data ?? new Set<string>();
+  const knownPartnerNames = partnerNamesQuery.data ?? new Set<string>();
+  // Only payout-relevant numbers (referred) without an active ownership row.
   const ownershipUnassignedCount = useMemo(
-    () => rows.filter((r) => !ownedNumberIds.has(r.id)).length,
+    () => rows.filter((r) => getAttribution(r).kind === "referred" && !ownedNumberIds.has(r.id)).length,
     [rows, ownedNumberIds],
+  );
+  // Referred numbers whose free-text attribution does not match any partner name.
+  const legacyMismatchCount = useMemo(
+    () => rows.filter((r) => {
+      const a = getAttribution(r);
+      if (a.kind !== "referred") return false;
+      const refOk = a.ref ? knownPartnerNames.has(a.ref.trim().toLowerCase()) : true;
+      const provOk = a.providedBy ? knownPartnerNames.has(a.providedBy.trim().toLowerCase()) : true;
+      return !refOk || !provOk;
+    }).length,
+    [rows, knownPartnerNames],
   );
 
   const [q, setQ] = useState("");
