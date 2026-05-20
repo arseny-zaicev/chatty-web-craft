@@ -34,8 +34,15 @@ export type AlltimeMetrics = {
   failed_alltime: number;
 };
 
+export type EarningsMetrics = {
+  earned_today: number;
+  earned_7d: number;
+  earned_alltime: number;
+};
+
 const ZERO_TODAY: TodayMetrics = { sent_today: 0, delivered_today: 0, failed_today: 0, replies_today: 0 };
 const ZERO_ALL: AlltimeMetrics = { sent_alltime: 0, delivered_alltime: 0, failed_alltime: 0 };
+const ZERO_EARN: EarningsMetrics = { earned_today: 0, earned_7d: 0, earned_alltime: 0 };
 
 const sumToday = (rows: any[]): TodayMetrics =>
   rows.reduce<TodayMetrics>((acc, r) => ({
@@ -123,22 +130,24 @@ export async function fetchNumberMetrics(
 // same per-number RPC the per-BM rows use, so totals reconcile to the digit.
 export async function fetchPartnerMetrics(
   partnerIds: string[]
-): Promise<Map<string, TodayMetrics & AlltimeMetrics>> {
-  const out = new Map<string, TodayMetrics & AlltimeMetrics>();
-  partnerIds.forEach((p) => out.set(p, { ...ZERO_TODAY, ...ZERO_ALL }));
+): Promise<Map<string, TodayMetrics & AlltimeMetrics & EarningsMetrics>> {
+  const out = new Map<string, TodayMetrics & AlltimeMetrics & EarningsMetrics>();
+  partnerIds.forEach((p) => out.set(p, { ...ZERO_TODAY, ...ZERO_ALL, ...ZERO_EARN }));
   if (!partnerIds.length) return out;
 
-  // partner -> currently-owned numbers (effective_to IS NULL = active)
+  // partner -> currently-owned numbers + active rate
   const { data: ownership } = await supabase
     .from("number_ownership")
-    .select("partner_id, whatsapp_number_id, effective_to")
+    .select("partner_id, whatsapp_number_id, rate_usd, effective_to")
     .in("partner_id", partnerIds)
     .is("effective_to", null);
 
   const numToPartner = new Map<string, string>();
+  const numToRate = new Map<string, number>();
   (ownership ?? []).forEach((r: any) => {
     if (!numToPartner.has(r.whatsapp_number_id)) {
       numToPartner.set(r.whatsapp_number_id, r.partner_id);
+      numToRate.set(r.whatsapp_number_id, Number(r.rate_usd ?? 0));
     }
   });
   const numIds = Array.from(numToPartner.keys());
@@ -149,14 +158,39 @@ export async function fetchPartnerMetrics(
     const pid = numToPartner.get(r.whatsapp_number_id);
     if (!pid) return;
     const acc = out.get(pid)!;
+    const rate = numToRate.get(r.whatsapp_number_id) ?? 0;
+    const delivToday = Number(r.delivered_today ?? 0);
+    const deliv7d = Number(r.delivered_7d ?? 0);
+    const delivAll = Number(r.delivered_all ?? 0);
     acc.sent_today += Number(r.sent_today ?? 0);
-    acc.delivered_today += Number(r.delivered_today ?? 0);
+    acc.delivered_today += delivToday;
     acc.failed_today += Number(r.failed_today ?? 0);
     acc.sent_alltime += Number(r.sent_all ?? 0);
-    acc.delivered_alltime += Number(r.delivered_all ?? 0);
-    acc.failed_alltime += Number(r.failed_today ?? 0); // failed_all not in RPC; keep today as best-effort
+    acc.delivered_alltime += delivAll;
+    acc.failed_alltime += Number(r.failed_today ?? 0); // failed_all not in RPC; best-effort
+    acc.earned_today += delivToday * rate;
+    acc.earned_7d += deliv7d * rate;
+    acc.earned_alltime += delivAll * rate;
   });
   return out;
+}
+
+// Returns map: whatsapp_number_id -> current active rate (USD per delivered).
+// Used to compute live earnings for per-BM rows where we already have number_live_stats.
+export async function fetchNumberRates(
+  partnerId?: string
+): Promise<Map<string, number>> {
+  let q = supabase
+    .from("number_ownership")
+    .select("whatsapp_number_id, rate_usd, partner_id")
+    .is("effective_to", null);
+  if (partnerId) q = q.eq("partner_id", partnerId);
+  const { data } = await q;
+  const m = new Map<string, number>();
+  (data ?? []).forEach((r: any) => {
+    if (!m.has(r.whatsapp_number_id)) m.set(r.whatsapp_number_id, Number(r.rate_usd ?? 0));
+  });
+  return m;
 }
 
 // ---------- BUSINESS MANAGERS (aggregate over linked numbers) ----------

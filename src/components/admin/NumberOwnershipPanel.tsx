@@ -13,6 +13,7 @@ import { Plus, History, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { InlineRateEditor } from "./InlineRateEditor";
+import { NumberBmPicker } from "./NumberBmPicker";
 
 const ROLES = ["provider", "referral", "manager"] as const;
 
@@ -25,7 +26,7 @@ type Ownership = {
   effective_from: string;
   effective_to: string | null;
   notes: string | null;
-  number?: { id: string; phone_number: string; display_name: string | null; workspace_id: string | null };
+  number?: { id: string; phone_number: string; display_name: string | null; workspace_id: string | null; business_manager_id: string | null };
 };
 
 async function setOwnership(args: {
@@ -70,7 +71,7 @@ export function NumberOwnershipPanel({
       const ids = list.map(r => r.whatsapp_number_id);
       const { data: nums } = await supabase
         .from("whatsapp_numbers")
-        .select("id, phone_number, display_name, workspace_id, status")
+        .select("id, phone_number, display_name, workspace_id, status, business_manager_id")
         .in("id", ids);
       const byId = new Map((nums ?? []).map((n: any) => [n.id, n]));
       return list.map(r => ({ ...r, number: byId.get(r.whatsapp_number_id) })) as Ownership[];
@@ -104,6 +105,7 @@ export function NumberOwnershipPanel({
             <TableRow>
               <TableHead>Number</TableHead>
               <TableHead>Display name</TableHead>
+              <TableHead>BM</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Rate $/delivered</TableHead>
               <TableHead>Since</TableHead>
@@ -112,11 +114,11 @@ export function NumberOwnershipPanel({
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             )}
             {!isLoading && !rows?.length && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
                   No numbers assigned to this partner. Use "+ Assign numbers" above.
                 </TableCell>
               </TableRow>
@@ -125,6 +127,17 @@ export function NumberOwnershipPanel({
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-xs">+{r.number?.phone_number || "?"}</TableCell>
                 <TableCell className="text-xs">{r.number?.display_name || "—"}</TableCell>
+                <TableCell>
+                  <NumberBmPicker
+                    numberId={r.whatsapp_number_id}
+                    currentBmId={r.number?.business_manager_id ?? null}
+                    workspaceId={r.number?.workspace_id ?? null}
+                    partnerId={partnerId}
+                    partnerDefaultRate={partnerDefaultRate}
+                    partnerRole={r.role}
+                    onChanged={invalidateAll}
+                  />
+                </TableCell>
                 <TableCell>
                   <Select
                     value={r.role}

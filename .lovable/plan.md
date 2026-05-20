@@ -1,84 +1,52 @@
-## Goal
+## Three fixes for the partner workflow
 
-When a setter is assigned to a conversation (`conversations.assigned_setter_id`), automatically move that conversation's deal into the matching "Aktive Chats {Setter}" stage in the same pipeline. Mapping is explicit (per-stage dropdown), so it works for any client and survives renames.
+### 1. Real earnings everywhere (top strip + BM table + partners list)
 
-## Schema change
+Today the Partner page shows "Open payout" and "Paid this month" but never the actual earned $ (delivered × rate). That's the "странная статистика" you're seeing.
 
-Add one nullable column:
+- Extend `fetchPartnerMetrics` (and per-BM aggregation in `PartnerDetail`) to compute earnings live by joining `number_live_stats` with `number_ownership.rate_usd` per-number, then summing per partner / per BM. Same math as `partner_earnings_breakdown`, just exposed in the live cards.
+- Top strip on `PartnerDetail`: add **Earned today · Earned 7d · Earned all-time** stat cards (green accent). Keep Open payout / Paid this month.
+- BM table row: add **Earned today / 7d / all** columns next to the Delivered/Sent columns.
+- `Partners.tsx` list: add **Earned today** and **Earned all-time** columns.
 
-```
-ALTER TABLE public.pipeline_stages
-  ADD COLUMN assigned_setter_id uuid
-    REFERENCES public.workspace_setters(id) ON DELETE SET NULL;
+### 2. Trim the noisy top stats
 
-CREATE INDEX pipeline_stages_assigned_setter_idx
-  ON public.pipeline_stages(assigned_setter_id)
-  WHERE assigned_setter_id IS NOT NULL;
-```
+Right now the strip has 15 cards. Keep only what you actually act on:
 
-Sanity check at write time (trigger): if a row sets `assigned_setter_id`, the setter must belong to the same `workspace_id` as the stage. Reject otherwise.
+Keep: Total BMs (with split Ready / Disabled inline), Total numbers, Restricted #, Blocked #, Sent today, Delivered today, Errors today (= failed_today), Sent 7d, Delivered 7d, Sent all-time, Delivered all-time, Earned today, Earned 7d, Earned all-time, Open payout, Paid this month.
 
-## Trigger: conversation → deal stage
+Drop standalone cards for: Warming up, Verifying (still visible in the BM table column).
 
-`AFTER UPDATE OF assigned_setter_id ON public.conversations` (and `AFTER INSERT` for completeness). When `NEW.assigned_setter_id IS DISTINCT FROM OLD.assigned_setter_id` and not null:
+### 3. Number ownership knows the BM too
 
-1. Look up the target stage:
-   ```sql
-   SELECT id FROM pipeline_stages
-   WHERE pipeline_id = NEW.pipeline_id
-     AND assigned_setter_id = NEW.assigned_setter_id
-   LIMIT 1;
-   ```
-2. If found, update the deal linked to this conversation:
-   ```sql
-   UPDATE deals
-      SET stage_id = <target>, updated_at = now()
-    WHERE conversation_id = NEW.id
-      AND stage_id <> <target>;
-   ```
-3. If no matching stage, do nothing silently (so pipelines without per-setter columns are unaffected).
+`whatsapp_numbers.business_manager_id` already exists; the UI just doesn't expose it. Add it here so the page becomes a 3-column truth: Number → Partner → BM.
 
-The trigger is `SECURITY DEFINER` so it works regardless of which role updated the conversation (webhook, cron, UI).
+**a) Global `/admin/numbers` page (`NumberOwnership.tsx`)**
+- Add **BM** column in both Unassigned and Assigned tabs.
+- Inline `<Select>` per row to pick an existing BM **or** "+ Create new BM" (opens a tiny inline dialog: name, Meta BM ID, status). Newly created BM auto-inherits the row's workspace; if the number's owner partner is known we also auto-create the `bm_partner_assignments` row at the partner's default rate so the BM shows up under that partner immediately.
+- Bulk-assign dialog: add an optional **BM** picker (existing BMs of the chosen partner, or "+ Create new BM"). When set, after `set_number_ownership` we also `UPDATE whatsapp_numbers.business_manager_id` for each picked number.
+- Summary card on top: `N BMs · M numbers · K unassigned` (so you see at a glance how many BMs are in the fleet).
 
-No backfill on schema migration. After the admin maps the three FB Media stages in the UI, a one-shot `UPDATE conversations SET assigned_setter_id = assigned_setter_id WHERE assigned_setter_id IS NOT NULL AND pipeline_id IN (...)` re-fires the trigger to align existing chats. I'll run that as a data update once mapping is saved.
+**b) Per-partner `NumberOwnershipPanel` (inside Partner page)**
+- Same new **BM** column with inline change / create, scoped to BMs linked to this partner (plus "+ Create" which also links it to this partner).
+- Add a small grouping header above the table: per-BM count of numbers (`ISKRA-BM-04 · 7 numbers`, etc.), with a click-to-filter.
+- "Assign numbers" dialog: BM dropdown (partner's BMs + Create new).
 
-## UI: PipelineConfigSheet stage editor
-
-In `src/components/workspace/PipelineConfigSheet.tsx`, in the stage row, add a small "Setter" dropdown next to the existing name/color controls:
-
-- Source: `fetchSetters(workspace_id)` filtered to active.
-- Options: "— none —" + each setter's `display_name`.
-- Writes `pipeline_stages.assigned_setter_id` directly.
-- Visual hint: when a stage has a setter mapped, show a tiny avatar/initial chip in the stage header on the Pipeline board too (so it's visible without opening config).
-
-Validation in UI: a setter can be mapped to at most one stage per pipeline. If user picks a setter already used in this pipeline, swap it (clear the previous stage's mapping) and toast "Moved Andre's column from X to Y".
-
-## What does NOT change
-
-- `assigned_setter_id` selection UI (`SetterAssignSelect`) stays as-is.
-- Manual drag of a card between columns still works; the trigger only fires on `assigned_setter_id` change, not on stage change.
-- Stages without `assigned_setter_id` (e.g. "No Reply", "Reply") behave exactly like before.
-
-## Edge cases handled
-
-- Deal doesn't exist for the conversation yet → no-op (trigger skips silently).
-- Setter unassigned (`NULL`) → don't touch the deal (leaves it where the user put it).
-- Conversation moved to a different pipeline → trigger uses `NEW.pipeline_id`, so it looks up the stage in the right pipeline.
-- Setter deleted → ON DELETE SET NULL clears the mapping; future assignments to that pipeline won't move anything.
+**c) Per-partner Business Managers tab**
+- Each BM row gets a "Manage numbers" button (already exists as `AddNumbersToBmButton`) - upgrade it to a side panel showing **current numbers** of that BM with checkbox to remove + a multi-select "Add" pool of numbers from any BM in the workspace (with confirmation when reassigning). This is the "удобная панель закрепления номеров за этим БМ".
 
 ## Files touched
 
-- New migration: add column + trigger + workspace-consistency check.
-- `src/components/workspace/PipelineConfigSheet.tsx`: setter dropdown per stage row.
-- `src/lib/pipelines.ts` (or inline in the sheet): tiny helper `setStageSetter(stageId, setterId)`.
-- `src/pages/Pipeline.tsx`: optional small avatar chip on stage header.
-- `src/integrations/supabase/types.ts`: regenerated automatically.
-- Data update after mapping is saved: re-trigger `assigned_setter_id` to align FB Media's existing conversations.
+- `src/lib/metrics.ts` — add earnings to `fetchPartnerMetrics` return type and computation.
+- `src/pages/admin/PartnerDetail.tsx` — trim top strip, add Earned cards, add Earned columns to BM table.
+- `src/pages/admin/Partners.tsx` — Earned columns in list.
+- `src/pages/admin/NumberOwnership.tsx` — BM column + inline create/select, bulk-assign BM, top counters.
+- `src/components/admin/NumberOwnershipPanel.tsx` — BM column + inline create/select scoped to partner.
+- `src/components/admin/BmNumbersPanel.tsx` (new) — side panel for "Manage numbers" of a BM, plugged into the BMs tab.
+- No schema migration needed; everything already exists in the DB.
 
-## Order of operations
+## Out of scope (not changed)
 
-1. Migration (column + trigger).
-2. UI dropdown in PipelineConfigSheet.
-3. You map the three FB Media stages to Andre/Katalin/Tobias.
-4. I run the one-shot re-fire so existing assigned chats jump into their columns.
-5. Optional: chip on stage header.
+- Payout calculation / finance runs.
+- Webhook health, fleet templates.
+- Pipeline routing (just shipped).

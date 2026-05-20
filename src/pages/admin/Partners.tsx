@@ -162,6 +162,8 @@ export default function Partners() {
                   <TableHead>Referred #</TableHead>
                   <TableHead>Delivered / Sent today</TableHead>
                   <TableHead>Delivered / Sent all-time</TableHead>
+                  <TableHead>Earned today</TableHead>
+                  <TableHead>Earned all-time</TableHead>
                   <TableHead>Partner rate</TableHead>
                   <TableHead>Manager rate</TableHead>
                   <TableHead>Unpaid</TableHead>
@@ -201,6 +203,8 @@ export default function Partners() {
                           <span className="text-emerald-700 dark:text-emerald-400 font-medium">{(pm?.delivered_alltime ?? 0).toLocaleString()}</span>
                           <span> / {(pm?.sent_alltime ?? 0).toLocaleString()}</span>
                         </TableCell>
+                        <TableCell className="tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">${(pm?.earned_today ?? 0).toFixed(2)}</TableCell>
+                        <TableCell className="tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">${(pm?.earned_alltime ?? 0).toFixed(2)}</TableCell>
                         <TableCell className="font-mono text-xs">${Number(p.default_payout_rate_usd).toFixed(4)}</TableCell>
                         <TableCell className="font-mono text-xs">{p.referral_rate_usd > 0 ? `$${Number(p.referral_rate_usd).toFixed(4)}` : <span className="text-muted-foreground">-</span>}</TableCell>
                         <TableCell className={unpaid > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}>
@@ -216,7 +220,7 @@ export default function Partners() {
                     );
                   })}
                   {!rows.length && (
-                    <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={14} className="text-center text-muted-foreground py-8">
                       No partners.
                     </TableCell></TableRow>
                   )}

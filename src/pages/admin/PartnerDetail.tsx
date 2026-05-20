@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfMonth } from "date-fns";
-import { fetchPartnerMetrics } from "@/lib/metrics";
+import { fetchPartnerMetrics, fetchNumberRates } from "@/lib/metrics";
 import { NumberOwnershipPanel } from "@/components/admin/NumberOwnershipPanel";
 import { PartnerEarningsPanel } from "@/components/admin/PartnerEarningsPanel";
 import { InlineRateEditor, InlineTextEditor } from "@/components/admin/InlineRateEditor";
@@ -148,8 +148,17 @@ export default function PartnerDetail() {
     queryKey: ["admin", "partner", id, "metrics"],
     enabled: !!id,
     queryFn: () => fetchPartnerMetrics([id!]),
+    refetchInterval: visibleRefetchInterval(30_000),
+    refetchIntervalInBackground: false,
   });
   const pm = id ? partnerMetrics?.get(id) : undefined;
+
+  // Per-number active rates for this partner (used in BM table to compute Earned columns)
+  const { data: numberRates } = useQuery({
+    queryKey: ["admin", "partner-num-rates", id],
+    enabled: !!id,
+    queryFn: () => fetchNumberRates(id!),
+  });
 
   if (partnerLoading || !partner) return <div className="p-6"><Loader2 className="animate-spin w-5 h-5" /></div>;
 
@@ -186,21 +195,20 @@ export default function PartnerDetail() {
           </span>
         </div>
 
-        {/* TOP SUMMARY STRIP - live across linked BMs / numbers */}
-        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-3">
-          <Stat label="Total BMs" value={String(bmList.length)} />
-          <Stat label="Ready" value={String(lifecycleCounts.ready)} />
-          <Stat label="Warming up" value={String(lifecycleCounts.warming_up)} />
-          <Stat label="Verifying" value={String(lifecycleCounts.verifying)} />
-          <Stat label="Disabled" value={String(lifecycleCounts.disabled)} />
-          <Stat label="Restricted #" value={String(restrictedNums)} alert={restrictedNums > 0} />
-          <Stat label="Blocked #" value={String(blockedNums)} alert={blockedNums > 0} />
+        {/* TOP SUMMARY STRIP - trimmed: only what you act on */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <Stat label="BMs" value={`${lifecycleCounts.ready}/${bmList.length}`} hint={`${lifecycleCounts.disabled} disabled`} />
+          <Stat label="Numbers" value={String(totalNums)} hint={`${restrictedNums} restricted · ${blockedNums} blocked`} alert={restrictedNums + blockedNums > 0} />
           <Stat label="Sent today" value={(pm?.sent_today ?? 0).toLocaleString()} />
           <Stat label="Delivered today" value={(pm?.delivered_today ?? 0).toLocaleString()} />
-          <Stat label="Sent all-time" value={(pm?.sent_alltime ?? 0).toLocaleString()} />
-          <Stat label="Delivered all-time" value={(pm?.delivered_alltime ?? 0).toLocaleString()} />
+          <Stat label="Errors today" value={(pm?.failed_today ?? 0).toLocaleString()} alert={(pm?.failed_today ?? 0) > 0} />
           <Stat label="Sent 7d" value={sent7dTotal.toLocaleString()} />
           <Stat label="Delivered 7d" value={delivered7dTotal.toLocaleString()} />
+          <Stat label="Sent all-time" value={(pm?.sent_alltime ?? 0).toLocaleString()} />
+          <Stat label="Delivered all-time" value={(pm?.delivered_alltime ?? 0).toLocaleString()} />
+          <Stat label="Earned today" value={fmtUsd(pm?.earned_today ?? 0)} accent />
+          <Stat label="Earned 7d" value={fmtUsd(pm?.earned_7d ?? 0)} accent />
+          <Stat label="Earned all-time" value={fmtUsd(pm?.earned_alltime ?? 0)} accent />
           <Stat label="Open payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
           <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
         </div>
@@ -262,6 +270,9 @@ export default function PartnerDetail() {
                     <TableHead className="text-right">Deliv / Sent today</TableHead>
                     <TableHead className="text-right">Deliv / Sent 7d</TableHead>
                     <TableHead className="text-right">Deliv / Sent all</TableHead>
+                    <TableHead className="text-right">Earned today</TableHead>
+                    <TableHead className="text-right">Earned 7d</TableHead>
+                    <TableHead className="text-right">Earned all</TableHead>
                     <TableHead className="text-right">Restricted</TableHead>
                     <TableHead className="text-right">Blocked</TableHead>
                     <TableHead className="text-right">Clients</TableHead>
@@ -280,6 +291,9 @@ export default function PartnerDetail() {
                       const delivToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_today || 0), 0);
                       const deliv7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_7d || 0), 0);
                       const delivAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_all || 0), 0);
+                      const earnedToday = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_today || 0) * (numberRates?.get(n.id) ?? 0), 0);
+                      const earned7d = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_7d || 0) * (numberRates?.get(n.id) ?? 0), 0);
+                      const earnedAll = bmNums.reduce((s, n) => s + Number(liveByNum.get(n.id)?.delivered_all || 0) * (numberRates?.get(n.id) ?? 0), 0);
                       const summary = bmNums.slice(0, 3).map(n => n.display_name || `+${n.phone_number}`).join(", ")
                         + (bmNums.length > 3 ? ` +${bmNums.length - 3}` : "");
                       const invalidateBm = () => {
@@ -385,6 +399,9 @@ export default function PartnerDetail() {
                             <span className="text-emerald-700 dark:text-emerald-400 font-medium">{delivAll.toLocaleString()}</span>
                             <span className="text-muted-foreground"> / {sentAll.toLocaleString()}</span>
                           </TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">{fmtUsd(earnedToday)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">{fmtUsd(earned7d)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">{fmtUsd(earnedAll)}</TableCell>
                           <TableCell className={`text-right tabular-nums ${restricted > 0 ? "text-amber-600 font-medium" : ""}`}>{restricted}</TableCell>
                           <TableCell className={`text-right tabular-nums ${blocked > 0 ? "text-destructive font-medium" : ""}`}>{blocked}</TableCell>
                           <TableCell className="text-right tabular-nums">{wsSet.size}</TableCell>
@@ -395,7 +412,7 @@ export default function PartnerDetail() {
                       );
                     })}
                     {!activeAssigns.length && (
-                      <TableRow><TableCell colSpan={14} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={17} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -503,11 +520,11 @@ export default function PartnerDetail() {
   );
 }
 
-const Stat = ({ label, value, hint, alert }: { label: string; value: string; hint?: string; alert?: boolean }) => (
+const Stat = ({ label, value, hint, alert, accent }: { label: string; value: string; hint?: string; alert?: boolean; accent?: boolean }) => (
   <Card>
     <CardContent className="pt-5">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`text-2xl font-semibold mt-1 ${alert ? "text-amber-600" : ""}`}>{value}</div>
+      <div className={`text-2xl font-semibold mt-1 ${alert ? "text-amber-600" : accent ? "text-emerald-700 dark:text-emerald-400" : ""}`}>{value}</div>
       {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </CardContent>
   </Card>
