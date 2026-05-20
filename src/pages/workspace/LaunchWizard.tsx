@@ -536,18 +536,16 @@ export default function LaunchWizard() {
   // where windowFitCap = floor(windowSeconds / minGap) for paced. Instant mode
   // skips the window clamp. Keeps pre-prepare estimate consistent with canonical
   // resolver output so review/launch don't diverge.
-  const capacity = useMemo(() => {
-    const numbers = Math.max(1, activeNumbers.length);
-    const days = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
-    const quota = Math.max(1, perNumberQuota);
-    const [sh, sm] = (windowStart || "09:00").split(":").map(Number);
-    const [eh, em] = (windowEnd || "18:00").split(":").map(Number);
-    const windowSeconds = Math.max(60, ((eh * 60 + em) - (sh * 60 + sm)) * 60);
-    const minGap = isMarketing ? 1 : Math.max(1, delayMin || 1);
-    const windowFitCap = isMarketing ? quota : Math.max(1, Math.floor(windowSeconds / minGap));
-    const perNumberCap = Math.min(quota, windowFitCap);
-    return numbers * perNumberCap * days;
-  }, [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota, windowStart, windowEnd, isMarketing, delayMin]);
+  const capacity = useMemo(() => computeCapacity({
+    activeNumbersCount: activeNumbers.length,
+    scheduledDatesCount: scheduledDates.length,
+    scheduleMode,
+    perNumberQuota,
+    windowStart,
+    windowEnd,
+    isMarketing,
+    delayMin,
+  }), [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota, windowStart, windowEnd, isMarketing, delayMin]);
   const overCapacity = audienceSource === "database"
     ? Math.max(0, dbTargetCount - capacity)
     : Math.max(0, recipients.length - capacity);
