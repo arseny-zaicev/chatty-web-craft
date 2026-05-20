@@ -2257,43 +2257,15 @@ serve(async (req) => {
 });
 
 // ===== Marketing Instant: prepare snapshot, kill switch, runtime status =====
+//
+// Snapshot contract version + signature now live in `_shared/launchContract.ts`
+// so prepare/launch/UI all read the same payload. Keep a thin local alias for
+// legacy logs.
+const SNAPSHOT_CONTRACT_VERSION = SHARED_SNAPSHOT_CONTRACT_VERSION;
 
-// Bump this whenever quota/capacity/allocation contract changes.
-// Any previously-prepared snapshot fails signature verification at launch and
-// forces the operator to re-prepare against the current contract.
-// v3 (2026-05-20): legacy/default whatsapp_numbers.daily_send_limit=200 is
-// treated as unset, so it cannot create hidden caps or warnings when the
-// operator did not explicitly set a number limit.
-const SNAPSHOT_CONTRACT_VERSION = "v3-default-200-is-unset-2026-05-20";
-
-async function computeSnapshotSignature(input: {
-  numberIds: string[];
-  templateIds: string[];
-  audienceCount: number;
-  windowStart: string;
-  windowEnd: string;
-  perNumberQuota: number;
-  maxInflightPerNumber: number;
-  maxInflightPerCampaign: number;
-}): Promise<string> {
-  const sorted = {
-    v: SNAPSHOT_CONTRACT_VERSION,
-    n: [...input.numberIds].sort(),
-    t: [...input.templateIds].sort(),
-    a: input.audienceCount,
-    ws: input.windowStart,
-    we: input.windowEnd,
-    q: input.perNumberQuota,
-    in: input.maxInflightPerNumber,
-    ic: input.maxInflightPerCampaign,
-  };
-  const txt = JSON.stringify(sorted);
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
-  return "sha256:" + Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-// Build a prepared snapshot for a campaign. Operator must call this before launch
-// for marketing_instant; the launch endpoint enforces freshness + signature match.
+// Build a prepared snapshot for a campaign. Operator must call this before
+// launch for marketing_instant; the launch endpoint enforces freshness +
+// signature match using the same canonical resolver.
 async function prepareCampaign(admin: any, requesterId: string, body: any) {
   const numbers: Array<{ number_id: string; template_id: string }> =
     Array.isArray(body.numbers) ? body.numbers
@@ -2303,124 +2275,65 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   const audienceCount = Math.max(0, Math.floor(Number(body.audience_count ?? 0)));
   const dispatchMode: "paced" | "marketing_instant" =
     body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
-  const perNumberQuota = normalizePerNumberQuota(body.per_number_quota);
   const maxInflightPerNumber = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_number ?? 5))));
   const maxInflightPerCampaign = Math.max(1, Math.min(5000, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
   const windowStart: string = typeof body.window_start === "string" ? body.window_start : "09:00";
   const windowEnd: string = typeof body.window_end === "string" ? body.window_end : "18:00";
+  const scheduledDates: string[] = Array.isArray(body.scheduled_dates)
+    ? body.scheduled_dates.filter((d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d))
+    : [];
+  const minDelaySeconds = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
+  const respectTz: boolean = body.respect_recipient_tz !== false;
+  const perNumberQuota = normalizePerNumberQuota(body.per_number_quota);
   const reuseCampaignId: string | null =
     typeof body.campaign_id === "string" && uuidRegex.test(body.campaign_id) ? body.campaign_id : null;
 
   if (numbers.length === 0) return json({ error: "At least one number+template required" }, 400);
   if (audienceCount <= 0) return json({ error: "audience_count required" }, 400);
 
-  const numberIds = [...new Set(numbers.map((n) => n.number_id))];
-  const templateIds = [...new Set(numbers.map((n) => n.template_id))];
+  // Ownership/access check (resolver doesn't perform RLS).
+  const probe = await admin.from("whatsapp_numbers").select("user_id").eq("id", numbers[0].number_id).maybeSingle();
+  if (!probe?.data) return json({ error: "Number not found" }, 404);
+  if (!(await canAccessUser(admin, requesterId, probe.data.user_id))) return json({ error: "Forbidden" }, 403);
 
-  const { data: numberRows } = await admin
-    .from("whatsapp_numbers")
-    .select("id, user_id, workspace_id, phone_number, status, webhook_connected, paused_at, paused_reason, daily_send_limit, provider_app_id, provider_api_key")
-    .in("id", numberIds);
-  if (!numberRows || numberRows.length !== numberIds.length) return json({ error: "Number not found" }, 404);
-  const ownerId = numberRows[0].user_id;
-  if (!(await canAccessUser(admin, requesterId, ownerId))) return json({ error: "Forbidden" }, 403);
-
-  const { data: templateRows } = await admin
-    .from("message_templates")
-    .select("id, name, status, body, variables")
-    .in("id", templateIds);
-  if (!templateRows || templateRows.length !== templateIds.length) return json({ error: "Template not found" }, 404);
-
-  const { data: backoffRows } = await admin
-    .from("provider_backoff")
-    .select("whatsapp_number_id, retry_after")
-    .in("whatsapp_number_id", numberIds);
-  const backoffMap = new Map<string, string>();
-  for (const b of backoffRows ?? []) backoffMap.set(b.whatsapp_number_id, b.retry_after);
-
-  const blockers: string[] = [];
-  const warnings: string[] = [];
-
-  // Allocate audience round-robin (capped per-number).
-  const allocByNum = new Map<string, number>();
-  for (const nid of numberIds) allocByNum.set(nid, 0);
-  let remaining = audienceCount;
-  while (remaining > 0) {
-    let placedThisRound = false;
-    for (const nid of numberIds) {
-      const cur = allocByNum.get(nid) ?? 0;
-      // Operator's per_number_quota is authoritative; daily_send_limit must
-      // not silently clamp it (workspace_send_guards remain the hard ceiling).
-      const cap = Math.max(0, perNumberQuota);
-      if (cur < cap) {
-        allocByNum.set(nid, cur + 1);
-        remaining--;
-        placedThisRound = true;
-        if (remaining === 0) break;
-      }
-    }
-    if (!placedThisRound) break;
-  }
-  if (remaining > 0) {
-    warnings.push(`Capacity is ${audienceCount - remaining} but audience is ${audienceCount}. Add more numbers, raise per-number cap, or split.`);
-  }
-  // Surface daily_send_limit recommendation as a non-blocking warning.
-  for (const nrow of numberRows as any[]) {
-    const dailyLimit = explicitDailySendLimit(nrow?.daily_send_limit);
-    if (dailyLimit !== null && perNumberQuota > dailyLimit) {
-      warnings.push(`Number ${nrow.phone_number}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
-    }
-  }
-
-  const numbersOut = numberRows.map((n: any) => {
-    const allocation = allocByNum.get(n.id) ?? 0;
-    if (n.webhook_connected === false) blockers.push(`Number ${n.phone_number}: webhook not connected — replies would be lost.`);
-    if (n.status === "banned" || n.status === "restricted") blockers.push(`Number ${n.phone_number} is ${n.status}.`);
-    if (n.paused_at) blockers.push(`Number ${n.phone_number} is paused: ${n.paused_reason ?? "no reason"}.`);
-    if (!n.provider_api_key) blockers.push(`Number ${n.phone_number}: no provider API key.`);
-    if (allocation === 0) blockers.push(`Number ${n.phone_number} got zero allocation — remove it from the pool or raise its daily cap.`);
-    return {
-      id: n.id,
-      phone: n.phone_number,
-      status: n.status,
-      webhook_connected: n.webhook_connected,
-      allocation,
-      daily_cap: explicitDailySendLimit(n.daily_send_limit) ?? perNumberQuota,
-      backoff_until: backoffMap.get(n.id) ?? null,
-    };
-  });
-
-  for (const t of templateRows) {
-    if (t.status !== "approved") blockers.push(`Template "${t.name}" is ${t.status}, not approved.`);
-  }
-
-  // Global instant kill switch.
-  if (dispatchMode === "marketing_instant") {
-    const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
-    if (flag && flag.value === false) blockers.push("Marketing Instant mode is globally disabled (kill switch).");
-  }
-
-  const signature = await computeSnapshotSignature({
-    numberIds, templateIds, audienceCount, windowStart, windowEnd,
-    perNumberQuota, maxInflightPerNumber, maxInflightPerCampaign,
-  });
+  const contract = await resolveLaunchContract(admin, {
+    numbers,
+    audienceCount,
+    perNumberQuota,
+    windowStart,
+    windowEnd,
+    scheduledDates,
+    dispatchMode,
+    minDelaySeconds,
+    maxInflightPerNumber,
+    maxInflightPerCampaign,
+    respectRecipientTz: respectTz,
+  }, { includeKillSwitch: true });
 
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const report = {
-    signature,
+    signature: contract.signature,
     expires_at: expiresAt,
     dispatch_mode: dispatchMode,
-    numbers: numbersOut,
-    templates: templateRows.map((t: any) => ({ id: t.id, name: t.name, status: t.status })),
-    audience: { total: audienceCount, allocated: audienceCount - remaining },
+    numbers: contract.numbersDetail,
+    templates: contract.templatesDetail,
+    audience: { total: audienceCount, allocated: contract.audienceAllocated },
+    capacity: {
+      per_day: contract.capacityPerDay,
+      today: contract.capacityToday,
+      total: contract.allocatedCapacity,
+      truncated: contract.truncatedCount,
+      days: contract.daysCount,
+      per_number_caps: contract.perNumberCaps,
+    },
     caps: {
       per_number_inflight: maxInflightPerNumber,
       per_campaign_inflight: maxInflightPerCampaign,
       per_number_daily: perNumberQuota,
     },
-    window: { start: windowStart, end: windowEnd, per_recipient_tz: body.respect_recipient_tz !== false },
-    blockers,
-    warnings,
+    window: { start: windowStart, end: windowEnd, per_recipient_tz: respectTz },
+    blockers: contract.blockers,
+    warnings: contract.warnings,
     notice: dispatchMode === "marketing_instant"
       ? "Instant mode sends each recipient immediately when their LOCAL window opens. Recipients in different timezones do not all send at the same global second."
       : null,
@@ -2430,13 +2343,21 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
     await admin.from("campaigns").update({
       prepared_at: new Date().toISOString(),
       prepared_expires_at: expiresAt,
-      prepared_signature: signature,
+      prepared_signature: contract.signature,
       prepared_report: report,
     }).eq("id", reuseCampaignId);
   }
 
-  return json({ ok: blockers.length === 0, signature, expires_at: expiresAt, blockers, warnings, snapshot: report });
+  return json({
+    ok: contract.ok,
+    signature: contract.signature,
+    expires_at: expiresAt,
+    blockers: contract.blockers,
+    warnings: contract.warnings,
+    snapshot: report,
+  });
 }
+
 
 // Engage / release a kill switch. scope: campaign | sender | instant_mode_global.
 async function killSwitch(admin: any, requesterId: string, body: any) {
