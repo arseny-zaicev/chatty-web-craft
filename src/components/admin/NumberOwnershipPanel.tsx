@@ -105,6 +105,7 @@ export function NumberOwnershipPanel({
             <TableRow>
               <TableHead>Number</TableHead>
               <TableHead>Display name</TableHead>
+              <TableHead>BM</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Rate $/delivered</TableHead>
               <TableHead>Since</TableHead>
