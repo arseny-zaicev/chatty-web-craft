@@ -36,6 +36,13 @@ import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 import { friendlySenderLabel, senderFullLabel } from "@/lib/crmData";
 import DispatchControlPanel, { type DispatchMode } from "@/components/workspace/DispatchControlPanel";
+import { computeCapacity } from "@/lib/launchEstimate";
+import { computeSnapshotFingerprint, snapshotStorageKey } from "@/lib/launchSnapshot";
+import {
+  computeStaticQaBlockers,
+  computeStaticQaWarnings,
+  StaticQaPanel,
+} from "@/components/workspace/LaunchBlockers";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
 
@@ -529,18 +536,16 @@ export default function LaunchWizard() {
   // where windowFitCap = floor(windowSeconds / minGap) for paced. Instant mode
   // skips the window clamp. Keeps pre-prepare estimate consistent with canonical
   // resolver output so review/launch don't diverge.
-  const capacity = useMemo(() => {
-    const numbers = Math.max(1, activeNumbers.length);
-    const days = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
-    const quota = Math.max(1, perNumberQuota);
-    const [sh, sm] = (windowStart || "09:00").split(":").map(Number);
-    const [eh, em] = (windowEnd || "18:00").split(":").map(Number);
-    const windowSeconds = Math.max(60, ((eh * 60 + em) - (sh * 60 + sm)) * 60);
-    const minGap = isMarketing ? 1 : Math.max(1, delayMin || 1);
-    const windowFitCap = isMarketing ? quota : Math.max(1, Math.floor(windowSeconds / minGap));
-    const perNumberCap = Math.min(quota, windowFitCap);
-    return numbers * perNumberCap * days;
-  }, [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota, windowStart, windowEnd, isMarketing, delayMin]);
+  const capacity = useMemo(() => computeCapacity({
+    activeNumbersCount: activeNumbers.length,
+    scheduledDatesCount: scheduledDates.length,
+    scheduleMode,
+    perNumberQuota,
+    windowStart,
+    windowEnd,
+    isMarketing,
+    delayMin,
+  }), [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota, windowStart, windowEnd, isMarketing, delayMin]);
   const overCapacity = audienceSource === "database"
     ? Math.max(0, dbTargetCount - capacity)
     : Math.max(0, recipients.length - capacity);
@@ -657,44 +662,15 @@ export default function LaunchWizard() {
   //   warnings → show but DO NOT block launch
   //   blockers → block launch (ONLY when every sampled row mismatches an expected
   //              static value — that's a true preset bug, not normal drift)
-  const staticQaWarnings = useMemo(() => {
-    if (audienceSource !== "database") return [] as Array<{ key: string; reason: string }>;
-    const rows = sampleDbRowsQ.data ?? [];
-    if (rows.length === 0) return [];
-    const banned = new Set(NAME_FALLBACK_PHRASES.map((s) => s.toLowerCase()));
-    const out: Array<{ key: string; reason: string }> = [];
-    for (const [key, expected] of Object.entries(expectedStaticValues)) {
-      const got = rows.map((r) => String(r.derived_payload?.[key] ?? ""));
-      const bad = got.find((g) => g.trim() !== expected.trim());
-      if (bad !== undefined) {
-        out.push({ key, reason: `Expected campaign-static "${expected.slice(0, 60)}${expected.length > 60 ? "..." : ""}", found "${bad.slice(0, 60)}${bad.length > 60 ? "..." : ""}" in some sampled rows.` });
-      }
-    }
-    if (Object.keys(expectedStaticValues).length === 0 && rows.length > 0) {
-      for (const k of Object.keys(rows[0].derived_payload ?? {})) {
-        if (k === "var_1") continue;
-        const vals = rows.map((r) => String(r.derived_payload?.[k] ?? "").trim().toLowerCase());
-        if (vals.every((v) => banned.has(v))) {
-          out.push({ key: k, reason: `Every sampled row has name-fallback text in ${k}. Likely a prep mistake — re-prepare with copy from Materials.` });
-        }
-      }
-    }
-    return out;
-  }, [audienceSource, expectedStaticValues, sampleDbRowsQ.data]);
+  const staticQaWarnings = useMemo(
+    () => computeStaticQaWarnings(audienceSource, expectedStaticValues, sampleDbRowsQ.data ?? []),
+    [audienceSource, expectedStaticValues, sampleDbRowsQ.data],
+  );
 
-  const staticQaBlockers = useMemo(() => {
-    // Only HARD-block when EVERY sampled row mismatches an expected value
-    // (preset bug). Single-row drift just warns.
-    if (audienceSource !== "database") return [] as Array<{ key: string; reason: string }>;
-    const rows = sampleDbRowsQ.data ?? [];
-    if (rows.length === 0) return [];
-    const out: Array<{ key: string; reason: string }> = [];
-    for (const [key, expected] of Object.entries(expectedStaticValues)) {
-      const allBad = rows.every((r) => String(r.derived_payload?.[key] ?? "").trim() !== expected.trim());
-      if (allBad) out.push({ key, reason: `Every sampled row mismatches expected static value for ${key}. Re-prepare the batch.` });
-    }
-    return out;
-  }, [audienceSource, expectedStaticValues, sampleDbRowsQ.data]);
+  const staticQaBlockers = useMemo(
+    () => computeStaticQaBlockers(audienceSource, expectedStaticValues, sampleDbRowsQ.data ?? []),
+    [audienceSource, expectedStaticValues, sampleDbRowsQ.data],
+  );
 
   // Back-compat alias kept for the UI block below.
   const staticQaIssues = staticQaWarnings;
@@ -786,16 +762,17 @@ export default function LaunchWizard() {
   // The user explicitly confirms a snapshot by clicking the badge; subsequent edits
   // invalidate it. No 30-min expiry: if nothing changed, the snapshot stays valid
   // regardless of time elapsed.
-  const snapshotFingerprint = useMemo(() => {
-    const parts = {
-      a: dbBatchId || `paste:${recipients.length}`,
-      t: activeLogical?.key ?? "",
-      n: [...activeNumbers.map((n) => n.id)].sort(),
-      m: Object.entries(mapping).sort(([a], [b]) => a.localeCompare(b)),
-    };
-    return btoa(unescape(encodeURIComponent(JSON.stringify(parts)))).slice(0, 16);
-  }, [dbBatchId, recipients.length, activeLogical?.key, activeNumbers, mapping]);
-  const snapshotKey = `launch-snapshot:${workspace?.id ?? ""}:${dbBatchId || "paste"}`;
+  const snapshotFingerprint = useMemo(
+    () => computeSnapshotFingerprint({
+      dbBatchId,
+      recipientsCount: recipients.length,
+      templateKey: activeLogical?.key,
+      numberIds: activeNumbers.map((n) => n.id),
+      mapping,
+    }),
+    [dbBatchId, recipients.length, activeLogical?.key, activeNumbers, mapping],
+  );
+  const snapshotKey = snapshotStorageKey(workspace?.id, dbBatchId);
   const [confirmedSnapshot, setConfirmedSnapshot] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return sessionStorage.getItem(snapshotKey) ?? "";
@@ -1899,20 +1876,7 @@ export default function LaunchWizard() {
               {sameForEveryoneVars.length} variable(s) static (same for everyone): {sameForEveryoneVars.map((v) => `{${v}}`).join(" ")}.
             </div>
           )}
-          {staticQaIssues.length > 0 && (
-            <div className={`text-xs flex items-start gap-1.5 ${staticQaBlockers.length > 0 ? "text-rose-600" : "text-amber-600"}`}>
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <div>
-                <b>{staticQaBlockers.length > 0 ? "Audience data quality (blocking):" : "Audience data quality (warning):"}</b>
-                <ul className="list-disc pl-4 mt-0.5">
-                  {staticQaIssues.map((i) => <li key={i.key}><span className="font-mono">{i.key}</span>: {i.reason}</li>)}
-                </ul>
-                {staticQaBlockers.length === 0 && (
-                  <p className="mt-1 opacity-80">Launch is allowed — only some sampled rows drifted. Re-prepare if you want strict consistency.</p>
-                )}
-              </div>
-            </div>
-          )}
+          <StaticQaPanel issues={staticQaIssues} blockers={staticQaBlockers} />
           {isMarketing && resolution.ok.length > 0 && recipients.length > 0 && (
             <DispatchControlPanel
               prepareInput={{
