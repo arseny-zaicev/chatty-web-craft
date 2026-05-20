@@ -91,6 +91,7 @@ const AdminAuth = lazyWithRetry(() => import("./pages/AdminAuth"));
 const AdminPanel = lazyWithRetry(() => import("./pages/AdminPanel"));
 const FleetRegistry = lazyWithRetry(() => import("./pages/admin/FleetRegistry"));
 const FleetAnalytics = lazyWithRetry(() => import("./pages/admin/FleetAnalytics"));
+const WorkspaceHistory = lazyWithRetry(() => import("./pages/admin/WorkspaceHistory"));
 const AdminMfaSetup = lazyWithRetry(() => import("./pages/admin/AdminMfaSetup"));
 const AdminMfaVerify = lazyWithRetry(() => import("./pages/admin/AdminMfaVerify"));
 const OpsLive = lazyWithRetry(() => import("./pages/admin/OpsLive"));
