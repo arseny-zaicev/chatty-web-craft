@@ -511,11 +511,11 @@ export default function PartnerDetail() {
   );
 }
 
-const Stat = ({ label, value, hint, alert }: { label: string; value: string; hint?: string; alert?: boolean }) => (
+const Stat = ({ label, value, hint, alert, accent }: { label: string; value: string; hint?: string; alert?: boolean; accent?: boolean }) => (
   <Card>
     <CardContent className="pt-5">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`text-2xl font-semibold mt-1 ${alert ? "text-amber-600" : ""}`}>{value}</div>
+      <div className={`text-2xl font-semibold mt-1 ${alert ? "text-amber-600" : accent ? "text-emerald-700 dark:text-emerald-400" : ""}`}>{value}</div>
       {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </CardContent>
   </Card>
