@@ -334,16 +334,25 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   for (const nid of numberIds) {
     const nrow: any = numberRows.find((n: any) => n.id === nid);
     const dailyLimit = Math.max(1, Math.min(100000, Number(nrow?.daily_send_limit ?? 200)));
-    const cap = Math.max(1, Math.min(perNumberQuota, dailyLimit, _windowFitCapPre));
+    // Operator's per-campaign `per_number_quota` is AUTHORITATIVE.
+    // `daily_send_limit` (DB default 200) is a recommendation/warning surface
+    // only — it must NOT silently clamp the operator's explicit choice.
+    // FE/FM and other workspace-level hard ceilings are enforced separately
+    // via `workspace_send_guards` and remain intact.
+    const effectivePerNumber = perNumberQuota;
+    const cap = Math.max(1, Math.min(effectivePerNumber, _windowFitCapPre));
     perNumberCaps.set(nid, cap);
     capacityPerDay += cap;
     const sentToday = sentTodayByNumber.get(nid) ?? 0;
-    const remainingToday = Math.max(0, dailyLimit - sentToday);
+    const remainingToday = Math.max(0, effectivePerNumber - sentToday);
     capacityToday += Math.min(cap, remainingToday);
-    if (sentToday >= dailyLimit) {
-      capWarnings.push(`Number ${nrow?.phone_number || nid} already sent ${sentToday}/${dailyLimit} today — new recipients on this number would be deferred to tomorrow.`);
+    if (perNumberQuota > dailyLimit) {
+      capWarnings.push(`Number ${nrow?.phone_number || nid}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
+    }
+    if (sentToday >= effectivePerNumber) {
+      capWarnings.push(`Number ${nrow?.phone_number || nid} already sent ${sentToday}/${effectivePerNumber} today — new recipients on this number would be deferred to tomorrow.`);
     } else if (sentToday > 0 && cap > remainingToday) {
-      capWarnings.push(`Number ${nrow?.phone_number || nid} has ${remainingToday}/${dailyLimit} headroom today (already sent ${sentToday}); excess will spill to next day.`);
+      capWarnings.push(`Number ${nrow?.phone_number || nid} has ${remainingToday}/${effectivePerNumber} headroom today (already sent ${sentToday}); excess will spill to next day.`);
     }
   }
   const daysCount = Math.max(1, scheduledDates.length || 1);
@@ -1067,6 +1076,19 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   const numIdsInTick = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
   const dailyLimitByNum = new Map<string, number>();
   const sentTodayByNum = new Map<string, number>();
+  // Per-campaign operator-set quota. This is AUTHORITATIVE — it must not be
+  // silently overridden by `whatsapp_numbers.daily_send_limit` (DB default
+  // 200). FE/FM-style hard ceilings live in `workspace_send_guards` and are
+  // enforced separately below.
+  const quotaByCampaign = new Map<string, number>();
+  const campaignIdsInTick = [...new Set((due ?? []).map((r: any) => r.campaign_id).filter(Boolean))];
+  if (campaignIdsInTick.length > 0) {
+    const { data: crows } = await admin
+      .from("campaigns")
+      .select("id, per_number_quota")
+      .in("id", campaignIdsInTick);
+    for (const c of crows ?? []) quotaByCampaign.set(c.id, Math.max(1, Number(c.per_number_quota ?? 200)));
+  }
   if (numIdsInTick.length > 0) {
     const { data: numRows } = await admin
       .from("whatsapp_numbers")
@@ -1321,7 +1343,12 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     // Daily-cap safety net (Dubai TZ). Bumps to tomorrow 09:00 if cap reached.
     const recNumId = recipient.whatsapp_number_id;
     if (recNumId && dailyLimitByNum.has(recNumId)) {
-      const cap = dailyLimitByNum.get(recNumId)!;
+      const numLimit = dailyLimitByNum.get(recNumId)!;
+      const campQuota = quotaByCampaign.get(recipient.campaign_id) ?? numLimit;
+      // Effective per-number cap = max(operator quota, number's daily_send_limit).
+      // daily_send_limit (default 200) can NEVER silently reduce the operator's
+      // explicit choice. workspace_send_guards still kill-switch FE/FM.
+      const cap = Math.max(numLimit, campQuota);
       const sentNow = sentTodayByNum.get(recNumId) ?? 0;
       if (sentNow >= cap) {
         const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -2219,8 +2246,9 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
     let placedThisRound = false;
     for (const nid of numberIds) {
       const cur = allocByNum.get(nid) ?? 0;
-      const nrow: any = numberRows.find((n: any) => n.id === nid);
-      const cap = Math.max(0, Math.min(perNumberQuota, Number(nrow?.daily_send_limit ?? 200)));
+      // Operator's per_number_quota is authoritative; daily_send_limit must
+      // not silently clamp it (workspace_send_guards remain the hard ceiling).
+      const cap = Math.max(0, perNumberQuota);
       if (cur < cap) {
         allocByNum.set(nid, cur + 1);
         remaining--;
@@ -2232,6 +2260,13 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   }
   if (remaining > 0) {
     warnings.push(`Capacity is ${audienceCount - remaining} but audience is ${audienceCount}. Add more numbers, raise per-number cap, or split.`);
+  }
+  // Surface daily_send_limit recommendation as a non-blocking warning.
+  for (const nrow of numberRows as any[]) {
+    const dailyLimit = Number(nrow?.daily_send_limit ?? 200);
+    if (perNumberQuota > dailyLimit) {
+      warnings.push(`Number ${nrow.phone_number}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
+    }
   }
 
   const numbersOut = numberRows.map((n: any) => {
