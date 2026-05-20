@@ -162,6 +162,8 @@ export default function Partners() {
                   <TableHead>Referred #</TableHead>
                   <TableHead>Delivered / Sent today</TableHead>
                   <TableHead>Delivered / Sent all-time</TableHead>
+                  <TableHead>Earned today</TableHead>
+                  <TableHead>Earned all-time</TableHead>
                   <TableHead>Partner rate</TableHead>
                   <TableHead>Manager rate</TableHead>
                   <TableHead>Unpaid</TableHead>
