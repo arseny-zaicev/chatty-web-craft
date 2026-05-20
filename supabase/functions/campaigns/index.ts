@@ -2164,6 +2164,14 @@ serve(async (req) => {
 
 // ===== Marketing Instant: prepare snapshot, kill switch, runtime status =====
 
+// Bump this whenever quota/capacity/allocation contract changes.
+// Any previously-prepared snapshot fails signature verification at launch and
+// forces the operator to re-prepare against the current contract.
+// v2 (2026-05-20): removed hidden 200 hard cap on per_number_quota; operator
+// `per_number_quota` is now authoritative end-to-end (prepare, launch,
+// redistribute), with `daily_send_limit` demoted to recommendation/warning only.
+const SNAPSHOT_CONTRACT_VERSION = "v2-quota-uncapped-2026-05-20";
+
 async function computeSnapshotSignature(input: {
   numberIds: string[];
   templateIds: string[];
@@ -2175,6 +2183,7 @@ async function computeSnapshotSignature(input: {
   maxInflightPerCampaign: number;
 }): Promise<string> {
   const sorted = {
+    v: SNAPSHOT_CONTRACT_VERSION,
     n: [...input.numberIds].sort(),
     t: [...input.templateIds].sort(),
     a: input.audienceCount,
