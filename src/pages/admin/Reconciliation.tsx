@@ -150,6 +150,7 @@ export default function Reconciliation() {
       if (error) throw error;
       return data || [];
     },
+  });
 
   // Payout-ownership drift gate. Same SQL function that approve_payout_run uses
   // to refuse approval - surface it here so ops sees the block before clicking.
