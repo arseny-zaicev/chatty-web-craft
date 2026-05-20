@@ -124,71 +124,84 @@ export async function fetchNumberMetrics(
   return byNum;
 }
 
-// ---------- PARTNERS ----------
-// Canonical: `number_ownership` is the single source of truth for "which
-// numbers belong to a partner". Today stats come from the per-number RPC.
-// `failed_alltime` is pulled from v_metrics_alltime (event-based,
-// metrics_for_range) so it reconciles to per-BM views and is no longer a
-// best-effort proxy of failed_today.
+// ---------- PARTNERS (CANONICAL) ----------
+// Source of truth: `partner_metrics_for_range` RPC, which aggregates the
+// event-based per-day basis (v_payout_basis -> metrics_for_range) and
+// attributes each day to whichever partner / rate was active on that day
+// via number_ownership(effective_from, effective_to). Earnings therefore
+// honour reassignments and historical rate changes.
+//
+// This reconciles partner totals to BM totals (also event-based via
+// v_metrics_today_by_number / v_metrics_alltime) and to workspace totals.
+type PartnerRangeRow = { partner_id: string; sent: number; delivered: number; failed: number; earned_usd: number };
+
+async function partnerMetricsForRange(
+  partnerIds: string[],
+  from: string,
+  to: string,
+): Promise<Map<string, PartnerRangeRow>> {
+  const out = new Map<string, PartnerRangeRow>();
+  if (!partnerIds.length) return out;
+  const { data } = await (supabase.rpc as any)("partner_metrics_for_range", {
+    p_partner_ids: partnerIds, _from: from, _to: to,
+  });
+  (data ?? []).forEach((r: any) => {
+    if (!r.partner_id) return;
+    out.set(r.partner_id, {
+      partner_id: r.partner_id,
+      sent: Number(r.sent ?? 0),
+      delivered: Number(r.delivered ?? 0),
+      failed: Number(r.failed ?? 0),
+      earned_usd: Number(r.earned_usd ?? 0),
+    });
+  });
+  return out;
+}
+
 export async function fetchPartnerMetrics(
   partnerIds: string[]
-): Promise<Map<string, TodayMetrics & AlltimeMetrics & EarningsMetrics>> {
-  const out = new Map<string, TodayMetrics & AlltimeMetrics & EarningsMetrics>();
-  partnerIds.forEach((p) => out.set(p, { ...ZERO_TODAY, ...ZERO_ALL, ...ZERO_EARN }));
+): Promise<Map<string, TodayMetrics & AlltimeMetrics & EarningsMetrics & { sent_7d: number; delivered_7d: number }>> {
+  type Row = TodayMetrics & AlltimeMetrics & EarningsMetrics & { sent_7d: number; delivered_7d: number };
+  const out = new Map<string, Row>();
+  partnerIds.forEach((p) =>
+    out.set(p, { ...ZERO_TODAY, ...ZERO_ALL, ...ZERO_EARN, sent_7d: 0, delivered_7d: 0 })
+  );
   if (!partnerIds.length) return out;
 
-  const { data: ownership } = await supabase
-    .from("number_ownership")
-    .select("partner_id, whatsapp_number_id, rate_usd, effective_to")
-    .in("partner_id", partnerIds)
-    .is("effective_to", null);
+  const dubaiToday = dubaiStartOfDayIso();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString();
+  const farFuture = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+  const epoch = "1970-01-01T00:00:00Z";
 
-  const numToPartner = new Map<string, string>();
-  const numToRate = new Map<string, number>();
-  (ownership ?? []).forEach((r: any) => {
-    if (!numToPartner.has(r.whatsapp_number_id)) {
-      numToPartner.set(r.whatsapp_number_id, r.partner_id);
-      numToRate.set(r.whatsapp_number_id, Number(r.rate_usd ?? 0));
-    }
-  });
-  const numIds = Array.from(numToPartner.keys());
-  if (!numIds.length) return out;
-
-  const [{ data: live }, { data: allRows }] = await Promise.all([
-    (supabase.rpc as any)("number_live_stats", { p_number_ids: numIds }),
-    supabase
-      .from("v_metrics_alltime")
-      .select("whatsapp_number_id, failed_alltime")
-      .in("whatsapp_number_id", numIds),
+  const [today, last7d, alltime] = await Promise.all([
+    partnerMetricsForRange(partnerIds, dubaiToday, farFuture),
+    partnerMetricsForRange(partnerIds, sevenDaysAgo, farFuture),
+    partnerMetricsForRange(partnerIds, epoch, farFuture),
   ]);
 
-  const failedAllByNum = new Map<string, number>();
-  (allRows ?? []).forEach((r: any) => {
-    if (!r.whatsapp_number_id) return;
-    failedAllByNum.set(
-      r.whatsapp_number_id,
-      (failedAllByNum.get(r.whatsapp_number_id) ?? 0) + Number(r.failed_alltime ?? 0),
-    );
-  });
-
-  (live ?? []).forEach((r: any) => {
-    const pid = numToPartner.get(r.whatsapp_number_id);
-    if (!pid) return;
+  for (const pid of partnerIds) {
     const acc = out.get(pid)!;
-    const rate = numToRate.get(r.whatsapp_number_id) ?? 0;
-    const delivToday = Number(r.delivered_today ?? 0);
-    const deliv7d = Number(r.delivered_7d ?? 0);
-    const delivAll = Number(r.delivered_all ?? 0);
-    acc.sent_today += Number(r.sent_today ?? 0);
-    acc.delivered_today += delivToday;
-    acc.failed_today += Number(r.failed_today ?? 0);
-    acc.sent_alltime += Number(r.sent_all ?? 0);
-    acc.delivered_alltime += delivAll;
-    acc.failed_alltime += failedAllByNum.get(r.whatsapp_number_id) ?? 0;
-    acc.earned_today += delivToday * rate;
-    acc.earned_7d += deliv7d * rate;
-    acc.earned_alltime += delivAll * rate;
-  });
+    const t = today.get(pid);
+    const w = last7d.get(pid);
+    const a = alltime.get(pid);
+    if (t) {
+      acc.sent_today = t.sent;
+      acc.delivered_today = t.delivered;
+      acc.failed_today = t.failed;
+      acc.earned_today = t.earned_usd;
+    }
+    if (w) {
+      acc.sent_7d = w.sent;
+      acc.delivered_7d = w.delivered;
+      acc.earned_7d = w.earned_usd;
+    }
+    if (a) {
+      acc.sent_alltime = a.sent;
+      acc.delivered_alltime = a.delivered;
+      acc.failed_alltime = a.failed;
+      acc.earned_alltime = a.earned_usd;
+    }
+  }
   return out;
 }
 
