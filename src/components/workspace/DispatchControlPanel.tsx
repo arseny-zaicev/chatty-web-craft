@@ -21,7 +21,10 @@ export interface PrepareInput {
   window_end: string;
   per_number_quota: number;
   respect_recipient_tz?: boolean;
+  scheduled_dates?: string[];
+  delay_min_seconds?: number;
 }
+
 
 interface SnapshotNumber {
   id: string;
