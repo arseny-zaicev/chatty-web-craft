@@ -525,14 +525,22 @@ export default function LaunchWizard() {
   }, [activeNumbers.length, recipients.length, perNumberQuota, scheduleMode, scheduledDates.length, isMarketing]);
 
   // ----- Capacity (hard allocation cap) -----
-  // capacity = numbers × per_number_quota × selected days. The launch endpoint
-  // truncates anything above this; only `capacity` recipients are materialized
-  // into campaign_recipients. The rest of the audience stays in the pool.
+  // Mirrors backend resolver: per-number cap = min(perNumberQuota, windowFitCap)
+  // where windowFitCap = floor(windowSeconds / minGap) for paced. Instant mode
+  // skips the window clamp. Keeps pre-prepare estimate consistent with canonical
+  // resolver output so review/launch don't diverge.
   const capacity = useMemo(() => {
     const numbers = Math.max(1, activeNumbers.length);
     const days = scheduleMode === "scheduled" ? Math.max(1, scheduledDates.length || 1) : 1;
-    return numbers * Math.max(1, perNumberQuota) * days;
-  }, [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota]);
+    const quota = Math.max(1, perNumberQuota);
+    const [sh, sm] = (windowStart || "09:00").split(":").map(Number);
+    const [eh, em] = (windowEnd || "18:00").split(":").map(Number);
+    const windowSeconds = Math.max(60, ((eh * 60 + em) - (sh * 60 + sm)) * 60);
+    const minGap = isMarketing ? 1 : Math.max(1, delayMin || 1);
+    const windowFitCap = isMarketing ? quota : Math.max(1, Math.floor(windowSeconds / minGap));
+    const perNumberCap = Math.min(quota, windowFitCap);
+    return numbers * perNumberCap * days;
+  }, [activeNumbers.length, scheduledDates.length, scheduleMode, perNumberQuota, windowStart, windowEnd, isMarketing, delayMin]);
   const overCapacity = audienceSource === "database"
     ? Math.max(0, dbTargetCount - capacity)
     : Math.max(0, recipients.length - capacity);
