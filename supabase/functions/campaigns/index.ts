@@ -1794,33 +1794,50 @@ async function setCampaignStatus(admin: any, requesterId: string, body: any, kin
           .from("campaigns")
           .select("id, name, workspace_id, total_recipients, workspaces(slack_channel_id, name)")
           .in("id", paused);
+        // Canonical alltime sent at the moment of pause/cancel.
+        let truthById = new Map<string, number>();
+        try {
+          const { data: t } = await admin.rpc("campaign_metrics_for_range", {
+            p_campaign_ids: paused,
+            _from: "1970-01-01T00:00:00Z",
+            _to: new Date().toISOString(),
+          });
+          for (const row of (t ?? []) as Array<{ campaign_id: string; sent: number }>) {
+            truthById.set(row.campaign_id, row.sent ?? 0);
+          }
+        } catch { /* ignore */ }
+        const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+        const slackKey = Deno.env.get("SLACK_API_KEY");
+        const verb = kind === "pause" ? "paused" : "cancelled";
+        const emoji = kind === "pause" ? "⏸️" : "🛑";
+        const reason = typeof body.reason === "string" ? body.reason.slice(0, 200) : null;
         for (const c of detail ?? []) {
-          // Canonical alltime sent at the moment of pause/cancel.
-          let sent = 0;
-          try {
-            const { data: t } = await admin.rpc("campaign_metrics_for_range", {
-              p_campaign_ids: [c.id],
-              _from: "1970-01-01T00:00:00Z",
-              _to: new Date().toISOString(),
-            });
-            sent = (t?.[0]?.sent as number) ?? 0;
-          } catch { /* ignore */ }
-          const remaining = Math.max(0, (c.total_recipients ?? 0) - sent);
-          const reason = typeof body.reason === "string" ? body.reason.slice(0, 200) : null;
-          const emoji = kind === "pause" ? ":double_vertical_bar:" : ":octagonal_sign:";
-          const verb = kind === "pause" ? "paused" : "cancelled";
-          const text = `${emoji} *Campaign ${verb}*: ${c.name}\n• Sent: *${sent}* / ${c.total_recipients ?? 0}  (remaining: ${remaining})${reason ? `\n• Reason: ${reason}` : ""}`;
-          await notifyLaunchSlack(c.workspace_id, {
-            name: c.name,
-            recipients: c.total_recipients ?? 0,
-            firstAt: "",
-            mode: verb,
-          }).catch(() => {});
-          // notifyLaunchSlack hard-codes a launch template — also emit a clean
-          // ops-channel line via slack_event_queue for digests/log retention.
-          await admin.from("slack_event_queue").insert({
-            kind: kind === "pause" ? "campaign_paused" : "campaign_cancelled",
-            payload: { text, campaign_id: c.id, workspace_id: c.workspace_id, sent, total: c.total_recipients ?? 0, reason },
+          const sent = truthById.get(c.id) ?? 0;
+          const total = c.total_recipients ?? 0;
+          const remaining = Math.max(0, total - sent);
+          const text = `${emoji} *Campaign ${verb}*: ${c.name}\n• Sent: *${sent}* / ${total}  (remaining: ${remaining})${reason ? `\n• Reason: ${reason}` : ""}`;
+          const channel = (c as any).workspaces?.slack_channel_id || "#delivery-campaigns";
+          if (lovableKey && slackKey) {
+            fetch("https://connector-gateway.lovable.dev/slack/api/chat.postMessage", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${lovableKey}`,
+                "X-Connection-Api-Key": slackKey,
+                "Content-Type": "application/json; charset=utf-8",
+              },
+              body: JSON.stringify({
+                channel, text,
+                username: "Iskra",
+                icon_url: "https://iskra.ae/iskra-favicon-v2.png",
+                unfurl_links: false, unfurl_media: false,
+              }),
+            }).catch(() => {});
+          }
+          // Mirror to ops queue for digest/log retention.
+          admin.from("slack_event_queue").insert({
+            event_type: kind === "pause" ? "campaign_paused" : "campaign_cancelled",
+            workspace_id: c.workspace_id,
+            payload: { text, campaign_name: c.name, campaign_id: c.id, sent, total, reason },
           }).then(() => {}, () => {});
         }
       }
