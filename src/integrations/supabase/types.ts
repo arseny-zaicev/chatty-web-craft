@@ -4200,6 +4200,14 @@ export type Database = {
         }
         Returns: number
       }
+      payout_ownership_drift: {
+        Args: never
+        Returns: {
+          legacy_provider_mismatch: number
+          legacy_referrer_mismatch: number
+          unassigned_referred: number
+        }[]
+      }
       pending_classification_conversations: {
         Args: { _limit?: number }
         Returns: {
