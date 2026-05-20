@@ -645,7 +645,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   let immediate: any = null;
   if (scheduledDates.length === 0 && isBlastLaunch && firstMs <= Date.now() + 55_000) {
     try {
-      const res = await processQueue(admin);
+      const res = await processQueue(admin, { mode: "manual" });
       immediate = await res.json();
     } catch (err) {
       immediate = { error: err instanceof Error ? err.message : "process failed" };
@@ -773,18 +773,21 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
   return created.id;
 }
 
-async function processQueue(admin: any) {
-  // Lock contract: a recipient is "owned" by a tick once we successfully transition
-  // it from 'scheduled' -> 'sending' below (the conditional UPDATE acts as the lock).
-  // If a tick crashes or times out mid-send, the row stays in 'sending' indefinitely
-  // and is invisible to subsequent ticks (which only claim 'scheduled'). Reap stuck
-  // 'sending' rows back to 'scheduled' so they are retried.
-  //
-  // marketing_instant blasts hammer Gupshup hard and a stuck isolate can freeze the
-  // whole campaign until reap. Use a shorter (2-min) window for those, and keep
-  // the conservative 10-min window for paced/utility. The mode-scoped call is a
-  // no-op on Postgres functions that haven't been migrated yet (it just errors and
-  // is caught), so this stays safe during rollout.
+async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {}) {
+  // Cron path = called by pg_cron via pg_net which has a 5s HTTP timeout.
+  // We MUST return well under that, otherwise the request is cancelled,
+  // `finally` (and our lock release) doesn't run, and the next tick sees
+  // a stale lock. The previous design used TICK_BUDGET_MS=55s + setTimeout
+  // pacing inside the tick — that consistently busted the 5s budget and is
+  // why FB Media / fitpreneur stayed at 0 sent. (2026-05-20 incident.)
+  const isCronMode = opts.mode !== "manual";
+  const TICK_BUDGET_MS = isCronMode ? 3_500 : 25_000;
+  const perTickLimit = isCronMode ? 30 : 500;
+
+  const tickStartedAt = Date.now();
+  console.log(`[job:campaigns-process] mode=${isCronMode ? "cron" : "manual"} budget_ms=${TICK_BUDGET_MS} limit=${perTickLimit} starting`);
+
+  // Reaper: stuck 'sending' rows -> 'scheduled'. Cheap RPC, safe to call here.
   try {
     await admin.rpc("reap_stuck_sending_recipients", {
       p_idle_minutes: 2,
@@ -800,8 +803,6 @@ async function processQueue(admin: any) {
   }
 
   // Promote scheduled campaigns whose first send is imminent to running.
-  // The campaigns_status_change trigger then enqueues a `campaign_launched`
-  // Slack event with today_recipients_count + recipient_country.
   try {
     await admin
       .from("campaigns")
@@ -812,19 +813,10 @@ async function processQueue(admin: any) {
     console.error("promote scheduled->running failed", err);
   }
 
-
-  // Fetch enough due recipients for marketing blasts. Actual send speed is still
-  // controlled below per WhatsApp number (1/sec for marketing, 60/sec for utility),
-  // so this limit must not become a hidden campaign-level throttle.
-  const perTickLimit = 500;
-
-  // Look ahead window: pg_cron fires at minute boundaries, so fetch anything
-  // due within the next ~55s and pace sends inside the tick. This honors the
-  // configured min/max delay (which is randomized into scheduled_at) instead of
-  // collapsing every send to xx:01 (the cron tick).
-  const TICK_BUDGET_MS = 55_000;
-  const tickStartedAt = Date.now();
-  const horizonIso = new Date(tickStartedAt + TICK_BUDGET_MS).toISOString();
+  // Only pick recipients that are due RIGHT NOW. No look-ahead window —
+  // anything scheduled in the next minute is picked up by the next cron tick.
+  // This is what keeps a single tick fast and predictable.
+  const horizonIso = new Date(tickStartedAt).toISOString();
 
   const { data: due, error } = await admin
     .from("campaign_recipients")
@@ -835,7 +827,11 @@ async function processQueue(admin: any) {
     .is("campaigns.kill_switch_at", null)
     .order("scheduled_at", { ascending: true })
     .limit(perTickLimit);
-  if (error) return json({ error: error.message }, 500);
+  if (error) {
+    console.error(`[job:campaigns-process] select_due failed: ${error.message}`);
+    return json({ error: error.message }, 500);
+  }
+  console.log(`[job:campaigns-process] selected=${(due ?? []).length} due_now`);
 
   // Pre-load provider backoff state for all numbers in this tick.
   const tickNumIds = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
@@ -916,6 +912,7 @@ async function processQueue(admin: any) {
   let sent = 0;
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
+  const skipCounters = { not_due: 0, over_budget: 0, pacing_gap: 0, claim_lost: 0, claimed: 0, paused: 0, backoff: 0, daily_cap: 0 };
 
   // ============= Per-number daily cap safety net =============
   // Pre-fetch daily_send_limit per number in this tick. Then count how many
@@ -1078,14 +1075,19 @@ async function processQueue(admin: any) {
       return;
     }
 
-    // Honor scheduled_at for paced mode. Instant mode pushes immediately.
+    // Honor scheduled_at. In cron mode we never sleep — if it's not due yet,
+    // skip and let the next tick pick it up. In manual mode we keep the brief
+    // wait so admin "process now" can flush near-due rows.
     const targetMs = new Date(recipient.scheduled_at).getTime();
     const waitMs = targetMs - Date.now();
-    const remainingBudget = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
-    if (!isInstant && waitMs > 0 && remainingBudget > 0) {
-      await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
+    if (waitMs > 0) {
+      if (isCronMode) { skipCounters.not_due++; return; }
+      const remainingBudget = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
+      if (!isInstant && remainingBudget > 0) {
+        await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
+      }
     }
-    if (Date.now() - tickStartedAt > TICK_BUDGET_MS) return;
+    if (Date.now() - tickStartedAt > TICK_BUDGET_MS) { skipCounters.over_budget++; return; }
 
     // Daily-cap safety net (Dubai TZ). Bumps to tomorrow 09:00 if cap reached.
     const recNumId = recipient.whatsapp_number_id;
@@ -1148,8 +1150,9 @@ async function processQueue(admin: any) {
         const since = Date.now() - lastMs;
         if (since < minGapMs) {
           const extra = minGapMs - since;
+          if (isCronMode) { skipCounters.pacing_gap++; return; }
           const budgetLeft = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
-          if (extra > budgetLeft) return; // try next tick
+          if (extra > budgetLeft) { skipCounters.pacing_gap++; return; }
           await new Promise((r) => setTimeout(r, extra));
         }
       }
@@ -1163,7 +1166,8 @@ async function processQueue(admin: any) {
       .eq("status", "scheduled")
       .select("id")
       .maybeSingle();
-    if (!locked) return;
+    if (!locked) { skipCounters.claim_lost++; return; }
+    skipCounters.claimed++;
     lastSentMs.set(pacingKey, Date.now());
 
     try {
@@ -1363,7 +1367,10 @@ async function processQueue(admin: any) {
     console.warn("reap_finished_campaigns failed", err);
   }
 
-  return json({ ok: true, processed: (due ?? []).length, sent, failed });
+  const duration_ms = Date.now() - tickStartedAt;
+  const skips = Object.entries(skipCounters).filter(([_, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(",") || "none";
+  console.log(`[job:campaigns-process] status=ok mode=${isCronMode ? "cron" : "manual"} selected=${(due ?? []).length} sent=${sent} failed=${failed} skips={${skips}} duration_ms=${duration_ms}`);
+  return json({ ok: true, processed: (due ?? []).length, sent, failed, skips: skipCounters, duration_ms, mode: isCronMode ? "cron" : "manual" });
 }
 
 async function blastCampaign(admin: any, requesterId: string, body: any) {
@@ -1797,7 +1804,8 @@ serve(async (req) => {
         return json({ ok: true, skipped: "locked" });
       }
       try {
-        return await withJobRun("campaigns-process", () => processQueue(admin));
+        const mode: "cron" | "manual" = body.mode === "manual" ? "manual" : (body.source === "cron" ? "cron" : "cron");
+        return await withJobRun("campaigns-process", () => processQueue(admin, { mode }));
       } finally {
         await release();
       }
