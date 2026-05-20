@@ -3556,15 +3556,19 @@ export type Database = {
           whatsapp_number_id: string | null
           workspace_id: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "campaign_recipients_campaign_id_fkey"
-            columns: ["campaign_id"]
-            isOneToOne: false
-            referencedRelation: "campaigns"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      v_metrics_daily_by_number: {
+        Row: {
+          day: string | null
+          delivered: number | null
+          failed: number | null
+          sent: number | null
+          source: string | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Relationships: []
       }
       v_metrics_today: {
         Row: {
@@ -3591,6 +3595,18 @@ export type Database = {
           delivered_today: number | null
           failed_today: number | null
           sent_today: number | null
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }
+        Relationships: []
+      }
+      v_payout_basis: {
+        Row: {
+          day: string | null
+          delivered: number | null
+          failed: number | null
+          last_at: string | null
+          sent: number | null
           whatsapp_number_id: string | null
           workspace_id: string | null
         }
@@ -3949,6 +3965,22 @@ export type Database = {
       member_pipeline_scope: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: string[]
+      }
+      metrics_for_range: {
+        Args: {
+          _from: string
+          _source?: string
+          _to: string
+          _workspace_id: string
+        }
+        Returns: {
+          delivered: number
+          failed: number
+          replies: number
+          sent: number
+          whatsapp_number_id: string
+          workspace_id: string
+        }[]
       }
       move_to_dlq: {
         Args: {
