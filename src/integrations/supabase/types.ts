@@ -3812,6 +3812,33 @@ export type Database = {
         Args: { _pipeline_id: string; _user_id: string; _workspace_id: string }
         Returns: boolean
       }
+      claim_due_campaign_recipients: {
+        Args: { p_limit?: number }
+        Returns: {
+          campaign_id: string
+          contact_name: string | null
+          contact_phone: string
+          conversation_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          provider_message_id: string | null
+          scheduled_at: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["campaign_recipient_status"]
+          updated_at: string
+          user_id: string
+          variables: Json
+          whatsapp_number_id: string | null
+          workspace_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "campaign_recipients"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       cleanup_whatsapp_webhook_raw: { Args: never; Returns: undefined }
       count_sent_today_for_number: {
         Args: { _number_id: string }
