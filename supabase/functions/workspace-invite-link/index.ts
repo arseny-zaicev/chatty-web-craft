@@ -314,6 +314,7 @@ Deno.serve(async (req) => {
         "perm_overview","perm_inbox","perm_pipeline","perm_campaigns_view",
         "perm_quick_replies_use","perm_quick_replies_manage",
         "perm_settings","perm_data","perm_materials","perm_launch",
+        "perm_stats","perm_stats_all",
       ] as const;
       const members = (rows ?? []).map((r) => {
         const auth = authById.get(r.user_id) ?? { email: null, last_sign_in_at: null, created_at: null };
