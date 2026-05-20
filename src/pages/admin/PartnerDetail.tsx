@@ -148,8 +148,17 @@ export default function PartnerDetail() {
     queryKey: ["admin", "partner", id, "metrics"],
     enabled: !!id,
     queryFn: () => fetchPartnerMetrics([id!]),
+    refetchInterval: visibleRefetchInterval(30_000),
+    refetchIntervalInBackground: false,
   });
   const pm = id ? partnerMetrics?.get(id) : undefined;
+
+  // Per-number active rates for this partner (used in BM table to compute Earned columns)
+  const { data: numberRates } = useQuery({
+    queryKey: ["admin", "partner-num-rates", id],
+    enabled: !!id,
+    queryFn: () => fetchNumberRates(id!),
+  });
 
   if (partnerLoading || !partner) return <div className="p-6"><Loader2 className="animate-spin w-5 h-5" /></div>;
 
