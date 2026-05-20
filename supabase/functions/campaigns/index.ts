@@ -37,6 +37,23 @@ function randomDelay(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+const MAX_PER_NUMBER_QUOTA = 10000;
+const LEGACY_DEFAULT_DAILY_SEND_LIMIT = 200;
+
+function normalizePerNumberQuota(value: any, fallback = LEGACY_DEFAULT_DAILY_SEND_LIMIT) {
+  return Math.max(1, Math.min(MAX_PER_NUMBER_QUOTA, Math.floor(Number(value ?? fallback))));
+}
+
+function explicitDailySendLimit(value: any): number | null {
+  const raw = Number(value);
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  const limit = Math.max(1, Math.min(100000, Math.floor(raw)));
+  // `daily_send_limit` was introduced as NOT NULL DEFAULT 200, so old rows
+  // with 200 do not prove the operator set a real limit. Treat that legacy
+  // default as unset: no hidden cap and no noisy warning.
+  return limit === LEGACY_DEFAULT_DAILY_SEND_LIMIT ? null : limit;
+}
+
 // readJson now imported from ./_helpers.ts
 
 // Gupshup template-fetch / parsing helpers and the template-action handlers
@@ -152,8 +169,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
-  // Per-number/day cap. Hard ceiling 200 (Meta tier), floor 1.
-  const perNumberQuota = Math.max(1, Math.min(10000, Math.floor(Number(body.per_number_quota ?? 200))));
+  const perNumberQuota = normalizePerNumberQuota(body.per_number_quota);
 
   // Multi-number support: accept either legacy single (whatsapp_number_id+template_id)
   // or new `numbers: [{number_id, template_id}, ...]`. ONE campaign row is created
@@ -203,6 +219,19 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       }
       if (new Date(existing.prepared_expires_at).getTime() < Date.now()) {
         return json({ error: "Prepared snapshot expired. Re-prepare.", code: "stale_snapshot", must_reprepare: true }, 409);
+      }
+      const expectedSig = await computeSnapshotSignature({
+        numberIds: [...new Set(rawNumbers.map((n) => n.number_id))],
+        templateIds: [...new Set(rawNumbers.map((n) => n.template_id))],
+        audienceCount: recipients.length,
+        windowStart,
+        windowEnd,
+        perNumberQuota,
+        maxInflightPerNumber,
+        maxInflightPerCampaign,
+      });
+      if (existing.prepared_signature !== expectedSig) {
+        return json({ error: "Prepared snapshot contract changed or inputs changed. Re-prepare.", code: "must_reprepare", must_reprepare: true }, 409);
       }
     }
   }
@@ -300,7 +329,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   if (cleanRecipientsAll.length === 0) return json({ error: "No valid phone numbers" }, 400);
 
   // ============= CAPACITY-BOUND ALLOCATION (hard truncation) =============
-  // capacity = Σ(min(per_number_quota, whatsapp_numbers.daily_send_limit, windowFitCap)) × selected days.
+  // capacity = Σ(min(per_number_quota, windowFitCap)) × selected days.
   // Anything beyond capacity is NOT inserted into campaign_recipients and stays
   // free in the audience pool. No silent "send later", no future-day bucket.
   const _wsMinPre = hhmmToMin(windowStart);
@@ -333,7 +362,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const capWarnings: string[] = [];
   for (const nid of numberIds) {
     const nrow: any = numberRows.find((n: any) => n.id === nid);
-    const dailyLimit = Math.max(1, Math.min(100000, Number(nrow?.daily_send_limit ?? 200)));
+    const dailyLimit = explicitDailySendLimit(nrow?.daily_send_limit);
     // Operator's per-campaign `per_number_quota` is AUTHORITATIVE.
     // `daily_send_limit` (DB default 200) is a recommendation/warning surface
     // only — it must NOT silently clamp the operator's explicit choice.
@@ -346,7 +375,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     const sentToday = sentTodayByNumber.get(nid) ?? 0;
     const remainingToday = Math.max(0, effectivePerNumber - sentToday);
     capacityToday += Math.min(cap, remainingToday);
-    if (perNumberQuota > dailyLimit) {
+    if (dailyLimit !== null && perNumberQuota > dailyLimit) {
       capWarnings.push(`Number ${nrow?.phone_number || nid}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
     }
     if (sentToday >= effectivePerNumber) {
@@ -861,7 +890,8 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   //     is already encoded in scheduled_at, do NOT re-apply per-row delays)
   //   - per-NUMBER concurrency (worker pool, instant hard-cap)
   //   - per-CAMPAIGN concurrency (max_inflight_per_campaign semaphore)
-  //   - per-NUMBER daily_send_limit SAFETY NET (whatsapp_numbers.daily_send_limit)
+  //   - per-CAMPAIGN per_number_quota safety net; explicit non-200
+  //     whatsapp_numbers.daily_send_limit remains a warning surface only.
   //   - canary abort + restriction detection
   //   - dispatcher heartbeat
   //
@@ -1070,16 +1100,14 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   const skipCounters = { not_due: 0, over_budget: 0, pacing_gap: 0, claim_lost: 0, claimed: 0, paused: 0, backoff: 0, daily_cap: 0 };
 
   // ============= Per-number daily cap safety net =============
-  // Pre-fetch daily_send_limit per number in this tick. Then count how many
-  // were already sent today (Dubai TZ) per number. We refuse to send a recipient
-  // whose number has reached its cap and bump the row to next day at 09:00 Dubai.
+  // Count how many were already sent today (Dubai TZ) per number. The runtime
+  // safety net uses the campaign's operator quota. A legacy/default
+  // whatsapp_numbers.daily_send_limit=200 must never create a hidden runtime cap.
   const numIdsInTick = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
   const dailyLimitByNum = new Map<string, number>();
   const sentTodayByNum = new Map<string, number>();
-  // Per-campaign operator-set quota. This is AUTHORITATIVE — it must not be
-  // silently overridden by `whatsapp_numbers.daily_send_limit` (DB default
-  // 200). FE/FM-style hard ceilings live in `workspace_send_guards` and are
-  // enforced separately below.
+  // Per-campaign operator-set quota. This is AUTHORITATIVE. FE/FM-style hard
+  // ceilings live in `workspace_send_guards` and are enforced separately.
   const quotaByCampaign = new Map<string, number>();
   const campaignIdsInTick = [...new Set((due ?? []).map((r: any) => r.campaign_id).filter(Boolean))];
   if (campaignIdsInTick.length > 0) {
@@ -1087,14 +1115,14 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       .from("campaigns")
       .select("id, per_number_quota")
       .in("id", campaignIdsInTick);
-    for (const c of crows ?? []) quotaByCampaign.set(c.id, Math.max(1, Number(c.per_number_quota ?? 200)));
+    for (const c of crows ?? []) quotaByCampaign.set(c.id, normalizePerNumberQuota(c.per_number_quota));
   }
   if (numIdsInTick.length > 0) {
     const { data: numRows } = await admin
       .from("whatsapp_numbers")
       .select("id, daily_send_limit")
       .in("id", numIdsInTick);
-    for (const n of numRows ?? []) dailyLimitByNum.set(n.id, Math.max(1, Number(n.daily_send_limit ?? 200)));
+    for (const n of numRows ?? []) dailyLimitByNum.set(n.id, explicitDailySendLimit(n.daily_send_limit) ?? 0);
     // Count sent today (Dubai) per number — single query.
     const dubaiTodayStartUtcMs = (() => {
       const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -1343,12 +1371,13 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     // Daily-cap safety net (Dubai TZ). Bumps to tomorrow 09:00 if cap reached.
     const recNumId = recipient.whatsapp_number_id;
     if (recNumId && dailyLimitByNum.has(recNumId)) {
-      const numLimit = dailyLimitByNum.get(recNumId)!;
-      const campQuota = quotaByCampaign.get(recipient.campaign_id) ?? numLimit;
-      // Effective per-number cap = max(operator quota, number's daily_send_limit).
-      // daily_send_limit (default 200) can NEVER silently reduce the operator's
-      // explicit choice. workspace_send_guards still kill-switch FE/FM.
-      const cap = Math.max(numLimit, campQuota);
+      const explicitNumLimit = dailyLimitByNum.get(recNumId) || 0;
+      const campQuota = quotaByCampaign.get(recipient.campaign_id) ?? explicitNumLimit;
+      // Effective per-number cap = operator quota. Only an explicitly-set,
+      // non-legacy number limit may raise the warning/safety surface; the
+      // old default 200 is treated as unset. workspace_send_guards still
+      // kill-switch FE/FM.
+      const cap = Math.max(explicitNumLimit, campQuota);
       const sentNow = sentTodayByNum.get(recNumId) ?? 0;
       if (sentNow >= cap) {
         const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -1780,7 +1809,7 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
   const skipSet = new Set<string>(Array.isArray(body.skip_dates) ? body.skip_dates.filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : []);
   const extraDates: string[] = Array.isArray(body.extra_dates) ? body.extra_dates.filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
   const overrideQuota = body.per_number_quota != null
-    ? Math.max(1, Math.min(10000, Math.floor(Number(body.per_number_quota))))
+    ? normalizePerNumberQuota(body.per_number_quota)
     : null;
   const overrideWindowStart = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : null;
   const overrideWindowEnd = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : null;
@@ -1850,7 +1879,7 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
       continue;
     }
 
-    const quota = overrideQuota ?? Math.max(1, Math.min(10000, c.per_number_quota || 200));
+    const quota = overrideQuota ?? normalizePerNumberQuota(c.per_number_quota);
     const winStart = overrideWindowStart ?? String(c.schedule_window_start || "09:00:00").slice(0, 5);
     const winEnd = overrideWindowEnd ?? String(c.schedule_window_end || "18:00:00").slice(0, 5);
     // P0.4 (2026-05-20): honor delay_min_seconds VERBATIM. Previously this
@@ -2167,10 +2196,10 @@ serve(async (req) => {
 // Bump this whenever quota/capacity/allocation contract changes.
 // Any previously-prepared snapshot fails signature verification at launch and
 // forces the operator to re-prepare against the current contract.
-// v2 (2026-05-20): removed hidden 200 hard cap on per_number_quota; operator
-// `per_number_quota` is now authoritative end-to-end (prepare, launch,
-// redistribute), with `daily_send_limit` demoted to recommendation/warning only.
-const SNAPSHOT_CONTRACT_VERSION = "v2-quota-uncapped-2026-05-20";
+// v3 (2026-05-20): legacy/default whatsapp_numbers.daily_send_limit=200 is
+// treated as unset, so it cannot create hidden caps or warnings when the
+// operator did not explicitly set a number limit.
+const SNAPSHOT_CONTRACT_VERSION = "v3-default-200-is-unset-2026-05-20";
 
 async function computeSnapshotSignature(input: {
   numberIds: string[];
@@ -2209,7 +2238,7 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   const audienceCount = Math.max(0, Math.floor(Number(body.audience_count ?? 0)));
   const dispatchMode: "paced" | "marketing_instant" =
     body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
-  const perNumberQuota = Math.max(1, Math.min(10000, Math.floor(Number(body.per_number_quota ?? 200))));
+  const perNumberQuota = normalizePerNumberQuota(body.per_number_quota);
   const maxInflightPerNumber = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_number ?? 5))));
   const maxInflightPerCampaign = Math.max(1, Math.min(5000, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
   const windowStart: string = typeof body.window_start === "string" ? body.window_start : "09:00";
@@ -2272,8 +2301,8 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   }
   // Surface daily_send_limit recommendation as a non-blocking warning.
   for (const nrow of numberRows as any[]) {
-    const dailyLimit = Number(nrow?.daily_send_limit ?? 200);
-    if (perNumberQuota > dailyLimit) {
+    const dailyLimit = explicitDailySendLimit(nrow?.daily_send_limit);
+    if (dailyLimit !== null && perNumberQuota > dailyLimit) {
       warnings.push(`Number ${nrow.phone_number}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
     }
   }
@@ -2291,7 +2320,7 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
       status: n.status,
       webhook_connected: n.webhook_connected,
       allocation,
-      daily_cap: Number(n.daily_send_limit ?? 200),
+      daily_cap: explicitDailySendLimit(n.daily_send_limit) ?? perNumberQuota,
       backoff_until: backoffMap.get(n.id) ?? null,
     };
   });
