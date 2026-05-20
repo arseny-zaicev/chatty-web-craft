@@ -4015,6 +4015,15 @@ export type Database = {
         Args: { _at: string; _whatsapp_number_id: string }
         Returns: string
       }
+      number_rate_at: {
+        Args: {
+          _at: string
+          _partner: string
+          _role: string
+          _whatsapp_number_id: string
+        }
+        Returns: number
+      }
       ops_operator_assigned_conversations: {
         Args: { _user_id: string }
         Returns: {
