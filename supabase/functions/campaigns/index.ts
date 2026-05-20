@@ -798,10 +798,56 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   // ============================================================
   const isCronMode = opts.mode !== "manual";
   const TICK_BUDGET_MS = isCronMode ? 3_500 : 25_000;
-  const perTickLimit = isCronMode ? 30 : 500;
+
+  // ============================================================
+  // INSTANT RATE CONTRACT (P0.3 — 2026-05-20)
+  // ------------------------------------------------------------
+  // pg_cron fires processQueue once per minute (cron cadence is OUT OF SCOPE
+  // for this patch). The ONLY per-minute throughput knob is `perTickLimit`
+  // (passed straight into `claim_due_campaign_recipients(p_limit)`), so:
+  //
+  //     effective sends-per-minute, per pipeline = perTickLimit
+  //
+  // Before this patch every tick used 30, regardless of dispatch_mode. That
+  // capped marketing_instant at 30/min even when the operator set
+  // max_inflight_per_number=250 — the label said "instant", the runtime
+  // said "30/min". The 250 was theatre.
+  //
+  // New contract:
+  //   * paced / utility / auth  -> BASE_TICK_LIMIT (30/min) — unchanged.
+  //   * marketing_instant       -> INSTANT_TICK_LIMIT (120/min) — applied
+  //     only when there is at least one DUE instant row this tick. We
+  //     cheaply peek before claiming so paced-only ticks stay light.
+  //
+  // 120/min was chosen so a single Deno isolate can drain it inside the
+  // 3.5s tick budget at the new INSTANT_PARALLEL_HARD_CAP of 80 workers
+  // (avg ~1.5 sends/worker/tick). Raise it further once we have a way to
+  // shorten the cron interval (out of scope here).
+  // ============================================================
+  const BASE_TICK_LIMIT = 30;
+  const INSTANT_TICK_LIMIT = 120;
+
+  let hasDueInstant = false;
+  if (isCronMode) {
+    const { data: peek } = await admin
+      .from("campaign_recipients")
+      .select("id, campaigns!inner(dispatch_mode, status, kill_switch_at)")
+      .eq("status", "scheduled")
+      .lte("scheduled_at", new Date().toISOString())
+      .eq("campaigns.dispatch_mode", "marketing_instant")
+      .eq("campaigns.status", "running")
+      .is("campaigns.kill_switch_at", null)
+      .limit(1);
+    hasDueInstant = (peek?.length ?? 0) > 0;
+  } else {
+    hasDueInstant = true; // manual replays should also use the higher cap
+  }
+  const perTickLimit = isCronMode
+    ? (hasDueInstant ? INSTANT_TICK_LIMIT : BASE_TICK_LIMIT)
+    : 500;
 
   const tickStartedAt = Date.now();
-  console.log(`[job:campaigns-process] mode=${isCronMode ? "cron" : "manual"} budget_ms=${TICK_BUDGET_MS} limit=${perTickLimit} starting`);
+  console.log(`[job:campaigns-process] mode=${isCronMode ? "cron" : "manual"} budget_ms=${TICK_BUDGET_MS} limit=${perTickLimit} instant_burst=${hasDueInstant} starting`);
 
   // Dispatcher heartbeat (best-effort, fire-and-forget). Lets operators see
   // that processQueue is alive without grepping edge logs. The "campaigns"
@@ -810,7 +856,7 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   admin.from("system_heartbeats").upsert({
     name: "campaigns-process",
     last_run_at: new Date(tickStartedAt).toISOString(),
-    payload: { mode: isCronMode ? "cron" : "manual", limit: perTickLimit },
+    payload: { mode: isCronMode ? "cron" : "manual", limit: perTickLimit, instant_burst: hasDueInstant },
   }).then(() => {}, () => {});
 
   // Reaper: stuck 'sending' rows -> 'scheduled'. Cheap RPC, safe to call here.
