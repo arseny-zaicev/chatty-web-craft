@@ -270,6 +270,9 @@ export default function PartnerDetail() {
                     <TableHead className="text-right">Deliv / Sent today</TableHead>
                     <TableHead className="text-right">Deliv / Sent 7d</TableHead>
                     <TableHead className="text-right">Deliv / Sent all</TableHead>
+                    <TableHead className="text-right">Earned today</TableHead>
+                    <TableHead className="text-right">Earned 7d</TableHead>
+                    <TableHead className="text-right">Earned all</TableHead>
                     <TableHead className="text-right">Restricted</TableHead>
                     <TableHead className="text-right">Blocked</TableHead>
                     <TableHead className="text-right">Clients</TableHead>
