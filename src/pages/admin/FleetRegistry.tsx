@@ -1081,7 +1081,8 @@ function AddNumberDrawer({
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
     setSourceKind("own");
-    setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
+    setProviderPartnerId(""); setReferrerPartnerId(""); setOwnershipRate("0");
+    setStatus("stock"); setDnApproved(false);
     setWebhookConnected(false);
     setBmId("__none__"); setBmNewName("");
   };
@@ -1099,8 +1100,15 @@ function AddNumberDrawer({
       setMessagingLimit(editing.messaging_limit || "");
       setWorkspaceId(editing.workspace_id ?? "__unassigned__");
       setUsage(editing.usage_type);
-      setProvidedBy(editing.provided_by && editing.provided_by.toLowerCase() !== SELF_PROVIDER.toLowerCase() ? editing.provided_by : "");
-      setAssignedRef(editing.assigned_ref || "");
+      // Map legacy free-text provided_by / assigned_ref back to partner uuids.
+      const providedName = (editing.provided_by || "").trim();
+      const isSelfProvider = !providedName || providedName.toLowerCase() === SELF_PROVIDER.toLowerCase();
+      const providerMatch = isSelfProvider ? null : partnerByLowerName.get(providedName.toLowerCase()) ?? null;
+      const refName = (editing.assigned_ref || "").trim();
+      const referrerMatch = refName ? partnerByLowerName.get(refName.toLowerCase()) ?? null : null;
+      setProviderPartnerId(providerMatch?.id ?? "");
+      setReferrerPartnerId(referrerMatch?.id ?? "");
+      setOwnershipRate(String(providerMatch?.default_payout_rate_usd ?? 0));
       setSourceKind(getAttribution(editing).kind === "own" ? "own" : "referred");
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
@@ -1110,7 +1118,7 @@ function AddNumberDrawer({
     } else {
       reset();
     }
-  }, [open, editing]);
+  }, [open, editing, partnerByLowerName]);
 
   const create = useMutation({
     mutationFn: async () => {
