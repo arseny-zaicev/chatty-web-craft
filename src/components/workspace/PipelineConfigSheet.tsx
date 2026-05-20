@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { groupLogicalTemplates, type Template as LaunchTemplate, type LogicalTemplate, type TemplateGroup as LaunchTemplateGroup } from "@/lib/launchData";
 import TemplateGroupsDialog from "@/components/workspace/TemplateGroupsDialog";
 import { friendlySenderLabel } from "@/lib/crmData";
+import { fetchSetters, setterKeys } from "@/lib/setters";
 
 type Stage = {
   id: string;
@@ -56,7 +57,9 @@ type Stage = {
   color: string;
   position: number;
   stage_type: "open" | "won" | "lost";
+  assigned_setter_id: string | null;
 };
+
 
 const STAGE_COLORS = [
   "#64748b", "#94a3b8", "#10b981", "#f59e0b", "#6366f1",
@@ -403,12 +406,41 @@ export default function PipelineConfigSheet({
     queryFn: async (): Promise<Stage[]> => {
       const { data } = await supabase
         .from("pipeline_stages")
-        .select("id, pipeline_id, workspace_id, user_id, name, color, position, stage_type")
+        .select("id, pipeline_id, workspace_id, user_id, name, color, position, stage_type, assigned_setter_id")
         .eq("pipeline_id", pipeId!)
         .order("position");
       return (data ?? []) as Stage[];
     },
   });
+
+  const { data: setters } = useQuery({
+    queryKey: setterKeys.list(wsId ?? undefined),
+    enabled: Boolean(wsId && open),
+    queryFn: () => fetchSetters(wsId ?? undefined),
+  });
+  const activeSetters = useMemo(() => (setters ?? []).filter((s) => s.is_active), [setters]);
+
+  const assignStageSetter = async (stageId: string, setterId: string | null) => {
+    if (setterId) {
+      // Clear any other stage in the same pipeline already mapped to this setter (one column per setter per pipeline)
+      const conflict = (stages ?? []).find((s) => s.id !== stageId && s.assigned_setter_id === setterId);
+      if (conflict) {
+        await supabase.from("pipeline_stages").update({ assigned_setter_id: null }).eq("id", conflict.id);
+        toast.message(`Moved setter from "${conflict.name}" to new stage`);
+      }
+    }
+    const { error } = await supabase
+      .from("pipeline_stages")
+      .update({ assigned_setter_id: setterId })
+      .eq("id", stageId);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    refetchStages();
+    qc.invalidateQueries({ queryKey: ["stages", wsId] });
+  };
+
 
   const addStage = async () => {
     if (!pipeId || !wsId) return;
@@ -1017,9 +1049,24 @@ export default function PipelineConfigSheet({
                     <SelectItem value="lost">Lost</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select
+                  value={s.assigned_setter_id ?? "__none"}
+                  onValueChange={(v) => assignStageSetter(s.id, v === "__none" ? null : v)}
+                >
+                  <SelectTrigger className="h-7 w-36 text-[11px]" title="Auto-route chats assigned to this setter into this stage">
+                    <SelectValue placeholder="Setter…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— No setter —</SelectItem>
+                    {activeSetters.map((st) => (
+                      <SelectItem key={st.id} value={st.id}>{st.display_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteStage(s)}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
+
               </div>
             ))}
           </div>
