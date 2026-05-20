@@ -26,147 +26,43 @@ import {
   resolveLaunchContract,
   SNAPSHOT_CONTRACT_VERSION as SHARED_SNAPSHOT_CONTRACT_VERSION,
 } from "../_shared/launchContract.ts";
+import {
+  COUNTRY_TZ,
+  dateAtTzToUTC,
+  exponentialGap,
+  explicitDailySendLimit,
+  hhmmToMin,
+  LEGACY_DEFAULT_DAILY_SEND_LIMIT,
+  MAX_PER_NUMBER_QUOTA,
+  normalizePerNumberQuota,
+  PHONE_TZ,
+  randomDelay,
+  stripToDigits,
+  tzFromPhone,
+  tzOffsetMinutes,
+} from "./time.ts";
+import { notifyLaunchSlack } from "./notifications.ts";
+import { killSwitch, runtimeStatus, setCampaignStatus } from "./control.ts";
+import { redistributeCampaign, retryFailedRecipients } from "./retry.ts";
 
 // Strips a phone string to digits only. Recipients reaching this point have
 // already been normalized + CC-repaired upstream by `lead-intake` /
 // `google-sheets-sync` (which both use `_shared/phone.ts`). This helper only
 // guarantees a clean digits-only contact_phone for inserts into
 // campaign_recipients / conversations. Do NOT use this for raw lead intake.
-function stripToDigits(phone: string) {
-  return String(phone || "").replace(/[^\d]/g, "");
-}
-
-function randomDelay(min: number, max: number) {
-  if (max <= min) return min;
-  return min + Math.floor(Math.random() * (max - min + 1));
-}
-
-const MAX_PER_NUMBER_QUOTA = 10000;
-const LEGACY_DEFAULT_DAILY_SEND_LIMIT = 200;
-
-function normalizePerNumberQuota(value: any, fallback = LEGACY_DEFAULT_DAILY_SEND_LIMIT) {
-  return Math.max(1, Math.min(MAX_PER_NUMBER_QUOTA, Math.floor(Number(value ?? fallback))));
-}
-
-function explicitDailySendLimit(value: any): number | null {
-  const raw = Number(value);
-  if (!Number.isFinite(raw) || raw <= 0) return null;
-  const limit = Math.max(1, Math.min(100000, Math.floor(raw)));
-  // `daily_send_limit` was introduced as NOT NULL DEFAULT 200, so old rows
-  // with 200 do not prove the operator set a real limit. Treat that legacy
-  // default as unset: no hidden cap and no noisy warning.
-  return limit === LEGACY_DEFAULT_DAILY_SEND_LIMIT ? null : limit;
-}
-
-// readJson now imported from ./_helpers.ts
-
-// Gupshup template-fetch / parsing helpers and the template-action handlers
-// (upsertTemplate / syncTemplates / syncTemplatesAll) now live in
-// `./templates.ts`. Cross-action helpers (json, uuidRegex, getUser,
-// canAccessUser, getGupshupAppToken, readJson, corsHeaders) live in
-// `./_helpers.ts`. `resolveGupshupSendToken` was unused and has been removed.
-
-
-
-// Map common phone country prefixes -> IANA timezone (rough, single TZ per country)
-const PHONE_TZ: Array<[string, string]> = [
-  ["971", "Asia/Dubai"], ["972", "Asia/Jerusalem"], ["966", "Asia/Riyadh"], ["965", "Asia/Kuwait"],
-  ["974", "Asia/Qatar"], ["973", "Asia/Bahrain"], ["968", "Asia/Muscat"], ["20", "Africa/Cairo"],
-  ["44", "Europe/London"], ["353", "Europe/Dublin"], ["33", "Europe/Paris"], ["49", "Europe/Berlin"],
-  ["34", "Europe/Madrid"], ["39", "Europe/Rome"], ["31", "Europe/Amsterdam"], ["351", "Europe/Lisbon"],
-  ["41", "Europe/Zurich"], ["43", "Europe/Vienna"], ["46", "Europe/Stockholm"], ["47", "Europe/Oslo"],
-  ["45", "Europe/Copenhagen"], ["358", "Europe/Helsinki"], ["48", "Europe/Warsaw"], ["420", "Europe/Prague"],
-  ["7", "Europe/Moscow"], ["380", "Europe/Kyiv"],
-  ["1", "America/New_York"], ["52", "America/Mexico_City"], ["55", "America/Sao_Paulo"], ["54", "America/Argentina/Buenos_Aires"],
-  ["91", "Asia/Kolkata"], ["86", "Asia/Shanghai"], ["81", "Asia/Tokyo"], ["82", "Asia/Seoul"],
-  ["65", "Asia/Singapore"], ["60", "Asia/Kuala_Lumpur"], ["62", "Asia/Jakarta"], ["63", "Asia/Manila"],
-  ["66", "Asia/Bangkok"], ["84", "Asia/Ho_Chi_Minh"], ["61", "Australia/Sydney"], ["64", "Pacific/Auckland"],
-  ["27", "Africa/Johannesburg"], ["234", "Africa/Lagos"], ["254", "Africa/Nairobi"], ["212", "Africa/Casablanca"],
-];
-
-// ISO country code -> primary IANA TZ (mirrors campaign-day-rollover.COUNTRY_TZ)
-const COUNTRY_TZ: Record<string, string> = {
-  US: "America/New_York", CA: "America/Toronto", GB: "Europe/London", UK: "Europe/London",
-  AE: "Asia/Dubai", SA: "Asia/Riyadh", IN: "Asia/Kolkata", DE: "Europe/Berlin",
-  FR: "Europe/Paris", IT: "Europe/Rome", ES: "Europe/Madrid", NL: "Europe/Amsterdam",
-  BR: "America/Sao_Paulo", MX: "America/Mexico_City", AU: "Australia/Sydney",
-  JP: "Asia/Tokyo", SG: "Asia/Singapore", HK: "Asia/Hong_Kong",
-};
-
-function tzFromPhone(phone: string): string {
-  const d = String(phone || "").replace(/[^\d]/g, "");
-  if (!d) return "UTC";
-  const sorted = [...PHONE_TZ].sort((a, b) => b[0].length - a[0].length);
-  for (const [pfx, tz] of sorted) if (d.startsWith(pfx)) return tz;
-  return "UTC";
-}
-
-// Get UTC offset (minutes) for a given IANA tz at instant `at`. Approximate, good enough for windows.
-function tzOffsetMinutes(tz: string, at: Date): number {
-  try {
-    const dtf = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    const parts = dtf.formatToParts(at);
-    const map: any = {};
-    for (const p of parts) map[p.type] = p.value;
-    const asUTC = Date.UTC(Number(map.year), Number(map.month) - 1, Number(map.day), Number(map.hour), Number(map.minute), Number(map.second));
-    return Math.round((asUTC - at.getTime()) / 60000);
-  } catch { return 0; }
-}
-
-// Parse "HH:MM" to minutes
-function hhmmToMin(s: string): number {
-  const [h, m] = String(s || "09:00").split(":").map((x) => parseInt(x, 10) || 0);
-  return Math.max(0, Math.min(24 * 60 - 1, h * 60 + m));
-}
-
-// Build a UTC Date for `dateStr (YYYY-MM-DD) at HH:MM in tz`.
-function dateAtTzToUTC(dateStr: string, hhmm: string, tz: string): Date {
-  const [Y, M, D] = dateStr.split("-").map((x) => parseInt(x, 10));
-  const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10) || 0);
-  // Treat the wall clock as UTC, then offset
-  const naiveUtc = Date.UTC(Y, (M || 1) - 1, D || 1, h || 0, m || 0, 0);
-  const offset = tzOffsetMinutes(tz, new Date(naiveUtc));
-  return new Date(naiveUtc - offset * 60_000);
-}
-
-// Poisson inter-arrival sampler with given rate (events per second). Returns seconds gap.
-function exponentialGap(ratePerSec: number): number {
-  if (ratePerSec <= 0) return 0;
-  const u = Math.max(1e-9, Math.random());
-  return -Math.log(u) / ratePerSec;
-}
-
-async function notifyLaunchSlack(workspace_id: string | null, payload: { name: string; recipients: number; firstAt: string; mode: string; numberPhone?: string }) {
-  try {
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    const slackKey = Deno.env.get("SLACK_API_KEY");
-    if (!lovableKey || !slackKey) return;
-    // Look up channel from workspace, fallback to default
-    let channel = "#delivery-campaigns";
-    if (workspace_id) {
-      try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const admin = createClient(supabaseUrl, serviceKey);
-        const { data: ws } = await admin.from("workspaces").select("slack_channel_id, name").eq("id", workspace_id).maybeSingle();
-        if (ws?.slack_channel_id) channel = ws.slack_channel_id;
-      } catch { /* ignore */ }
-    }
-    const text = `🚀 *Campaign launched*: ${payload.name}\n• Recipients: *${payload.recipients}*\n• First send: ${payload.firstAt}\n• Scheduler: ${payload.mode}${payload.numberPhone ? `\n• Number: +${payload.numberPhone}` : ""}`;
-    await fetch("https://connector-gateway.lovable.dev/slack/api/chat.postMessage", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${lovableKey}`, "X-Connection-Api-Key": slackKey, "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({
-        channel,
-        text,
-        username: "Iskra",
-        icon_url: "https://iskra.ae/iskra-favicon-v2.png",
-        unfurl_links: false,
-        unfurl_media: false,
-      }),
-    }).catch(() => {});
-  } catch { /* ignore */ }
-}
+// Time/phone-TZ/quota helpers, slack notification, and pause/resume/cancel +
+// retry/redistribute + kill-switch + runtime_status now live in dedicated
+// sibling modules:
+//
+//   - ./time.ts            (tzFromPhone, dateAtTzToUTC, COUNTRY_TZ, normalizePerNumberQuota, …)
+//   - ./notifications.ts   (notifyLaunchSlack, postSlackChannelMessage)
+//   - ./control.ts         (setCampaignStatus, killSwitch, runtimeStatus)
+//   - ./retry.ts           (redistributeCampaign, retryFailedRecipients)
+//
+// `readJson` / `json` / `uuidRegex` / `getUser` / `canAccessUser` /
+// `getGupshupAppToken` / `corsHeaders` live in `./_helpers.ts`. Gupshup
+// template-fetch / parsing helpers and template-action handlers
+// (upsertTemplate / syncTemplates / syncTemplatesAll) live in `./templates.ts`.
 
 async function launchCampaign(admin: any, requesterId: string, body: any) {
   const name = String(body.name || "").trim().slice(0, 160);
@@ -2289,131 +2185,5 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   });
 }
 
+// killSwitch + runtimeStatus moved to ./control.ts (stage 1 split).
 
-// Engage / release a kill switch. scope: campaign | sender | instant_mode_global.
-async function killSwitch(admin: any, requesterId: string, body: any) {
-  const scope = String(body.scope || "campaign");
-  const reason = String(body.reason || "manual").slice(0, 500);
-  const release = body.release === true;
-
-  if (scope === "campaign") {
-    const id = String(body.campaign_id || "");
-    if (!uuidRegex.test(id)) return json({ error: "campaign_id required" }, 400);
-    const { data: c } = await admin.from("campaigns").select("id, user_id, workspace_id").eq("id", id).maybeSingle();
-    if (!c) return json({ error: "Not found" }, 404);
-    if (!(await canAccessUser(admin, requesterId, c.user_id))) return json({ error: "Forbidden" }, 403);
-    await admin.from("campaigns").update({
-      kill_switch_at: release ? null : new Date().toISOString(),
-      kill_switch_by: release ? null : requesterId,
-      kill_switch_reason: release ? null : reason,
-      status: release ? "running" : "paused",
-    }).eq("id", id);
-    await admin.from("campaign_dispatch_events").insert({
-      campaign_id: id, workspace_id: c.workspace_id,
-      event_type: release ? "kill_switch_released" : "killed",
-      reason, payload: { by: requesterId },
-    });
-    return json({ ok: true });
-  }
-
-  if (scope === "sender") {
-    const id = String(body.whatsapp_number_id || "");
-    if (!uuidRegex.test(id)) return json({ error: "whatsapp_number_id required" }, 400);
-    const { data: n } = await admin.from("whatsapp_numbers").select("id, user_id").eq("id", id).maybeSingle();
-    if (!n) return json({ error: "Not found" }, 404);
-    if (!(await canAccessUser(admin, requesterId, n.user_id))) return json({ error: "Forbidden" }, 403);
-    await admin.from("whatsapp_numbers").update({
-      paused_at: release ? null : new Date().toISOString(),
-      paused_reason: release ? null : reason,
-    }).eq("id", id);
-    return json({ ok: true });
-  }
-
-  if (scope === "instant_mode_global") {
-    const { data: isAdminRow } = await admin.rpc("is_admin", { _user_id: requesterId });
-    if (!isAdminRow) return json({ error: "Admin only" }, 403);
-    await admin.from("system_flags").upsert({
-      key: "marketing_instant_enabled",
-      value: release ? true : false,
-      updated_by: requesterId,
-      updated_at: new Date().toISOString(),
-    });
-    return json({ ok: true });
-  }
-
-  return json({ error: "Unknown scope" }, 400);
-}
-
-// Live runtime status for the operator UI.
-async function runtimeStatus(admin: any, requesterId: string, body: any) {
-  const id = String(body.campaign_id || "");
-  if (!uuidRegex.test(id)) return json({ error: "campaign_id required" }, 400);
-  const { data: c } = await admin.from("campaigns")
-    .select("id, user_id, workspace_id, status, dispatch_mode, kill_switch_at, kill_switch_reason, prepared_at, prepared_expires_at, prepared_signature, prepared_report, max_inflight_per_number, max_inflight_per_campaign")
-    .eq("id", id).maybeSingle();
-  if (!c) return json({ error: "Not found" }, 404);
-  if (!(await canAccessUser(admin, requesterId, c.user_id))) return json({ error: "Forbidden" }, 403);
-
-  const sinceIso = new Date(Date.now() - 60_000).toISOString();
-  const fiveMinIso = new Date(Date.now() - 5 * 60_000).toISOString();
-
-  const { data: recents } = await admin
-    .from("campaign_recipients")
-    .select("whatsapp_number_id, status, sent_at")
-    .eq("campaign_id", id)
-    .gte("sent_at", sinceIso)
-    .not("sent_at", "is", null)
-    .limit(2000);
-  const sentLast60 = (recents ?? []).length;
-  const activeSenders = new Set((recents ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean));
-
-  const { data: events } = await admin
-    .from("campaign_dispatch_events")
-    .select("whatsapp_number_id, event_type, reason, created_at")
-    .eq("campaign_id", id)
-    .gte("created_at", fiveMinIso)
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  const idleByNum = new Map<string, { reason: string; at: string }>();
-  for (const e of events ?? []) {
-    const nid = (e as any).whatsapp_number_id;
-    if (!nid || idleByNum.has(nid) || activeSenders.has(nid)) continue;
-    idleByNum.set(nid, { reason: e.reason ?? e.event_type, at: e.created_at });
-  }
-
-  // Pool participation alert: window open + < 50% selected senders sent in last 5 min.
-  const selected = (c.prepared_report as any)?.numbers?.map((n: any) => n.id) ?? [];
-  const { data: recentByNum } = await admin
-    .from("campaign_recipients")
-    .select("whatsapp_number_id")
-    .eq("campaign_id", id)
-    .gte("sent_at", fiveMinIso)
-    .not("sent_at", "is", null)
-    .limit(5000);
-  const activeRecent = new Set((recentByNum ?? []).map((r: any) => r.whatsapp_number_id));
-  const idle = selected.filter((n: string) => !activeRecent.has(n));
-  const poolAlert = c.status === "running" && selected.length > 0 && activeRecent.size * 2 < selected.length;
-
-  return json({
-    ok: true,
-    campaign: {
-      id: c.id,
-      status: c.status,
-      dispatch_mode: c.dispatch_mode,
-      kill_switch: c.kill_switch_at ? { at: c.kill_switch_at, reason: c.kill_switch_reason } : null,
-      snapshot: c.prepared_at
-        ? { prepared_at: c.prepared_at, expires_at: c.prepared_expires_at, signature: c.prepared_signature, fresh: new Date(c.prepared_expires_at).getTime() > Date.now() }
-        : null,
-      caps: { per_number: c.max_inflight_per_number, per_campaign: c.max_inflight_per_campaign },
-    },
-    runtime: {
-      sent_last_60s: sentLast60,
-      rate_per_min: sentLast60,
-      active_senders: [...activeSenders],
-      idle_senders: [...idleByNum.entries()].map(([id, v]) => ({ id, reason: v.reason, at: v.at })),
-      pool_participation_alert: poolAlert,
-      idle_pool_members: idle,
-    },
-  });
-}
