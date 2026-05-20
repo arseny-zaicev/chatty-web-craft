@@ -195,13 +195,6 @@ export default function PartnerDetail() {
           </span>
         </div>
 
-        {/* TOP SUMMARY STRIP - live across linked BMs / numbers */}
-        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-3">
-          <Stat label="Total BMs" value={String(bmList.length)} />
-          <Stat label="Ready" value={String(lifecycleCounts.ready)} />
-          <Stat label="Warming up" value={String(lifecycleCounts.warming_up)} />
-          <Stat label="Verifying" value={String(lifecycleCounts.verifying)} />
-          <Stat label="Disabled" value={String(lifecycleCounts.disabled)} />
         {/* TOP SUMMARY STRIP - trimmed: only what you act on */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
           <Stat label="BMs" value={`${lifecycleCounts.ready}/${bmList.length}`} hint={`${lifecycleCounts.disabled} disabled`} />
