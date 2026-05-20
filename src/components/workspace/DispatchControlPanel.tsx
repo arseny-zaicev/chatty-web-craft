@@ -121,6 +121,8 @@ export default function DispatchControlPanel({ prepareInput, onSnapshotChange }:
           max_inflight_per_number: maxInflightPerNumber,
           max_inflight_per_campaign: maxInflightPerCampaign,
           respect_recipient_tz: prepareInput.respect_recipient_tz !== false,
+          scheduled_dates: prepareInput.scheduled_dates ?? [],
+          delay_min_seconds: prepareInput.delay_min_seconds ?? (mode === "marketing_instant" ? 0 : 30),
           campaign_id: prepareInput.campaign_id ?? null,
         },
       });
