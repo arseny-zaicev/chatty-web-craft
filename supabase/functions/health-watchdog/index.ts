@@ -20,8 +20,15 @@ const HEARTBEAT_MAX_AGE_MIN: Record<string, number> = {
   "lead-dispatch": 5,
   "google-sheets-sync": 6,
   "health-watchdog": 12,
+  "inbound-recovery-sweep": 12,
 };
 const INBOUND_SILENCE_MIN = 90; // widened to avoid off-peak false positives
+
+// Inbound recovery thresholds — anything above these means a reply
+// is sitting in the recovery queue and an operator should look.
+const INBOUND_STUCK_RAW_THRESHOLD = 5;          // rows in 'received' >2 min
+const INBOUND_PENDING_FAILURES_THRESHOLD = 5;   // unreplayed failures
+const INBOUND_OLDEST_PENDING_AGE_MIN = 30;      // age of oldest pending
 
 Deno.serve(cronGuard({ jobName: "health-watchdog", lock: true }, async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
