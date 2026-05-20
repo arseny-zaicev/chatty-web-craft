@@ -395,7 +395,7 @@ export default function PartnerDetail() {
                       );
                     })}
                     {!activeAssigns.length && (
-                      <TableRow><TableCell colSpan={13} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={14} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
