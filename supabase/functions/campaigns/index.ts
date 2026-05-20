@@ -1594,7 +1594,7 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     const isInstant = camp.dispatch_mode === "marketing_instant";
     const tplCategory = String(first.campaigns?.message_templates?.category || "marketing").toLowerCase();
     const isUtility = tplCategory === "utility" || tplCategory === "authentication";
-    const perNumberFloor = isInstant ? 0 : (isUtility ? 60 : 1);
+    const perNumberFloor = isInstant ? 0 : (isUtility ? 90 : 1);
     const perNumberCap = Math.max(1, Number(camp.max_inflight_per_number ?? 5));
     // For marketing_instant the configured per_number cap (often 200) lets a single
     // tick spawn 200 parallel Gupshup fetches inside one Deno isolate. That regularly
