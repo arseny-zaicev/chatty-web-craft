@@ -34,8 +34,15 @@ export type AlltimeMetrics = {
   failed_alltime: number;
 };
 
+export type EarningsMetrics = {
+  earned_today: number;
+  earned_7d: number;
+  earned_alltime: number;
+};
+
 const ZERO_TODAY: TodayMetrics = { sent_today: 0, delivered_today: 0, failed_today: 0, replies_today: 0 };
 const ZERO_ALL: AlltimeMetrics = { sent_alltime: 0, delivered_alltime: 0, failed_alltime: 0 };
+const ZERO_EARN: EarningsMetrics = { earned_today: 0, earned_7d: 0, earned_alltime: 0 };
 
 const sumToday = (rows: any[]): TodayMetrics =>
   rows.reduce<TodayMetrics>((acc, r) => ({
