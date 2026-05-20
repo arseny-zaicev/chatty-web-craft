@@ -153,38 +153,73 @@ const fetchAnalytics = async (period: Period) => {
     };
   });
 
-  // Per-client aggregation
-  type ClientAgg = { workspace_id: string; name: string; rate: number; numbers: number; activeNumbers: number; cap: number; sent: number; delivered: number; failed: number; sent_convos: number; replied_convos: number };
+  // Per-client aggregation.
+  //
+  // CRITICAL: traffic (sent/delivered/failed) is attributed by the EVENT-TIME
+  // workspace_id carried on each whatsapp_message_events row (via
+  // metrics_for_range), NOT by whatsapp_numbers.workspace_id. Reassigning a
+  // number to a new client must NOT back-credit the old workspace's history
+  // to the new one. Rows whose event-time workspace_id is NULL are bucketed
+  // as "Unassigned (historical / orphan)" instead of being absorbed by the
+  // number's current workspace.
+  //
+  // Structural counts (numbers / activeNumbers / capacity / reply convos)
+  // continue to reflect the CURRENT assignment — they describe today's fleet
+  // layout, not past traffic.
+  type ClientAgg = { workspace_id: string; name: string; rate: number; numbers: number; activeNumbers: number; cap: number; sent: number; delivered: number; failed: number; sent_convos: number; replied_convos: number; is_unassigned: boolean };
   const perClient = new Map<string, ClientAgg>();
+  const UNASSIGNED_KEY = "__unassigned__";
+  const ensureClient = (wsId: string | null): ClientAgg => {
+    const key = wsId ?? UNASSIGNED_KEY;
+    let agg = perClient.get(key);
+    if (!agg) {
+      const ws = wsId ? wsMap.get(wsId) : null;
+      agg = {
+        workspace_id: key,
+        name: wsId ? (ws?.name ?? "(deleted workspace)") : "Unassigned (historical / orphan)",
+        rate: ws?.rate ?? 0,
+        numbers: 0, activeNumbers: 0, cap: 0,
+        sent: 0, delivered: 0, failed: 0,
+        sent_convos: 0, replied_convos: 0,
+        is_unassigned: !wsId,
+      };
+      perClient.set(key, agg);
+    }
+    return agg;
+  };
+  // 1) Traffic by EVENT-TIME workspace, straight off canonical rows.
+  for (const r of (canonicalRows ?? []) as Array<{ workspace_id: string | null; whatsapp_number_id: string | null; sent: number; delivered: number; failed: number }>) {
+    if (!r.whatsapp_number_id && !r.workspace_id) continue;
+    const agg = ensureClient(r.workspace_id ?? null);
+    agg.sent += Number(r.sent ?? 0);
+    agg.delivered += Number(r.delivered ?? 0);
+    agg.failed += Number(r.failed ?? 0);
+  }
+  // 2) Structural counts by CURRENT assignment.
   for (const n of numberRows) {
     if (!n.workspace_id) continue;
-    let agg = perClient.get(n.workspace_id);
-    if (!agg) {
-      const ws = wsMap.get(n.workspace_id);
-      agg = { workspace_id: n.workspace_id, name: ws?.name ?? "—", rate: ws?.rate ?? 0, numbers: 0, activeNumbers: 0, cap: 0, sent: 0, delivered: 0, failed: 0, sent_convos: 0, replied_convos: 0 };
-      perClient.set(n.workspace_id, agg);
-    }
+    const agg = ensureClient(n.workspace_id);
     agg.numbers += 1;
     if (isCountedStatus(n.status)) agg.activeNumbers += 1;
     agg.cap += n.cap;
-    agg.sent += n.sent;
-    agg.delivered += n.delivered;
-    agg.failed += n.failed;
     agg.sent_convos += n.sent_convos;
     agg.replied_convos += n.replied_convos;
   }
   const clientRows = Array.from(perClient.values()).sort((a, b) => (b.delivered * b.rate) - (a.delivered * a.rate));
 
-  // Totals — derived from canonical per-number truth (not raw events) so the
-  // KPI strip matches Per-client and Per-number tables exactly.
-  let totSent = 0, totDelivered = 0, totFailed = 0, totRevenue = 0;
+  // Totals — derived from canonical per-number truth so the KPI strip stays
+  // consistent across all event-time workspaces (per-number cumulative is
+  // workspace-agnostic and not subject to the back-credit bug).
+  let totSent = 0, totDelivered = 0, totFailed = 0;
   for (const n of numberRows) {
     totSent += n.sent;
     totDelivered += n.delivered;
     totFailed += n.failed;
-    const rate = n.workspace_id ? (wsMap.get(n.workspace_id)?.rate ?? 0) : 0;
-    totRevenue += n.delivered * rate;
   }
+  // Revenue is summed from per-client (event-time delivered × current rate),
+  // so a reassigned number's historical deliveries pay the OLD client's rate.
+  let totRevenue = 0;
+  for (const c of clientRows) totRevenue += c.delivered * c.rate;
   // "Read" is a vanity metric and not part of the canonical sent/delivered/
   // failed contract — keep it from raw events.
   let totRead = 0;
