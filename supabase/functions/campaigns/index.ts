@@ -774,18 +774,44 @@ async function ensureCampaignConversation(admin: any, recipient: any): Promise<s
 }
 
 async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {}) {
-  // Cron path = called by pg_cron via pg_net which has a 5s HTTP timeout.
-  // We MUST return well under that, otherwise the request is cancelled,
-  // `finally` (and our lock release) doesn't run, and the next tick sees
-  // a stale lock. The previous design used TICK_BUDGET_MS=55s + setTimeout
-  // pacing inside the tick — that consistently busted the 5s budget and is
-  // why FB Media / fitpreneur stayed at 0 sent. (2026-05-20 incident.)
+  // ============================================================
+  // OUTBOUND DISPATCH CONTRACT (P0.1 — 2026-05-20)
+  // ------------------------------------------------------------
+  // SQL `claim_due_campaign_recipients(p_limit)` owns:
+  //   - eligibility   (status=scheduled, scheduled_at<=now, campaign running, no kill switch)
+  //   - PIPELINE-level daily_cap enforcement (pipelines.daily_cap)
+  //   - FAIRNESS across senders (round-robin by sender_rank, window = p_limit)
+  //   - returns at most p_limit rows
+  //
+  // processQueue (this function) owns:
+  //   - PACING (per-number floor — only for utility/auth; marketing pacing
+  //     is already encoded in scheduled_at, do NOT re-apply per-row delays)
+  //   - per-NUMBER concurrency (worker pool, instant hard-cap)
+  //   - per-CAMPAIGN concurrency (max_inflight_per_campaign semaphore)
+  //   - per-NUMBER daily_send_limit SAFETY NET (whatsapp_numbers.daily_send_limit)
+  //   - canary abort + restriction detection
+  //   - dispatcher heartbeat
+  //
+  // Cron path = called by pg_cron via pg_net (HTTP timeout 60s, but we keep
+  // each tick well under 5s so a missed `finally` never strands the lock).
+  // Throughput is governed by a SINGLE knob: perTickLimit (== p_limit).
+  // ============================================================
   const isCronMode = opts.mode !== "manual";
   const TICK_BUDGET_MS = isCronMode ? 3_500 : 25_000;
   const perTickLimit = isCronMode ? 30 : 500;
 
   const tickStartedAt = Date.now();
   console.log(`[job:campaigns-process] mode=${isCronMode ? "cron" : "manual"} budget_ms=${TICK_BUDGET_MS} limit=${perTickLimit} starting`);
+
+  // Dispatcher heartbeat (best-effort, fire-and-forget). Lets operators see
+  // that processQueue is alive without grepping edge logs. The "campaigns"
+  // row was previously never written, so the watchdog UI showed it stale
+  // since 2026-05-10 even though cron was firing every minute.
+  admin.from("system_heartbeats").upsert({
+    name: "campaigns-process",
+    last_run_at: new Date(tickStartedAt).toISOString(),
+    payload: { mode: isCronMode ? "cron" : "manual", limit: perTickLimit },
+  }).then(() => {}, () => {});
 
   // Reaper: stuck 'sending' rows -> 'scheduled'. Cheap RPC, safe to call here.
   try {
