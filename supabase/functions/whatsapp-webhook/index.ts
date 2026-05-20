@@ -823,6 +823,16 @@ serve(async (req) => {
       await markRaw(rawId, { processing_status: "skipped", processed_at: new Date().toISOString(), error_message: `unhandled type: ${type}` });
     }
 
+    // Proof-of-life: a tiny heartbeat upsert so admin/watchdog can see the
+    // webhook is actually receiving traffic without scanning messages.
+    try {
+      await supabase.from("system_heartbeats").upsert({
+        name: "whatsapp-webhook",
+        last_run_at: new Date().toISOString(),
+        payload: { type: String((payload as any)?.type ?? "unknown"), raw_id: rawId },
+      });
+    } catch (_) { /* never block the webhook on heartbeat */ }
+
     return new Response(JSON.stringify({ ok: true, raw_id: rawId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
