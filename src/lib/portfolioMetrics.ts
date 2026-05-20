@@ -145,14 +145,13 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     m.replies_today += r.replies_today ?? 0;
   });
 
-  // Per-campaign sent for active-group rollup.
-  const sentByWsCampaign = new Map<string, number>(); // key = ws|campaign
-  const deliveredByWsCampaign = new Map<string, number>();
-  (metricsByCampaign ?? []).forEach((r: any) => {
-    if (!r.workspace_id || !r.campaign_id) return;
-    const k = `${r.workspace_id}|${r.campaign_id}`;
-    sentByWsCampaign.set(k, (sentByWsCampaign.get(k) ?? 0) + (r.sent_today ?? 0));
-    deliveredByWsCampaign.set(k, (deliveredByWsCampaign.get(k) ?? 0) + (r.delivered_today ?? 0));
+  // Per-campaign sent/delivered for active-group rollup — canonical truth
+  // (campaign_metrics_for_range, event-based, dedup'd by provider_message_id).
+  const sentByCampaign = new Map<string, number>();
+  const deliveredByCampaign = new Map<string, number>();
+  truthTodayByCampaign.forEach((t, cid) => {
+    sentByCampaign.set(cid, t.sent);
+    deliveredByCampaign.set(cid, Math.min(t.delivered, t.sent));
   });
 
   // Recent activity per (workspace, campaign) for sending-now detection.
