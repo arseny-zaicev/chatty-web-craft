@@ -1801,7 +1801,8 @@ serve(async (req) => {
         return json({ ok: true, skipped: "locked" });
       }
       try {
-        return await withJobRun("campaigns-process", () => processQueue(admin));
+        const mode: "cron" | "manual" = body.mode === "manual" ? "manual" : (body.source === "cron" ? "cron" : "cron");
+        return await withJobRun("campaigns-process", () => processQueue(admin, { mode }));
       } finally {
         await release();
       }
