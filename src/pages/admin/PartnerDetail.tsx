@@ -202,14 +202,20 @@ export default function PartnerDetail() {
           <Stat label="Warming up" value={String(lifecycleCounts.warming_up)} />
           <Stat label="Verifying" value={String(lifecycleCounts.verifying)} />
           <Stat label="Disabled" value={String(lifecycleCounts.disabled)} />
-          <Stat label="Restricted #" value={String(restrictedNums)} alert={restrictedNums > 0} />
-          <Stat label="Blocked #" value={String(blockedNums)} alert={blockedNums > 0} />
+        {/* TOP SUMMARY STRIP - trimmed: only what you act on */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <Stat label="BMs" value={`${lifecycleCounts.ready}/${bmList.length}`} hint={`${lifecycleCounts.disabled} disabled`} />
+          <Stat label="Numbers" value={String(totalNums)} hint={`${restrictedNums} restricted · ${blockedNums} blocked`} alert={restrictedNums + blockedNums > 0} />
           <Stat label="Sent today" value={(pm?.sent_today ?? 0).toLocaleString()} />
           <Stat label="Delivered today" value={(pm?.delivered_today ?? 0).toLocaleString()} />
-          <Stat label="Sent all-time" value={(pm?.sent_alltime ?? 0).toLocaleString()} />
-          <Stat label="Delivered all-time" value={(pm?.delivered_alltime ?? 0).toLocaleString()} />
+          <Stat label="Errors today" value={(pm?.failed_today ?? 0).toLocaleString()} alert={(pm?.failed_today ?? 0) > 0} />
           <Stat label="Sent 7d" value={sent7dTotal.toLocaleString()} />
           <Stat label="Delivered 7d" value={delivered7dTotal.toLocaleString()} />
+          <Stat label="Sent all-time" value={(pm?.sent_alltime ?? 0).toLocaleString()} />
+          <Stat label="Delivered all-time" value={(pm?.delivered_alltime ?? 0).toLocaleString()} />
+          <Stat label="Earned today" value={fmtUsd(pm?.earned_today ?? 0)} accent />
+          <Stat label="Earned 7d" value={fmtUsd(pm?.earned_7d ?? 0)} accent />
+          <Stat label="Earned all-time" value={fmtUsd(pm?.earned_alltime ?? 0)} accent />
           <Stat label="Open payout" value={fmtUsd(unpaid)} alert={unpaid > 0} />
           <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
         </div>
