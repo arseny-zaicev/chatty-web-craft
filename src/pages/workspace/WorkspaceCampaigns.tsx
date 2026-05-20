@@ -178,18 +178,16 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const { data: liveCountsByCampaign } = useQuery({
     queryKey: ["campaigns", "live-counts", workspaceId, allCampaignIds.slice().sort().join(",")],
     queryFn: async () => {
-      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
       const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: allCampaignIds });
-      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
-      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
+      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
       for (const r of data as any[]) {
         m.set(r.campaign_id, {
           replied: Number(r.replied ?? 0),
           tagged: Number(r.tagged ?? 0),
           positive: Number(r.positive ?? 0),
           warm: Number(r.warm ?? 0),
-          sent: Number(r.sent ?? 0),
-          delivered: Number(r.delivered_count ?? 0),
         });
       }
       return m;
@@ -200,15 +198,36 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
     refetchOnWindowFocus: true,
   });
 
-  const groupLiveCounts = useMemo(() => {
-    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+  // Canonical campaign truth (event-based, dedup'd by provider_message_id).
+  // Replaces lagging campaigns.sent_count/failed_count and recipient-based
+  // campaign_live_counts.sent/delivered for daily campaign-facing surfaces.
+  const { data: truthByCampaign } = useQuery({
+    queryKey: ["campaigns", "truth-alltime", workspaceId, allCampaignIds.slice().sort().join(",")],
+    queryFn: () => fetchCampaignTruth(allCampaignIds, "alltime"),
+    enabled: allCampaignIds.length > 0,
+    refetchInterval: visibleRefetchInterval(30_000),
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+
+  const groupTruth = useMemo(() => {
+    const out = new Map<string, CampaignTruth>();
+    if (!truthByCampaign) return out;
     for (const g of groups) {
-      let replied = 0, tagged = 0, positive = 0, warm = 0, sent = 0, delivered = 0;
+      out.set(g.key, sumCampaignTruth(g.campaigns.map((c) => c.id), truthByCampaign));
+    }
+    return out;
+  }, [groups, truthByCampaign]);
+
+  const groupLiveCounts = useMemo(() => {
+    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
+    for (const g of groups) {
+      let replied = 0, tagged = 0, positive = 0, warm = 0;
       for (const c of g.campaigns) {
         const v = liveCountsByCampaign?.get(c.id);
-        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; sent += v.sent; delivered += v.delivered; }
+        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; }
       }
-      out.set(g.key, { replied, tagged, positive, warm, sent, delivered });
+      out.set(g.key, { replied, tagged, positive, warm });
     }
     return out;
   }, [groups, liveCountsByCampaign]);
