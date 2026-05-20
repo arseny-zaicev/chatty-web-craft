@@ -1049,9 +1049,24 @@ export default function PipelineConfigSheet({
                     <SelectItem value="lost">Lost</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select
+                  value={s.assigned_setter_id ?? "__none"}
+                  onValueChange={(v) => assignStageSetter(s.id, v === "__none" ? null : v)}
+                >
+                  <SelectTrigger className="h-7 w-36 text-[11px]" title="Auto-route chats assigned to this setter into this stage">
+                    <SelectValue placeholder="Setter…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— No setter —</SelectItem>
+                    {activeSetters.map((st) => (
+                      <SelectItem key={st.id} value={st.id}>{st.display_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteStage(s)}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
+
               </div>
             ))}
           </div>
