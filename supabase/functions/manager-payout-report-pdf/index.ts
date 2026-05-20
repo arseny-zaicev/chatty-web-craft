@@ -50,6 +50,13 @@ Deno.serve(async (req) => {
   if (!body.manager_id || !body.period_from || !body.period_to)
     return json({ error: "manager_id, period_from, period_to required" }, 400);
 
+  // Payout-ownership gate.
+  const gate = await assertPayoutOwnershipClean(admin);
+  if (!gate.ok) {
+    console.warn("manager-payout-report-pdf blocked:", gate.body.message);
+    return json(gate.body, 409);
+  }
+
   const { manager_id, period_from, period_to } = body;
   const fromIso = `${period_from}T00:00:00Z`;
   const toIso = new Date(new Date(`${period_to}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000).toISOString();
