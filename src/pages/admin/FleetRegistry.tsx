@@ -483,9 +483,18 @@ export default function FleetRegistry() {
             <Link
               to="/admin/number-ownership"
               className="text-[10px] px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/15"
-              title="Numbers without an active partner ownership row - payouts will skip these"
+              title="Referred numbers without an active partner ownership row - payouts will skip these. Own numbers are excluded."
             >
-              ⚠ {ownershipUnassignedCount} without partner ownership
+              ⚠ {ownershipUnassignedCount} referred without payout owner
+            </Link>
+          )}
+          {legacyMismatchCount > 0 && (
+            <Link
+              to="/admin/number-ownership"
+              className="text-[10px] px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15"
+              title="Referred numbers whose Provided-by / Ref text does not match a known partner. Edit the row to remap to a real partner."
+            >
+              ⚑ {legacyMismatchCount} legacy attribution mismatch
             </Link>
           )}
           <div className="ml-auto flex items-center gap-2">
