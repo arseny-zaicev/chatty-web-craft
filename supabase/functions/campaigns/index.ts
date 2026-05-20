@@ -1448,6 +1448,11 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       if (recipient.whatsapp_number_id) {
         sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
       }
+      if (wsGuardCfg && wsIdGuard) {
+        sentTodayByWs.set(wsIdGuard, (sentTodayByWs.get(wsIdGuard) ?? 0) + 1);
+        sentByCampaignGuarded.set(recipient.campaign_id, (sentByCampaignGuarded.get(recipient.campaign_id) ?? 0) + 1);
+      }
+
     } catch (err) {
       sentMu.incFail();
       const msg = err instanceof Error ? err.message : "Send failed";
