@@ -3,9 +3,9 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, MessageCircle, Clock, FileText, Target, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
-import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import { ClientLogos } from "@/components/ClientLogos";
 import { usePageAnalytics } from "@/hooks/usePageAnalytics";
+import { testimonials } from "@/components/Testimonials";
 
 const checklist = [
   { icon: Target, text: "Think about your ideal client profile and target market" },
