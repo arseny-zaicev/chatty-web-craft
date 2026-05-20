@@ -205,13 +205,27 @@ export default function PartnerDetail() {
           <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
         </div>
 
-        <Tabs defaultValue="bms">
+        <Tabs defaultValue="ownership">
           <TabsList>
+            <TabsTrigger value="ownership">Numbers (truth)</TabsTrigger>
+            <TabsTrigger value="earnings">Earnings (live)</TabsTrigger>
             <TabsTrigger value="bms">Business Managers</TabsTrigger>
             <TabsTrigger value="finance">Finance & Reports</TabsTrigger>
             <TabsTrigger value="payments">Payment History</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="ownership" className="pt-4">
+            <NumberOwnershipPanel
+              partnerId={id!}
+              partnerDefaultRate={Number(partner.default_payout_rate_usd) || 0.005}
+            />
+          </TabsContent>
+
+          <TabsContent value="earnings" className="pt-4">
+            <PartnerEarningsPanel partnerId={id!} />
+          </TabsContent>
+
 
           {/* BUSINESS MANAGERS */}
           <TabsContent value="bms" className="pt-4 space-y-4">
