@@ -1076,6 +1076,19 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   const numIdsInTick = [...new Set((due ?? []).map((r: any) => r.whatsapp_number_id).filter(Boolean))];
   const dailyLimitByNum = new Map<string, number>();
   const sentTodayByNum = new Map<string, number>();
+  // Per-campaign operator-set quota. This is AUTHORITATIVE — it must not be
+  // silently overridden by `whatsapp_numbers.daily_send_limit` (DB default
+  // 200). FE/FM-style hard ceilings live in `workspace_send_guards` and are
+  // enforced separately below.
+  const quotaByCampaign = new Map<string, number>();
+  const campaignIdsInTick = [...new Set((due ?? []).map((r: any) => r.campaign_id).filter(Boolean))];
+  if (campaignIdsInTick.length > 0) {
+    const { data: crows } = await admin
+      .from("campaigns")
+      .select("id, per_number_quota")
+      .in("id", campaignIdsInTick);
+    for (const c of crows ?? []) quotaByCampaign.set(c.id, Math.max(1, Number(c.per_number_quota ?? 200)));
+  }
   if (numIdsInTick.length > 0) {
     const { data: numRows } = await admin
       .from("whatsapp_numbers")
