@@ -787,6 +787,16 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   const tickStartedAt = Date.now();
   console.log(`[job:campaigns-process] mode=${isCronMode ? "cron" : "manual"} budget_ms=${TICK_BUDGET_MS} limit=${perTickLimit} starting`);
 
+  // Dispatcher heartbeat (best-effort, fire-and-forget). Lets operators see
+  // that processQueue is alive without grepping edge logs. The "campaigns"
+  // row was previously never written, so the watchdog UI showed it stale
+  // since 2026-05-10 even though cron was firing every minute.
+  admin.from("system_heartbeats").upsert({
+    name: "campaigns-process",
+    last_run_at: new Date(tickStartedAt).toISOString(),
+    payload: { mode: isCronMode ? "cron" : "manual", limit: perTickLimit },
+  }).then(() => {}, () => {});
+
   // Reaper: stuck 'sending' rows -> 'scheduled'. Cheap RPC, safe to call here.
   try {
     await admin.rpc("reap_stuck_sending_recipients", {
