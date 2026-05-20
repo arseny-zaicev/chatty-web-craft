@@ -1445,20 +1445,66 @@ function AddNumberDrawer({
           </Field>
 
           {sourceKind === "referred" && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Provided by">
-                <Input value={providedBy} onChange={(e) => setProvidedBy(e.target.value)} placeholder="Kartik" />
+            <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Partner ownership (writes to number_ownership - drives payouts)
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Provider partner" required>
+                  <Select
+                    value={providerPartnerId || "__none__"}
+                    onValueChange={(v) => {
+                      const id = v === "__none__" ? "" : v;
+                      setProviderPartnerId(id);
+                      const p = partners.find((x) => x.id === id);
+                      if (p) setOwnershipRate(String(p.default_payout_rate_usd ?? 0));
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={partnersQuery.isLoading ? "Loading..." : "Pick partner"} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">- none -</SelectItem>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} <span className="text-muted-foreground text-[10px]">(${Number(p.default_payout_rate_usd ?? 0).toFixed(4)})</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Referrer partner (optional)">
+                  <Select
+                    value={referrerPartnerId || "__none__"}
+                    onValueChange={(v) => setReferrerPartnerId(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">- none -</SelectItem>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Field label="Payout rate $/delivered">
+                <Input
+                  type="number" step="0.0001" min={0}
+                  value={ownershipRate}
+                  onChange={(e) => setOwnershipRate(e.target.value)}
+                />
               </Field>
-              <Field label="Ref (required)">
-                <Input value={assignedRef} onChange={(e) => setAssignedRef(e.target.value)} placeholder="Nitish" />
-              </Field>
+              {providerPartnerId === "" && (
+                <div className="text-[11px] text-amber-700 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Pick a provider partner or this number will land Unassigned in payouts.
+                </div>
+              )}
             </div>
           )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim()) || (bmId === "__new__" && !bmNewName.trim())}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !providerPartnerId) || (bmId === "__new__" && !bmNewName.trim())}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
             Save
           </Button>
