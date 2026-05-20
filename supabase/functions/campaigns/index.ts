@@ -1392,8 +1392,9 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     // overshoots the 30s isolate wall-clock / 55s tick budget and leaves rows stuck
     // in 'sending' for 10 min until reap. Hard-cap the actual concurrency to something
     // an isolate can finish in one tick; pg_cron still fires every minute so total
-    // throughput per campaign is unchanged, we just stop creating dead zones.
-    const INSTANT_PARALLEL_HARD_CAP = 40;
+    // throughput per campaign is governed by INSTANT_TICK_LIMIT, not this cap.
+    // Raised from 40 -> 80 in P0.3 so a 120-row instant tick drains ~1.5 sends/worker.
+    const INSTANT_PARALLEL_HARD_CAP = 80;
     const effectiveCap = isInstant ? Math.min(perNumberCap, INSTANT_PARALLEL_HARD_CAP) : perNumberCap;
     // Paced/utility floor>0 forces serialization within a number.
     const parallel = perNumberFloor > 0 ? 1 : Math.min(effectiveCap, recipients.length);
