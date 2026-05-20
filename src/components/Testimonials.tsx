@@ -61,55 +61,67 @@ export const Testimonials = () => {
           </div>
         </ScrollReveal>
 
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-8">
-          {testimonials.map((t, idx) => (
-            <ScrollReveal key={t.id} delay={100 + idx * 100}>
-              <article className="bg-card border border-iskra-emerald/30 rounded-2xl p-6 shadow-lg hover-lift h-full flex flex-col">
-                <div
-                  className={`${
-                    t.orientation === "portrait"
-                      ? "aspect-[9/16] max-h-[560px]"
-                      : "aspect-video"
-                  } w-full mx-auto bg-black rounded-xl mb-6 overflow-hidden`}
-                >
-                  <video
-                    src={t.videoSrc}
-                    poster={t.poster}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="w-full h-full object-contain"
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          {testimonials.map((t, idx) => {
+            const isPortrait = t.orientation === "portrait";
+            const colSpan = isPortrait ? "lg:col-span-5" : "lg:col-span-7";
+            return (
+              <ScrollReveal key={t.id} delay={100 + idx * 100} className={colSpan}>
+                <article className="group relative h-full min-h-[520px] lg:min-h-[640px] bg-iskra-charcoal rounded-3xl overflow-hidden shadow-2xl border border-iskra-emerald/20 hover-lift flex flex-col">
+                  {/* Blurred backdrop from poster */}
+                  <div
+                    className="absolute inset-0 bg-center bg-cover scale-110 blur-2xl opacity-40"
+                    style={{ backgroundImage: `url(${t.poster})` }}
                   />
-                </div>
-                <div className="space-y-3 mt-auto">
-                  <div>
-                    <p className="font-semibold text-lg">{t.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {t.role},{" "}
-                      <a
-                        href={t.companyHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-iskra-emerald hover:underline"
-                      >
-                        {t.companyLabel}
-                      </a>
-                    </p>
+                  {/* Video letterboxed on top of backdrop */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <video
+                      src={t.videoSrc}
+                      poster={t.poster}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="max-w-full max-h-full w-auto h-full object-contain"
+                    />
                   </div>
-                  {t.result && (
-                    <div className="bg-iskra-emerald/10 rounded-xl p-4 border border-iskra-emerald/20">
-                      <p className="text-xs font-medium text-iskra-emerald mb-1 uppercase tracking-wider">
-                        Result
-                      </p>
-                      <p className="font-display text-base md:text-lg font-bold">
-                        {t.result}
-                      </p>
+                  {/* Gradient overlay for caption legibility */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+
+                  {/* Caption */}
+                  <div className="relative z-10 mt-auto p-6 md:p-7 text-white pointer-events-none">
+                    <div className="flex items-end justify-between gap-4 flex-wrap">
+                      <div className="pointer-events-auto">
+                        <p className="font-display text-xl md:text-2xl font-bold leading-tight">
+                          {t.name}
+                        </p>
+                        <p className="text-sm text-white/75">
+                          {t.role},{" "}
+                          <a
+                            href={t.companyHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-iskra-emerald hover:underline"
+                          >
+                            {t.companyLabel}
+                          </a>
+                        </p>
+                      </div>
+                      {t.result && (
+                        <div className="pointer-events-auto bg-iskra-emerald/95 text-iskra-charcoal rounded-xl px-4 py-2 backdrop-blur-sm shadow-lg max-w-[260px]">
+                          <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">
+                            Result
+                          </p>
+                          <p className="font-display text-sm md:text-base font-bold leading-snug">
+                            {t.result}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </article>
-            </ScrollReveal>
-          ))}
+                  </div>
+                </article>
+              </ScrollReveal>
+            );
+          })}
         </div>
       </div>
     </section>
