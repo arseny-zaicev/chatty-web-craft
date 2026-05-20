@@ -486,7 +486,10 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const wsMax = hhmmToMin(windowEnd);
   const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
   const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
-  const minGapSec = Math.max(60, minDelay || 60);
+  // P0.4: honor minDelay verbatim during per-recipient placement. Was
+  // `Math.max(60, ...)` which spaced rows 60s apart even when the operator
+  // configured 30s (or 0 for blast).
+  const minGapSec = Math.max(1, minDelay || 1);
 
 
   const nextDateStr = (d: string) => {
