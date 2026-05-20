@@ -123,6 +123,11 @@ export async function resolveLaunchContract(
 ): Promise<LaunchContract> {
   const blockers: string[] = [];
   const warnings: string[] = [];
+  const structuredBlockers: StructuredBlocker[] = [];
+  const addBlocker = (code: string, message: string, meta?: Record<string, unknown>) => {
+    blockers.push(message);
+    structuredBlockers.push({ code, message, ...(meta ? { meta } : {}) });
+  };
 
   const perNumberQuota = normalizePerNumberQuota(input.perNumberQuota);
   const numberIds = [...new Set(input.numbers.map((n) => n.number_id))];
