@@ -201,6 +201,7 @@ const App = () => (
               <Route path="/admin/roadmap" element={<Navigate to="/ws/iskra/roadmap" replace />} />
               <Route path="/admin/fleet" element={<FleetRegistry />} />
               <Route path="/admin/analytics" element={<FleetAnalytics />} />
+              <Route path="/admin/workspaces" element={<WorkspaceHistory />} />
               <Route path="/admin/business-managers" element={<BusinessManagers />} />
               <Route path="/admin/business-managers/:id" element={<BusinessManagerDetail />} />
               <Route path="/admin/mfa-setup" element={<AdminMfaSetup />} />
