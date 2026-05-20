@@ -37,6 +37,23 @@ function randomDelay(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+const MAX_PER_NUMBER_QUOTA = 10000;
+const LEGACY_DEFAULT_DAILY_SEND_LIMIT = 200;
+
+function normalizePerNumberQuota(value: any, fallback = LEGACY_DEFAULT_DAILY_SEND_LIMIT) {
+  return Math.max(1, Math.min(MAX_PER_NUMBER_QUOTA, Math.floor(Number(value ?? fallback))));
+}
+
+function explicitDailySendLimit(value: any): number | null {
+  const raw = Number(value);
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  const limit = Math.max(1, Math.min(100000, Math.floor(raw)));
+  // `daily_send_limit` was introduced as NOT NULL DEFAULT 200, so old rows
+  // with 200 do not prove the operator set a real limit. Treat that legacy
+  // default as unset: no hidden cap and no noisy warning.
+  return limit === LEGACY_DEFAULT_DAILY_SEND_LIMIT ? null : limit;
+}
+
 // readJson now imported from ./_helpers.ts
 
 // Gupshup template-fetch / parsing helpers and the template-action handlers
@@ -152,8 +169,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const minDelay = Math.max(0, Math.min(86400, Number(body.delay_min_seconds ?? 30)));
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
-  // Per-number/day cap. Hard ceiling 200 (Meta tier), floor 1.
-  const perNumberQuota = Math.max(1, Math.min(10000, Math.floor(Number(body.per_number_quota ?? 200))));
+  const perNumberQuota = normalizePerNumberQuota(body.per_number_quota);
 
   // Multi-number support: accept either legacy single (whatsapp_number_id+template_id)
   // or new `numbers: [{number_id, template_id}, ...]`. ONE campaign row is created
@@ -300,7 +316,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   if (cleanRecipientsAll.length === 0) return json({ error: "No valid phone numbers" }, 400);
 
   // ============= CAPACITY-BOUND ALLOCATION (hard truncation) =============
-  // capacity = Σ(min(per_number_quota, whatsapp_numbers.daily_send_limit, windowFitCap)) × selected days.
+  // capacity = Σ(min(per_number_quota, windowFitCap)) × selected days.
   // Anything beyond capacity is NOT inserted into campaign_recipients and stays
   // free in the audience pool. No silent "send later", no future-day bucket.
   const _wsMinPre = hhmmToMin(windowStart);
@@ -333,7 +349,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const capWarnings: string[] = [];
   for (const nid of numberIds) {
     const nrow: any = numberRows.find((n: any) => n.id === nid);
-    const dailyLimit = Math.max(1, Math.min(100000, Number(nrow?.daily_send_limit ?? 200)));
+    const dailyLimit = explicitDailySendLimit(nrow?.daily_send_limit);
     // Operator's per-campaign `per_number_quota` is AUTHORITATIVE.
     // `daily_send_limit` (DB default 200) is a recommendation/warning surface
     // only — it must NOT silently clamp the operator's explicit choice.
@@ -346,7 +362,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     const sentToday = sentTodayByNumber.get(nid) ?? 0;
     const remainingToday = Math.max(0, effectivePerNumber - sentToday);
     capacityToday += Math.min(cap, remainingToday);
-    if (perNumberQuota > dailyLimit) {
+    if (dailyLimit !== null && perNumberQuota > dailyLimit) {
       capWarnings.push(`Number ${nrow?.phone_number || nid}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
     }
     if (sentToday >= effectivePerNumber) {
