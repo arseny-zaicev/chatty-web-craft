@@ -218,8 +218,8 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     m.active_campaign_name = grp.base;
     m.active_campaign_status = grp.status;
     m.active_campaign_kind = grp.kind;
-    const todaySent = sentByWsCampaign.get(`${wsId}|${c.id}`) ?? 0;
-    const todayDelivered = deliveredByWsCampaign.get(`${wsId}|${c.id}`) ?? 0;
+    const todaySent = sentByCampaign.get(c.id) ?? 0;
+    const todayDelivered = deliveredByCampaign.get(c.id) ?? 0;
     m.active_campaign_sent += todaySent;
     m.active_campaign_delivered += todayDelivered;
     m.active_campaign_total += c.total_recipients ?? 0;
