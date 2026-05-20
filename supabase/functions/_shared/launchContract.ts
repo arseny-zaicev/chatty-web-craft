@@ -41,6 +41,10 @@ export interface LaunchContractInput {
   maxInflightPerNumber: number;
   maxInflightPerCampaign: number;
   respectRecipientTz: boolean;
+  // Slice 2: optional workspace context. When provided, the resolver also
+  // returns workspace_send_guards blockers and the would-defer-to-next-day
+  // flag, so prepare/review/launch never recompute them inline.
+  workspaceId?: string | null;
 }
 
 export interface ResolvedNumber {
@@ -51,6 +55,23 @@ export interface ResolvedNumber {
   allocation: number;
   daily_cap: number;
   backoff_until: string | null;
+}
+
+export interface StructuredBlocker {
+  code: string;
+  message: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface WorkspaceGuardSnapshot {
+  enabled: boolean;
+  hard_daily_cap: number | null;
+  hard_per_campaign_cap: number | null;
+  force_paced: boolean;
+  // Live counters used for daily-cap evaluation.
+  workspace_sent_today: number;
+  workspace_pending: number;
+  planned_volume: number;
 }
 
 export interface LaunchContract {
@@ -67,11 +88,14 @@ export interface LaunchContract {
   audienceAllocated: number;                     // min(audienceCount, allocatedCapacity)
   blockers: string[];
   warnings: string[];
+  structuredBlockers: StructuredBlocker[];       // machine-readable mirror of `blockers` for 409 mapping
   numbersDetail: ResolvedNumber[];
   templatesDetail: Array<{ id: string; name: string; status: string }>;
   signaturePayload: Record<string, unknown>;
   signature: string;
   killSwitchEngaged: boolean;
+  wouldDeferToNextDay: boolean;                  // single-day launch crossing today's remaining quota
+  workspaceGuard: WorkspaceGuardSnapshot | null; // null when no workspaceId or no enabled row
 }
 
 export async function computeSnapshotSignature(payload: Record<string, unknown>): Promise<string> {
@@ -82,9 +106,8 @@ export async function computeSnapshotSignature(payload: Record<string, unknown>)
 
 export interface ResolveOptions {
   // When true, blockers include workspace-guard / kill-switch checks intended for launch.
-  // Prepare uses the same checks; the launch path additionally enforces hard guard caps
-  // (workspace_send_guards.hard_daily_cap, hard_per_campaign_cap) outside this resolver
-  // because they require querying live sent counters.
+  // Prepare uses the same checks. Slice 2: workspace guard hard caps are now
+  // also evaluated inside this resolver when `input.workspaceId` is provided.
   includeKillSwitch?: boolean;
 }
 
