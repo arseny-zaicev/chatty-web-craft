@@ -1180,6 +1180,14 @@ function AddNumberDrawer({
         resolvedBmName = found?.name ?? null;
       }
 
+      // Resolve partner-uuid selections back to canonical names so the legacy
+      // text columns (read by analytics) stay aligned with number_ownership.
+      const providerPartner = providerPartnerId ? partners.find((p) => p.id === providerPartnerId) ?? null : null;
+      const referrerPartner = referrerPartnerId ? partners.find((p) => p.id === referrerPartnerId) ?? null : null;
+      if (sourceKind === "referred" && !providerPartner) {
+        throw new Error("Pick the provider partner for this number (or switch Source to Own).");
+      }
+
       const payload = {
         phone_number: cleanPhone,
         label: appName || null,
@@ -1190,8 +1198,8 @@ function AddNumberDrawer({
         provider_waba_id: wabaId || null,
         profile_avatar: profileAvatar || null,
         messaging_limit: messagingLimit || null,
-        provided_by: sourceKind === "own" ? SELF_PROVIDER : (providedBy.trim() || null),
-        assigned_ref: sourceKind === "own" ? null : (assignedRef.trim() || null),
+        provided_by: sourceKind === "own" ? SELF_PROVIDER : (providerPartner?.name ?? null),
+        assigned_ref: sourceKind === "own" ? null : (referrerPartner?.name ?? null),
         usage_type: usage,
         webhook_connected: webhookConnected,
         business_manager_id: resolvedBmId,
@@ -1199,6 +1207,7 @@ function AddNumberDrawer({
         ...dnPatch,
       };
 
+      let savedNumberId: string | null = editing?.id ?? null;
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
           .update({ ...payload, workspace_id: targetWs, status, ...restrictionPatch })
@@ -1209,15 +1218,41 @@ function AddNumberDrawer({
           .select("id").eq("phone_number", cleanPhone).maybeSingle();
         if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
         const initialStatus: Status = targetWs ? status : "stock";
-        const { error } = await supabase.from("whatsapp_numbers").insert({
+        const { data: inserted, error } = await supabase.from("whatsapp_numbers").insert({
           ...payload,
           user_id: auth.user.id,
           workspace_id: targetWs,
           status: initialStatus,
           ...(initialStatus === "restricted" || initialStatus === "banned"
             ? { restricted_at: new Date().toISOString() } : {}),
-        });
+        }).select("id").single();
         if (error) throw error;
+        savedNumberId = inserted.id;
+      }
+
+      // Write canonical ownership row (number_ownership) via the security-definer
+      // RPC. This is what payouts/analytics read - so partner attribution is now
+      // recorded at onboarding time instead of weeks later.
+      if (savedNumberId && sourceKind === "referred" && providerPartner) {
+        const rate = Number(ownershipRate);
+        const { error: ownErr } = await supabase.rpc("set_number_ownership" as any, {
+          p_whatsapp_number_id: savedNumberId,
+          p_partner_id: providerPartner.id,
+          p_role: "provider",
+          p_rate_usd: Number.isFinite(rate) ? rate : Number(providerPartner.default_payout_rate_usd ?? 0),
+          p_notes: referrerPartner ? `referrer:${referrerPartner.name}` : null,
+        });
+        if (ownErr) throw new Error(`Number saved but ownership write failed: ${ownErr.message}`);
+      } else if (savedNumberId && sourceKind === "own") {
+        // Close any stale ownership row when toggled back to Own.
+        const { error: ownErr } = await supabase.rpc("set_number_ownership" as any, {
+          p_whatsapp_number_id: savedNumberId,
+          p_partner_id: null,
+          p_role: "provider",
+          p_rate_usd: 0,
+          p_notes: null,
+        });
+        if (ownErr) throw new Error(`Number saved but ownership reset failed: ${ownErr.message}`);
       }
     },
     onSuccess: async () => {
