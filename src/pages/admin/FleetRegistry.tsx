@@ -1014,13 +1014,38 @@ function AddNumberDrawer({
   const [workspaceId, setWorkspaceId] = useState<string>("__unassigned__");
   const [usage, setUsage] = useState<Usage>("both");
   const [sourceKind, setSourceKind] = useState<"own" | "referred">("own");
-  const [providedBy, setProvidedBy] = useState("");
-  const [assignedRef, setAssignedRef] = useState("");
+  // Slice: provider/referrer are now partner uuids picked from the canonical
+  // `partners` table (same source as analytics + payouts). The legacy
+  // provided_by / assigned_ref text fields are kept in sync from partner.name
+  // so existing analytics keep agreeing.
+  const [providerPartnerId, setProviderPartnerId] = useState<string>("");
+  const [referrerPartnerId, setReferrerPartnerId] = useState<string>("");
+  const [ownershipRate, setOwnershipRate] = useState<string>("0");
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
-  const [bmId, setBmId] = useState<string>("__none__"); // "__none__" | "__new__" | uuid
+  const [bmId, setBmId] = useState<string>("__none__");
   const [bmNewName, setBmNewName] = useState<string>("");
+
+  // Canonical partner list. Used both for the selectors and to back-map an
+  // editing row's free-text provided_by/assigned_ref to a partner uuid.
+  const partnersQuery = useQuery({
+    queryKey: ["fleet-partners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, default_payout_rate_usd, kind, status")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; default_payout_rate_usd: number; kind: string; status: string }>;
+    },
+  });
+  const partners = partnersQuery.data ?? [];
+  const partnerByLowerName = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; default_payout_rate_usd: number }>();
+    partners.forEach((p) => m.set(p.name.trim().toLowerCase(), p));
+    return m;
+  }, [partners]);
 
   const bmsQuery = useQuery({
     queryKey: ["fleet-bms"],
