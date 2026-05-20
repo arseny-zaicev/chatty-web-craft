@@ -298,11 +298,9 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                       </div>
                     )}
                     {(() => {
-                      const lc = groupLiveCounts.get(g.key);
-                      // Live count is the truth (includes recipients that flipped
-                      // straight to 'replied' without passing through 'sent').
-                      // Fall back to the cached counter only if RPC hasn't loaded yet.
-                      const liveSent = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                      const t = groupTruth.get(g.key);
+                      // Canonical sent: event-based, dedup'd by provider_message_id.
+                      const liveSent = t?.sent ?? 0;
                       return (
                         <>
                           <div className="md:hidden mt-2 flex items-center gap-2">
@@ -314,8 +312,8 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     })()}
                   </div>
                   {(() => {
-                    const lc = groupLiveCounts.get(g.key);
-                    const liveSent = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                    const t = groupTruth.get(g.key);
+                    const liveSent = t?.sent ?? 0;
                     return (
                       <div className="hidden md:flex items-center gap-3 shrink-0 w-[180px]">
                         <ProgressBar value={liveSent} total={g.total} className="flex-1" />
@@ -325,7 +323,8 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                   })()}
                   {(() => {
                     const lc = groupLiveCounts.get(g.key);
-                    const sentForRate = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                    const t = groupTruth.get(g.key);
+                    const sentForRate = t?.sent ?? 0;
                     const rate = sentForRate > 0 ? Math.round(((lc?.replied ?? 0) / sentForRate) * 100) : 0;
                     const replied = lc?.replied ?? 0;
                     const tagged = lc?.tagged ?? 0;
@@ -355,7 +354,11 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                       </div>
                     );
                   })()}
-                  {g.failed > 0 && <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{g.failed} failed</span>}
+                  {(() => {
+                    const t = groupTruth.get(g.key);
+                    const failed = t?.failed ?? 0;
+                    return failed > 0 ? <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{failed} failed</span> : null;
+                  })()}
                   <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>
                 {open && (
@@ -364,6 +367,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     canManage={canManage}
                     numberById={numberById}
                     liveCounts={groupLiveCounts.get(g.key)}
+                    truth={groupTruth.get(g.key)}
                   />
                 )}
               </div>
