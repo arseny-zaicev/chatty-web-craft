@@ -46,7 +46,7 @@ export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; s
   }
   if (!data) return null;
 
-  const { campaign, insight, delivered } = data;
+  const { campaign, insight, truth } = data;
   const totals = (insight?.metrics as { totals?: Totals } | null)?.totals;
   const summary = insight?.summary_md ?? null;
   const summaryShort = summary ? summary.split("\n").slice(0, 6).join("\n") : null;
@@ -67,17 +67,17 @@ export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; s
       <CardContent className="space-y-3">
         {totals ? (
           <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
-            <Mini label="Sent" value={totals.sent} />
-            <Mini label="Delivered" value={delivered} tone="good" />
-            <Mini label="Replied" value={totals.replied} />
+            <Mini label="Sent" value={truth.sent} />
+            <Mini label="Delivered" value={truth.delivered} tone="good" />
+            <Mini label="Replied" value={truth.replied} />
             <Mini label="Positive" value={totals.positive} tone="good" />
             <Mini label="Meeting" value={totals.meeting} tone="good" />
-            <Mini label="Failed" value={totals.failed} tone={totals.failed > 0 ? "bad" : undefined} />
+            <Mini label="Failed" value={truth.failed} tone={truth.failed > 0 ? "bad" : undefined} />
             <Mini label="Total" value={totals.total} />
           </div>
         ) : (
           <div className="text-xs text-muted-foreground">
-            Sent {campaign.sent_count}/{campaign.total_recipients}. AI insights are generating in the background (auto every ~15 min after completion).
+            Sent {truth.sent}/{campaign.total_recipients}. AI insights are generating in the background (auto every ~15 min after completion).
           </div>
         )}
 
