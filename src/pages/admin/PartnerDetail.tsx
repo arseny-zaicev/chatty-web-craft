@@ -399,6 +399,9 @@ export default function PartnerDetail() {
                             <span className="text-emerald-700 dark:text-emerald-400 font-medium">{delivAll.toLocaleString()}</span>
                             <span className="text-muted-foreground"> / {sentAll.toLocaleString()}</span>
                           </TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">{fmtUsd(earnedToday)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">{fmtUsd(earned7d)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">{fmtUsd(earnedAll)}</TableCell>
                           <TableCell className={`text-right tabular-nums ${restricted > 0 ? "text-amber-600 font-medium" : ""}`}>{restricted}</TableCell>
                           <TableCell className={`text-right tabular-nums ${blocked > 0 ? "text-destructive font-medium" : ""}`}>{blocked}</TableCell>
                           <TableCell className="text-right tabular-nums">{wsSet.size}</TableCell>
