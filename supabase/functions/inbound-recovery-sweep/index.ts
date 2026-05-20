@@ -163,6 +163,43 @@ Deno.serve(cronGuard({ jobName: "inbound-recovery-sweep", lock: true }, async (_
     }
   }
 
+  // ---- 3. Publish live gauge / heartbeat -----------------------------------
+  // After the sweep we re-count what is still stuck/pending. These are the
+  // numbers the watchdog + admin panel poll, so they reflect post-sweep truth.
+  const { count: stuckNow } = await admin
+    .from("whatsapp_webhook_raw")
+    .select("id", { count: "exact", head: true })
+    .eq("processing_status", "received")
+    .lt("received_at", new Date(Date.now() - RAW_STUCK_AFTER_MS).toISOString());
+
+  const { count: pendingNow } = await admin
+    .from("whatsapp_webhook_failures")
+    .select("id", { count: "exact", head: true })
+    .eq("replay_status", "pending");
+
+  const { data: oldestPending } = await admin
+    .from("whatsapp_webhook_failures")
+    .select("created_at")
+    .eq("replay_status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const oldestPendingAgeMin = oldestPending?.created_at
+    ? Math.round((Date.now() - new Date(oldestPending.created_at).getTime()) / 60000)
+    : 0;
+
+  const gauge = {
+    stuck_received: stuckNow ?? 0,
+    pending_failures: pendingNow ?? 0,
+    oldest_pending_age_min: oldestPendingAgeMin,
+  };
+
+  await admin.from("system_heartbeats").upsert({
+    name: "inbound-recovery-sweep",
+    last_run_at: new Date().toISOString(),
+    payload: { ...gauge, last_sweep: { raw_recovered: rawRecovered, failures_replayed: failReplayed } },
+  });
+
   const summary = {
     ok: true,
     raw: {
@@ -176,8 +213,10 @@ Deno.serve(cronGuard({ jobName: "inbound-recovery-sweep", lock: true }, async (_
       still_failing: failStillFailing,
       given_up: failGivenUp,
     },
+    gauge,
   };
   console.log("[job:inbound-recovery-sweep]", JSON.stringify(summary));
+
 
   return new Response(JSON.stringify(summary), {
     headers: { ...CORS, "Content-Type": "application/json" },
