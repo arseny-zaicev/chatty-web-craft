@@ -2261,6 +2261,10 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
     window: { start: windowStart, end: windowEnd, per_recipient_tz: respectTz },
     blockers: contract.blockers,
     warnings: contract.warnings,
+    structured_blockers: contract.structuredBlockers,
+    workspace_guard: contract.workspaceGuard,
+    would_defer_to_next_day: contract.wouldDeferToNextDay,
+    kill_switch_engaged: contract.killSwitchEngaged,
     notice: dispatchMode === "marketing_instant"
       ? "Instant mode sends each recipient immediately when their LOCAL window opens. Recipients in different timezones do not all send at the same global second."
       : null,
