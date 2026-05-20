@@ -67,7 +67,23 @@ Deno.serve(cronGuard("campaign-overflow-rebalance", async (req) => {
     let totalReassigned = 0;
     const perCampaign: Record<string, number> = {};
 
+    let skippedInstant = 0;
     for (const c of (clusters ?? []) as Array<{ campaign_id: string; scheduled_at: string; n: number }>) {
+      // P0.6.1 (2026-05-20): marketing_instant clusters are INTENTIONAL.
+      // A 250-row same-second cluster is the contract for instant launches,
+      // not the endUtc-clamp bug fingerprint this cron was built for.
+      // Respreading them silently undoes P0.6 within 30 min and caps
+      // effective rate to ~25/hour. Skip them; paced/utility still respread.
+      const { data: campRow } = await admin
+        .from("campaigns")
+        .select("dispatch_mode")
+        .eq("id", c.campaign_id)
+        .maybeSingle();
+      if (String(campRow?.dispatch_mode || "paced") === "marketing_instant") {
+        skippedInstant++;
+        continue;
+      }
+
       const { data: rows } = await admin
         .from("campaign_recipients")
         .select("id")
