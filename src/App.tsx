@@ -101,6 +101,7 @@ const Reconciliation = lazyWithRetry(() => import("./pages/admin/Reconciliation"
 const WebhookDLQ = lazyWithRetry(() => import("./pages/admin/WebhookDLQ"));
 const Partners = lazyWithRetry(() => import("./pages/admin/Partners"));
 const PartnerDetail = lazyWithRetry(() => import("./pages/admin/PartnerDetail"));
+const NumberOwnership = lazyWithRetry(() => import("./pages/admin/NumberOwnership"));
 const BusinessManagers = lazyWithRetry(() => import("./pages/admin/BusinessManagers"));
 const BusinessManagerDetail = lazyWithRetry(() => import("./pages/admin/BusinessManagerDetail"));
 const Apply = lazyWithRetry(() => import("./pages/Apply"));
