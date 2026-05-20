@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaceAccess } from "@/lib/workspaceRole";
 import { groupCampaigns, type CampaignRow, type CampaignGroup } from "@/lib/campaigns";
+import { fetchCampaignTruth, sumCampaignTruth, type CampaignTruth } from "@/lib/metrics";
 import { CampaignReportPanel } from "@/components/workspace/CampaignReportPanel";
 import CampaignRuntimePanel from "@/components/workspace/CampaignRuntimePanel";
 import { tzInfo, dateKeyInTz, todayKeyInTz, shortDateInTz, timeInTz } from "@/lib/timezones";
@@ -177,18 +178,16 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
   const { data: liveCountsByCampaign } = useQuery({
     queryKey: ["campaigns", "live-counts", workspaceId, allCampaignIds.slice().sort().join(",")],
     queryFn: async () => {
-      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+      if (allCampaignIds.length === 0) return new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
       const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: allCampaignIds });
-      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
-      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+      if (error || !data) return new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
+      const m = new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
       for (const r of data as any[]) {
         m.set(r.campaign_id, {
           replied: Number(r.replied ?? 0),
           tagged: Number(r.tagged ?? 0),
           positive: Number(r.positive ?? 0),
           warm: Number(r.warm ?? 0),
-          sent: Number(r.sent ?? 0),
-          delivered: Number(r.delivered_count ?? 0),
         });
       }
       return m;
@@ -199,15 +198,36 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
     refetchOnWindowFocus: true,
   });
 
-  const groupLiveCounts = useMemo(() => {
-    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number }>();
+  // Canonical campaign truth (event-based, dedup'd by provider_message_id).
+  // Replaces lagging campaigns.sent_count/failed_count and recipient-based
+  // campaign_live_counts.sent/delivered for daily campaign-facing surfaces.
+  const { data: truthByCampaign } = useQuery({
+    queryKey: ["campaigns", "truth-alltime", workspaceId, allCampaignIds.slice().sort().join(",")],
+    queryFn: () => fetchCampaignTruth(allCampaignIds, "alltime"),
+    enabled: allCampaignIds.length > 0,
+    refetchInterval: visibleRefetchInterval(30_000),
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+
+  const groupTruth = useMemo(() => {
+    const out = new Map<string, CampaignTruth>();
+    if (!truthByCampaign) return out;
     for (const g of groups) {
-      let replied = 0, tagged = 0, positive = 0, warm = 0, sent = 0, delivered = 0;
+      out.set(g.key, sumCampaignTruth(g.campaigns.map((c) => c.id), truthByCampaign));
+    }
+    return out;
+  }, [groups, truthByCampaign]);
+
+  const groupLiveCounts = useMemo(() => {
+    const out = new Map<string, { replied: number; tagged: number; positive: number; warm: number }>();
+    for (const g of groups) {
+      let replied = 0, tagged = 0, positive = 0, warm = 0;
       for (const c of g.campaigns) {
         const v = liveCountsByCampaign?.get(c.id);
-        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; sent += v.sent; delivered += v.delivered; }
+        if (v) { replied += v.replied; tagged += v.tagged; positive += v.positive; warm += v.warm; }
       }
-      out.set(g.key, { replied, tagged, positive, warm, sent, delivered });
+      out.set(g.key, { replied, tagged, positive, warm });
     }
     return out;
   }, [groups, liveCountsByCampaign]);
@@ -278,11 +298,9 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                       </div>
                     )}
                     {(() => {
-                      const lc = groupLiveCounts.get(g.key);
-                      // Live count is the truth (includes recipients that flipped
-                      // straight to 'replied' without passing through 'sent').
-                      // Fall back to the cached counter only if RPC hasn't loaded yet.
-                      const liveSent = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                      const t = groupTruth.get(g.key);
+                      // Canonical sent: event-based, dedup'd by provider_message_id.
+                      const liveSent = t?.sent ?? 0;
                       return (
                         <>
                           <div className="md:hidden mt-2 flex items-center gap-2">
@@ -294,8 +312,8 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     })()}
                   </div>
                   {(() => {
-                    const lc = groupLiveCounts.get(g.key);
-                    const liveSent = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                    const t = groupTruth.get(g.key);
+                    const liveSent = t?.sent ?? 0;
                     return (
                       <div className="hidden md:flex items-center gap-3 shrink-0 w-[180px]">
                         <ProgressBar value={liveSent} total={g.total} className="flex-1" />
@@ -305,7 +323,8 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                   })()}
                   {(() => {
                     const lc = groupLiveCounts.get(g.key);
-                    const sentForRate = Math.max(lc?.sent ?? 0, g.sent ?? 0);
+                    const t = groupTruth.get(g.key);
+                    const sentForRate = t?.sent ?? 0;
                     const rate = sentForRate > 0 ? Math.round(((lc?.replied ?? 0) / sentForRate) * 100) : 0;
                     const replied = lc?.replied ?? 0;
                     const tagged = lc?.tagged ?? 0;
@@ -335,7 +354,11 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                       </div>
                     );
                   })()}
-                  {g.failed > 0 && <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{g.failed} failed</span>}
+                  {(() => {
+                    const t = groupTruth.get(g.key);
+                    const failed = t?.failed ?? 0;
+                    return failed > 0 ? <span className="text-[11px] text-red-600 shrink-0 hidden sm:inline">{failed} failed</span> : null;
+                  })()}
                   <Badge variant="outline" className={`text-[10px] capitalize shrink-0 ${tone}`}>{g.status}</Badge>
                 </button>
                 {open && (
@@ -344,6 +367,7 @@ export default function WorkspaceCampaigns({ workspaceId, slug }: { workspaceId:
                     canManage={canManage}
                     numberById={numberById}
                     liveCounts={groupLiveCounts.get(g.key)}
+                    truth={groupTruth.get(g.key)}
                   />
                 )}
               </div>
@@ -383,11 +407,13 @@ function CampaignDetail({
   canManage,
   numberById,
   liveCounts,
+  truth,
 }: {
   group: CampaignGroup;
   canManage: boolean;
   numberById: Map<string, { id: string; phone_number: string; label: string | null; display_name: string | null }>;
-  liveCounts?: { replied: number; tagged: number; positive: number; warm: number; sent: number; delivered: number };
+  liveCounts?: { replied: number; tagged: number; positive: number; warm: number };
+  truth?: CampaignTruth;
 }) {
   const campaignIds = group.campaigns.map((c) => c.id);
   const tz = tzInfo(group.recipientCountry).tz;
@@ -456,17 +482,19 @@ function CampaignDetail({
   }, [days, todayKey, showAllDays]);
   const hiddenCount = days.length - visibleDays.length;
 
-  // Authoritative totals: prefer the live RPC (includes recipients that flipped
-  // straight to 'replied' without passing through 'sent'); fall back to the
-  // cached counter if the RPC hasn't loaded yet.
-  const liveSent = Math.max(liveCounts?.sent ?? 0, group.sent ?? 0);
-  const liveDelivered = Math.min(liveCounts?.delivered ?? 0, liveSent);
+  // Canonical campaign truth (event-based, dedup'd). Single source for
+  // sent/delivered/failed across all campaign-facing surfaces. `total` and
+  // `today` (scheduled-for-today) still come from the row since they are
+  // intent, not delivery state.
+  const liveSent = truth?.sent ?? 0;
+  const liveDelivered = Math.min(truth?.delivered ?? 0, liveSent);
+  const liveFailed = truth?.failed ?? 0;
   const totals = {
     total: group.total,
     sent: liveSent,
     delivered: liveDelivered,
-    failed: group.failed,
-    pending: Math.max(0, group.total - liveSent - group.failed),
+    failed: liveFailed,
+    pending: Math.max(0, group.total - liveSent - liveFailed),
     today: group.today,
   };
 

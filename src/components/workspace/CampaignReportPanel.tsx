@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { fetchCampaignTruth, sumCampaignTruth } from "@/lib/metrics";
 import {
   ChartContainer,
   ChartTooltip,
@@ -40,21 +41,35 @@ async function fetchInsight(campaignId: string): Promise<Insight | null> {
 
 type LiveTotals = { total: number; sent: number; delivered: number; failed: number; pending: number; replied: number; positive: number; meeting: number };
 
+// Sent/delivered/failed/replied = canonical campaign_metrics_for_range (event-based, dedup'd).
+// total/pending derived from total_recipients on the row + canonical sent/failed.
+// positive/meeting still come from campaign_live_counts (recipient AI-tag axis).
 async function fetchLiveTotals(campaignIds: string[]): Promise<LiveTotals> {
   const empty: LiveTotals = { total: 0, sent: 0, delivered: 0, failed: 0, pending: 0, replied: 0, positive: 0, meeting: 0 };
   if (campaignIds.length === 0) return empty;
-  const { data, error } = await supabase.rpc("campaign_live_counts", { p_campaign_ids: campaignIds });
-  if (error || !data) return empty;
-  return (data as any[]).reduce<LiveTotals>((acc, r) => ({
-    total:     acc.total     + Number(r.total ?? 0),
-    sent:      acc.sent      + Number(r.sent ?? 0),
-    delivered: acc.delivered + Number(r.delivered_count ?? 0),
-    failed:    acc.failed    + Number(r.failed ?? 0),
-    pending:   acc.pending   + Number(r.pending ?? 0),
-    replied:   acc.replied   + Number(r.replied ?? 0),
-    positive:  acc.positive  + Number(r.positive ?? 0),
-    meeting:   acc.meeting   + Number(r.meeting ?? 0),
-  }), empty);
+  const [truth, { data: live }] = await Promise.all([
+    fetchCampaignTruth(campaignIds, "alltime"),
+    supabase.rpc("campaign_live_counts", { p_campaign_ids: campaignIds }),
+  ]);
+  const t = sumCampaignTruth(campaignIds, truth);
+  const liveAgg = (live as any[] | null ?? []).reduce(
+    (acc, r) => ({
+      total: acc.total + Number(r.total ?? 0),
+      positive: acc.positive + Number(r.positive ?? 0),
+      meeting: acc.meeting + Number(r.meeting ?? 0),
+    }),
+    { total: 0, positive: 0, meeting: 0 },
+  );
+  return {
+    total: liveAgg.total,
+    sent: t.sent,
+    delivered: Math.min(t.delivered, t.sent),
+    failed: t.failed,
+    pending: Math.max(0, liveAgg.total - t.sent - t.failed),
+    replied: t.replied,
+    positive: liveAgg.positive,
+    meeting: liveAgg.meeting,
+  };
 }
 
 async function downloadReport(

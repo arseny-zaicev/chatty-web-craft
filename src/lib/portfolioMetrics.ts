@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { baseName as splitBase } from "./campaigns";
+import { fetchCampaignTruth, sumCampaignTruth } from "./metrics";
 
 const startOfDayIso = () => {
   const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
@@ -63,7 +64,6 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     { data: numbers },
     { data: campaigns },
     { data: metricsToday },
-    { data: metricsByCampaign },
     { data: recentSent },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
@@ -71,18 +71,22 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
     supabase
       .from("campaigns")
-      .select("id, workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients")
+      .select("id, workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, total_recipients")
       .in("status", ["scheduled", "running", "paused"]),
-    // v_metrics_today: one row per workspace - safe to sum.
+    // v_metrics_today: one row per workspace — same metrics_for_range primitive.
     supabase.from("v_metrics_today").select("workspace_id, sent_today, delivered_today, replies_today"),
-    // v_metrics_today_by_campaign: per-campaign sent for active-group rollup.
-    supabase.from("v_metrics_today_by_campaign").select("workspace_id, campaign_id, sent_today, delivered_today"),
     // Recent recipient activity per workspace -> drives is_sending_now.
     supabase
       .from("campaign_recipients")
       .select("workspace_id, campaign_id, sent_at")
       .gte("sent_at", recentSinceIso),
   ]);
+
+  // Canonical per-campaign TODAY truth for the active-campaign rollup —
+  // event-based, matches WorkspaceCampaigns cards. Replaces the recipient-based
+  // v_metrics_today_by_campaign read.
+  const activeCampaignIds = (campaigns ?? []).map((c: any) => c.id);
+  const truthTodayByCampaign = await fetchCampaignTruth(activeCampaignIds, "today");
 
   const byWorkspace: Record<string, WorkspaceMetrics> = {};
   const ensure = (id: string): WorkspaceMetrics => {
@@ -141,14 +145,13 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     m.replies_today += r.replies_today ?? 0;
   });
 
-  // Per-campaign sent for active-group rollup.
-  const sentByWsCampaign = new Map<string, number>(); // key = ws|campaign
-  const deliveredByWsCampaign = new Map<string, number>();
-  (metricsByCampaign ?? []).forEach((r: any) => {
-    if (!r.workspace_id || !r.campaign_id) return;
-    const k = `${r.workspace_id}|${r.campaign_id}`;
-    sentByWsCampaign.set(k, (sentByWsCampaign.get(k) ?? 0) + (r.sent_today ?? 0));
-    deliveredByWsCampaign.set(k, (deliveredByWsCampaign.get(k) ?? 0) + (r.delivered_today ?? 0));
+  // Per-campaign sent/delivered for active-group rollup — canonical truth
+  // (campaign_metrics_for_range, event-based, dedup'd by provider_message_id).
+  const sentByCampaign = new Map<string, number>();
+  const deliveredByCampaign = new Map<string, number>();
+  truthTodayByCampaign.forEach((t, cid) => {
+    sentByCampaign.set(cid, t.sent);
+    deliveredByCampaign.set(cid, Math.min(t.delivered, t.sent));
   });
 
   // Recent activity per (workspace, campaign) for sending-now detection.
@@ -215,8 +218,8 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     m.active_campaign_name = grp.base;
     m.active_campaign_status = grp.status;
     m.active_campaign_kind = grp.kind;
-    const todaySent = sentByWsCampaign.get(`${wsId}|${c.id}`) ?? 0;
-    const todayDelivered = deliveredByWsCampaign.get(`${wsId}|${c.id}`) ?? 0;
+    const todaySent = sentByCampaign.get(c.id) ?? 0;
+    const todayDelivered = deliveredByCampaign.get(c.id) ?? 0;
     m.active_campaign_sent += todaySent;
     m.active_campaign_delivered += todayDelivered;
     m.active_campaign_total += c.total_recipients ?? 0;
@@ -278,7 +281,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     supabase.from("message_templates").select("status").eq("workspace_id", workspaceId).eq("status", "approved"),
     supabase
       .from("campaigns")
-      .select("id, name, status, created_at, sent_count, total_recipients")
+      .select("id, name, status, created_at, total_recipients")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -318,6 +321,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
   else if (unread_replies >= 20) health = "attention";
 
   // Group recent launches by base name (exclude cancelled/failed siblings if a live one exists).
+  // `sent_count` here is canonical alltime sent from campaign_metrics_for_range.
   type Launch = { id: string; name: string; status: string; created_at: string; sent_count: number; total: number };
   const byBase = new Map<string, any[]>();
   for (const r of (recent ?? [])) {
@@ -325,25 +329,29 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     if (!byBase.has(base)) byBase.set(base, []);
     byBase.get(base)!.push(r);
   }
+
+  const recentIds = (recent ?? []).map((r: any) => r.id);
+  const truthByRecent = await fetchCampaignTruth(recentIds, "alltime");
+
   const launchMap = new Map<string, Launch>();
   for (const [base, siblings] of byBase) {
     const live = siblings.filter((r: any) => !["cancelled", "failed"].includes(r.status));
     const effective = live.length ? live : siblings;
+    const truthSum = sumCampaignTruth(effective.map((r: any) => r.id), truthByRecent);
     const sum = effective.reduce(
       (acc, r: any) => ({
-        sent: acc.sent + (r.sent_count ?? 0),
         total: acc.total + (r.total_recipients ?? 0),
         created: acc.created < r.created_at ? acc.created : r.created_at,
         status: (statusRank[r.status] ?? 0) > (statusRank[acc.status] ?? 0) ? r.status : acc.status,
       }),
-      { sent: 0, total: 0, created: effective[0].created_at, status: effective[0].status }
+      { total: 0, created: effective[0].created_at, status: effective[0].status }
     );
     launchMap.set(base, {
       id: effective[0].id,
       name: base,
       status: sum.status,
       created_at: sum.created,
-      sent_count: sum.sent,
+      sent_count: truthSum.sent,
       total: sum.total,
     });
   }

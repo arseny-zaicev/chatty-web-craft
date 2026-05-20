@@ -7,26 +7,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCampaignTruth } from "@/lib/metrics";
 
 type Totals = { total: number; sent: number; delivered?: number; failed: number; replied: number; positive: number; meeting: number };
 
 async function fetchLatestReport(workspaceId: string) {
   const { data: campaign } = await supabase
     .from("campaigns")
-    .select("id, name, updated_at, sent_count, total_recipients")
+    .select("id, name, updated_at, total_recipients")
     .eq("workspace_id", workspaceId)
     .eq("status", "completed")
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!campaign) return null;
-  const [{ data: insight }, { data: live }] = await Promise.all([
+  const [{ data: insight }, truth] = await Promise.all([
     supabase.from("campaign_insights").select("summary_md, metrics, generated_at").eq("campaign_id", campaign.id).maybeSingle(),
-    supabase.rpc("campaign_live_counts", { p_campaign_ids: [campaign.id] }),
+    fetchCampaignTruth([campaign.id], "alltime"),
   ]);
-  const liveRow = Array.isArray(live) && live[0] ? (live[0] as any) : null;
-  const delivered = liveRow ? Number(liveRow.delivered_count ?? 0) : 0;
-  return { campaign, insight: insight ?? null, delivered };
+  const t = truth.get(campaign.id) ?? { sent: 0, delivered: 0, failed: 0, replied: 0 };
+  return { campaign, insight: insight ?? null, truth: t };
 }
 
 export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; slug: string }) {
@@ -46,7 +46,7 @@ export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; s
   }
   if (!data) return null;
 
-  const { campaign, insight, delivered } = data;
+  const { campaign, insight, truth } = data;
   const totals = (insight?.metrics as { totals?: Totals } | null)?.totals;
   const summary = insight?.summary_md ?? null;
   const summaryShort = summary ? summary.split("\n").slice(0, 6).join("\n") : null;
@@ -67,17 +67,17 @@ export function LatestReportCard({ workspaceId, slug }: { workspaceId: string; s
       <CardContent className="space-y-3">
         {totals ? (
           <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
-            <Mini label="Sent" value={totals.sent} />
-            <Mini label="Delivered" value={delivered} tone="good" />
-            <Mini label="Replied" value={totals.replied} />
+            <Mini label="Sent" value={truth.sent} />
+            <Mini label="Delivered" value={truth.delivered} tone="good" />
+            <Mini label="Replied" value={truth.replied} />
             <Mini label="Positive" value={totals.positive} tone="good" />
             <Mini label="Meeting" value={totals.meeting} tone="good" />
-            <Mini label="Failed" value={totals.failed} tone={totals.failed > 0 ? "bad" : undefined} />
+            <Mini label="Failed" value={truth.failed} tone={truth.failed > 0 ? "bad" : undefined} />
             <Mini label="Total" value={totals.total} />
           </div>
         ) : (
           <div className="text-xs text-muted-foreground">
-            Sent {campaign.sent_count}/{campaign.total_recipients}. AI insights are generating in the background (auto every ~15 min after completion).
+            Sent {truth.sent}/{campaign.total_recipients}. AI insights are generating in the background (auto every ~15 min after completion).
           </div>
         )}
 

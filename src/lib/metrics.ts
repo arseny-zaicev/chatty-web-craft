@@ -125,9 +125,11 @@ export async function fetchNumberMetrics(
 }
 
 // ---------- PARTNERS ----------
-// Canonical: `number_ownership` (populated in Phase A) is the single source
-// of truth for "which numbers belong to a partner". Stats are pulled via the
-// same per-number RPC the per-BM rows use, so totals reconcile to the digit.
+// Canonical: `number_ownership` is the single source of truth for "which
+// numbers belong to a partner". Today stats come from the per-number RPC.
+// `failed_alltime` is pulled from v_metrics_alltime (event-based,
+// metrics_for_range) so it reconciles to per-BM views and is no longer a
+// best-effort proxy of failed_today.
 export async function fetchPartnerMetrics(
   partnerIds: string[]
 ): Promise<Map<string, TodayMetrics & AlltimeMetrics & EarningsMetrics>> {
@@ -135,7 +137,6 @@ export async function fetchPartnerMetrics(
   partnerIds.forEach((p) => out.set(p, { ...ZERO_TODAY, ...ZERO_ALL, ...ZERO_EARN }));
   if (!partnerIds.length) return out;
 
-  // partner -> currently-owned numbers + active rate
   const { data: ownership } = await supabase
     .from("number_ownership")
     .select("partner_id, whatsapp_number_id, rate_usd, effective_to")
@@ -153,7 +154,23 @@ export async function fetchPartnerMetrics(
   const numIds = Array.from(numToPartner.keys());
   if (!numIds.length) return out;
 
-  const { data: live } = await (supabase.rpc as any)("number_live_stats", { p_number_ids: numIds });
+  const [{ data: live }, { data: allRows }] = await Promise.all([
+    (supabase.rpc as any)("number_live_stats", { p_number_ids: numIds }),
+    supabase
+      .from("v_metrics_alltime")
+      .select("whatsapp_number_id, failed_alltime")
+      .in("whatsapp_number_id", numIds),
+  ]);
+
+  const failedAllByNum = new Map<string, number>();
+  (allRows ?? []).forEach((r: any) => {
+    if (!r.whatsapp_number_id) return;
+    failedAllByNum.set(
+      r.whatsapp_number_id,
+      (failedAllByNum.get(r.whatsapp_number_id) ?? 0) + Number(r.failed_alltime ?? 0),
+    );
+  });
+
   (live ?? []).forEach((r: any) => {
     const pid = numToPartner.get(r.whatsapp_number_id);
     if (!pid) return;
@@ -167,7 +184,7 @@ export async function fetchPartnerMetrics(
     acc.failed_today += Number(r.failed_today ?? 0);
     acc.sent_alltime += Number(r.sent_all ?? 0);
     acc.delivered_alltime += delivAll;
-    acc.failed_alltime += Number(r.failed_today ?? 0); // failed_all not in RPC; best-effort
+    acc.failed_alltime += failedAllByNum.get(r.whatsapp_number_id) ?? 0;
     acc.earned_today += delivToday * rate;
     acc.earned_7d += deliv7d * rate;
     acc.earned_alltime += delivAll * rate;
@@ -266,3 +283,66 @@ export const liveStatusLabel = (s: LiveStatus): string => ({
   failed: "Failed",
   unknown: "—",
 })[s];
+
+// ---------- CAMPAIGN CANONICAL TRUTH ----------
+// Event-based sent/delivered/failed/replied per campaign, derived from
+// whatsapp_message_events via metrics_for_range (dedup by provider_message_id).
+// This is the SINGLE source of truth for campaign-facing daily and alltime
+// numbers across:
+//   - WorkspaceCampaigns group cards & detail totals
+//   - CampaignReportPanel KPI strip
+//   - LatestReportCard delivered/sent
+//   - Portfolio per-campaign active rollup (today) & recent_launches (alltime)
+// Never read campaigns.sent_count / failed_count / today_recipients_count for UI.
+
+export type CampaignTruth = { sent: number; delivered: number; failed: number; replied: number };
+const ZERO_CT: CampaignTruth = { sent: 0, delivered: 0, failed: 0, replied: 0 };
+
+function dubaiStartOfDayIso(): string {
+  const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+  return new Date(`${dubaiDate}T00:00:00+04:00`).toISOString();
+}
+
+export async function fetchCampaignTruth(
+  campaignIds: string[],
+  range: "today" | "alltime",
+): Promise<Map<string, CampaignTruth>> {
+  const out = new Map<string, CampaignTruth>();
+  if (!campaignIds.length) return out;
+  const from = range === "today" ? dubaiStartOfDayIso() : "1970-01-01T00:00:00Z";
+  // +1 day forward window so just-arrived events are not clipped.
+  const to = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+  const { data } = await (supabase.rpc as any)("campaign_metrics_for_range", {
+    p_campaign_ids: campaignIds,
+    _from: from,
+    _to: to,
+  });
+  (data ?? []).forEach((r: any) => {
+    if (!r.campaign_id) return;
+    out.set(r.campaign_id, {
+      sent: Number(r.sent ?? 0),
+      delivered: Number(r.delivered ?? 0),
+      failed: Number(r.failed ?? 0),
+      replied: Number(r.replied ?? 0),
+    });
+  });
+  // Ensure every requested id has a zero entry.
+  campaignIds.forEach((id) => { if (!out.has(id)) out.set(id, { ...ZERO_CT }); });
+  return out;
+}
+
+export function sumCampaignTruth(
+  ids: string[],
+  m: Map<string, CampaignTruth>,
+): CampaignTruth {
+  return ids.reduce<CampaignTruth>((acc, id) => {
+    const v = m.get(id);
+    if (!v) return acc;
+    return {
+      sent: acc.sent + v.sent,
+      delivered: acc.delivered + v.delivered,
+      failed: acc.failed + v.failed,
+      replied: acc.replied + v.replied,
+    };
+  }, { ...ZERO_CT });
+}
