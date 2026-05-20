@@ -73,6 +73,11 @@ export function cronGuard(
     try {
       return await withJobRun(jobName, async () => handler(req));
     } finally {
+      // Auto heartbeat (best-effort, idempotent with manual writers).
+      checker.from("system_heartbeats").upsert({
+        name: jobName,
+        last_run_at: new Date().toISOString(),
+      }).then(() => {}, () => {});
       if (release) await release();
     }
   };
