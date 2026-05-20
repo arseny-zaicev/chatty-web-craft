@@ -254,8 +254,83 @@ export async function resolveLaunchContract(
     const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
     if (flag && flag.value === false) {
       killSwitchEngaged = true;
-      blockers.push("Marketing Instant mode is globally disabled (kill switch).");
+      addBlocker("instant_mode_disabled", "Marketing Instant mode is globally disabled (kill switch).");
     }
+  }
+
+  // Workspace send guards (FE/FM hard caps + force_paced). Slice 2: now resolved
+  // here so launch validation reads them from this contract instead of querying
+  // workspace_send_guards inline. Daily-cap planning needs live workspace
+  // counters (sent today + pending), which the resolver fetches once here.
+  let workspaceGuard: WorkspaceGuardSnapshot | null = null;
+  if (input.workspaceId) {
+    const { data: wsGuard } = await admin
+      .from("workspace_send_guards")
+      .select("hard_daily_cap, hard_per_campaign_cap, force_paced, enabled")
+      .eq("workspace_id", input.workspaceId)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (wsGuard) {
+      const [{ count: wsSentToday }, { count: wsPending }] = await Promise.all([
+        admin.from("campaign_recipients")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", input.workspaceId)
+          .gte("sent_at", dubaiTodayStartIso)
+          .not("sent_at", "is", null),
+        admin.from("campaign_recipients")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", input.workspaceId)
+          .in("status", ["scheduled", "sending"]),
+      ]);
+      const sentToday = wsSentToday ?? 0;
+      const pending = wsPending ?? 0;
+      const planned = sentToday + pending + audienceAllocated;
+      workspaceGuard = {
+        enabled: true,
+        hard_daily_cap: Number(wsGuard.hard_daily_cap),
+        hard_per_campaign_cap: Number(wsGuard.hard_per_campaign_cap),
+        force_paced: Boolean(wsGuard.force_paced),
+        workspace_sent_today: sentToday,
+        workspace_pending: pending,
+        planned_volume: planned,
+      };
+      if (workspaceGuard.force_paced && input.dispatchMode === "marketing_instant") {
+        addBlocker(
+          "workspace_guard_force_paced",
+          "marketing_instant is disabled for this workspace by hard guardrail. Use paced mode.",
+        );
+      }
+      if (workspaceGuard.hard_per_campaign_cap !== null && audienceCount > workspaceGuard.hard_per_campaign_cap) {
+        addBlocker(
+          "workspace_guard_per_campaign_cap",
+          `Campaign size ${audienceCount} exceeds workspace hard per-campaign cap ${workspaceGuard.hard_per_campaign_cap}`,
+          { requested: audienceCount, cap: workspaceGuard.hard_per_campaign_cap },
+        );
+      }
+      if (workspaceGuard.hard_daily_cap !== null && planned > workspaceGuard.hard_daily_cap) {
+        addBlocker(
+          "workspace_guard_daily_cap",
+          `Planned workspace volume ${planned} exceeds hard daily cap ${workspaceGuard.hard_daily_cap}`,
+          {
+            already_sent_today: sentToday,
+            already_pending: pending,
+            new_recipients: audienceAllocated,
+            cap: workspaceGuard.hard_daily_cap,
+          },
+        );
+      }
+    }
+  }
+
+  // Single-day launch crossing today's remaining quota: would defer to next day.
+  // Not a blocker by itself — the launch path translates this into a 409
+  // (forceable) so the operator can confirm a same-day overflow.
+  const isSingleDay = daysCount <= 1;
+  const wouldDeferToNextDay = isSingleDay && audienceAllocated > capacityToday;
+  if (wouldDeferToNextDay) {
+    warnings.push(
+      `Today's remaining capacity is ${capacityToday}, but ${audienceAllocated} recipients are planned. The overflow would defer to next day.`,
+    );
   }
 
   const signaturePayload = {
@@ -289,10 +364,13 @@ export async function resolveLaunchContract(
     audienceAllocated,
     blockers,
     warnings,
+    structuredBlockers,
     numbersDetail,
     templatesDetail: templateRows.map((t: any) => ({ id: t.id, name: t.name, status: t.status })),
     signaturePayload,
     signature,
     killSwitchEngaged,
+    wouldDeferToNextDay,
+    workspaceGuard,
   };
 }
