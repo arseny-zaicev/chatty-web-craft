@@ -45,9 +45,9 @@ Deno.test("marketing_instant has no artificial pacing floor", () => {
   assertEquals(decidePerNumberFloorSec("marketing_instant", true), 0);
 });
 
-Deno.test("paced mode keeps existing floors (utility 60s, marketing 1s)", () => {
+Deno.test("paced mode keeps existing floors (utility 90s, marketing 1s)", () => {
   assertEquals(decidePerNumberFloorSec("paced", false), 1);
-  assertEquals(decidePerNumberFloorSec("paced", true), 60);
+  assertEquals(decidePerNumberFloorSec("paced", true), 90);
 });
 
 Deno.test("launch blocked when snapshot is missing", () => {
