@@ -1,210 +1,101 @@
-## Что уже понятно по фактам
 
-Проблема не в том, что сообщения «не отображаются» в чате. Они реально не уходят.
+# Send-chain regression audit — 2026-05-19 → 2026-05-20 (GST)
 
-Проверка backend на 20 мая, Dubai time:
+## 1. Executive summary
 
-- **FB Media**: 33 получателя в статусе `scheduled`, все уже должны были уйти примерно с **11:19 до 11:43 GST**, но `sent = 0`, `failed = 0`.
-- **fitpreneur**: 1090 получателей в статусе `scheduled`, все уже должны были уйти примерно с **11:19 до 12:24 GST**, но `sent = 0`, `failed = 0`.
-- Номера у fitpreneur выглядят рабочими: `ready`, не paused, есть app id и API key.
-- Глобальный kill switch выключен.
-- Cron `campaigns-process-every-min` активен и вызывается каждую минуту.
-- Но HTTP-вызовы cron к `campaigns` регулярно падают по **5-секундному timeout**.
-- В логах `campaigns` нет нормальных строк `[job:campaigns-process] ... processed/sent/failed`, значит worker не доходит до штатного финального логирования.
-- Таблица `campaign_dispatch_events` пустая, значит skip-причины типа `sender_paused`, `daily_cap_reached`, `provider_backoff` не логируются - обработка не доходит до отправки/скипа конкретных recipients.
+The send chain is **not broken** — it is dispatching every minute and rows are moving `scheduled → sent`. Today's hourly throughput (147 / 180 / 59 in 11–13 GST) is in the same band as yesterday's busy hours.
 
-## Что я делал раньше и почему это не помогло
+What changed is **effective per-workspace throughput**, and it has a clear cause: the combination of yesterday's two safe fixes — the 20 s cron timeout (good) and the new `claim_due_campaign_recipients` ordering (regression candidate) — means each cron tick can only send **one row per WhatsApp number per minute**, regardless of `p_limit=30`, because in `mode=cron` subsequent rows for the same sender skip on `pacing_gap` instead of sleeping.
 
-Раньше я решил, что причина - stale lock в `job_locks`:
+So:
+- Yesterday's incident fixes did **not** disable sending.
+- They did silently cap the dispatcher at **≈ N rows/minute, where N = number of distinct due senders globally**.
+- FB Media (2 senders) and fitpreneur (3 senders) are starving when goflow / Undergroundecom backlogs share the same minute, because the `picked` CTE returns ranks 1..5 per sender, but only rank 1 actually sends in cron mode — the other 24 of the 30 claimed slots are wasted on `pacing_gap` skips.
 
-- вручную очистил `job_locks` для `campaigns-process`;
-- сократил TTL lock с 5 минут до 90 секунд;
-- проверил, что lock можно снова получить.
+This is **slower-by-design from yesterday's pacing change**, not a new bug, not a disabled job, not a cron failure.
 
-Это сняло только симптом, но не первопричину.
+## 2. Yesterday vs now — change inventory
 
-Почему ничего не поменялось:
+Migrations on 2026-05-20 GST that touched the send chain:
 
-1. `campaigns-process` запускается через database cron с HTTP timeout около **5 секунд**.
-2. Сам `processQueue` рассчитан на долгий tick до **55 секунд** и внутри может ждать между отправками, делать много prefetch/count запросов и работать с большим backlog.
-3. Поэтому cron-вызов обрывается раньше, чем dispatcher успевает стабильно claim/send/update recipients.
-4. Когда вызов обрывается, `finally` может не успеть освободить lock, поэтому следующий tick часто видит `locked`.
-5. Сокращение TTL до 90 секунд просто позволяет следующей попытке стартовать быстрее, но каждая новая попытка снова упирается в тот же 5-секундный timeout.
-6. Поэтому очередь остается в `scheduled`, без `sent`, без `failed`, без сообщений в inbox.
+| Time GST | Migration | What it did | Risk to send chain |
+|---|---|---|---|
+| 07:42 | `..._199eca27_..._job_locks` | Dropped + recreated `try_job_lock` / `release_job_lock`; TTL = 5 min | Neutral (later shortened) |
+| 08:08 | `..._54c2bb8f_debug_cron_status` | Added `debug_cron_status()` view | None |
+| 08:13 | `..._48c85916_..._job_lock_ttl_90s` | Cleared stale `campaigns-process` lock; TTL → **90 s** | Good — unblocks stuck ticks |
+| 08:42 | `..._9c54c9f8_claim_due_campaign_recipients` | New `claim_due_campaign_recipients(p_limit=30)` ordered by `sender_rank ASC` then `id` | **Top regression candidate (pacing interaction)** |
+| 09:19 / 09:23 | FB Media ownership swap + revert; `process-email-queue` restored | Email queue only — unrelated to WhatsApp send | None |
 
-Иными словами: проблема не в одном зависшем lock, а в архитектуре dispatcher - cron вызывает длинную функцию как короткий HTTP request.
+Cron command changes (already applied earlier in the day):
+- `campaigns-process-every-min` and `lead-dispatch-every-min` now use `timeout_milliseconds := 20000` (previously default 5 s). Confirmed in `cron.job.command`.
+- All 18 cron jobs are `active = true`. Nothing was unscheduled and forgotten.
 
-## Цель исправления
+Edge function changes in `campaigns/index.ts`:
+- `processQueue` was split into `cron` vs `manual` mode. In `cron`:
+  - `TICK_BUDGET_MS = 3500`
+  - `perTickLimit = 30`
+  - `pacing_gap` rows **skip instead of sleep** (lines 1162–1164).
 
-Сделать отправку кампаний устойчивой и проверяемой:
+Nothing else in the send chain (`send-whatsapp-template`, `whatsapp-webhook`, `lead-dispatch`, `follow-up-dispatch`) was modified in the incident window.
 
-- FB Media и fitpreneur должны реально переводить recipients из `scheduled` в `sent` или `failed`.
-- Outbound messages должны появляться в нужных conversations/chat.
-- Если отправка невозможна, в UI и логах должна быть конкретная причина, а не «ноль отправлено».
-- Lock не должен блокировать очередь после timeout.
+## 3. Top regression candidates (ranked)
 
-## План решения
+1. **`claim_due_campaign_recipients` + cron pacing interaction (highest)**
+   The function returns 30 rows ordered by `sender_rank ASC`. With only 6 distinct due senders globally right now (FB 2, fitpreneur 3, Sophias 1), a single tick claims ~30 rows = ranks 1..5 across 6 senders. In `cron` mode rows 2..5 per sender are 30 s behind the previous send for the same number, so they all skip with `pacing_gap`. Today's logs confirm: `sent=4 skips={pacing_gap:26,claimed:4}` and `sent=2 skips={pacing_gap:28,claimed:2}`.
+2. **Cron tick cadence vs `delay_min_seconds=30`**
+   Cron fires every 60 s. The 30 s `delay_min_seconds` could allow 2 sends per number per minute, but only one is ever sent because `lastSentMs` is an in-memory Map that resets on each cold start, *and* within a single tick the second row hits pacing_gap and skips. Net: hard cap of **1 send / number / minute**, no matter how large `p_limit` is.
+3. **`campaign_dispatch_events` table is empty (no skip-reason persistence)**
+   `[job:...] skips={pacing_gap:26,...}` only goes to function logs, never to the DB. There is currently no DB-side audit trail to attribute starvation per workspace or per number. This is why workspace owners experience "nothing is sending" — there is no row in the UI runtime panel explaining why.
+4. **Two `running` FB Media campaigns with the same name and same `whatsapp_number_id`**
+   Both compete for the single rank-1 slot for that number. Effective cap = 1/min shared across two campaigns. Not yesterday's fix, but it compounds the starvation symptom.
 
-### 1. Сначала добавить нормальную диагностику dispatcher
-
-Добавить в `campaigns` action `process` короткие структурные логи на ключевых этапах, чтобы больше не было «черного ящика»:
-
-- `due_selected` - сколько recipients выбрано;
-- `by_workspace` - сколько due по каждому workspace;
-- `by_number` - сколько due по каждому номеру;
-- `claimed` - сколько переведено `scheduled -> sending`;
-- `sent` / `failed`;
-- `skipped` с причиной;
-- `duration_ms`;
-- `lock_acquired` / `lock_released`.
-
-Технически:
-
-- использовать уже существующий `withJobRun`, но обязательно вызывать `run.selected(...)`, `run.processed += 1`, `run.skipped(...)`;
-- добавить ранний log сразу после выборки `due`, не только в `finally`.
-
-Зачем: если после фикса отправка снова остановится, будет видно точную причину за 1 минуту.
-
-### 2. Убрать конфликт 55-секундного worker с 5-секундным cron timeout
-
-Переделать `processQueue` в короткие batches, которые гарантированно завершаются за 3-4 секунды.
-
-Новая логика:
-
-- `TICK_BUDGET_MS`: снизить с `55_000` до примерно `3_500` для cron path.
-- `perTickLimit`: снизить с `500` до безопасного batch размера, например `25-50`.
-- Не делать длинные `setTimeout` внутри cron-worker.
-- Если recipient запланирован чуть позже, не ждать внутри функции - оставить его на следующий tick.
-- Для paced кампаний отправлять только те recipients, которые уже due now, без ожидания до horizon.
-
-Важно: сейчас код смотрит вперед на 55 секунд и может спать внутри tick. Это нормально для ручного воркера, но плохо для database cron с 5-секундным timeout.
-
-### 3. Разделить два режима обработки
-
-Сделать два budget режима внутри `action=process`:
-
-- **cron mode** - короткий, безопасный, без длинных sleep, batch 25-50;
-- **manual/admin drain mode** - длиннее, для ручного запуска из UI или edge test, когда нужно быстро «продавить» накопившийся backlog.
-
-Пример поведения:
-
-- cron каждую минуту стабильно отправляет небольшой batch и всегда возвращает 200 за несколько секунд;
-- manual drain можно запускать только админом, с явным лимитом и безопасными cap.
-
-### 4. Исправить lock contract
-
-Текущий lock остается в `job_locks` до `release_job_lock`, но если request timeout/cancelled, release может не произойти.
-
-Изменить lock-подход:
-
-- оставить TTL, но сделать его меньше для `campaigns-process`, например **15-20 секунд**, если cron batch будет коротким;
-- при `locked` логировать текущий age lock;
-- не считать lock нормальным, если он старше допустимого runtime;
-- добавить отдельный cleanup stale locks перед попыткой acquire.
-
-Это не основное исправление, но оно уберет повторение прошлого инцидента.
-
-### 5. Сделать отправку idempotent и безопасную при повторных ticks
-
-Оставить атомарный claim:
+## 4. Shared bottleneck diagnosis
 
 ```text
-scheduled -> sending -> sent/failed
+cron fires every 60s
+   |
+   v
+/functions/v1/campaigns?action=process (mode=cron, 20s timeout)  -> OK, always 200
+   |
+   v
+RPC claim_due_campaign_recipients(30)
+   |   returns up to 30 rows in (sender_rank ASC, id)
+   v
+processQueue per row:
+   - if pacing minGap (30s) not satisfied AND cron mode -> SKIP pacing_gap
+   - else atomic UPDATE status='scheduled' -> 'sending' -> send -> 'sent'
 ```
 
-Но усилить recovery:
+Effective dispatcher throughput is `min(p_limit, N_distinct_due_senders_globally)` per minute, **not** `p_limit`. That is the shared bottleneck. It is the same code path for every workspace, so when one workspace (goflow / Undergroundecom) finishes a burst, the bottleneck visibly "moves" to the next workspace (FB Media / fitpreneur), which feels client-specific but is not.
 
-- `sending` старше 2-3 минут возвращать в `scheduled`;
-- при повторном запуске не отправлять строку, если у нее уже есть `provider_message_id` или `sent_at`;
-- при ошибке отправки обязательно записывать `failed + error_message`, чтобы UI показывал причину.
+There is no provider backoff issue, no kill switch, no paused number, and no lock contention right now. `whatsapp_message_events` and inbound webhooks are flowing normally.
 
-### 6. Исправить текущий backlog FB Media и fitpreneur
+## 5. Smallest safe recovery action (proposal — not yet applied)
 
-После изменения worker:
+Pick exactly one of these. They are listed cheapest → most invasive. Each is independent.
 
-1. Разблокировать текущий `campaigns-process` lock.
-2. Проверить количество due scheduled:
-   - FB Media: 33;
-   - fitpreneur: около 1090;
-   - плюс другие workspace, где тоже накопились due scheduled.
-3. Запустить controlled drain:
-   - сначала FB Media маленьким batch, убедиться что появляются `sent` и messages в chat;
-   - потом fitpreneur batches по номерам;
-   - после каждого batch проверять `sent_count`, `failed_count`, `messages`, `campaign_recipients`.
+**Option A — change only `claim_due_campaign_recipients` (recommended, smallest blast radius)**
 
-Не надо вручную массово переводить всё в `sent`. Нужно именно отправить через Gupshup, иначе чат будет показывать фейковую статистику.
+Replace `row_number()` over the per-sender partition with `LIMIT 1 per sender` so the RPC returns only one (the oldest due) row per `whatsapp_number_id` per call. The dispatcher then sends exactly one row per due sender per tick and stops wasting 24/30 slots on pacing skips. `p_limit` becomes the cap on *distinct senders served per minute*, which is what we actually want.
 
-### 7. Обновить UI, чтобы это было видно без открытия чата
+This is reversible by re-running the 08:42 migration if anything regresses.
 
-Добавить/проверить в workspace campaign runtime panel:
+**Option B — same as A, but also raise cron cadence on `campaigns-process-every-min` to every 30 s**
 
-- Due now;
-- Scheduled backlog;
-- Sending stuck;
-- Last successful send time;
-- Last error;
-- Last dispatcher run;
-- Кнопка admin-only `Process now / Drain backlog` с лимитом.
+Doubles per-sender throughput to ~2/min. Only safe after A, otherwise we just double the wasted `pacing_gap` skips and double cron HTTP load.
 
-Для пользователя это решает вопрос: «как проверять без этого чата?»
+**Option C — keep claim function as-is, drop `pacing_gap` floor when cron mode and `delay_min_seconds < tick_cadence`**
 
-Проверка должна быть не только через inbox, а через campaign runtime:
+More code, more reasoning surface in `processQueue`. Not recommended as the first move.
 
-```text
-scheduled -> sending -> sent/failed
-sent row -> outbound message in conversation
-provider_message_id present -> provider accepted send
-```
+Recommendation: **Option A only**, deploy, watch for one hour, then decide whether to add B.
 
-### 8. Финальная валидация
+## 6. What should NOT be touched yet
 
-После реализации проверить по данным:
-
-- FB Media:
-  - `scheduled` уменьшается;
-  - `sent` растет;
-  - в `messages` появляются outbound rows;
-  - campaign `sent_count` обновляется.
-
-- fitpreneur:
-  - новые recipients не остаются вечным `scheduled`;
-  - отправка распределяется по номерам;
-  - если провайдер отдает ошибки, они видны в `failed/error_message`, а не теряются.
-
-- Cron:
-  - `net._http_response` по `campaigns` больше не показывает 5s timeout для process;
-  - `campaigns` logs показывают `[job:campaigns-process] status=ok selected=N processed=N ...`;
-  - lock освобождается или устаревает быстро.
-
-## Технические изменения
-
-### Backend function `supabase/functions/campaigns/index.ts`
-
-- Уменьшить cron budget.
-- Убрать ожидание `setTimeout` в cron path.
-- Выбирать due recipients только `scheduled_at <= now()` для cron path.
-- Добавить batch limit.
-- Добавить detailed logs.
-- Добавить clear skip reasons.
-- Разделить cron process и manual drain mode.
-
-### Database functions/migrations
-
-- Обновить `try_job_lock` или добавить job-specific TTL для `campaigns-process`.
-- При необходимости добавить lightweight table/view для dispatcher health, если текущих logs недостаточно.
-- Не менять схему кампаний без необходимости.
-
-### Admin UI
-
-- Добавить понятную панель runtime/debug для кампаний:
-  - due;
-  - sent;
-  - failed;
-  - stuck sending;
-  - last run;
-  - last provider error;
-  - admin drain button.
-
-## Почему этот план должен сработать
-
-Потому что он убирает реальную причину: длинный dispatcher сейчас запускается способом, который обрывает его через 5 секунд. После переделки каждый cron tick будет коротким, атомарным и наблюдаемым. Если провайдер принимает сообщения - они начнут появляться в `sent` и в chat. Если провайдер не принимает - мы увидим конкретный `failed/error_message`, а не вечный ноль.
+- `try_job_lock` / `release_job_lock` — TTL=90s is fine, no stuck locks observed.
+- `timeout_milliseconds := 20000` on the two cron HTTP calls — keep it.
+- Sender routing, templates, Gupshup app/api key columns — confirmed healthy.
+- `max_inflight_per_number` / `max_inflight_per_campaign` defaults (5 / 50) — not the bottleneck; raising them changes nothing until A is done.
+- Webhook / inbound chain — healthy, dozens of `message-event` / `billing-event` callbacks per minute.
+- `lead-dispatch` and `follow-up-dispatch` schedules — both active and logging cleanly.
+- The duplicate FB Media campaign — leave for the workspace owner to merge / cancel; do not touch from the dispatcher side.
