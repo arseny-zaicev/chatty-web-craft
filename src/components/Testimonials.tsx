@@ -68,19 +68,24 @@ export const Testimonials = () => {
             return (
               <ScrollReveal key={t.id} delay={100 + idx * 100} className={colSpan}>
                 <article className="group relative h-full min-h-[520px] lg:min-h-[640px] bg-iskra-charcoal rounded-3xl overflow-hidden shadow-2xl border border-iskra-emerald/20 hover-lift flex flex-col">
-                  {/* Video as full background */}
-                  <div className="absolute inset-0">
+                  {/* Blurred backdrop from poster */}
+                  <div
+                    className="absolute inset-0 bg-center bg-cover scale-110 blur-2xl opacity-40"
+                    style={{ backgroundImage: `url(${t.poster})` }}
+                  />
+                  {/* Video letterboxed on top of backdrop */}
+                  <div className="absolute inset-0 flex items-center justify-center">
                     <video
                       src={t.videoSrc}
                       poster={t.poster}
                       controls
                       playsInline
                       preload="metadata"
-                      className={`w-full h-full ${isPortrait ? "object-cover" : "object-cover"}`}
+                      className="max-w-full max-h-full w-auto h-full object-contain"
                     />
-                    {/* Gradient overlay for caption legibility */}
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
                   </div>
+                  {/* Gradient overlay for caption legibility */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
 
                   {/* Caption */}
                   <div className="relative z-10 mt-auto p-6 md:p-7 text-white pointer-events-none">
