@@ -150,6 +150,21 @@ export default function Reconciliation() {
       if (error) throw error;
       return data || [];
     },
+
+  // Payout-ownership drift gate. Same SQL function that approve_payout_run uses
+  // to refuse approval - surface it here so ops sees the block before clicking.
+  const driftQ = useQuery({
+    queryKey: ["payout-ownership-drift"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("payout_ownership_drift" as any);
+      if (error) throw error;
+      const r = (Array.isArray(data) ? data[0] : data) as any;
+      return {
+        unassigned_referred: Number(r?.unassigned_referred ?? 0),
+        legacy_provider_mismatch: Number(r?.legacy_provider_mismatch ?? 0),
+        legacy_referrer_mismatch: Number(r?.legacy_referrer_mismatch ?? 0),
+      };
+    },
   });
 
   const refreshAll = () => {
