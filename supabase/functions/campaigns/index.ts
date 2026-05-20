@@ -1597,7 +1597,7 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
 
   const { data: campaigns } = await admin
     .from("campaigns")
-    .select("id, user_id, workspace_id, whatsapp_number_id, schedule_window_start, schedule_window_end, scheduled_dates, per_number_quota, delay_min_seconds, delay_max_seconds, recipient_country, respect_recipient_tz, first_scheduled_at, status")
+    .select("id, user_id, workspace_id, whatsapp_number_id, schedule_window_start, schedule_window_end, scheduled_dates, per_number_quota, delay_min_seconds, delay_max_seconds, recipient_country, respect_recipient_tz, first_scheduled_at, status, dispatch_mode")
     .in("id", uniq);
   if (!campaigns || campaigns.length === 0) return json({ error: "Not found" }, 404);
   for (const c of campaigns) {
