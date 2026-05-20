@@ -1914,9 +1914,12 @@ export default function LaunchWizard() {
                 window_end: windowEnd,
                 per_number_quota: perNumberQuota,
                 respect_recipient_tz: respectTz,
+                scheduled_dates: scheduleMode === "scheduled" ? scheduledDates : [],
+                delay_min_seconds: isMarketing ? 0 : Math.max(0, Number(delayMin) || 30),
               }}
               onSnapshotChange={setDispatchState}
             />
+
           )}
           {isMarketing && dispatchState.ok && dispatchState.signature && (
             <div className="text-xs rounded-md border border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400 px-2.5 py-2 flex items-start gap-2">
