@@ -23,7 +23,6 @@ import {
   upsertTemplate,
 } from "./templates.ts";
 import {
-  computeSnapshotSignature as sharedComputeSnapshotSignature,
   resolveLaunchContract,
   SNAPSHOT_CONTRACT_VERSION as SHARED_SNAPSHOT_CONTRACT_VERSION,
 } from "../_shared/launchContract.ts";
