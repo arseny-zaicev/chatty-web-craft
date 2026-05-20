@@ -1771,8 +1771,11 @@ async function retryFailedRecipients(admin: any, requesterId: string, body: any)
   if (!campaign) return json({ error: "Not found" }, 404);
   if (!(await canAccessUser(admin, requesterId, campaign.user_id))) return json({ error: "Forbidden" }, 403);
 
-  const minDelay = Math.max(60, campaign.delay_min_seconds || 60);
-  const maxDelay = Math.max(minDelay, campaign.delay_max_seconds || 120);
+  // P0.4 (2026-05-20): honor delay_min_seconds VERBATIM. Previously this
+  // forced `max(60, ...)`, so a 0-delay/blast campaign's retried failures
+  // were silently re-paced to 60s gaps — different contract than launch.
+  const minDelay = Math.max(0, Number(campaign.delay_min_seconds ?? 30));
+  const maxDelay = Math.max(minDelay, Number(campaign.delay_max_seconds ?? Math.max(minDelay, 90)));
   const winStart = String(campaign.schedule_window_start || "09:00:00").slice(0, 5);
   const winEnd = String(campaign.schedule_window_end || "18:00:00").slice(0, 5);
   const respectTz = campaign.respect_recipient_tz !== false;
