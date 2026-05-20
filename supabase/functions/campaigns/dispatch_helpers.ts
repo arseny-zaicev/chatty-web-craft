@@ -33,11 +33,11 @@ export async function computeSnapshotSignature(input: SnapshotInput): Promise<st
 }
 
 // Per-number floor between consecutive sends.
-// marketing_instant removes the artificial 1s (marketing) / 60s (utility)
+// marketing_instant removes the artificial 1s (marketing) / 90s (utility)
 // floor and relies on inflight caps + provider backoff.
 export function decidePerNumberFloorSec(mode: DispatchMode, isUtility: boolean): number {
   if (mode === "marketing_instant") return 0;
-  return isUtility ? 60 : 1;
+  return isUtility ? 90 : 1;
 }
 
 export interface LaunchDecisionInput {
