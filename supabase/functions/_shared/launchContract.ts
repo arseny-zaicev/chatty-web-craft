@@ -161,8 +161,8 @@ export async function resolveLaunchContract(
   const backoffMap = new Map<string, string>();
   for (const b of backoffRes.data ?? []) backoffMap.set(b.whatsapp_number_id, b.retry_after);
 
-  if (numberRows.length !== numberIds.length) blockers.push("One or more selected numbers not found.");
-  if (templateRows.length !== templateIds.length) blockers.push("One or more selected templates not found.");
+  if (numberRows.length !== numberIds.length) addBlocker("numbers_missing", "One or more selected numbers not found.");
+  if (templateRows.length !== templateIds.length) addBlocker("templates_missing", "One or more selected templates not found.");
 
   // Today's sent counts per number, Dubai TZ.
   const dubaiTodayStartIso = (() => {
