@@ -60,22 +60,6 @@ const Booked = () => {
           </div>
         </section>
 
-        {/* Loom Video */}
-        <section className="pb-16 px-4">
-          <div className="container mx-auto max-w-3xl">
-            <div className="rounded-2xl overflow-hidden shadow-xl border border-border" data-track="loom_video_container">
-              <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
-                <iframe
-                  src="https://www.loom.com/embed/7141dff6f84c48b6b5158651b861fa91?sid=autoplay"
-                  frameBorder="0"
-                  allowFullScreen
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
-                  title="What to expect on our call"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Checklist */}
         <section className="pb-16 px-4">
