@@ -1343,7 +1343,12 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     // Daily-cap safety net (Dubai TZ). Bumps to tomorrow 09:00 if cap reached.
     const recNumId = recipient.whatsapp_number_id;
     if (recNumId && dailyLimitByNum.has(recNumId)) {
-      const cap = dailyLimitByNum.get(recNumId)!;
+      const numLimit = dailyLimitByNum.get(recNumId)!;
+      const campQuota = quotaByCampaign.get(recipient.campaign_id) ?? numLimit;
+      // Effective per-number cap = max(operator quota, number's daily_send_limit).
+      // daily_send_limit (default 200) can NEVER silently reduce the operator's
+      // explicit choice. workspace_send_guards still kill-switch FE/FM.
+      const cap = Math.max(numLimit, campQuota);
       const sentNow = sentTodayByNum.get(recNumId) ?? 0;
       if (sentNow >= cap) {
         const next = new Date(Date.now() + 24 * 60 * 60 * 1000);
