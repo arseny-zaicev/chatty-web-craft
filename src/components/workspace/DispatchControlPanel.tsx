@@ -283,6 +283,36 @@ export default function DispatchControlPanel({ prepareInput, onSnapshotChange }:
             </div>
           </div>
 
+          {(snapshot.workspace_guard || snapshot.would_defer_to_next_day) && (
+            <div className="space-y-1.5">
+              {snapshot.workspace_guard && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] space-y-0.5">
+                  <div className="font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Workspace guard active
+                  </div>
+                  <div className="text-muted-foreground">
+                    Sent today: {snapshot.workspace_guard.workspace_sent_today.toLocaleString()} ·
+                    Pending: {snapshot.workspace_guard.workspace_pending.toLocaleString()} ·
+                    Planned: {snapshot.workspace_guard.planned_volume.toLocaleString()}
+                  </div>
+                  <div className="text-muted-foreground">
+                    Hard daily cap: {snapshot.workspace_guard.hard_daily_cap ?? "—"} ·
+                    Per-campaign cap: {snapshot.workspace_guard.hard_per_campaign_cap ?? "—"} ·
+                    Force paced: {snapshot.workspace_guard.force_paced ? "yes" : "no"}
+                  </div>
+                </div>
+              )}
+              {snapshot.would_defer_to_next_day && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-700 dark:text-amber-400">
+                  <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>Today's remaining capacity ({snapshot.capacity?.today ?? 0}) is less than allocated audience. Overflow will defer to next day — launch will require explicit confirmation.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+
+
 
           <div>
             <div className="text-[11px] text-muted-foreground mb-1">Allocation per number</div>
