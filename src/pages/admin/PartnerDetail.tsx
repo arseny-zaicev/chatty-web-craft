@@ -290,8 +290,68 @@ export default function PartnerDetail() {
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">
-                            {bm?.name || a.business_manager_id.slice(0,8)}
-                            <div className="text-[10px] text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || ""}</div>
+                            {bm ? (
+                              <InlineTextEditor
+                                value={bm.name}
+                                onSave={async (next) => {
+                                  if (!next.trim()) { toast.error("Name required"); return; }
+                                  const { error } = await supabase
+                                    .from("business_managers")
+                                    .update({ name: next.trim(), updated_at: new Date().toISOString() } as any)
+                                    .eq("id", bm.id);
+                                  if (error) { toast.error(error.message); return; }
+                                  toast.success("BM renamed");
+                                  invalidateBm();
+                                }}
+                              />
+                            ) : (
+                              <span>{a.business_manager_id.slice(0,8)}</span>
+                            )}
+                            <div className="text-[10px] text-muted-foreground">
+                              {bm ? (
+                                <InlineTextEditor
+                                  value={bm.meta_bm_id || ""}
+                                  placeholder="Meta BM ID"
+                                  onSave={async (next) => {
+                                    const { error } = await supabase
+                                      .from("business_managers")
+                                      .update({ meta_bm_id: next || null, updated_at: new Date().toISOString() } as any)
+                                      .eq("id", bm.id);
+                                    if (error) { toast.error(error.message); return; }
+                                    toast.success("Meta BM ID updated");
+                                    invalidateBm();
+                                  }}
+                                />
+                              ) : (bm?.external_id || "")}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <InlineRateEditor
+                              value={Number(a.rate_usd)}
+                              onSave={async (next) => {
+                                // History-preserving: close current, insert new
+                                const { data: u } = await supabase.auth.getUser();
+                                const nowIso = new Date().toISOString();
+                                const { error: closeErr } = await supabase
+                                  .from("bm_partner_assignments")
+                                  .update({ effective_to: nowIso })
+                                  .eq("id", a.id);
+                                if (closeErr) { toast.error(closeErr.message); return; }
+                                const { error: insErr } = await supabase
+                                  .from("bm_partner_assignments")
+                                  .insert({
+                                    business_manager_id: a.business_manager_id,
+                                    partner_id: id!,
+                                    role: a.role,
+                                    rate_usd: next,
+                                    created_by: u.user?.id,
+                                    effective_from: nowIso,
+                                  });
+                                if (insErr) { toast.error(insErr.message); return; }
+                                toast.success("BM rate updated (history preserved)");
+                                qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] });
+                              }}
+                            />
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
