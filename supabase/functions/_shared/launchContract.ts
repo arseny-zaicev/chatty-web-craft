@@ -229,11 +229,11 @@ export async function resolveLaunchContract(
   // Per-number blockers.
   const numbersDetail: ResolvedNumber[] = numberRows.map((n: any) => {
     const allocation = allocByNumber[n.id] ?? 0;
-    if (n.webhook_connected === false) blockers.push(`Number ${n.phone_number}: webhook not connected — replies would be lost.`);
-    if (n.status === "banned" || n.status === "restricted") blockers.push(`Number ${n.phone_number} is ${n.status}.`);
-    if (n.paused_at) blockers.push(`Number ${n.phone_number} is paused: ${n.paused_reason ?? "no reason"}.`);
-    if (!n.provider_api_key) blockers.push(`Number ${n.phone_number}: no provider API key.`);
-    if (allocation === 0 && audienceCount > 0) blockers.push(`Number ${n.phone_number} got zero allocation — remove it from the pool or raise its daily cap.`);
+    if (n.webhook_connected === false) addBlocker("number_webhook_disconnected", `Number ${n.phone_number}: webhook not connected — replies would be lost.`, { number_id: n.id });
+    if (n.status === "banned" || n.status === "restricted") addBlocker("number_blocked", `Number ${n.phone_number} is ${n.status}.`, { number_id: n.id, status: n.status });
+    if (n.paused_at) addBlocker("number_paused", `Number ${n.phone_number} is paused: ${n.paused_reason ?? "no reason"}.`, { number_id: n.id });
+    if (!n.provider_api_key) addBlocker("number_no_provider_key", `Number ${n.phone_number}: no provider API key.`, { number_id: n.id });
+    if (allocation === 0 && audienceCount > 0) addBlocker("number_zero_allocation", `Number ${n.phone_number} got zero allocation — remove it from the pool or raise its daily cap.`, { number_id: n.id });
     return {
       id: n.id,
       phone: n.phone_number,
@@ -246,7 +246,7 @@ export async function resolveLaunchContract(
   });
 
   for (const t of templateRows) {
-    if (t.status !== "approved") blockers.push(`Template "${t.name}" is ${t.status}, not approved.`);
+    if (t.status !== "approved") addBlocker("template_not_approved", `Template "${t.name}" is ${t.status}, not approved.`, { template_id: t.id, status: t.status });
   }
 
   let killSwitchEngaged = false;
