@@ -368,6 +368,27 @@ Deno.serve(cronGuard("slack-dispatch", async (req) => {
           await supabase.from("slack_event_queue").update({ status: "skipped", processed_at: new Date().toISOString() }).eq("id", ev.id);
           continue;
         }
+        // Always resolve the actual inbound reply text at dispatch time.
+        // The trigger may capture conversations.last_message_text while it
+        // still holds the OUTBOUND template body (race between the
+        // campaign_recipients status flip and the conversations.last_message_text
+        // update from the inbound webhook), which previously caused Slack to
+        // show our own outreach text instead of the lead's reply.
+        let replyText: string | null = null;
+        if (p?.conversation_id) {
+          const { data: lastInbound } = await supabase
+            .from("messages")
+            .select("body")
+            .eq("conversation_id", p.conversation_id)
+            .eq("direction", "inbound")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          replyText = lastInbound?.body ?? null;
+        }
+        if (replyText) {
+          p.last_message_text = replyText;
+        }
         // Final guardrail: re-check qualification at dispatch time. Stops any
         // stale/buggy enqueue path (trigger, watchdog, manual backfill) from
         // pinging clients with Block / Not relevant / auto-replies / lost leads.
@@ -375,7 +396,7 @@ Deno.serve(cronGuard("slack-dispatch", async (req) => {
         if (!p?.force && p?.conversation_id) {
           const { data: gate } = await supabase.rpc("should_notify_lead_reply", {
             _conversation_id: p.conversation_id,
-            _reply_text: p?.last_message_text ?? null,
+            _reply_text: replyText ?? p?.last_message_text ?? null,
           });
           if (!gate) {
             await supabase.from("slack_event_queue")
@@ -383,6 +404,14 @@ Deno.serve(cronGuard("slack-dispatch", async (req) => {
               .eq("id", ev.id);
             continue;
           }
+        }
+        // No inbound message means we have nothing legitimate to show -
+        // skip rather than post the outbound template body.
+        if (!replyText && !p?.force) {
+          await supabase.from("slack_event_queue")
+            .update({ status: "skipped", processed_at: new Date().toISOString(), error: "no inbound message yet" })
+            .eq("id", ev.id);
+          continue;
         }
         const msg = buildFirstReplyBlocks(ws, p);
         // Cross-event dedupe: if positive_lead already posted for this
