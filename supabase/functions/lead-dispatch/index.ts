@@ -222,18 +222,27 @@ async function processPipeline(admin: any, pipeline: Pipeline) {
 
   // Daily cap check (per pipeline). Day boundary uses the pipeline's
   // sending_window.timezone so "50/day" matches the client's local day, not
-  // UTC. We count only successfully-delivered rows (sent + replied) — failures
-  // and still-queued attempts do NOT consume quota, so 50 = 50 actually-sent.
+  // UTC.
+  //
+  // P0.2 (2026-05-20): SINGLE SOURCE OF TRUTH = campaign_recipients.sent_at.
+  // Previously this path counted lead_imports.status in ('sent','replied'),
+  // while manual launches (and the SQL claim_due_campaign_recipients RPC)
+  // counted campaign_recipients.sent_at — so the same pipeline could read
+  // two different "sent today" numbers (e.g. 436 vs 527) and either gate or
+  // overshoot. Both flows now count the exact same rows the SQL gate counts.
   const pipelineTz = (pipeline.sending_window as any)?.timezone || "UTC";
-  const todayStart = startOfLocalDayUtc(new Date(), pipelineTz);
+  const todayKey = dayKey(Date.now(), pipelineTz);
+  const todayStart = dateAtTzToUTC(todayKey, "00:00", pipelineTz);
+  const todayEnd = dateAtTzToUTC(todayKey, "00:00", pipelineTz, true);
   let availableCapacity = Number.MAX_SAFE_INTEGER;
   if (pipeline.daily_cap && pipeline.daily_cap > 0) {
     const { count } = await admin
-      .from("lead_imports")
-      .select("id", { count: "exact", head: true })
-      .eq("pipeline_id", pipeline.id)
-      .in("status", ["sent", "replied"])
-      .gte("sent_at", todayStart.toISOString());
+      .from("campaign_recipients")
+      .select("id, campaigns!inner(pipeline_id)", { count: "exact", head: true })
+      .eq("campaigns.pipeline_id", pipeline.id)
+      .not("sent_at", "is", null)
+      .gte("sent_at", todayStart.toISOString())
+      .lt("sent_at", todayEnd.toISOString());
     availableCapacity = Math.max(0, pipeline.daily_cap - (count || 0));
   }
   if (availableCapacity === 0) {
