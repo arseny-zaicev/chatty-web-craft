@@ -152,6 +152,22 @@ export default function Reconciliation() {
     },
   });
 
+  // Payout-ownership drift gate. Same SQL function that approve_payout_run uses
+  // to refuse approval - surface it here so ops sees the block before clicking.
+  const driftQ = useQuery({
+    queryKey: ["payout-ownership-drift"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("payout_ownership_drift" as any);
+      if (error) throw error;
+      const r = (Array.isArray(data) ? data[0] : data) as any;
+      return {
+        unassigned_referred: Number(r?.unassigned_referred ?? 0),
+        legacy_provider_mismatch: Number(r?.legacy_provider_mismatch ?? 0),
+        legacy_referrer_mismatch: Number(r?.legacy_referrer_mismatch ?? 0),
+      };
+    },
+  });
+
   const refreshAll = () => {
     summaryQ.refetch();
     dailyQ.refetch();
@@ -190,6 +206,24 @@ export default function Reconciliation() {
           Источник истины для платежей партнёрам — события <code>delivered</code>. Если drift &gt; 1% — webhook'и теряются и партнёр недоплачен/переплачен.
           Время в Dubai (GST).
         </p>
+
+        {/* Ownership drift gate - matches the check inside approve_payout_run */}
+        {driftQ.data && (driftQ.data.unassigned_referred + driftQ.data.legacy_provider_mismatch + driftQ.data.legacy_referrer_mismatch) > 0 && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="pt-4 text-sm">
+              <div className="font-semibold text-destructive mb-1">Payout approvals are blocked: partner ownership drift</div>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {driftQ.data.unassigned_referred > 0 && <li>{driftQ.data.unassigned_referred} referred numbers have no active partner ownership row.</li>}
+                {driftQ.data.legacy_provider_mismatch > 0 && <li>{driftQ.data.legacy_provider_mismatch} numbers have a <code>provided_by</code> text that does not match any partner.</li>}
+                {driftQ.data.legacy_referrer_mismatch > 0 && <li>{driftQ.data.legacy_referrer_mismatch} numbers have an <code>assigned_ref</code> text that does not match any partner (e.g. a referrer not yet created as a partner row).</li>}
+              </ul>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Fix in <Link to="/admin/fleet-registry" className="underline">Fleet Registry</Link> or create the missing partner in <Link to="/admin/finance/partners" className="underline">Finance · Partners</Link>. <code>approve_payout_run</code> will refuse while any of these are non-zero.
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
