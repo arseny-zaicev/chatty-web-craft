@@ -306,8 +306,12 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const _wsMinPre = hhmmToMin(windowStart);
   const _wsMaxPre = hhmmToMin(windowEnd);
   const _windowSecondsPre = Math.max(60, (_wsMaxPre - _wsMinPre) * 60);
-  const _minGapPre = isBlastLaunch ? 1 : Math.max(60, minDelay || 60);
-  const _windowFitCapPre = isBlastLaunch ? perNumberQuota : Math.max(1, Math.floor(_windowSecondsPre / _minGapPre));
+  // P0.4: honor minDelay verbatim. Was `Math.max(60, ...)` which silently
+  // computed launch capacity as if a 30s campaign were a 60s one.
+  const _minGapPre = isBlastLaunch ? 1 : Math.max(1, minDelay || 1);
+  const _windowFitCapPre = (isBlastLaunch || minDelay <= 0)
+    ? perNumberQuota
+    : Math.max(1, Math.floor(_windowSecondsPre / _minGapPre));
   const perNumberCaps = new Map<string, number>();
   // Pre-fetch sent_today per number (Dubai TZ) so the launch knows real remaining
   // headroom and refuses to silently push the rest to tomorrow.
@@ -482,7 +486,10 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const wsMax = hhmmToMin(windowEnd);
   const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
   const avgDelay = Math.max(1, (minDelay + maxDelay) / 2);
-  const minGapSec = Math.max(60, minDelay || 60);
+  // P0.4: honor minDelay verbatim during per-recipient placement. Was
+  // `Math.max(60, ...)` which spaced rows 60s apart even when the operator
+  // configured 30s (or 0 for blast).
+  const minGapSec = Math.max(1, minDelay || 1);
 
 
   const nextDateStr = (d: string) => {
