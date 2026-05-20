@@ -1074,12 +1074,17 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       return;
     }
 
-    // Honor scheduled_at for paced mode. Instant mode pushes immediately.
+    // Honor scheduled_at. In cron mode we never sleep — if it's not due yet,
+    // skip and let the next tick pick it up. In manual mode we keep the brief
+    // wait so admin "process now" can flush near-due rows.
     const targetMs = new Date(recipient.scheduled_at).getTime();
     const waitMs = targetMs - Date.now();
-    const remainingBudget = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
-    if (!isInstant && waitMs > 0 && remainingBudget > 0) {
-      await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
+    if (waitMs > 0) {
+      if (isCronMode) return; // never sleep inside cron
+      const remainingBudget = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
+      if (!isInstant && remainingBudget > 0) {
+        await new Promise((r) => setTimeout(r, Math.min(waitMs, remainingBudget)));
+      }
     }
     if (Date.now() - tickStartedAt > TICK_BUDGET_MS) return;
 
