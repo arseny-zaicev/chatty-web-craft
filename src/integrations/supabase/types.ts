@@ -4061,6 +4061,17 @@ export type Database = {
           waiting_now: number
         }[]
       }
+      partner_earnings_breakdown: {
+        Args: { p_from: string; p_partner_id: string; p_to: string }
+        Returns: {
+          day: string
+          delivered: number
+          earned_usd: number
+          rate_usd: number
+          role: string
+          whatsapp_number_id: string
+        }[]
+      }
       partner_rate_at: {
         Args: {
           _at: string
@@ -4221,6 +4232,16 @@ export type Database = {
       retry_lead_import: {
         Args: { p_lead_id: string; p_new_phone?: string }
         Returns: undefined
+      }
+      set_number_ownership: {
+        Args: {
+          p_notes?: string
+          p_partner_id: string
+          p_rate_usd?: number
+          p_role?: string
+          p_whatsapp_number_id: string
+        }
+        Returns: string
       }
       setter_performance: {
         Args: {

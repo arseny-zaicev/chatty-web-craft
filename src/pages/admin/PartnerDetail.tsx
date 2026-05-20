@@ -17,6 +17,9 @@ import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2, Buildin
 import { toast } from "sonner";
 import { format, subDays, startOfMonth } from "date-fns";
 import { fetchPartnerMetrics } from "@/lib/metrics";
+import { NumberOwnershipPanel } from "@/components/admin/NumberOwnershipPanel";
+import { PartnerEarningsPanel } from "@/components/admin/PartnerEarningsPanel";
+import { InlineRateEditor, InlineTextEditor } from "@/components/admin/InlineRateEditor";
 
 const LIFECYCLE_STATUSES = ["ready", "warming_up", "verifying", "disabled"] as const;
 const VERIFICATION_STATUSES = ["unverified", "verifying", "verified"] as const;
@@ -202,13 +205,27 @@ export default function PartnerDetail() {
           <Stat label="Paid this month" value={fmtUsd(paidThisMonth)} />
         </div>
 
-        <Tabs defaultValue="bms">
+        <Tabs defaultValue="ownership">
           <TabsList>
+            <TabsTrigger value="ownership">Numbers (truth)</TabsTrigger>
+            <TabsTrigger value="earnings">Earnings (live)</TabsTrigger>
             <TabsTrigger value="bms">Business Managers</TabsTrigger>
             <TabsTrigger value="finance">Finance & Reports</TabsTrigger>
             <TabsTrigger value="payments">Payment History</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="ownership" className="pt-4">
+            <NumberOwnershipPanel
+              partnerId={id!}
+              partnerDefaultRate={Number(partner.default_payout_rate_usd) || 0.005}
+            />
+          </TabsContent>
+
+          <TabsContent value="earnings" className="pt-4">
+            <PartnerEarningsPanel partnerId={id!} />
+          </TabsContent>
+
 
           {/* BUSINESS MANAGERS */}
           <TabsContent value="bms" className="pt-4 space-y-4">
@@ -236,6 +253,7 @@ export default function PartnerDetail() {
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead>BM</TableHead>
+                    <TableHead>BM rate</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Warm-up</TableHead>
@@ -272,8 +290,68 @@ export default function PartnerDetail() {
                       return (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">
-                            {bm?.name || a.business_manager_id.slice(0,8)}
-                            <div className="text-[10px] text-muted-foreground">{bm?.meta_bm_id || bm?.external_id || ""}</div>
+                            {bm ? (
+                              <InlineTextEditor
+                                value={bm.name}
+                                onSave={async (next) => {
+                                  if (!next.trim()) { toast.error("Name required"); return; }
+                                  const { error } = await supabase
+                                    .from("business_managers")
+                                    .update({ name: next.trim(), updated_at: new Date().toISOString() } as any)
+                                    .eq("id", bm.id);
+                                  if (error) { toast.error(error.message); return; }
+                                  toast.success("BM renamed");
+                                  invalidateBm();
+                                }}
+                              />
+                            ) : (
+                              <span>{a.business_manager_id.slice(0,8)}</span>
+                            )}
+                            <div className="text-[10px] text-muted-foreground">
+                              {bm ? (
+                                <InlineTextEditor
+                                  value={bm.meta_bm_id || ""}
+                                  placeholder="Meta BM ID"
+                                  onSave={async (next) => {
+                                    const { error } = await supabase
+                                      .from("business_managers")
+                                      .update({ meta_bm_id: next || null, updated_at: new Date().toISOString() } as any)
+                                      .eq("id", bm.id);
+                                    if (error) { toast.error(error.message); return; }
+                                    toast.success("Meta BM ID updated");
+                                    invalidateBm();
+                                  }}
+                                />
+                              ) : (bm?.external_id || "")}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <InlineRateEditor
+                              value={Number(a.rate_usd)}
+                              onSave={async (next) => {
+                                // History-preserving: close current, insert new
+                                const { data: u } = await supabase.auth.getUser();
+                                const nowIso = new Date().toISOString();
+                                const { error: closeErr } = await supabase
+                                  .from("bm_partner_assignments")
+                                  .update({ effective_to: nowIso })
+                                  .eq("id", a.id);
+                                if (closeErr) { toast.error(closeErr.message); return; }
+                                const { error: insErr } = await supabase
+                                  .from("bm_partner_assignments")
+                                  .insert({
+                                    business_manager_id: a.business_manager_id,
+                                    partner_id: id!,
+                                    role: a.role,
+                                    rate_usd: next,
+                                    created_by: u.user?.id,
+                                    effective_from: nowIso,
+                                  });
+                                if (insErr) { toast.error(insErr.message); return; }
+                                toast.success("BM rate updated (history preserved)");
+                                qc.invalidateQueries({ queryKey: ["admin", "partner-assigns", id] });
+                              }}
+                            />
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {bm?.created_at ? format(new Date(bm.created_at), "MMM d, yyyy") : "—"}
@@ -317,7 +395,7 @@ export default function PartnerDetail() {
                       );
                     })}
                     {!activeAssigns.length && (
-                      <TableRow><TableCell colSpan={13} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={14} className="text-center py-6 text-muted-foreground">No BMs linked yet - create one above</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
