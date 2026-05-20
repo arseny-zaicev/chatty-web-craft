@@ -117,7 +117,7 @@ Deno.serve(cronGuard("regression-probe", async (req) => {
   for (const f of findings) {
     try {
       await admin.from("slack_event_queue").insert({
-        kind: f.kind,
+        event_type: f.kind,
         payload: { text: f.text, severity: f.severity, data: f.data ?? null, source: "regression-probe" },
       });
     } catch { /* ignore: queue table may not exist in some envs */ }
