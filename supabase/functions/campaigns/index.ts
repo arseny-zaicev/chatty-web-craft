@@ -1150,7 +1150,10 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     const tplCategory = String(recipient.campaigns?.message_templates?.category || "marketing").toLowerCase();
     const isUtility = tplCategory === "utility" || tplCategory === "authentication";
     const configuredMin = Number(recipient.campaigns?.delay_min_seconds ?? 0) || 0;
-    const floor = isInstant ? 0 : (isUtility ? 60 : 1);
+    // Marketing pacing floor removed (was 1s) — it serialized sends to ~1 row
+    // per sender per cron tick. Utility/auth still uses 60s. Per-number/campaign
+    // inflight caps + claim_due_campaign_recipients fairness bound throughput.
+    const floor = isInstant ? 0 : (isUtility ? 60 : 0);
     const minGapMs = Math.max(floor, configuredMin) * 1000;
     const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
     if (minGapMs > 0) {
