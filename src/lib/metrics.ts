@@ -283,3 +283,66 @@ export const liveStatusLabel = (s: LiveStatus): string => ({
   failed: "Failed",
   unknown: "—",
 })[s];
+
+// ---------- CAMPAIGN CANONICAL TRUTH ----------
+// Event-based sent/delivered/failed/replied per campaign, derived from
+// whatsapp_message_events via metrics_for_range (dedup by provider_message_id).
+// This is the SINGLE source of truth for campaign-facing daily and alltime
+// numbers across:
+//   - WorkspaceCampaigns group cards & detail totals
+//   - CampaignReportPanel KPI strip
+//   - LatestReportCard delivered/sent
+//   - Portfolio per-campaign active rollup (today) & recent_launches (alltime)
+// Never read campaigns.sent_count / failed_count / today_recipients_count for UI.
+
+export type CampaignTruth = { sent: number; delivered: number; failed: number; replied: number };
+const ZERO_CT: CampaignTruth = { sent: 0, delivered: 0, failed: 0, replied: 0 };
+
+function dubaiStartOfDayIso(): string {
+  const dubaiDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+  return new Date(`${dubaiDate}T00:00:00+04:00`).toISOString();
+}
+
+export async function fetchCampaignTruth(
+  campaignIds: string[],
+  range: "today" | "alltime",
+): Promise<Map<string, CampaignTruth>> {
+  const out = new Map<string, CampaignTruth>();
+  if (!campaignIds.length) return out;
+  const from = range === "today" ? dubaiStartOfDayIso() : "1970-01-01T00:00:00Z";
+  // +1 day forward window so just-arrived events are not clipped.
+  const to = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+  const { data } = await (supabase.rpc as any)("campaign_metrics_for_range", {
+    p_campaign_ids: campaignIds,
+    _from: from,
+    _to: to,
+  });
+  (data ?? []).forEach((r: any) => {
+    if (!r.campaign_id) return;
+    out.set(r.campaign_id, {
+      sent: Number(r.sent ?? 0),
+      delivered: Number(r.delivered ?? 0),
+      failed: Number(r.failed ?? 0),
+      replied: Number(r.replied ?? 0),
+    });
+  });
+  // Ensure every requested id has a zero entry.
+  campaignIds.forEach((id) => { if (!out.has(id)) out.set(id, { ...ZERO_CT }); });
+  return out;
+}
+
+export function sumCampaignTruth(
+  ids: string[],
+  m: Map<string, CampaignTruth>,
+): CampaignTruth {
+  return ids.reduce<CampaignTruth>((acc, id) => {
+    const v = m.get(id);
+    if (!v) return acc;
+    return {
+      sent: acc.sent + v.sent,
+      delivered: acc.delivered + v.delivered,
+      failed: acc.failed + v.failed,
+      replied: acc.replied + v.replied,
+    };
+  }, { ...ZERO_CT });
+}
