@@ -4155,6 +4155,26 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      persist_inbound_message: {
+        Args: {
+          _body: string
+          _contact_name: string
+          _contact_phone: string
+          _inferred_pipeline_id: string
+          _media_type: string
+          _media_url: string
+          _metadata: Json
+          _provider_message_id: string
+          _user_id: string
+          _whatsapp_number_id: string
+          _workspace_id: string
+        }
+        Returns: {
+          conversation_created: boolean
+          conversation_id: string
+          message_id: string
+        }[]
+      }
       pipeline_follow_up_send_at: {
         Args: { _base_ts: string; _pipeline_id: string }
         Returns: string

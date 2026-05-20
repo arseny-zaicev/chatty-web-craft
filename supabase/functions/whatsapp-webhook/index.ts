@@ -205,33 +205,17 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
     .select("id")
     .maybeSingle();
 
-  // Upsert conversation
+  // Resolve inferred pipeline ONLY when we'll likely create a new conversation,
+  // to preserve current behavior. The RPC ignores this value on the update path.
   const { data: existing } = await supabase
     .from("conversations")
-    .select("id, unread_count")
+    .select("id")
     .eq("whatsapp_number_id", number.id)
     .eq("contact_phone", source)
     .maybeSingle();
 
-  let conversationId: string;
-  if (existing) {
-    conversationId = existing.id;
-    // NOTE: last_message_text / last_message_at are derived columns maintained by
-    // the trg_conversations_sync_preview_ins trigger on `messages` insert.
-    // Do not write them here — the trigger guarantees the inbox preview always
-    // matches a real row in the thread.
-    await supabase
-      .from("conversations")
-      .update({
-        contact_name: contactName,
-        unread_count: (existing.unread_count ?? 0) + 1,
-      })
-      .eq("id", conversationId);
-  } else {
-    // Resolve pipeline from the most recent first_touch campaign recipient for this
-    // (number, phone), so the new conversation lands in the source pipeline rather
-    // than the workspace default that the BEFORE INSERT trigger would otherwise set.
-    let inferredPipelineId: string | null = null;
+  let inferredPipelineId: string | null = null;
+  if (!existing) {
     const { data: rec } = await supabase
       .from("campaign_recipients")
       .select("campaigns!inner(pipeline_id, kind)")
@@ -242,31 +226,12 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
       .limit(1)
       .maybeSingle();
     inferredPipelineId = (rec as any)?.campaigns?.pipeline_id ?? null;
-
-    // last_message_text / last_message_at intentionally omitted — trigger fills
-    // them from the inbound `messages` insert below.
-    const { data: created, error } = await supabase
-      .from("conversations")
-      .insert({
-        user_id: number.user_id,
-        workspace_id: number.workspace_id,
-        whatsapp_number_id: number.id,
-        contact_phone: source,
-        contact_name: contactName,
-        pipeline_id: inferredPipelineId,
-        unread_count: 1,
-      })
-      .select("id")
-      .single();
-    if (error || !created) {
-      console.error("Failed to create conversation", error);
-      await markRaw(rawId, { processing_status: "failed", processed_at: new Date().toISOString(), error_message: `conversation_insert_failed: ${error?.message ?? "unknown"}`, workspace_id: number.workspace_id, whatsapp_number_id: number.id });
-      return;
-    }
-    conversationId = created.id;
   }
 
-  // Try to link this reply back to a campaign recipient (most recent sent/delivered to this contact on this number)
+
+  // Try to link this reply back to a campaign recipient (most recent sent/delivered
+  // to this contact on this number). Looked up BEFORE persistence so the recipient
+  // ids land in the inbound message metadata atomically with the insert.
   const { data: recipient } = await supabase
     .from("campaign_recipients")
     .select("id, campaign_id, status, campaigns!inner(pipeline_id, kind)")
@@ -278,6 +243,82 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
     .maybeSingle();
 
   const recipientPipelineId = (recipient as any)?.campaigns?.pipeline_id ?? null;
+
+  // ATOMIC inbound persistence: conversation upsert + inbound message insert in a
+  // single transaction. If the message insert fails (e.g. duplicate
+  // provider_message_id, trigger error), the conversation create/unread bump rolls
+  // back, eliminating the phantom-conversation risk.
+  const inboundMetadata = {
+    ...(payload as Record<string, unknown>),
+    matched_whatsapp_number: {
+      id: number.id,
+      phone_number: number.phone_number,
+      display_name: number.display_name,
+      provider_app_id: number.provider_app_id,
+      app_name: appName || null,
+      destination: destination || null,
+    },
+    campaign_recipient_id: recipient?.id ?? null,
+    campaign_id: recipient?.campaign_id ?? null,
+  };
+
+  const { data: persisted, error: persistError } = await supabase.rpc(
+    "persist_inbound_message",
+    {
+      _whatsapp_number_id: number.id,
+      _user_id: number.user_id,
+      _workspace_id: number.workspace_id,
+      _contact_phone: source,
+      _contact_name: contactName,
+      _inferred_pipeline_id: inferredPipelineId,
+      _body: body,
+      _media_url: mediaUrl,
+      _media_type: mediaUrl ? messageType : null,
+      _provider_message_id: providerMessageId,
+      _metadata: inboundMetadata,
+    },
+  );
+
+  const persistedRow = Array.isArray(persisted) ? persisted[0] : persisted;
+  const conversationId: string | undefined = persistedRow?.conversation_id;
+  const insertedMessageId: string | undefined = persistedRow?.message_id;
+
+  if (persistError || !conversationId || !insertedMessageId) {
+    console.error("Failed atomic inbound persistence", {
+      error: persistError,
+      providerMessageId,
+      source,
+      appName,
+    });
+    if (inboundAudit?.id) {
+      await supabase
+        .from("whatsapp_message_events")
+        .update({
+          event_type: "inbound_message_persist_failed",
+          error_message: persistError?.message ?? "persist_inbound_message returned no row",
+        })
+        .eq("id", inboundAudit.id);
+    }
+    await supabase.from("whatsapp_webhook_failures").insert({
+      reason: "message_insert_failed",
+      app_name: appName || null,
+      destination: destination || null,
+      source: source || null,
+      event_type: "message",
+      payload,
+      replay_status: "pending",
+    });
+    await markRaw(rawId, {
+      processing_status: "failed",
+      processed_at: new Date().toISOString(),
+      error_message: persistError?.message ?? "persist_inbound_message returned no row",
+      workspace_id: number.workspace_id,
+      whatsapp_number_id: number.id,
+    });
+    return;
+  }
+
+  // Recipient linking — safe to run after atomic persistence. Idempotent.
   if (recipient) {
     await supabase
       .from("campaign_recipients")
@@ -296,10 +337,8 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
     console.log("Linked inbound reply to campaign_recipient", recipient.id);
   }
 
-  // If the reply carries WhatsApp/Gupshup context but the opener is missing in our
-  // messages table, backfill it from the campaign recipient. This prevents chats
-  // from looking like they started with the customer's quick reply when the send
-  // row was not inserted or the provider used a different id in the reply context.
+  // Opener backfill — runs only after the inbound message has been safely stored,
+  // so we never leak an opener into a phantom conversation.
   const context = (inner.context ?? {}) as Record<string, unknown>;
   const contextIds = compactStrings([context.gsId, context.id]);
   if (recipient && contextIds.length > 0) {
@@ -343,71 +382,11 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
     }
   }
 
-  // Insert message
-  const { data: insertedMessage, error: insertMessageError } = await supabase.from("messages").insert({
-    user_id: number.user_id,
-    conversation_id: conversationId,
-    direction: "inbound",
-    body,
-    media_url: mediaUrl,
-    media_type: mediaUrl ? messageType : null,
-    status: "delivered",
-    provider_message_id: providerMessageId,
-    metadata: {
-      ...(payload as Record<string, unknown>),
-      matched_whatsapp_number: {
-        id: number.id,
-        phone_number: number.phone_number,
-        display_name: number.display_name,
-        provider_app_id: number.provider_app_id,
-        app_name: appName || null,
-        destination: destination || null,
-      },
-      campaign_recipient_id: recipient?.id ?? null,
-      campaign_id: recipient?.campaign_id ?? null,
-    },
-  }).select("id").maybeSingle();
-
-  if (insertMessageError || !insertedMessage?.id) {
-    console.error("Failed to persist inbound message", {
-      error: insertMessageError,
-      conversationId,
-      providerMessageId,
-      source,
-      appName,
-    });
-    if (inboundAudit?.id) {
-      await supabase
-        .from("whatsapp_message_events")
-        .update({
-          event_type: "inbound_message_persist_failed",
-          error_message: insertMessageError?.message ?? "message insert returned no id",
-        })
-        .eq("id", inboundAudit.id);
-    }
-    await supabase.from("whatsapp_webhook_failures").insert({
-      reason: "message_insert_failed",
-      app_name: appName || null,
-      destination: destination || null,
-      source: source || null,
-      event_type: "message",
-      payload,
-      replay_status: "pending",
-    });
-    await markRaw(rawId, {
-      processing_status: "failed",
-      processed_at: new Date().toISOString(),
-      error_message: insertMessageError?.message ?? "message insert returned no id",
-      workspace_id: number.workspace_id,
-      whatsapp_number_id: number.id,
-    });
-    return;
-  }
 
   await markRaw(rawId, {
     processing_status: "processed",
     processed_at: new Date().toISOString(),
-    message_id: insertedMessage.id,
+    message_id: insertedMessageId,
     workspace_id: number.workspace_id,
     whatsapp_number_id: number.id,
   });
@@ -417,11 +396,12 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
       .from("whatsapp_message_events")
       .update({
         event_type: "inbound_message_persisted",
-        message_id: insertedMessage.id,
+        message_id: insertedMessageId,
         campaign_recipient_id: recipient?.id ?? null,
       })
       .eq("id", inboundAudit.id);
   }
+
 
 
   // Apply automations: inbound_any + inbound_keyword + button_click
