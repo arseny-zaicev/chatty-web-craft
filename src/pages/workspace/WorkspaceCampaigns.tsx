@@ -482,17 +482,19 @@ function CampaignDetail({
   }, [days, todayKey, showAllDays]);
   const hiddenCount = days.length - visibleDays.length;
 
-  // Authoritative totals: prefer the live RPC (includes recipients that flipped
-  // straight to 'replied' without passing through 'sent'); fall back to the
-  // cached counter if the RPC hasn't loaded yet.
-  const liveSent = Math.max(liveCounts?.sent ?? 0, group.sent ?? 0);
-  const liveDelivered = Math.min(liveCounts?.delivered ?? 0, liveSent);
+  // Canonical campaign truth (event-based, dedup'd). Single source for
+  // sent/delivered/failed across all campaign-facing surfaces. `total` and
+  // `today` (scheduled-for-today) still come from the row since they are
+  // intent, not delivery state.
+  const liveSent = truth?.sent ?? 0;
+  const liveDelivered = Math.min(truth?.delivered ?? 0, liveSent);
+  const liveFailed = truth?.failed ?? 0;
   const totals = {
     total: group.total,
     sent: liveSent,
     delivered: liveDelivered,
-    failed: group.failed,
-    pending: Math.max(0, group.total - liveSent - group.failed),
+    failed: liveFailed,
+    pending: Math.max(0, group.total - liveSent - liveFailed),
     today: group.today,
   };
 
