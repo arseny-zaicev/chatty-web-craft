@@ -26,7 +26,7 @@ type Ownership = {
   effective_from: string;
   effective_to: string | null;
   notes: string | null;
-  number?: { id: string; phone_number: string; display_name: string | null; workspace_id: string | null };
+  number?: { id: string; phone_number: string; display_name: string | null; workspace_id: string | null; business_manager_id: string | null };
 };
 
 async function setOwnership(args: {
