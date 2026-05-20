@@ -4,6 +4,7 @@ import { CheckCircle2, MessageCircle, Clock, FileText, Target } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
 import { ClientLogos } from "@/components/ClientLogos";
+import { IskraLogo } from "@/components/IskraLogo";
 import { usePageAnalytics } from "@/hooks/usePageAnalytics";
 import { testimonials } from "@/components/Testimonials";
 
