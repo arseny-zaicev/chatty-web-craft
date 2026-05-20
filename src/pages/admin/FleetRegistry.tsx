@@ -269,6 +269,26 @@ export default function FleetRegistry() {
   const rows = data?.rows ?? EMPTY_ROWS;
   const workspaces = data?.workspaces ?? EMPTY_WORKSPACES;
 
+  // Canonical ownership truth (number_ownership). Drives the header health
+  // badge so onboarding gaps surface here without visiting the ownership page.
+  const ownershipQuery = useQuery({
+    queryKey: ["fleet-registry", "ownership-ids"],
+    enabled: authChecked,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("number_ownership")
+        .select("whatsapp_number_id")
+        .is("effective_to", null);
+      if (error) throw error;
+      return new Set((data ?? []).map((r: any) => r.whatsapp_number_id as string));
+    },
+  });
+  const ownedNumberIds = ownershipQuery.data ?? new Set<string>();
+  const ownershipUnassignedCount = useMemo(
+    () => rows.filter((r) => !ownedNumberIds.has(r.id)).length,
+    [rows, ownedNumberIds],
+  );
+
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewMode>("all");
   const [fStatus, setFStatus] = useState<string>("all");
@@ -427,6 +447,15 @@ export default function FleetRegistry() {
               {unassignedCount} unassigned
             </Badge>
           )}
+          {ownershipUnassignedCount > 0 && (
+            <Link
+              to="/admin/number-ownership"
+              className="text-[10px] px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/15"
+              title="Numbers without an active partner ownership row - payouts will skip these"
+            >
+              ⚠ {ownershipUnassignedCount} without partner ownership
+            </Link>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -553,7 +582,12 @@ export default function FleetRegistry() {
       <AddNumberDrawer open={adderOpen || !!editing} onOpenChange={(v) => { if (!v) { setAdderOpen(false); setEditing(null); } else setAdderOpen(true); }} workspaces={workspaces}
         editing={editing}
         existingRows={rows}
-        onCreated={async () => { await qc.invalidateQueries({ queryKey: ["fleet-registry"] }); }} />
+        onCreated={async () => {
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: ["fleet-registry"] }),
+            qc.invalidateQueries({ queryKey: ["fleet-registry", "ownership-ids"] }),
+          ]);
+        }} />
     </div>
   );
 }
@@ -985,13 +1019,38 @@ function AddNumberDrawer({
   const [workspaceId, setWorkspaceId] = useState<string>("__unassigned__");
   const [usage, setUsage] = useState<Usage>("both");
   const [sourceKind, setSourceKind] = useState<"own" | "referred">("own");
-  const [providedBy, setProvidedBy] = useState("");
-  const [assignedRef, setAssignedRef] = useState("");
+  // Slice: provider/referrer are now partner uuids picked from the canonical
+  // `partners` table (same source as analytics + payouts). The legacy
+  // provided_by / assigned_ref text fields are kept in sync from partner.name
+  // so existing analytics keep agreeing.
+  const [providerPartnerId, setProviderPartnerId] = useState<string>("");
+  const [referrerPartnerId, setReferrerPartnerId] = useState<string>("");
+  const [ownershipRate, setOwnershipRate] = useState<string>("0");
   const [status, setStatus] = useState<Status>("stock");
   const [dnApproved, setDnApproved] = useState<boolean>(false);
   const [webhookConnected, setWebhookConnected] = useState<boolean>(false);
-  const [bmId, setBmId] = useState<string>("__none__"); // "__none__" | "__new__" | uuid
+  const [bmId, setBmId] = useState<string>("__none__");
   const [bmNewName, setBmNewName] = useState<string>("");
+
+  // Canonical partner list. Used both for the selectors and to back-map an
+  // editing row's free-text provided_by/assigned_ref to a partner uuid.
+  const partnersQuery = useQuery({
+    queryKey: ["fleet-partners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, default_payout_rate_usd, kind, status")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; default_payout_rate_usd: number; kind: string; status: string }>;
+    },
+  });
+  const partners = partnersQuery.data ?? [];
+  const partnerByLowerName = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; default_payout_rate_usd: number }>();
+    partners.forEach((p) => m.set(p.name.trim().toLowerCase(), p));
+    return m;
+  }, [partners]);
 
   const bmsQuery = useQuery({
     queryKey: ["fleet-bms"],
@@ -1027,7 +1086,8 @@ function AddNumberDrawer({
     setAppId(""); setApiKey(""); setWabaId(""); setMessagingLimit("");
     setWorkspaceId("__unassigned__"); setUsage("both");
     setSourceKind("own");
-    setProvidedBy(""); setAssignedRef(""); setStatus("stock"); setDnApproved(false);
+    setProviderPartnerId(""); setReferrerPartnerId(""); setOwnershipRate("0");
+    setStatus("stock"); setDnApproved(false);
     setWebhookConnected(false);
     setBmId("__none__"); setBmNewName("");
   };
@@ -1045,8 +1105,15 @@ function AddNumberDrawer({
       setMessagingLimit(editing.messaging_limit || "");
       setWorkspaceId(editing.workspace_id ?? "__unassigned__");
       setUsage(editing.usage_type);
-      setProvidedBy(editing.provided_by && editing.provided_by.toLowerCase() !== SELF_PROVIDER.toLowerCase() ? editing.provided_by : "");
-      setAssignedRef(editing.assigned_ref || "");
+      // Map legacy free-text provided_by / assigned_ref back to partner uuids.
+      const providedName = (editing.provided_by || "").trim();
+      const isSelfProvider = !providedName || providedName.toLowerCase() === SELF_PROVIDER.toLowerCase();
+      const providerMatch = isSelfProvider ? null : partnerByLowerName.get(providedName.toLowerCase()) ?? null;
+      const refName = (editing.assigned_ref || "").trim();
+      const referrerMatch = refName ? partnerByLowerName.get(refName.toLowerCase()) ?? null : null;
+      setProviderPartnerId(providerMatch?.id ?? "");
+      setReferrerPartnerId(referrerMatch?.id ?? "");
+      setOwnershipRate(String(providerMatch?.default_payout_rate_usd ?? 0));
       setSourceKind(getAttribution(editing).kind === "own" ? "own" : "referred");
       setStatus((editing.status === "draft" || editing.status === "inactive") ? "stock" : editing.status);
       setDnApproved(editing.display_name_status === "approved");
@@ -1056,7 +1123,7 @@ function AddNumberDrawer({
     } else {
       reset();
     }
-  }, [open, editing]);
+  }, [open, editing, partnerByLowerName]);
 
   const create = useMutation({
     mutationFn: async () => {
@@ -1118,6 +1185,14 @@ function AddNumberDrawer({
         resolvedBmName = found?.name ?? null;
       }
 
+      // Resolve partner-uuid selections back to canonical names so the legacy
+      // text columns (read by analytics) stay aligned with number_ownership.
+      const providerPartner = providerPartnerId ? partners.find((p) => p.id === providerPartnerId) ?? null : null;
+      const referrerPartner = referrerPartnerId ? partners.find((p) => p.id === referrerPartnerId) ?? null : null;
+      if (sourceKind === "referred" && !providerPartner) {
+        throw new Error("Pick the provider partner for this number (or switch Source to Own).");
+      }
+
       const payload = {
         phone_number: cleanPhone,
         label: appName || null,
@@ -1128,8 +1203,8 @@ function AddNumberDrawer({
         provider_waba_id: wabaId || null,
         profile_avatar: profileAvatar || null,
         messaging_limit: messagingLimit || null,
-        provided_by: sourceKind === "own" ? SELF_PROVIDER : (providedBy.trim() || null),
-        assigned_ref: sourceKind === "own" ? null : (assignedRef.trim() || null),
+        provided_by: sourceKind === "own" ? SELF_PROVIDER : (providerPartner?.name ?? null),
+        assigned_ref: sourceKind === "own" ? null : (referrerPartner?.name ?? null),
         usage_type: usage,
         webhook_connected: webhookConnected,
         business_manager_id: resolvedBmId,
@@ -1137,6 +1212,7 @@ function AddNumberDrawer({
         ...dnPatch,
       };
 
+      let savedNumberId: string | null = editing?.id ?? null;
       if (editing) {
         const { error } = await supabase.from("whatsapp_numbers")
           .update({ ...payload, workspace_id: targetWs, status, ...restrictionPatch })
@@ -1147,15 +1223,41 @@ function AddNumberDrawer({
           .select("id").eq("phone_number", cleanPhone).maybeSingle();
         if (existing) throw new Error(`+${cleanPhone} already exists in Fleet.`);
         const initialStatus: Status = targetWs ? status : "stock";
-        const { error } = await supabase.from("whatsapp_numbers").insert({
+        const { data: inserted, error } = await supabase.from("whatsapp_numbers").insert({
           ...payload,
           user_id: auth.user.id,
           workspace_id: targetWs,
           status: initialStatus,
           ...(initialStatus === "restricted" || initialStatus === "banned"
             ? { restricted_at: new Date().toISOString() } : {}),
-        });
+        }).select("id").single();
         if (error) throw error;
+        savedNumberId = inserted.id;
+      }
+
+      // Write canonical ownership row (number_ownership) via the security-definer
+      // RPC. This is what payouts/analytics read - so partner attribution is now
+      // recorded at onboarding time instead of weeks later.
+      if (savedNumberId && sourceKind === "referred" && providerPartner) {
+        const rate = Number(ownershipRate);
+        const { error: ownErr } = await supabase.rpc("set_number_ownership" as any, {
+          p_whatsapp_number_id: savedNumberId,
+          p_partner_id: providerPartner.id,
+          p_role: "provider",
+          p_rate_usd: Number.isFinite(rate) ? rate : Number(providerPartner.default_payout_rate_usd ?? 0),
+          p_notes: referrerPartner ? `referrer:${referrerPartner.name}` : null,
+        });
+        if (ownErr) throw new Error(`Number saved but ownership write failed: ${ownErr.message}`);
+      } else if (savedNumberId && sourceKind === "own") {
+        // Close any stale ownership row when toggled back to Own.
+        const { error: ownErr } = await supabase.rpc("set_number_ownership" as any, {
+          p_whatsapp_number_id: savedNumberId,
+          p_partner_id: null,
+          p_role: "provider",
+          p_rate_usd: 0,
+          p_notes: null,
+        });
+        if (ownErr) throw new Error(`Number saved but ownership reset failed: ${ownErr.message}`);
       }
     },
     onSuccess: async () => {
@@ -1348,20 +1450,66 @@ function AddNumberDrawer({
           </Field>
 
           {sourceKind === "referred" && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Provided by">
-                <Input value={providedBy} onChange={(e) => setProvidedBy(e.target.value)} placeholder="Kartik" />
+            <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Partner ownership (writes to number_ownership - drives payouts)
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Provider partner" required>
+                  <Select
+                    value={providerPartnerId || "__none__"}
+                    onValueChange={(v) => {
+                      const id = v === "__none__" ? "" : v;
+                      setProviderPartnerId(id);
+                      const p = partners.find((x) => x.id === id);
+                      if (p) setOwnershipRate(String(p.default_payout_rate_usd ?? 0));
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={partnersQuery.isLoading ? "Loading..." : "Pick partner"} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">- none -</SelectItem>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} <span className="text-muted-foreground text-[10px]">(${Number(p.default_payout_rate_usd ?? 0).toFixed(4)})</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Referrer partner (optional)">
+                  <Select
+                    value={referrerPartnerId || "__none__"}
+                    onValueChange={(v) => setReferrerPartnerId(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">- none -</SelectItem>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Field label="Payout rate $/delivered">
+                <Input
+                  type="number" step="0.0001" min={0}
+                  value={ownershipRate}
+                  onChange={(e) => setOwnershipRate(e.target.value)}
+                />
               </Field>
-              <Field label="Ref (required)">
-                <Input value={assignedRef} onChange={(e) => setAssignedRef(e.target.value)} placeholder="Nitish" />
-              </Field>
+              {providerPartnerId === "" && (
+                <div className="text-[11px] text-amber-700 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Pick a provider partner or this number will land Unassigned in payouts.
+                </div>
+              )}
             </div>
           )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="ghost" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !assignedRef.trim()) || (bmId === "__new__" && !bmNewName.trim())}>
+          <Button onClick={() => create.mutate()} disabled={create.isPending || !phone || !!dupPhone || (sourceKind === "referred" && !providerPartnerId) || (bmId === "__new__" && !bmNewName.trim())}>
             {create.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
             Save
           </Button>
