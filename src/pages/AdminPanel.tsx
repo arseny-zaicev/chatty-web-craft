@@ -31,6 +31,7 @@ type Section =
   | "companies.portfolio"
   | "companies.fleet"
   | "companies.partners"
+  | "companies.number_ownership"
   | "companies.analytics"
   | "companies.webhook_health"
   | "companies.reconciliation"
