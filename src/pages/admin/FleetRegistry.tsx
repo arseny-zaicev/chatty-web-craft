@@ -269,6 +269,26 @@ export default function FleetRegistry() {
   const rows = data?.rows ?? EMPTY_ROWS;
   const workspaces = data?.workspaces ?? EMPTY_WORKSPACES;
 
+  // Canonical ownership truth (number_ownership). Drives the header health
+  // badge so onboarding gaps surface here without visiting the ownership page.
+  const ownershipQuery = useQuery({
+    queryKey: ["fleet-registry", "ownership-ids"],
+    enabled: authChecked,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("number_ownership")
+        .select("whatsapp_number_id")
+        .is("effective_to", null);
+      if (error) throw error;
+      return new Set((data ?? []).map((r: any) => r.whatsapp_number_id as string));
+    },
+  });
+  const ownedNumberIds = ownershipQuery.data ?? new Set<string>();
+  const ownershipUnassignedCount = useMemo(
+    () => rows.filter((r) => !ownedNumberIds.has(r.id)).length,
+    [rows, ownedNumberIds],
+  );
+
   const [q, setQ] = useState("");
   const [view, setView] = useState<ViewMode>("all");
   const [fStatus, setFStatus] = useState<string>("all");
