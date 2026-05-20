@@ -3834,6 +3834,16 @@ export type Database = {
         }[]
       }
       campaign_live_status: { Args: { _campaign_id: string }; Returns: string }
+      campaign_metrics_for_range: {
+        Args: { _from: string; _to: string; p_campaign_ids: string[] }
+        Returns: {
+          campaign_id: string
+          delivered: number
+          failed: number
+          replied: number
+          sent: number
+        }[]
+      }
       campaign_overflow_clusters: {
         Args: { _threshold?: number }
         Returns: {
