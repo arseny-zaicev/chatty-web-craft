@@ -818,15 +818,24 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   // This is what keeps a single tick fast and predictable.
   const horizonIso = new Date(tickStartedAt).toISOString();
 
-  const { data: due, error } = await admin
-    .from("campaign_recipients")
-    .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, delay_min_seconds, dispatch_mode, kill_switch_at, max_inflight_per_number, max_inflight_per_campaign, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name, paused_at, paused_reason), message_templates(id, name, language, body, variables, provider_template_id, category))")
-    .eq("status", "scheduled")
-    .lte("scheduled_at", horizonIso)
-    .eq("campaigns.status", "running")
-    .is("campaigns.kill_switch_at", null)
-    .order("scheduled_at", { ascending: true })
-    .limit(perTickLimit);
+  const { data: dueIds, error: dueIdsError } = await admin.rpc("claim_due_campaign_recipients", { p_limit: perTickLimit });
+  if (dueIdsError) {
+    console.error(`[job:campaigns-process] fair_due_ids failed: ${dueIdsError.message}`);
+    return json({ error: dueIdsError.message }, 500);
+  }
+
+  const pickedIds = (dueIds ?? []).map((r: any) => r.id).filter(Boolean);
+  const { data: due, error } = pickedIds.length === 0
+    ? { data: [], error: null }
+    : await admin
+        .from("campaign_recipients")
+        .select("id, user_id, workspace_id, campaign_id, conversation_id, contact_phone, contact_name, variables, scheduled_at, whatsapp_number_id, campaigns!inner(id, status, pipeline_id, whatsapp_number_id, delay_min_seconds, dispatch_mode, kill_switch_at, max_inflight_per_number, max_inflight_per_campaign, whatsapp_numbers(id, phone_number, provider_app_id, provider_api_key, display_name, paused_at, paused_reason), message_templates(id, name, language, body, variables, provider_template_id, category))")
+        .in("id", pickedIds)
+        .eq("status", "scheduled")
+        .lte("scheduled_at", horizonIso)
+        .eq("campaigns.status", "running")
+        .is("campaigns.kill_switch_at", null)
+        .order("scheduled_at", { ascending: true });
   if (error) {
     console.error(`[job:campaigns-process] select_due failed: ${error.message}`);
     return json({ error: error.message }, 500);
