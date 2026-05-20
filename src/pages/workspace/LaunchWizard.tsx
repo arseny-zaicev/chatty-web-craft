@@ -762,16 +762,17 @@ export default function LaunchWizard() {
   // The user explicitly confirms a snapshot by clicking the badge; subsequent edits
   // invalidate it. No 30-min expiry: if nothing changed, the snapshot stays valid
   // regardless of time elapsed.
-  const snapshotFingerprint = useMemo(() => {
-    const parts = {
-      a: dbBatchId || `paste:${recipients.length}`,
-      t: activeLogical?.key ?? "",
-      n: [...activeNumbers.map((n) => n.id)].sort(),
-      m: Object.entries(mapping).sort(([a], [b]) => a.localeCompare(b)),
-    };
-    return btoa(unescape(encodeURIComponent(JSON.stringify(parts)))).slice(0, 16);
-  }, [dbBatchId, recipients.length, activeLogical?.key, activeNumbers, mapping]);
-  const snapshotKey = `launch-snapshot:${workspace?.id ?? ""}:${dbBatchId || "paste"}`;
+  const snapshotFingerprint = useMemo(
+    () => computeSnapshotFingerprint({
+      dbBatchId,
+      recipientsCount: recipients.length,
+      templateKey: activeLogical?.key,
+      numberIds: activeNumbers.map((n) => n.id),
+      mapping,
+    }),
+    [dbBatchId, recipients.length, activeLogical?.key, activeNumbers, mapping],
+  );
+  const snapshotKey = snapshotStorageKey(workspace?.id, dbBatchId);
   const [confirmedSnapshot, setConfirmedSnapshot] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return sessionStorage.getItem(snapshotKey) ?? "";
