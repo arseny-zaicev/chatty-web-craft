@@ -205,10 +205,28 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const respectTz: boolean = body.respect_recipient_tz !== false;
   const pipelineId: string | null = typeof body.pipeline_id === "string" && uuidRegex.test(body.pipeline_id) ? body.pipeline_id : null;
 
-  // Snapshot enforcement: if a prepared snapshot exists for this campaign id, validate freshness.
-  // Standalone launch (no campaign_id) goes through fresh allocation below.
+  // Snapshot enforcement: validate freshness + signature via the canonical
+  // resolver so prepare/launch agree on the exact same payload.
   const reuseCampaignId: string | null =
     typeof body.campaign_id === "string" && uuidRegex.test(body.campaign_id) ? body.campaign_id : null;
+
+  const computeContractSignature = async () => {
+    const c = await resolveLaunchContract(admin, {
+      numbers: rawNumbers,
+      audienceCount: recipients.length,
+      perNumberQuota,
+      windowStart,
+      windowEnd,
+      scheduledDates,
+      dispatchMode,
+      minDelaySeconds: minDelay,
+      maxInflightPerNumber,
+      maxInflightPerCampaign,
+      respectRecipientTz: respectTz,
+    }, { includeKillSwitch: false });
+    return c.signature;
+  };
+
   if (reuseCampaignId) {
     const { data: existing } = await admin
       .from("campaigns")
@@ -225,16 +243,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       if (new Date(existing.prepared_expires_at).getTime() < Date.now()) {
         return json({ error: "Prepared snapshot expired. Re-prepare.", code: "stale_snapshot", must_reprepare: true }, 409);
       }
-      const expectedSig = await computeSnapshotSignature({
-        numberIds: [...new Set(rawNumbers.map((n) => n.number_id))],
-        templateIds: [...new Set(rawNumbers.map((n) => n.template_id))],
-        audienceCount: recipients.length,
-        windowStart,
-        windowEnd,
-        perNumberQuota,
-        maxInflightPerNumber,
-        maxInflightPerCampaign,
-      });
+      const expectedSig = await computeContractSignature();
       if (existing.prepared_signature !== expectedSig) {
         return json({ error: "Prepared snapshot contract changed or inputs changed. Re-prepare.", code: "must_reprepare", must_reprepare: true }, 409);
       }
@@ -246,11 +255,8 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
     if (flag && flag.value === false) {
       return json({ error: "Marketing instant mode is globally disabled", code: "instant_mode_disabled" }, 409);
     }
-    // marketing_instant requires a prepared snapshot. For fresh launches
-    // (no reuseCampaignId / no campaign row yet) we accept a `snapshot_signature`
-    // returned by action=prepare and re-verify it deterministically from the
-    // same inputs. This avoids a chicken-and-egg deadlock (a fresh campaign
-    // has no id until launch creates one). Paced mode is unchanged.
+    // Fresh launches (no campaign row yet) must present a snapshot_signature
+    // returned by action=prepare. Re-verify deterministically via the resolver.
     if (!reuseCampaignId) {
       const providedSig: string | null = typeof body.snapshot_signature === "string" && body.snapshot_signature.startsWith("sha256:") ? body.snapshot_signature : null;
       if (!providedSig) {
@@ -259,18 +265,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
           code: "must_prepare",
         }, 409);
       }
-      const nIds = [...new Set(rawNumbers.map((n) => n.number_id))];
-      const tIds = [...new Set(rawNumbers.map((n) => n.template_id))];
-      const expectedSig = await computeSnapshotSignature({
-        numberIds: nIds,
-        templateIds: tIds,
-        audienceCount: recipients.length,
-        windowStart,
-        windowEnd,
-        perNumberQuota,
-        maxInflightPerNumber,
-        maxInflightPerCampaign,
-      });
+      const expectedSig = await computeContractSignature();
       if (expectedSig !== providedSig) {
         return json({
           error: "Snapshot is stale - inputs changed after prepare. Click 'Prepare' again.",
@@ -280,6 +275,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
       }
     }
   }
+
 
   if (!name || rawNumbers.length === 0) {
     return json({ error: "Campaign name and at least one number+template are required" }, 400);
