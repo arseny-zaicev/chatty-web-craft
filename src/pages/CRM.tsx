@@ -1144,6 +1144,13 @@ const CRM = ({
                         });
                       }}
                     />
+                    <QuickTemplatesButton
+                      workspaceId={workspaceId}
+                      conversationId={active?.id}
+                      conversationNumberId={active?.whatsapp_number_id}
+                      disabled={sending}
+                    />
+
                     <Button
                       type="button"
                       variant="outline"
