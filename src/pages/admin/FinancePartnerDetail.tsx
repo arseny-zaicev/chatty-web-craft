@@ -109,12 +109,15 @@ export default function FinancePartnerDetail() {
   const assignNumber = useMutation({
     mutationFn: async () => {
       if (!pickNumber) throw new Error("Pick a number");
-      const now = new Date().toISOString();
-      await supabase.from("number_ownership")
-        .update({ effective_to: now })
-        .eq("whatsapp_number_id", pickNumber).is("effective_to", null);
-      const { error } = await supabase.from("number_ownership").insert({
-        whatsapp_number_id: pickNumber, partner_id: id!, effective_from: now,
+      // Route through canonical RPC so the attribution guard trigger runs,
+      // history is preserved, and structured referrer linkage stays consistent
+      // with FleetRegistry onboarding.
+      const { error } = await supabase.rpc("set_number_ownership" as any, {
+        p_whatsapp_number_id: pickNumber,
+        p_partner_id: id!,
+        p_role: "provider",
+        p_rate_usd: Number(partner?.default_payout_rate_usd ?? 0),
+        p_notes: null,
       });
       if (error) throw error;
     },
