@@ -383,6 +383,63 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
 
+  // ============= Hard workspace send guardrails (FE/FM and similar) =============
+  // Refuses launch if workspace exceeds locked-down caps. Service-managed only;
+  // no client can bypass via UI inputs (table is service_role write).
+  const wsForGuard = number.workspace_id;
+  if (wsForGuard) {
+    const { data: wsGuard } = await admin
+      .from("workspace_send_guards")
+      .select("hard_daily_cap, hard_per_campaign_cap, force_paced")
+      .eq("workspace_id", wsForGuard)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (wsGuard) {
+      if (wsGuard.force_paced && dispatchMode === "marketing_instant") {
+        return json({
+          error: "marketing_instant is disabled for this workspace by hard guardrail. Use paced mode.",
+          code: "workspace_guard_force_paced",
+        }, 409);
+      }
+      if (cleanRecipients.length > Number(wsGuard.hard_per_campaign_cap)) {
+        return json({
+          error: `Campaign size ${cleanRecipients.length} exceeds workspace hard per-campaign cap ${wsGuard.hard_per_campaign_cap}`,
+          code: "workspace_guard_per_campaign_cap",
+          requested: cleanRecipients.length,
+          cap: Number(wsGuard.hard_per_campaign_cap),
+        }, 409);
+      }
+      const dubaiTodayStartIsoGuard = (() => {
+        const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+        return new Date(`${k}T00:00:00+04:00`).toISOString();
+      })();
+      const { count: wsSentToday } = await admin
+        .from("campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", wsForGuard)
+        .gte("sent_at", dubaiTodayStartIsoGuard)
+        .not("sent_at", "is", null);
+      const { count: wsPending } = await admin
+        .from("campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", wsForGuard)
+        .in("status", ["scheduled", "sending"]);
+      const planned = (wsSentToday ?? 0) + (wsPending ?? 0) + cleanRecipients.length;
+      if (planned > Number(wsGuard.hard_daily_cap)) {
+        return json({
+          error: `Planned workspace volume ${planned} exceeds hard daily cap ${wsGuard.hard_daily_cap}`,
+          code: "workspace_guard_daily_cap",
+          already_sent_today: wsSentToday ?? 0,
+          already_pending: wsPending ?? 0,
+          new_recipients: cleanRecipients.length,
+          cap: Number(wsGuard.hard_daily_cap),
+        }, 409);
+      }
+    }
+  }
+
+
+
 
   // Pre-flight: validate every template that will be used against its actual
   // recipient slice. This is the guard that would have caught the Nov 2025
