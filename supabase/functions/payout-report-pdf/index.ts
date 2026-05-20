@@ -8,6 +8,7 @@ import {
   BRAND, BRAND_COPY, drawHeader, drawFooter,
   fmtUsd, fmtRate, fmtDateRangeDxb, spellOutRate,
 } from "../_shared/brand.ts";
+import { assertPayoutOwnershipClean } from "../_shared/payoutGate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,6 +52,14 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "invalid body" }, 400); }
   if (!body.run_id) return json({ error: "run_id required" }, 400);
   const mode: "internal" | "partner" = body.mode === "partner" ? "partner" : "internal";
+
+  // Payout-ownership gate: refuse to generate ANY payout artifact while drift exists.
+  const gate = await assertPayoutOwnershipClean(admin);
+  if (!gate.ok) {
+    console.warn("payout-report-pdf blocked:", gate.body.message, "counts=", JSON.stringify(gate.body.counts));
+    return json(gate.body, 409);
+  }
+
 
   const { data: run, error: runErr } = await admin
     .from("payout_runs").select("*").eq("id", body.run_id).single();

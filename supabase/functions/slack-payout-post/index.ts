@@ -1,6 +1,7 @@
 // Posts a payout run summary + PDF link to the internal Slack finance channel.
 // POST { run_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { assertPayoutOwnershipClean, formatDriftForSlack } from "../_shared/payoutGate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +51,27 @@ Deno.serve(async (req) => {
   let body: { run_id?: string };
   try { body = await req.json(); } catch { return json({ error: "invalid body" }, 400); }
   if (!body.run_id) return json({ error: "run_id required" }, 400);
+
+  // Payout-ownership gate. If drift exists, post a *blocking alert* to the
+  // finance channel instead of the normal payout summary, then refuse.
+  const gate = await assertPayoutOwnershipClean(admin);
+  if (!gate.ok) {
+    console.warn("slack-payout-post blocked:", gate.body.message);
+    try {
+      await fetch(`${GATEWAY_URL}/chat.postMessage`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "X-Connection-Api-Key": SLACK_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ channel: CHANNEL, text: formatDriftForSlack(gate.body), unfurl_links: false }),
+      });
+    } catch (e) {
+      console.error("slack alert post failed:", e);
+    }
+    return json(gate.body, 409);
+  }
 
   const { data: run, error: runErr } = await admin.from("payout_runs").select("*").eq("id", body.run_id).single();
   if (runErr || !run) return json({ error: "run not found" }, 404);

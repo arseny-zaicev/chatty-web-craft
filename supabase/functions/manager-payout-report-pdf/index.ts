@@ -14,6 +14,7 @@ import {
   BRAND, BRAND_COPY, drawHeader, drawFooter,
   fmtUsd, fmtRate, fmtDateRangeDxb,
 } from "../_shared/brand.ts";
+import { assertPayoutOwnershipClean } from "../_shared/payoutGate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +49,13 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "invalid body" }, 400); }
   if (!body.manager_id || !body.period_from || !body.period_to)
     return json({ error: "manager_id, period_from, period_to required" }, 400);
+
+  // Payout-ownership gate.
+  const gate = await assertPayoutOwnershipClean(admin);
+  if (!gate.ok) {
+    console.warn("manager-payout-report-pdf blocked:", gate.body.message);
+    return json(gate.body, 409);
+  }
 
   const { manager_id, period_from, period_to } = body;
   const fromIso = `${period_from}T00:00:00Z`;
