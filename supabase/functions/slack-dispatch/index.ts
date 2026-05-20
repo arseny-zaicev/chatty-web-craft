@@ -2,8 +2,8 @@
 // Triggered by pg_cron every minute and ad-hoc.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { acquireJobLock } from "../_shared/jobLock.ts";
-import {
 import { cronGuard } from "../_shared/cronGuard.ts";
+import {
   buildCampaignGroupBlocks,
   buildNumberAlertBlocks,
   buildPositiveLeadBlocks,
