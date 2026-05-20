@@ -75,9 +75,16 @@ export function renderTemplateBody(
     const v = resolveTemplateVarForBody({ body }, name, idx, (values ?? {})[name]);
     // For inbox display, " " (param fallback) renders as nothing.
     const displayed = v === " " ? "" : v;
-    out = out.replace(new RegExp(escape(`{{${idx + 1}}}`), "g"), displayed);
-    out = out.replace(new RegExp(escape(`{${name}}`), "g"), displayed);
-    out = out.replace(new RegExp(escape(`{{${name}}}`), "g"), displayed);
+    const patterns = [`{{${idx + 1}}}`, `{${name}}`, `{{${name}}}`];
+    for (const pat of patterns) {
+      if (displayed === "") {
+        // Strip placeholder + one adjacent space on either side so
+        // "Hey there {{1}}, Elena" -> "Hey there, Elena" (not "Hey there , Elena").
+        out = out.replace(new RegExp(`[ \\t]?${escape(pat)}[ \\t]?`, "g"), "");
+      } else {
+        out = out.replace(new RegExp(escape(pat), "g"), displayed);
+      }
+    }
   });
   return out;
 }
