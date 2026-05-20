@@ -1368,8 +1368,9 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
   }
 
   const duration_ms = Date.now() - tickStartedAt;
-  console.log(`[job:campaigns-process] status=ok mode=${isCronMode ? "cron" : "manual"} selected=${(due ?? []).length} sent=${sent} failed=${failed} duration_ms=${duration_ms}`);
-  return json({ ok: true, processed: (due ?? []).length, sent, failed, duration_ms, mode: isCronMode ? "cron" : "manual" });
+  const skips = Object.entries(skipCounters).filter(([_, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(",") || "none";
+  console.log(`[job:campaigns-process] status=ok mode=${isCronMode ? "cron" : "manual"} selected=${(due ?? []).length} sent=${sent} failed=${failed} skips={${skips}} duration_ms=${duration_ms}`);
+  return json({ ok: true, processed: (due ?? []).length, sent, failed, skips: skipCounters, duration_ms, mode: isCronMode ? "cron" : "manual" });
 }
 
 async function blastCampaign(admin: any, requesterId: string, body: any) {
