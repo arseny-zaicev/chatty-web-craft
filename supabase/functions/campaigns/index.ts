@@ -1149,8 +1149,9 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
         const since = Date.now() - lastMs;
         if (since < minGapMs) {
           const extra = minGapMs - since;
+          if (isCronMode) return; // never sleep in cron — let next tick handle it
           const budgetLeft = TICK_BUDGET_MS - (Date.now() - tickStartedAt);
-          if (extra > budgetLeft) return; // try next tick
+          if (extra > budgetLeft) return;
           await new Promise((r) => setTimeout(r, extra));
         }
       }
