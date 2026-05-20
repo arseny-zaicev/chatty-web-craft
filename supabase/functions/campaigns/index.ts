@@ -645,7 +645,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   let immediate: any = null;
   if (scheduledDates.length === 0 && isBlastLaunch && firstMs <= Date.now() + 55_000) {
     try {
-      const res = await processQueue(admin);
+      const res = await processQueue(admin, { mode: "manual" });
       immediate = await res.json();
     } catch (err) {
       immediate = { error: err instanceof Error ? err.message : "process failed" };
