@@ -1397,6 +1397,24 @@ export type Database = {
           },
         ]
       }
+      job_locks: {
+        Row: {
+          acquired_at: string
+          holder: string | null
+          job_name: string
+        }
+        Insert: {
+          acquired_at?: string
+          holder?: string | null
+          job_name: string
+        }
+        Update: {
+          acquired_at?: string
+          holder?: string | null
+          job_name?: string
+        }
+        Relationships: []
+      }
       lead_imports: {
         Row: {
           batch_id: string | null
@@ -4201,7 +4219,7 @@ export type Database = {
       }
       record_heartbeat: { Args: never; Returns: undefined }
       release_audience_rows: { Args: { _row_ids: string[] }; Returns: number }
-      release_job_lock: { Args: { _job_name: string }; Returns: boolean }
+      release_job_lock: { Args: { _job_name: string }; Returns: undefined }
       release_stale_reservations: {
         Args: { _older_than_minutes?: number }
         Returns: number
