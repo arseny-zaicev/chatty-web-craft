@@ -1,11 +1,11 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { CheckCircle2, MessageCircle, Clock, FileText, Target, Quote } from "lucide-react";
+import { CheckCircle2, MessageCircle, Clock, FileText, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
-import kristapsPhoto from "@/assets/testimonials/kristaps.webp";
 import { ClientLogos } from "@/components/ClientLogos";
 import { usePageAnalytics } from "@/hooks/usePageAnalytics";
+import { testimonials } from "@/components/Testimonials";
 
 const checklist = [
   { icon: Target, text: "Think about your ideal client profile and target market" },
@@ -113,59 +113,59 @@ const Booked = () => {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 items-stretch">
-              {/* Video */}
-              <div className="bg-card border border-iskra-emerald/30 rounded-2xl p-5 shadow-lg">
-                <div className="aspect-[9/16] max-h-[520px] mx-auto bg-black rounded-xl overflow-hidden">
-                  <video
-                    src="https://xglfamaaotmwulglwcui.supabase.co/storage/v1/object/public/testimonials/kristaps-testimonial.mp4"
-                    poster={kristapsPhoto}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="w-full h-full object-contain"
-                    data-track="testimonial_video"
-                  />
-                </div>
-              </div>
-
-              {/* Quote */}
-              <div className="bg-card border border-border rounded-2xl p-7 relative flex flex-col justify-between">
-                <div>
-                  <Quote className="w-8 h-8 text-iskra-emerald/25 mb-4" />
-                  <p className="text-base md:text-lg text-foreground leading-relaxed mb-6">
-                    "Arsenijs helped create amazing copy that brought 8 meetings in just 2 days. Highly recommend working with him!"
-                  </p>
-                  <div className="bg-iskra-emerald/10 rounded-xl p-4 border border-iskra-emerald/20 mb-6">
-                    <p className="text-xs font-medium text-iskra-emerald mb-1 uppercase tracking-wider">Result</p>
-                    <p className="font-display text-base md:text-lg font-bold text-foreground">
-                      500 messages → 8 meetings booked in 2 days
-                    </p>
+              {testimonials.map((t) => (
+                <div
+                  key={t.id}
+                  className="bg-card border border-iskra-emerald/30 rounded-2xl p-5 shadow-lg flex flex-col"
+                >
+                  <div
+                    className={`${
+                      t.orientation === "portrait"
+                        ? "aspect-[9/16] max-h-[520px]"
+                        : "aspect-video"
+                    } w-full mx-auto bg-black rounded-xl overflow-hidden mb-5`}
+                  >
+                    <video
+                      src={t.videoSrc}
+                      poster={t.poster}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-contain"
+                      data-track="testimonial_video"
+                    />
+                  </div>
+                  <div className="mt-auto space-y-3">
+                    <div>
+                      <p className="font-semibold text-foreground">{t.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t.role},{" "}
+                        <a
+                          href={t.companyHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-iskra-emerald hover:underline"
+                          data-track="testimonial_client_link"
+                        >
+                          {t.companyLabel}
+                        </a>
+                      </p>
+                    </div>
+                    {t.result && (
+                      <div className="bg-iskra-emerald/10 rounded-xl p-3 border border-iskra-emerald/20">
+                        <p className="text-[10px] font-medium text-iskra-emerald mb-1 uppercase tracking-wider">
+                          Result
+                        </p>
+                        <p className="font-display text-sm md:text-base font-bold text-foreground">
+                          {t.result}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 pt-4 border-t border-border/50">
-                  <img
-                    src={kristapsPhoto}
-                    alt="Kristaps"
-                    className="w-12 h-12 rounded-full object-cover object-top border-2 border-iskra-emerald/30"
-                  />
-                  <div>
-                    <p className="font-semibold text-foreground">Kristaps</p>
-                    <p className="text-sm text-muted-foreground">
-                      Founder,{" "}
-                      <a
-                        href="https://key-digital.lv"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-iskra-emerald hover:underline"
-                        data-track="testimonial_client_link"
-                      >
-                        key-digital.lv
-                      </a>
-                    </p>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
+
           </div>
         </section>
 
