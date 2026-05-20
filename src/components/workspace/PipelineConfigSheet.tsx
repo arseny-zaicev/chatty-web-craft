@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { groupLogicalTemplates, type Template as LaunchTemplate, type LogicalTemplate, type TemplateGroup as LaunchTemplateGroup } from "@/lib/launchData";
 import TemplateGroupsDialog from "@/components/workspace/TemplateGroupsDialog";
 import { friendlySenderLabel } from "@/lib/crmData";
+import { fetchSetters, setterKeys } from "@/lib/setters";
 
 type Stage = {
   id: string;
@@ -56,7 +57,9 @@ type Stage = {
   color: string;
   position: number;
   stage_type: "open" | "won" | "lost";
+  assigned_setter_id: string | null;
 };
+
 
 const STAGE_COLORS = [
   "#64748b", "#94a3b8", "#10b981", "#f59e0b", "#6366f1",
