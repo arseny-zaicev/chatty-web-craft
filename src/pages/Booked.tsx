@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { CheckCircle2, MessageCircle, Clock, FileText, Target, Quote } from "lucide-react";
+import { CheckCircle2, MessageCircle, Clock, FileText, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import founderPhoto from "@/assets/founder/arsenijs-new.png";
 import { ClientLogos } from "@/components/ClientLogos";
