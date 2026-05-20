@@ -17,6 +17,9 @@ import { Loader2, ArrowLeft, Plus, FileText, Send, CheckCircle2, Trash2, Buildin
 import { toast } from "sonner";
 import { format, subDays, startOfMonth } from "date-fns";
 import { fetchPartnerMetrics } from "@/lib/metrics";
+import { NumberOwnershipPanel } from "@/components/admin/NumberOwnershipPanel";
+import { PartnerEarningsPanel } from "@/components/admin/PartnerEarningsPanel";
+import { InlineRateEditor, InlineTextEditor } from "@/components/admin/InlineRateEditor";
 
 const LIFECYCLE_STATUSES = ["ready", "warming_up", "verifying", "disabled"] as const;
 const VERIFICATION_STATUSES = ["unverified", "verifying", "verified"] as const;
