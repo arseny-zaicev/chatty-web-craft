@@ -406,12 +406,41 @@ export default function PipelineConfigSheet({
     queryFn: async (): Promise<Stage[]> => {
       const { data } = await supabase
         .from("pipeline_stages")
-        .select("id, pipeline_id, workspace_id, user_id, name, color, position, stage_type")
+        .select("id, pipeline_id, workspace_id, user_id, name, color, position, stage_type, assigned_setter_id")
         .eq("pipeline_id", pipeId!)
         .order("position");
       return (data ?? []) as Stage[];
     },
   });
+
+  const { data: setters } = useQuery({
+    queryKey: setterKeys.list(wsId ?? undefined),
+    enabled: Boolean(wsId && open),
+    queryFn: () => fetchSetters(wsId ?? undefined),
+  });
+  const activeSetters = useMemo(() => (setters ?? []).filter((s) => s.is_active), [setters]);
+
+  const assignStageSetter = async (stageId: string, setterId: string | null) => {
+    if (setterId) {
+      // Clear any other stage in the same pipeline already mapped to this setter (one column per setter per pipeline)
+      const conflict = (stages ?? []).find((s) => s.id !== stageId && s.assigned_setter_id === setterId);
+      if (conflict) {
+        await supabase.from("pipeline_stages").update({ assigned_setter_id: null }).eq("id", conflict.id);
+        toast.message(`Moved setter from "${conflict.name}" to new stage`);
+      }
+    }
+    const { error } = await supabase
+      .from("pipeline_stages")
+      .update({ assigned_setter_id: setterId })
+      .eq("id", stageId);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    refetchStages();
+    qc.invalidateQueries({ queryKey: ["stages", wsId] });
+  };
+
 
   const addStage = async () => {
     if (!pipeId || !wsId) return;
