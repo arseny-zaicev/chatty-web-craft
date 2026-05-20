@@ -47,13 +47,15 @@ Deno.test("buildTemplateParams: never returns empty string (would trigger #13100
 Deno.test("buildTemplateParams: literal there templates use blank-safe first fallback", () => {
   const tpl = { body: "Hey there {{1}}, Elena here", variables: ["name"] };
   assertEquals(buildTemplateParams(tpl, { name: "" }), [" "]);
-  assertEquals(renderTemplateBody(tpl.body, tpl.variables, { name: "" }), "Hey there , Elena here");
+  // Render collapses the orphan space before the comma -> no "Hey there ,".
+  assertEquals(renderTemplateBody(tpl.body, tpl.variables, { name: "" }), "Hey there, Elena here");
 });
 
 Deno.test("renderTemplateBody: same fallback as params, ' ' renders as empty", () => {
   const body = "Hi {{1}}, your city is {{2}}.";
   const out = renderTemplateBody(body, ["name", "city"], { name: "", city: "" });
-  assertEquals(out, "Hi there, your city is .");
+  // Both placeholders empty: orphan spaces around them are stripped too.
+  assertEquals(out, "Hi there, your city is.");
 });
 
 Deno.test("renderTemplateBody: real values pass through", () => {
