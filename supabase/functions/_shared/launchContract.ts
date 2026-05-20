@@ -41,6 +41,10 @@ export interface LaunchContractInput {
   maxInflightPerNumber: number;
   maxInflightPerCampaign: number;
   respectRecipientTz: boolean;
+  // Slice 2: optional workspace context. When provided, the resolver also
+  // returns workspace_send_guards blockers and the would-defer-to-next-day
+  // flag, so prepare/review/launch never recompute them inline.
+  workspaceId?: string | null;
 }
 
 export interface ResolvedNumber {
@@ -51,6 +55,23 @@ export interface ResolvedNumber {
   allocation: number;
   daily_cap: number;
   backoff_until: string | null;
+}
+
+export interface StructuredBlocker {
+  code: string;
+  message: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface WorkspaceGuardSnapshot {
+  enabled: boolean;
+  hard_daily_cap: number | null;
+  hard_per_campaign_cap: number | null;
+  force_paced: boolean;
+  // Live counters used for daily-cap evaluation.
+  workspace_sent_today: number;
+  workspace_pending: number;
+  planned_volume: number;
 }
 
 export interface LaunchContract {
@@ -67,11 +88,14 @@ export interface LaunchContract {
   audienceAllocated: number;                     // min(audienceCount, allocatedCapacity)
   blockers: string[];
   warnings: string[];
+  structuredBlockers: StructuredBlocker[];       // machine-readable mirror of `blockers` for 409 mapping
   numbersDetail: ResolvedNumber[];
   templatesDetail: Array<{ id: string; name: string; status: string }>;
   signaturePayload: Record<string, unknown>;
   signature: string;
   killSwitchEngaged: boolean;
+  wouldDeferToNextDay: boolean;                  // single-day launch crossing today's remaining quota
+  workspaceGuard: WorkspaceGuardSnapshot | null; // null when no workspaceId or no enabled row
 }
 
 export async function computeSnapshotSignature(payload: Record<string, unknown>): Promise<string> {
@@ -82,9 +106,8 @@ export async function computeSnapshotSignature(payload: Record<string, unknown>)
 
 export interface ResolveOptions {
   // When true, blockers include workspace-guard / kill-switch checks intended for launch.
-  // Prepare uses the same checks; the launch path additionally enforces hard guard caps
-  // (workspace_send_guards.hard_daily_cap, hard_per_campaign_cap) outside this resolver
-  // because they require querying live sent counters.
+  // Prepare uses the same checks. Slice 2: workspace guard hard caps are now
+  // also evaluated inside this resolver when `input.workspaceId` is provided.
   includeKillSwitch?: boolean;
 }
 
@@ -100,6 +123,11 @@ export async function resolveLaunchContract(
 ): Promise<LaunchContract> {
   const blockers: string[] = [];
   const warnings: string[] = [];
+  const structuredBlockers: StructuredBlocker[] = [];
+  const addBlocker = (code: string, message: string, meta?: Record<string, unknown>) => {
+    blockers.push(message);
+    structuredBlockers.push({ code, message, ...(meta ? { meta } : {}) });
+  };
 
   const perNumberQuota = normalizePerNumberQuota(input.perNumberQuota);
   const numberIds = [...new Set(input.numbers.map((n) => n.number_id))];
@@ -133,8 +161,8 @@ export async function resolveLaunchContract(
   const backoffMap = new Map<string, string>();
   for (const b of backoffRes.data ?? []) backoffMap.set(b.whatsapp_number_id, b.retry_after);
 
-  if (numberRows.length !== numberIds.length) blockers.push("One or more selected numbers not found.");
-  if (templateRows.length !== templateIds.length) blockers.push("One or more selected templates not found.");
+  if (numberRows.length !== numberIds.length) addBlocker("numbers_missing", "One or more selected numbers not found.");
+  if (templateRows.length !== templateIds.length) addBlocker("templates_missing", "One or more selected templates not found.");
 
   // Today's sent counts per number, Dubai TZ.
   const dubaiTodayStartIso = (() => {
@@ -201,11 +229,11 @@ export async function resolveLaunchContract(
   // Per-number blockers.
   const numbersDetail: ResolvedNumber[] = numberRows.map((n: any) => {
     const allocation = allocByNumber[n.id] ?? 0;
-    if (n.webhook_connected === false) blockers.push(`Number ${n.phone_number}: webhook not connected — replies would be lost.`);
-    if (n.status === "banned" || n.status === "restricted") blockers.push(`Number ${n.phone_number} is ${n.status}.`);
-    if (n.paused_at) blockers.push(`Number ${n.phone_number} is paused: ${n.paused_reason ?? "no reason"}.`);
-    if (!n.provider_api_key) blockers.push(`Number ${n.phone_number}: no provider API key.`);
-    if (allocation === 0 && audienceCount > 0) blockers.push(`Number ${n.phone_number} got zero allocation — remove it from the pool or raise its daily cap.`);
+    if (n.webhook_connected === false) addBlocker("number_webhook_disconnected", `Number ${n.phone_number}: webhook not connected — replies would be lost.`, { number_id: n.id });
+    if (n.status === "banned" || n.status === "restricted") addBlocker("number_blocked", `Number ${n.phone_number} is ${n.status}.`, { number_id: n.id, status: n.status });
+    if (n.paused_at) addBlocker("number_paused", `Number ${n.phone_number} is paused: ${n.paused_reason ?? "no reason"}.`, { number_id: n.id });
+    if (!n.provider_api_key) addBlocker("number_no_provider_key", `Number ${n.phone_number}: no provider API key.`, { number_id: n.id });
+    if (allocation === 0 && audienceCount > 0) addBlocker("number_zero_allocation", `Number ${n.phone_number} got zero allocation — remove it from the pool or raise its daily cap.`, { number_id: n.id });
     return {
       id: n.id,
       phone: n.phone_number,
@@ -218,7 +246,7 @@ export async function resolveLaunchContract(
   });
 
   for (const t of templateRows) {
-    if (t.status !== "approved") blockers.push(`Template "${t.name}" is ${t.status}, not approved.`);
+    if (t.status !== "approved") addBlocker("template_not_approved", `Template "${t.name}" is ${t.status}, not approved.`, { template_id: t.id, status: t.status });
   }
 
   let killSwitchEngaged = false;
@@ -226,8 +254,83 @@ export async function resolveLaunchContract(
     const { data: flag } = await admin.from("system_flags").select("value").eq("key", "marketing_instant_enabled").maybeSingle();
     if (flag && flag.value === false) {
       killSwitchEngaged = true;
-      blockers.push("Marketing Instant mode is globally disabled (kill switch).");
+      addBlocker("instant_mode_disabled", "Marketing Instant mode is globally disabled (kill switch).");
     }
+  }
+
+  // Workspace send guards (FE/FM hard caps + force_paced). Slice 2: now resolved
+  // here so launch validation reads them from this contract instead of querying
+  // workspace_send_guards inline. Daily-cap planning needs live workspace
+  // counters (sent today + pending), which the resolver fetches once here.
+  let workspaceGuard: WorkspaceGuardSnapshot | null = null;
+  if (input.workspaceId) {
+    const { data: wsGuard } = await admin
+      .from("workspace_send_guards")
+      .select("hard_daily_cap, hard_per_campaign_cap, force_paced, enabled")
+      .eq("workspace_id", input.workspaceId)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (wsGuard) {
+      const [{ count: wsSentToday }, { count: wsPending }] = await Promise.all([
+        admin.from("campaign_recipients")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", input.workspaceId)
+          .gte("sent_at", dubaiTodayStartIso)
+          .not("sent_at", "is", null),
+        admin.from("campaign_recipients")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", input.workspaceId)
+          .in("status", ["scheduled", "sending"]),
+      ]);
+      const sentToday = wsSentToday ?? 0;
+      const pending = wsPending ?? 0;
+      const planned = sentToday + pending + audienceAllocated;
+      workspaceGuard = {
+        enabled: true,
+        hard_daily_cap: Number(wsGuard.hard_daily_cap),
+        hard_per_campaign_cap: Number(wsGuard.hard_per_campaign_cap),
+        force_paced: Boolean(wsGuard.force_paced),
+        workspace_sent_today: sentToday,
+        workspace_pending: pending,
+        planned_volume: planned,
+      };
+      if (workspaceGuard.force_paced && input.dispatchMode === "marketing_instant") {
+        addBlocker(
+          "workspace_guard_force_paced",
+          "marketing_instant is disabled for this workspace by hard guardrail. Use paced mode.",
+        );
+      }
+      if (workspaceGuard.hard_per_campaign_cap !== null && audienceCount > workspaceGuard.hard_per_campaign_cap) {
+        addBlocker(
+          "workspace_guard_per_campaign_cap",
+          `Campaign size ${audienceCount} exceeds workspace hard per-campaign cap ${workspaceGuard.hard_per_campaign_cap}`,
+          { requested: audienceCount, cap: workspaceGuard.hard_per_campaign_cap },
+        );
+      }
+      if (workspaceGuard.hard_daily_cap !== null && planned > workspaceGuard.hard_daily_cap) {
+        addBlocker(
+          "workspace_guard_daily_cap",
+          `Planned workspace volume ${planned} exceeds hard daily cap ${workspaceGuard.hard_daily_cap}`,
+          {
+            already_sent_today: sentToday,
+            already_pending: pending,
+            new_recipients: audienceAllocated,
+            cap: workspaceGuard.hard_daily_cap,
+          },
+        );
+      }
+    }
+  }
+
+  // Single-day launch crossing today's remaining quota: would defer to next day.
+  // Not a blocker by itself — the launch path translates this into a 409
+  // (forceable) so the operator can confirm a same-day overflow.
+  const isSingleDay = daysCount <= 1;
+  const wouldDeferToNextDay = isSingleDay && audienceAllocated > capacityToday;
+  if (wouldDeferToNextDay) {
+    warnings.push(
+      `Today's remaining capacity is ${capacityToday}, but ${audienceAllocated} recipients are planned. The overflow would defer to next day.`,
+    );
   }
 
   const signaturePayload = {
@@ -261,10 +364,13 @@ export async function resolveLaunchContract(
     audienceAllocated,
     blockers,
     warnings,
+    structuredBlockers,
     numbersDetail,
     templatesDetail: templateRows.map((t: any) => ({ id: t.id, name: t.name, status: t.status })),
     signaturePayload,
     signature,
     killSwitchEngaged,
+    wouldDeferToNextDay,
+    workspaceGuard,
   };
 }
