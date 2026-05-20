@@ -1429,8 +1429,8 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     // Marketing pacing in cron mode is already enforced by scheduled_at
     // (claim_due_campaign_recipients only returns due rows). Re-applying
     // configuredMin/floor inside the tick double-serialized sends to ~1 per
-    // sender per tick. Utility/auth keeps the 60s floor.
-    const floor = isInstant ? 0 : (isUtility ? 60 : 0);
+    // sender per tick. Utility/auth keeps the 90s floor.
+    const floor = isInstant ? 0 : (isUtility ? 90 : 0);
     const useConfiguredMin = isUtility || !isCronMode;
     const minGapMs = Math.max(floor, useConfiguredMin ? configuredMin : 0) * 1000;
     const pacingKey = recipient.whatsapp_number_id || recipient.campaigns?.whatsapp_number_id || recipient.campaign_id;
@@ -1594,7 +1594,7 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     const isInstant = camp.dispatch_mode === "marketing_instant";
     const tplCategory = String(first.campaigns?.message_templates?.category || "marketing").toLowerCase();
     const isUtility = tplCategory === "utility" || tplCategory === "authentication";
-    const perNumberFloor = isInstant ? 0 : (isUtility ? 60 : 1);
+    const perNumberFloor = isInstant ? 0 : (isUtility ? 90 : 1);
     const perNumberCap = Math.max(1, Number(camp.max_inflight_per_number ?? 5));
     // For marketing_instant the configured per_number cap (often 200) lets a single
     // tick spawn 200 parallel Gupshup fetches inside one Deno isolate. That regularly
