@@ -281,7 +281,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     supabase.from("message_templates").select("status").eq("workspace_id", workspaceId).eq("status", "approved"),
     supabase
       .from("campaigns")
-      .select("id, name, status, created_at, sent_count, total_recipients")
+      .select("id, name, status, created_at, total_recipients")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(20),
