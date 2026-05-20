@@ -383,6 +383,63 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
 
   if (cleanRecipients.length === 0) return json({ error: "Capacity is zero" }, 400);
 
+  // ============= Hard workspace send guardrails (FE/FM and similar) =============
+  // Refuses launch if workspace exceeds locked-down caps. Service-managed only;
+  // no client can bypass via UI inputs (table is service_role write).
+  const wsForGuard = number.workspace_id;
+  if (wsForGuard) {
+    const { data: wsGuard } = await admin
+      .from("workspace_send_guards")
+      .select("hard_daily_cap, hard_per_campaign_cap, force_paced")
+      .eq("workspace_id", wsForGuard)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (wsGuard) {
+      if (wsGuard.force_paced && dispatchMode === "marketing_instant") {
+        return json({
+          error: "marketing_instant is disabled for this workspace by hard guardrail. Use paced mode.",
+          code: "workspace_guard_force_paced",
+        }, 409);
+      }
+      if (cleanRecipients.length > Number(wsGuard.hard_per_campaign_cap)) {
+        return json({
+          error: `Campaign size ${cleanRecipients.length} exceeds workspace hard per-campaign cap ${wsGuard.hard_per_campaign_cap}`,
+          code: "workspace_guard_per_campaign_cap",
+          requested: cleanRecipients.length,
+          cap: Number(wsGuard.hard_per_campaign_cap),
+        }, 409);
+      }
+      const dubaiTodayStartIsoGuard = (() => {
+        const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+        return new Date(`${k}T00:00:00+04:00`).toISOString();
+      })();
+      const { count: wsSentToday } = await admin
+        .from("campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", wsForGuard)
+        .gte("sent_at", dubaiTodayStartIsoGuard)
+        .not("sent_at", "is", null);
+      const { count: wsPending } = await admin
+        .from("campaign_recipients")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", wsForGuard)
+        .in("status", ["scheduled", "sending"]);
+      const planned = (wsSentToday ?? 0) + (wsPending ?? 0) + cleanRecipients.length;
+      if (planned > Number(wsGuard.hard_daily_cap)) {
+        return json({
+          error: `Planned workspace volume ${planned} exceeds hard daily cap ${wsGuard.hard_daily_cap}`,
+          code: "workspace_guard_daily_cap",
+          already_sent_today: wsSentToday ?? 0,
+          already_pending: wsPending ?? 0,
+          new_recipients: cleanRecipients.length,
+          cap: Number(wsGuard.hard_daily_cap),
+        }, 409);
+      }
+    }
+  }
+
+
+
 
   // Pre-flight: validate every template that will be used against its actual
   // recipient slice. This is the guard that would have caught the Nov 2025
@@ -997,6 +1054,7 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
     }
   }
 
+
   let sent = 0;
   let failed = 0;
   const sentMu = { inc: () => { sent++; }, incFail: () => { failed++; } };
@@ -1033,6 +1091,59 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       sentTodayByNum.set(nid, count ?? 0);
     }
   }
+
+  // ============= Workspace hard send guardrails (FE/FM and similar) =============
+  // Pre-fetch enabled guards + today's workspace-wide sent counts + per-campaign
+  // sent counts. Enforced inside processOneRecipient: when a cap is reached we
+  // engage kill_switch on the campaign so it stops claiming new rows this tick
+  // and on the next tick.
+  const wsIdsInTick = [...new Set((due ?? []).map((r: any) => r.workspace_id).filter(Boolean))];
+  const guardByWs = new Map<string, { hard_daily_cap: number; hard_per_campaign_cap: number }>();
+  const sentTodayByWs = new Map<string, number>();
+  const sentByCampaignGuarded = new Map<string, number>();
+  if (wsIdsInTick.length > 0) {
+    const { data: guardRows } = await admin
+      .from("workspace_send_guards")
+      .select("workspace_id, hard_daily_cap, hard_per_campaign_cap")
+      .in("workspace_id", wsIdsInTick)
+      .eq("enabled", true);
+    for (const g of guardRows ?? []) {
+      guardByWs.set(g.workspace_id, {
+        hard_daily_cap: Number(g.hard_daily_cap),
+        hard_per_campaign_cap: Number(g.hard_per_campaign_cap),
+      });
+    }
+    if (guardByWs.size > 0) {
+      const dubaiTodayStartIsoGuard = (() => {
+        const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
+        return new Date(`${k}T00:00:00+04:00`).toISOString();
+      })();
+      for (const wsId of guardByWs.keys()) {
+        const { count } = await admin
+          .from("campaign_recipients")
+          .select("id", { count: "exact", head: true })
+          .eq("workspace_id", wsId)
+          .gte("sent_at", dubaiTodayStartIsoGuard)
+          .not("sent_at", "is", null);
+        sentTodayByWs.set(wsId, count ?? 0);
+      }
+      const campIdsForGuards = [...new Set(
+        (due ?? [])
+          .filter((r: any) => guardByWs.has(r.workspace_id))
+          .map((r: any) => r.campaign_id),
+      )];
+      for (const cid of campIdsForGuards) {
+        const { count } = await admin
+          .from("campaign_recipients")
+          .select("id", { count: "exact", head: true })
+          .eq("campaign_id", cid)
+          .not("sent_at", "is", null);
+        sentByCampaignGuarded.set(cid, count ?? 0);
+      }
+    }
+  }
+
+
 
   // Per-campaign canary state. If the first 3 sends for a campaign in this
   // tick all fail with the same provider error code (and zero successes),
@@ -1151,6 +1262,36 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       await logEvent(recipient, "skipped", "instant_mode_disabled");
       return;
     }
+
+    // Workspace hard guardrail (FE/FM and similar): refuse + engage kill switch
+    // when either workspace-daily-cap or per-campaign-cap is reached. Stops the
+    // campaign from claiming further rows this tick AND on the next tick.
+    const wsIdGuard = recipient.workspace_id as string | undefined;
+    const wsGuardCfg = wsIdGuard ? guardByWs.get(wsIdGuard) : undefined;
+    if (wsGuardCfg && wsIdGuard) {
+      const wsSent = sentTodayByWs.get(wsIdGuard) ?? 0;
+      if (wsSent >= wsGuardCfg.hard_daily_cap) {
+        await admin.from("campaigns").update({
+          kill_switch_at: new Date().toISOString(),
+          kill_switch_reason: `workspace_daily_cap_reached (${wsSent}/${wsGuardCfg.hard_daily_cap})`,
+          status: "paused",
+        }).eq("id", recipient.campaign_id).is("kill_switch_at", null);
+        await logEvent(recipient, "killed", "workspace_daily_cap_reached", { sent_today: wsSent, cap: wsGuardCfg.hard_daily_cap });
+        return;
+      }
+      const campSent = sentByCampaignGuarded.get(recipient.campaign_id) ?? 0;
+      if (campSent >= wsGuardCfg.hard_per_campaign_cap) {
+        await admin.from("campaigns").update({
+          kill_switch_at: new Date().toISOString(),
+          kill_switch_reason: `campaign_hard_cap_reached (${campSent}/${wsGuardCfg.hard_per_campaign_cap})`,
+          status: "paused",
+        }).eq("id", recipient.campaign_id).is("kill_switch_at", null);
+        await logEvent(recipient, "killed", "campaign_hard_cap_reached", { sent_campaign: campSent, cap: wsGuardCfg.hard_per_campaign_cap });
+        return;
+      }
+    }
+
+
     const numRow = camp.whatsapp_numbers ?? null;
     if (numRow?.paused_at) {
       await logEvent(recipient, "idle", "sender_paused", { paused_reason: numRow.paused_reason });
@@ -1307,6 +1448,11 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       if (recipient.whatsapp_number_id) {
         sentTodayByNum.set(recipient.whatsapp_number_id, (sentTodayByNum.get(recipient.whatsapp_number_id) ?? 0) + 1);
       }
+      if (wsGuardCfg && wsIdGuard) {
+        sentTodayByWs.set(wsIdGuard, (sentTodayByWs.get(wsIdGuard) ?? 0) + 1);
+        sentByCampaignGuarded.set(recipient.campaign_id, (sentByCampaignGuarded.get(recipient.campaign_id) ?? 0) + 1);
+      }
+
     } catch (err) {
       sentMu.incFail();
       const msg = err instanceof Error ? err.message : "Send failed";

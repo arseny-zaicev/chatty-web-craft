@@ -3410,6 +3410,39 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_send_guards: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          force_paced: boolean
+          hard_daily_cap: number
+          hard_per_campaign_cap: number
+          notes: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          force_paced?: boolean
+          hard_daily_cap: number
+          hard_per_campaign_cap: number
+          notes?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          force_paced?: boolean
+          hard_daily_cap?: number
+          hard_per_campaign_cap?: number
+          notes?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_setters: {
         Row: {
           avatar_url: string | null
