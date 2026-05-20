@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.debug_cron_status() TO postgres, anon, authenticated, service_role;
