@@ -3817,17 +3817,6 @@ export type Database = {
         Args: { _number_id: string }
         Returns: number
       }
-      debug_cron_status: {
-        Args: never
-        Returns: {
-          active: boolean
-          jobid: number
-          jobname: string
-          last_run: string
-          last_status: string
-          schedule: string
-        }[]
-      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
