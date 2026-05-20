@@ -97,20 +97,16 @@ export default function JoinTeam() {
         setSubmitting(false);
         return;
       }
-      if (result?.already_existed) {
-        toast.success("You're already added. Sign in with that account password.");
-        navigate("/portal-auth", { replace: true });
-        return;
-      }
-
       // Remember email for the sign-in page (prefill on next visit)
       try { localStorage.setItem("iskra:lastEmail", mail); } catch { /* ignore */ }
 
-      // Sign the user in
+      // Sign the user in immediately after attaching the invite. Existing users
+      // already proved the password inside the invite function, so do not send
+      // them back to a generic login screen.
       const { error: signErr } = await supabase.auth.signInWithPassword({ email: mail, password });
       if (signErr) {
         if (result.already_existed) {
-          toast.success("You were added to the workspace. Sign in with your existing password.");
+          toast.success("You were added to the workspace. Sign in with the same password.");
           navigate("/portal-auth", { replace: true });
           return;
         }
