@@ -1046,62 +1046,14 @@ async function processQueue(admin: any, opts: { mode?: "cron" | "manual" } = {})
       if (n && r.campaigns) {
         r.campaigns.whatsapp_number_id = n.id;
         r.campaigns.whatsapp_numbers = n;
-  }
-
-  // ============= Workspace hard send guardrails (FE/FM and similar) =============
-  // Pre-fetch enabled guards + today's workspace-wide sent counts + per-campaign
-  // sent counts for guarded workspaces. Enforced inside processOneRecipient: when
-  // a cap is reached, engage kill_switch on the campaign so it stops claiming.
-  const wsIdsInTick = [...new Set((due ?? []).map((r: any) => r.workspace_id).filter(Boolean))];
-  const guardByWs = new Map<string, { hard_daily_cap: number; hard_per_campaign_cap: number }>();
-  const sentTodayByWs = new Map<string, number>();
-  const sentByCampaignGuarded = new Map<string, number>();
-  if (wsIdsInTick.length > 0) {
-    const { data: guardRows } = await admin
-      .from("workspace_send_guards")
-      .select("workspace_id, hard_daily_cap, hard_per_campaign_cap")
-      .in("workspace_id", wsIdsInTick)
-      .eq("enabled", true);
-    for (const g of guardRows ?? []) {
-      guardByWs.set(g.workspace_id, {
-        hard_daily_cap: Number(g.hard_daily_cap),
-        hard_per_campaign_cap: Number(g.hard_per_campaign_cap),
-      });
-    }
-    if (guardByWs.size > 0) {
-      const dubaiTodayStartIsoGuard = (() => {
-        const k = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(new Date());
-        return new Date(`${k}T00:00:00+04:00`).toISOString();
-      })();
-      for (const wsId of guardByWs.keys()) {
-        const { count } = await admin
-          .from("campaign_recipients")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", wsId)
-          .gte("sent_at", dubaiTodayStartIsoGuard)
-          .not("sent_at", "is", null);
-        sentTodayByWs.set(wsId, count ?? 0);
-      }
-      const campIdsForGuards = [...new Set(
-        (due ?? [])
-          .filter((r: any) => guardByWs.has(r.workspace_id))
-          .map((r: any) => r.campaign_id),
-      )];
-      for (const cid of campIdsForGuards) {
-        const { count } = await admin
-          .from("campaign_recipients")
-          .select("id", { count: "exact", head: true })
-          .eq("campaign_id", cid)
-          .not("sent_at", "is", null);
-        sentByCampaignGuarded.set(cid, count ?? 0);
       }
     }
-
     if (typeof tid === "string" && tid !== r.campaigns?.message_templates?.id) {
       const t = templateCache.get(tid);
       if (t && r.campaigns) r.campaigns.message_templates = t;
     }
   }
+
 
   let sent = 0;
   let failed = 0;
