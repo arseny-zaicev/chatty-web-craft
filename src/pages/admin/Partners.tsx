@@ -220,7 +220,7 @@ export default function Partners() {
                     );
                   })}
                   {!rows.length && (
-                    <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                    <TableRow><TableCell colSpan={14} className="text-center text-muted-foreground py-8">
                       No partners.
                     </TableCell></TableRow>
                   )}
