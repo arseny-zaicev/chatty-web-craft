@@ -64,7 +64,6 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     { data: numbers },
     { data: campaigns },
     { data: metricsToday },
-    { data: metricsByCampaign },
     { data: recentSent },
   ] = await Promise.all([
     supabase.from("workspaces").select("id").eq("is_active", true),
@@ -72,18 +71,22 @@ export async function fetchPortfolioSnapshot(): Promise<PortfolioSnapshot> {
     supabase.from("whatsapp_numbers").select("workspace_id, is_active, connected_in_gupshup, connected_in_iskra"),
     supabase
       .from("campaigns")
-      .select("id, workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, sent_count, total_recipients")
+      .select("id, workspace_id, name, status, kind, scheduled_start_at, scheduled_dates, recurrence_end_at, total_recipients")
       .in("status", ["scheduled", "running", "paused"]),
-    // v_metrics_today: one row per workspace - safe to sum.
+    // v_metrics_today: one row per workspace — same metrics_for_range primitive.
     supabase.from("v_metrics_today").select("workspace_id, sent_today, delivered_today, replies_today"),
-    // v_metrics_today_by_campaign: per-campaign sent for active-group rollup.
-    supabase.from("v_metrics_today_by_campaign").select("workspace_id, campaign_id, sent_today, delivered_today"),
     // Recent recipient activity per workspace -> drives is_sending_now.
     supabase
       .from("campaign_recipients")
       .select("workspace_id, campaign_id, sent_at")
       .gte("sent_at", recentSinceIso),
   ]);
+
+  // Canonical per-campaign TODAY truth for the active-campaign rollup —
+  // event-based, matches WorkspaceCampaigns cards. Replaces the recipient-based
+  // v_metrics_today_by_campaign read.
+  const activeCampaignIds = (campaigns ?? []).map((c: any) => c.id);
+  const truthTodayByCampaign = await fetchCampaignTruth(activeCampaignIds, "today");
 
   const byWorkspace: Record<string, WorkspaceMetrics> = {};
   const ensure = (id: string): WorkspaceMetrics => {
