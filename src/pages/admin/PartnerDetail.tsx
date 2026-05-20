@@ -173,8 +173,10 @@ export default function PartnerDetail() {
     { ready: 0, warming_up: 0, verifying: 0, disabled: 0 } as Record<Lifecycle, number>,
   );
 
-  const sent7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.sent_7d || 0), 0);
-  const delivered7dTotal = (liveStats ?? []).reduce((s, r: any) => s + Number(r.delivered_7d || 0), 0);
+  // 7d totals come from the canonical partner RPC so they always match
+  // the per-partner truth on /admin/partners and the per-BM truth.
+  const sent7dTotal = pm?.sent_7d ?? 0;
+  const delivered7dTotal = pm?.delivered_7d ?? 0;
   const unpaid = (runs || []).filter(r => r.status === "draft" || r.status === "approved")
     .reduce((s, r) => s + Number(r.total_payout_usd || 0), 0);
   const monthStart = startOfMonth(new Date());
