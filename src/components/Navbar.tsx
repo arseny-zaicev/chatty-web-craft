@@ -7,6 +7,7 @@ import { IskraLogo } from "@/components/IskraLogo";
 const navItems = [
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Results", href: "/#testimonials" },
+  { label: "Testimonials", href: "/#testimonials" },
   { label: "Pricing", href: "/#pricing" },
 ];
 
