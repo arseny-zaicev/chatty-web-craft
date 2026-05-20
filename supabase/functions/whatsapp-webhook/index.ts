@@ -386,7 +386,7 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
   await markRaw(rawId, {
     processing_status: "processed",
     processed_at: new Date().toISOString(),
-    message_id: insertedMessage.id,
+    message_id: insertedMessageId,
     workspace_id: number.workspace_id,
     whatsapp_number_id: number.id,
   });
@@ -396,11 +396,12 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
       .from("whatsapp_message_events")
       .update({
         event_type: "inbound_message_persisted",
-        message_id: insertedMessage.id,
+        message_id: insertedMessageId,
         campaign_recipient_id: recipient?.id ?? null,
       })
       .eq("id", inboundAudit.id);
   }
+
 
 
   // Apply automations: inbound_any + inbound_keyword + button_click
