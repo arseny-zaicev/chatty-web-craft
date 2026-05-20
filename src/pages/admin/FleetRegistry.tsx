@@ -271,6 +271,16 @@ export default function FleetRegistry() {
 
   // Canonical ownership truth (number_ownership). Drives the header health
   // badge so onboarding gaps surface here without visiting the ownership page.
+  //
+  // OWNERSHIP SEMANTICS (slice 3):
+  // - "Own" numbers (attribution.kind === "own") are house-owned and intentionally
+  //   live OUTSIDE the partner payout ledger. They must NOT appear in
+  //   "missing partner ownership" alerts - that was a false positive.
+  // - "Referred" numbers are payout-relevant: they MUST have an active
+  //   number_ownership row pointing at a real partner.
+  // - "Legacy mismatch" = a referred number whose free-text provided_by /
+  //   assigned_ref does not map to any known partner row (typos, old data).
+  //   Surfaced separately so ops can repair the attribution.
   const ownershipQuery = useQuery({
     queryKey: ["fleet-registry", "ownership-ids"],
     enabled: authChecked,
@@ -283,10 +293,32 @@ export default function FleetRegistry() {
       return new Set((data ?? []).map((r: any) => r.whatsapp_number_id as string));
     },
   });
+  const partnerNamesQuery = useQuery({
+    queryKey: ["fleet-registry", "partner-names"],
+    enabled: authChecked,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("partners").select("name");
+      if (error) throw error;
+      return new Set((data ?? []).map((p: any) => String(p.name ?? "").trim().toLowerCase()).filter(Boolean));
+    },
+  });
   const ownedNumberIds = ownershipQuery.data ?? new Set<string>();
+  const knownPartnerNames = partnerNamesQuery.data ?? new Set<string>();
+  // Only payout-relevant numbers (referred) without an active ownership row.
   const ownershipUnassignedCount = useMemo(
-    () => rows.filter((r) => !ownedNumberIds.has(r.id)).length,
+    () => rows.filter((r) => getAttribution(r).kind === "referred" && !ownedNumberIds.has(r.id)).length,
     [rows, ownedNumberIds],
+  );
+  // Referred numbers whose free-text attribution does not match any partner name.
+  const legacyMismatchCount = useMemo(
+    () => rows.filter((r) => {
+      const a = getAttribution(r);
+      if (a.kind !== "referred") return false;
+      const refOk = a.ref ? knownPartnerNames.has(a.ref.trim().toLowerCase()) : true;
+      const provOk = a.providedBy ? knownPartnerNames.has(a.providedBy.trim().toLowerCase()) : true;
+      return !refOk || !provOk;
+    }).length,
+    [rows, knownPartnerNames],
   );
 
   const [q, setQ] = useState("");
@@ -451,9 +483,18 @@ export default function FleetRegistry() {
             <Link
               to="/admin/number-ownership"
               className="text-[10px] px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/15"
-              title="Numbers without an active partner ownership row - payouts will skip these"
+              title="Referred numbers without an active partner ownership row - payouts will skip these. Own numbers are excluded."
             >
-              ⚠ {ownershipUnassignedCount} without partner ownership
+              ⚠ {ownershipUnassignedCount} referred without payout owner
+            </Link>
+          )}
+          {legacyMismatchCount > 0 && (
+            <Link
+              to="/admin/number-ownership"
+              className="text-[10px] px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15"
+              title="Referred numbers whose Provided-by / Ref text does not match a known partner. Edit the row to remap to a real partner."
+            >
+              ⚑ {legacyMismatchCount} legacy attribution mismatch
             </Link>
           )}
           <div className="ml-auto flex items-center gap-2">
