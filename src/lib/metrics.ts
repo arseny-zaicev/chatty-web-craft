@@ -125,9 +125,11 @@ export async function fetchNumberMetrics(
 }
 
 // ---------- PARTNERS ----------
-// Canonical: `number_ownership` (populated in Phase A) is the single source
-// of truth for "which numbers belong to a partner". Stats are pulled via the
-// same per-number RPC the per-BM rows use, so totals reconcile to the digit.
+// Canonical: `number_ownership` is the single source of truth for "which
+// numbers belong to a partner". Today stats come from the per-number RPC.
+// `failed_alltime` is pulled from v_metrics_alltime (event-based,
+// metrics_for_range) so it reconciles to per-BM views and is no longer a
+// best-effort proxy of failed_today.
 export async function fetchPartnerMetrics(
   partnerIds: string[]
 ): Promise<Map<string, TodayMetrics & AlltimeMetrics & EarningsMetrics>> {
@@ -135,7 +137,6 @@ export async function fetchPartnerMetrics(
   partnerIds.forEach((p) => out.set(p, { ...ZERO_TODAY, ...ZERO_ALL, ...ZERO_EARN }));
   if (!partnerIds.length) return out;
 
-  // partner -> currently-owned numbers + active rate
   const { data: ownership } = await supabase
     .from("number_ownership")
     .select("partner_id, whatsapp_number_id, rate_usd, effective_to")
@@ -153,7 +154,23 @@ export async function fetchPartnerMetrics(
   const numIds = Array.from(numToPartner.keys());
   if (!numIds.length) return out;
 
-  const { data: live } = await (supabase.rpc as any)("number_live_stats", { p_number_ids: numIds });
+  const [{ data: live }, { data: allRows }] = await Promise.all([
+    (supabase.rpc as any)("number_live_stats", { p_number_ids: numIds }),
+    supabase
+      .from("v_metrics_alltime")
+      .select("whatsapp_number_id, failed_alltime")
+      .in("whatsapp_number_id", numIds),
+  ]);
+
+  const failedAllByNum = new Map<string, number>();
+  (allRows ?? []).forEach((r: any) => {
+    if (!r.whatsapp_number_id) return;
+    failedAllByNum.set(
+      r.whatsapp_number_id,
+      (failedAllByNum.get(r.whatsapp_number_id) ?? 0) + Number(r.failed_alltime ?? 0),
+    );
+  });
+
   (live ?? []).forEach((r: any) => {
     const pid = numToPartner.get(r.whatsapp_number_id);
     if (!pid) return;
@@ -167,7 +184,7 @@ export async function fetchPartnerMetrics(
     acc.failed_today += Number(r.failed_today ?? 0);
     acc.sent_alltime += Number(r.sent_all ?? 0);
     acc.delivered_alltime += delivAll;
-    acc.failed_alltime += Number(r.failed_today ?? 0); // failed_all not in RPC; best-effort
+    acc.failed_alltime += failedAllByNum.get(r.whatsapp_number_id) ?? 0;
     acc.earned_today += delivToday * rate;
     acc.earned_7d += deliv7d * rate;
     acc.earned_alltime += delivAll * rate;
