@@ -2218,7 +2218,7 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   if (audienceCount <= 0) return json({ error: "audience_count required" }, 400);
 
   // Ownership/access check (resolver doesn't perform RLS).
-  const probe = await admin.from("whatsapp_numbers").select("user_id").eq("id", numbers[0].number_id).maybeSingle();
+  const probe = await admin.from("whatsapp_numbers").select("user_id, workspace_id").eq("id", numbers[0].number_id).maybeSingle();
   if (!probe?.data) return json({ error: "Number not found" }, 404);
   if (!(await canAccessUser(admin, requesterId, probe.data.user_id))) return json({ error: "Forbidden" }, 403);
 
@@ -2234,6 +2234,7 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
     maxInflightPerNumber,
     maxInflightPerCampaign,
     respectRecipientTz: respectTz,
+    workspaceId: probe.data.workspace_id ?? null,
   }, { includeKillSwitch: true });
 
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
