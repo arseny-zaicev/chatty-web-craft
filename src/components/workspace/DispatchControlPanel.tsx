@@ -36,6 +36,16 @@ interface SnapshotNumber {
   backoff_until: string | null;
 }
 
+interface WorkspaceGuardSnapshot {
+  enabled: boolean;
+  hard_daily_cap: number | null;
+  hard_per_campaign_cap: number | null;
+  force_paced: boolean;
+  workspace_sent_today: number;
+  workspace_pending: number;
+  planned_volume: number;
+}
+
 interface Snapshot {
   signature: string;
   expires_at: string;
@@ -48,6 +58,9 @@ interface Snapshot {
   window: { start: string; end: string; per_recipient_tz: boolean };
   blockers: string[];
   warnings: string[];
+  workspace_guard?: WorkspaceGuardSnapshot | null;
+  would_defer_to_next_day?: boolean;
+  kill_switch_engaged?: boolean;
   notice: string | null;
 }
 
