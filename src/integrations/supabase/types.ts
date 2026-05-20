@@ -4181,6 +4181,16 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      partner_metrics_for_range: {
+        Args: { _from: string; _to: string; p_partner_ids: string[] }
+        Returns: {
+          delivered: number
+          earned_usd: number
+          failed: number
+          partner_id: string
+          sent: number
+        }[]
+      }
       partner_rate_at: {
         Args: {
           _at: string
