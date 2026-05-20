@@ -1256,7 +1256,7 @@ export default function LaunchWizard() {
             )}
 
             <div className={isMarketing ? "grid sm:grid-cols-2 gap-2 mt-3" : "grid grid-cols-3 gap-2 mt-3"}>
-              <Field label="Quota / number (max 200)"><Input type="number" min={1} max={200} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Math.min(200, Number(e.target.value)))} /></Field>
+              <Field label="Quota / number (default 200)"><Input type="number" min={1} max={10000} value={perNumberQuota} onChange={(e) => setPerNumberQuota(Math.max(1, Math.min(10000, Number(e.target.value) || 1)))} /></Field>
               {!isMarketing && (
                 <>
                   <Field label="Min delay (s) · ≥60">
