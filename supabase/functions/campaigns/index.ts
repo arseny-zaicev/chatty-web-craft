@@ -1785,6 +1785,66 @@ async function setCampaignStatus(admin: any, requesterId: string, body: any, kin
         .in("used_in_campaign_id", cancelled);
     }
   }
+  // Slack: notify on pause / cancel so ops sees state changes that today only live in DB.
+  if (kind === "pause" || kind === "cancel") {
+    try {
+      const paused = updates[kind === "pause" ? "paused" : "cancelled"] ?? [];
+      if (paused.length > 0) {
+        const { data: detail } = await admin
+          .from("campaigns")
+          .select("id, name, workspace_id, total_recipients, workspaces(slack_channel_id, name)")
+          .in("id", paused);
+        // Canonical alltime sent at the moment of pause/cancel.
+        let truthById = new Map<string, number>();
+        try {
+          const { data: t } = await admin.rpc("campaign_metrics_for_range", {
+            p_campaign_ids: paused,
+            _from: "1970-01-01T00:00:00Z",
+            _to: new Date().toISOString(),
+          });
+          for (const row of (t ?? []) as Array<{ campaign_id: string; sent: number }>) {
+            truthById.set(row.campaign_id, row.sent ?? 0);
+          }
+        } catch { /* ignore */ }
+        const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+        const slackKey = Deno.env.get("SLACK_API_KEY");
+        const verb = kind === "pause" ? "paused" : "cancelled";
+        const emoji = kind === "pause" ? "⏸️" : "🛑";
+        const reason = typeof body.reason === "string" ? body.reason.slice(0, 200) : null;
+        for (const c of detail ?? []) {
+          const sent = truthById.get(c.id) ?? 0;
+          const total = c.total_recipients ?? 0;
+          const remaining = Math.max(0, total - sent);
+          const text = `${emoji} *Campaign ${verb}*: ${c.name}\n• Sent: *${sent}* / ${total}  (remaining: ${remaining})${reason ? `\n• Reason: ${reason}` : ""}`;
+          const channel = (c as any).workspaces?.slack_channel_id || "#delivery-campaigns";
+          if (lovableKey && slackKey) {
+            fetch("https://connector-gateway.lovable.dev/slack/api/chat.postMessage", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${lovableKey}`,
+                "X-Connection-Api-Key": slackKey,
+                "Content-Type": "application/json; charset=utf-8",
+              },
+              body: JSON.stringify({
+                channel, text,
+                username: "Iskra",
+                icon_url: "https://iskra.ae/iskra-favicon-v2.png",
+                unfurl_links: false, unfurl_media: false,
+              }),
+            }).catch(() => {});
+          }
+          // Mirror to ops queue for digest/log retention.
+          admin.from("slack_event_queue").insert({
+            event_type: kind === "pause" ? "campaign_paused" : "campaign_cancelled",
+            workspace_id: c.workspace_id,
+            payload: { text, campaign_name: c.name, campaign_id: c.id, sent, total, reason },
+          }).then(() => {}, () => {});
+        }
+      }
+    } catch (e) {
+      console.error("pause/cancel slack notify failed", e);
+    }
+  }
   return json({ ok: true, action: kind, campaigns: uniq.length });
 }
 

@@ -19,9 +19,23 @@ Deno.serve(cronGuard("slack-morning-digest", async (req) => {
 
   const { data: campaigns } = await supabase
     .from("campaigns")
-    .select("id, name, total_recipients, sent_count, scheduled_start_at, scheduled_dates, status, workspace_id, workspaces(id, name, slug, internal_code, slack_channel_id)")
+    .select("id, name, total_recipients, scheduled_start_at, scheduled_dates, status, workspace_id, workspaces(id, name, slug, internal_code, slack_channel_id)")
     .in("status", ["scheduled", "running"])
     .or(`scheduled_dates.cs.{${today}},scheduled_start_at.gte.${today}T00:00:00Z`);
+
+  // Canonical truth: alltime sent per campaign, so "remaining" is honest.
+  const ids = (campaigns ?? []).map((c) => c.id);
+  const sentByCampaign = new Map<string, number>();
+  if (ids.length > 0) {
+    const { data: truth } = await supabase.rpc("campaign_metrics_for_range", {
+      p_campaign_ids: ids,
+      _from: "1970-01-01T00:00:00Z",
+      _to: new Date().toISOString(),
+    });
+    for (const t of (truth ?? []) as Array<{ campaign_id: string; sent: number }>) {
+      sentByCampaign.set(t.campaign_id, t.sent ?? 0);
+    }
+  }
 
   const rowsByWs = new Map<string, any[]>();
   let totalCampaigns = 0; let totalVolume = 0;
@@ -30,7 +44,8 @@ Deno.serve(cronGuard("slack-morning-digest", async (req) => {
   for (const c of campaigns || []) {
     const ws = (c as any).workspaces;
     if (!ws) continue;
-    const remaining = Math.max(0, (c.total_recipients || 0) - (c.sent_count || 0));
+    const sent = sentByCampaign.get(c.id) ?? 0;
+    const remaining = Math.max(0, (c.total_recipients || 0) - sent);
     const row = {
       workspace_name: brandTag(ws.name, ws.internal_code),
       campaign_name: c.name,
