@@ -282,6 +282,7 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
   const persistedRow = Array.isArray(persisted) ? persisted[0] : persisted;
   const conversationId: string | undefined = persistedRow?.conversation_id;
   const insertedMessageId: string | undefined = persistedRow?.message_id;
+  const wasDuplicate: boolean = !!persistedRow?.was_duplicate;
 
   if (persistError || !conversationId || !insertedMessageId) {
     console.error("Failed atomic inbound persistence", {
@@ -312,6 +313,37 @@ async function handleInbound(payload: Record<string, unknown>, rawId: string | n
       processing_status: "failed",
       processed_at: new Date().toISOString(),
       error_message: persistError?.message ?? "persist_inbound_message returned no row",
+      workspace_id: number.workspace_id,
+      whatsapp_number_id: number.id,
+    });
+    return;
+  }
+
+  // DB-level idempotency: a concurrent webhook already stored this
+  // provider_message_id. The RPC rolled back the conversation upsert and
+  // returned the winning row. Mark this delivery as a clean skip and stop —
+  // do NOT re-run recipient linking, backfill, automations, or Slack alerts.
+  if (wasDuplicate) {
+    console.log("Skipping duplicate inbound (DB-level provider_message_id collision)", {
+      provider_message_id: providerMessageId,
+      existing_message_id: insertedMessageId,
+      conversation_id: conversationId,
+    });
+    if (inboundAudit?.id) {
+      await supabase
+        .from("whatsapp_message_events")
+        .update({
+          event_type: "inbound_message_duplicate_skipped",
+          message_id: insertedMessageId,
+          error_message: "duplicate provider_message_id (db unique violation)",
+        })
+        .eq("id", inboundAudit.id);
+    }
+    await markRaw(rawId, {
+      processing_status: "skipped",
+      processed_at: new Date().toISOString(),
+      message_id: insertedMessageId,
+      error_message: "duplicate provider_message_id (db unique violation)",
       workspace_id: number.workspace_id,
       whatsapp_number_id: number.id,
     });

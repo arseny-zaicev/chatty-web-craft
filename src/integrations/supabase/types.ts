@@ -4173,6 +4173,7 @@ export type Database = {
           conversation_created: boolean
           conversation_id: string
           message_id: string
+          was_duplicate: boolean
         }[]
       }
       pipeline_follow_up_send_at: {
