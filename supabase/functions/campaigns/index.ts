@@ -2228,8 +2228,9 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
     let placedThisRound = false;
     for (const nid of numberIds) {
       const cur = allocByNum.get(nid) ?? 0;
-      const nrow: any = numberRows.find((n: any) => n.id === nid);
-      const cap = Math.max(0, Math.min(perNumberQuota, Number(nrow?.daily_send_limit ?? 200)));
+      // Operator's per_number_quota is authoritative; daily_send_limit must
+      // not silently clamp it (workspace_send_guards remain the hard ceiling).
+      const cap = Math.max(0, perNumberQuota);
       if (cur < cap) {
         allocByNum.set(nid, cur + 1);
         remaining--;
@@ -2241,6 +2242,13 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   }
   if (remaining > 0) {
     warnings.push(`Capacity is ${audienceCount - remaining} but audience is ${audienceCount}. Add more numbers, raise per-number cap, or split.`);
+  }
+  // Surface daily_send_limit recommendation as a non-blocking warning.
+  for (const nrow of numberRows as any[]) {
+    const dailyLimit = Number(nrow?.daily_send_limit ?? 200);
+    if (perNumberQuota > dailyLimit) {
+      warnings.push(`Number ${nrow.phone_number}: per-number quota ${perNumberQuota} exceeds its daily_send_limit recommendation (${dailyLimit}). Honoring operator override.`);
+    }
   }
 
   const numbersOut = numberRows.map((n: any) => {
