@@ -321,6 +321,7 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
   else if (unread_replies >= 20) health = "attention";
 
   // Group recent launches by base name (exclude cancelled/failed siblings if a live one exists).
+  // `sent_count` here is canonical alltime sent from campaign_metrics_for_range.
   type Launch = { id: string; name: string; status: string; created_at: string; sent_count: number; total: number };
   const byBase = new Map<string, any[]>();
   for (const r of (recent ?? [])) {
@@ -328,25 +329,29 @@ export async function fetchWorkspaceOverview(workspaceId: string): Promise<Works
     if (!byBase.has(base)) byBase.set(base, []);
     byBase.get(base)!.push(r);
   }
+
+  const recentIds = (recent ?? []).map((r: any) => r.id);
+  const truthByRecent = await fetchCampaignTruth(recentIds, "alltime");
+
   const launchMap = new Map<string, Launch>();
   for (const [base, siblings] of byBase) {
     const live = siblings.filter((r: any) => !["cancelled", "failed"].includes(r.status));
     const effective = live.length ? live : siblings;
+    const truthSum = sumCampaignTruth(effective.map((r: any) => r.id), truthByRecent);
     const sum = effective.reduce(
       (acc, r: any) => ({
-        sent: acc.sent + (r.sent_count ?? 0),
         total: acc.total + (r.total_recipients ?? 0),
         created: acc.created < r.created_at ? acc.created : r.created_at,
         status: (statusRank[r.status] ?? 0) > (statusRank[acc.status] ?? 0) ? r.status : acc.status,
       }),
-      { sent: 0, total: 0, created: effective[0].created_at, status: effective[0].status }
+      { total: 0, created: effective[0].created_at, status: effective[0].status }
     );
     launchMap.set(base, {
       id: effective[0].id,
       name: base,
       status: sum.status,
       created_at: sum.created,
-      sent_count: sum.sent,
+      sent_count: truthSum.sent,
       total: sum.total,
     });
   }
