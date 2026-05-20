@@ -153,7 +153,7 @@ async function launchCampaign(admin: any, requesterId: string, body: any) {
   const maxDelay = Math.max(minDelay, Math.min(86400, Number(body.delay_max_seconds ?? 90)));
   const recipients = Array.isArray(body.recipients) ? body.recipients : [];
   // Per-number/day cap. Hard ceiling 200 (Meta tier), floor 1.
-  const perNumberQuota = Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota ?? 200))));
+  const perNumberQuota = Math.max(1, Math.min(10000, Math.floor(Number(body.per_number_quota ?? 200))));
 
   // Multi-number support: accept either legacy single (whatsapp_number_id+template_id)
   // or new `numbers: [{number_id, template_id}, ...]`. ONE campaign row is created
@@ -1506,7 +1506,7 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
   const skipSet = new Set<string>(Array.isArray(body.skip_dates) ? body.skip_dates.filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : []);
   const extraDates: string[] = Array.isArray(body.extra_dates) ? body.extra_dates.filter((d: any) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
   const overrideQuota = body.per_number_quota != null
-    ? Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota))))
+    ? Math.max(1, Math.min(10000, Math.floor(Number(body.per_number_quota))))
     : null;
   const overrideWindowStart = typeof body.window_start === "string" && /^\d{2}:\d{2}$/.test(body.window_start) ? body.window_start : null;
   const overrideWindowEnd = typeof body.window_end === "string" && /^\d{2}:\d{2}$/.test(body.window_end) ? body.window_end : null;
@@ -1527,7 +1527,7 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
   const newTodayByCampaign: Record<string, number> = {};
 
   for (const c of campaigns) {
-    const quota = overrideQuota ?? Math.max(1, Math.min(200, c.per_number_quota || 200));
+    const quota = overrideQuota ?? Math.max(1, Math.min(10000, c.per_number_quota || 200));
     const winStart = overrideWindowStart ?? String(c.schedule_window_start || "09:00:00").slice(0, 5);
     const winEnd = overrideWindowEnd ?? String(c.schedule_window_end || "18:00:00").slice(0, 5);
     const minDelay = Math.max(60, c.delay_min_seconds || 60);
@@ -1865,7 +1865,7 @@ async function prepareCampaign(admin: any, requesterId: string, body: any) {
   const audienceCount = Math.max(0, Math.floor(Number(body.audience_count ?? 0)));
   const dispatchMode: "paced" | "marketing_instant" =
     body.dispatch_mode === "marketing_instant" ? "marketing_instant" : "paced";
-  const perNumberQuota = Math.max(1, Math.min(200, Math.floor(Number(body.per_number_quota ?? 200))));
+  const perNumberQuota = Math.max(1, Math.min(10000, Math.floor(Number(body.per_number_quota ?? 200))));
   const maxInflightPerNumber = Math.max(1, Math.min(500, Math.floor(Number(body.max_inflight_per_number ?? 5))));
   const maxInflightPerCampaign = Math.max(1, Math.min(5000, Math.floor(Number(body.max_inflight_per_campaign ?? 50))));
   const windowStart: string = typeof body.window_start === "string" ? body.window_start : "09:00";
