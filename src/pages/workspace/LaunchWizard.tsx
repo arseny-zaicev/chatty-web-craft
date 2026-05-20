@@ -36,6 +36,13 @@ import { Plus } from "lucide-react";
 import type { WorkspaceContext } from "./WorkspaceLayout";
 import { friendlySenderLabel, senderFullLabel } from "@/lib/crmData";
 import DispatchControlPanel, { type DispatchMode } from "@/components/workspace/DispatchControlPanel";
+import { computeCapacity } from "@/lib/launchEstimate";
+import { computeSnapshotFingerprint, snapshotStorageKey } from "@/lib/launchSnapshot";
+import {
+  computeStaticQaBlockers,
+  computeStaticQaWarnings,
+  StaticQaPanel,
+} from "@/components/workspace/LaunchBlockers";
 
 const CTA_PRESETS = ["Guide", "Call", "Free material", "Audit", "Case study", "Other"] as const;
 
