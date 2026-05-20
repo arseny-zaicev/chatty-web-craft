@@ -418,12 +418,25 @@ Deno.serve(cronGuard("slack-dispatch", async (req) => {
         // conversation, skip the pipeline post but still mirror to delivery-leads
         // (positive_lead does NOT mirror, so ops still needs the signal).
         const dupedByPositive = p?.conversation_id && (await alreadyNotified(supabase, "positive_lead", p.conversation_id));
+        let pipelinePostError: unknown = null;
         if (!dupedByPositive) {
-          await postSlack(pipelineChannel, msg);
+          // Soft-fail on pipeline channel: if the client's channel is broken
+          // (channel_not_found, bot kicked, archived, etc.) we still mirror
+          // to delivery-leads below so ops never miss a lead reply.
+          try { await postSlack(pipelineChannel, msg); }
+          catch (e) { pipelinePostError = e; console.warn("pipeline first_reply failed", pipelineChannel, e); }
         }
         const ISKRA_INTERNAL = "delivery-leads";
         if (pipelineChannel !== ISKRA_INTERNAL) {
           try { await postSlack(ISKRA_INTERNAL, msg); } catch (e) { console.warn("mirror first_reply failed", e); }
+        }
+        if (pipelinePostError) {
+          // Surface the broken-channel signal so admins notice, but don't
+          // re-queue: the lead alert already reached delivery-leads.
+          await supabase.from("slack_event_queue")
+            .update({ status: "sent", processed_at: new Date().toISOString(), error: `pipeline channel ${pipelineChannel} unreachable: ${String((pipelinePostError as Error)?.message ?? pipelinePostError).slice(0,200)}` })
+            .eq("id", ev.id);
+          continue;
         }
       } else if (ev.event_type === "lead.imported" || ev.event_type === "lead.import_failed" || ev.event_type === "lead.dispatched" || ev.event_type === "lead.dispatch_blocked") {
         // Operational noise: do not notify clients in their pipeline channel.
