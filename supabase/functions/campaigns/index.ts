@@ -1624,11 +1624,19 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
     const quota = overrideQuota ?? Math.max(1, Math.min(10000, c.per_number_quota || 200));
     const winStart = overrideWindowStart ?? String(c.schedule_window_start || "09:00:00").slice(0, 5);
     const winEnd = overrideWindowEnd ?? String(c.schedule_window_end || "18:00:00").slice(0, 5);
-    const minDelay = Math.max(60, c.delay_min_seconds || 60);
+    // P0.4 (2026-05-20): honor delay_min_seconds VERBATIM. Previously this
+    // forced `max(60, ...)`, which silently re-paced 0-delay / blast / 30s
+    // campaigns to 60s gaps on every redistribute — the same field had a
+    // different meaning at launch (0 allowed) vs here (>=60 forced).
+    const minDelay = Math.max(0, Number(c.delay_min_seconds ?? 30));
     const wsMin = hhmmToMin(winStart);
     const wsMax = hhmmToMin(winEnd);
     const windowSeconds = Math.max(60, (wsMax - wsMin) * 60);
-    const windowFitCap = Math.max(1, Math.floor(windowSeconds / minDelay));
+    // minDelay=0 (blast) means no per-message floor, so the window doesn't
+    // bound capacity — only the operator-provided quota does.
+    const windowFitCap = minDelay > 0
+      ? Math.max(1, Math.floor(windowSeconds / minDelay))
+      : Number.MAX_SAFE_INTEGER;
     const effectiveQuota = Math.max(1, Math.min(quota, windowFitCap));
     const recipientTz = c.recipient_country ? (COUNTRY_TZ[String(c.recipient_country).toUpperCase()] ?? "UTC") : "UTC";
     const todayKeyMain = todayKeyTz(recipientTz);
