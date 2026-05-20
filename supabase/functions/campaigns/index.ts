@@ -1597,7 +1597,7 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
 
   const { data: campaigns } = await admin
     .from("campaigns")
-    .select("id, user_id, workspace_id, whatsapp_number_id, schedule_window_start, schedule_window_end, scheduled_dates, per_number_quota, delay_min_seconds, delay_max_seconds, recipient_country, respect_recipient_tz, first_scheduled_at, status")
+    .select("id, user_id, workspace_id, whatsapp_number_id, schedule_window_start, schedule_window_end, scheduled_dates, per_number_quota, delay_min_seconds, delay_max_seconds, recipient_country, respect_recipient_tz, first_scheduled_at, status, dispatch_mode")
     .in("id", uniq);
   if (!campaigns || campaigns.length === 0) return json({ error: "Not found" }, 404);
   for (const c of campaigns) {
@@ -1628,6 +1628,55 @@ async function redistributeCampaign(admin: any, requesterId: string, body: any) 
   const newTodayByCampaign: Record<string, number> = {};
 
   for (const c of campaigns) {
+    // P0.6: marketing_instant must NEVER be re-spread across the window.
+    // Stamp every pending recipient as due now (or campaign start if future).
+    if (String((c as any).dispatch_mode || "paced") === "marketing_instant") {
+      const startAtMs = Date.now();
+      const startIso = new Date(startAtMs).toISOString();
+      const tzMain = c.recipient_country ? (COUNTRY_TZ[String(c.recipient_country).toUpperCase()] ?? "UTC") : "UTC";
+      let todayKeyMain: string;
+      try { todayKeyMain = new Intl.DateTimeFormat("en-CA", { timeZone: tzMain }).format(new Date(startAtMs)); }
+      catch { todayKeyMain = startIso.slice(0, 10); }
+
+      // Load all pending recipient ids (paged) and bulk-stamp scheduled_at=now.
+      const ids: string[] = [];
+      const PAGE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await admin
+          .from("campaign_recipients")
+          .select("id")
+          .eq("campaign_id", c.id)
+          .eq("status", "scheduled")
+          .is("sent_at", null)
+          .range(from, from + PAGE - 1);
+        if (error) return json({ error: error.message }, 500);
+        const rows = data ?? [];
+        ids.push(...rows.map((r: any) => r.id));
+        if (rows.length < PAGE) break;
+        from += PAGE;
+      }
+      if (ids.length === 0) continue;
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500);
+        const { error } = await admin
+          .from("campaign_recipients")
+          .update({ scheduled_at: startIso })
+          .in("id", chunk);
+        if (error) return json({ error: error.message }, 500);
+      }
+      totalUpdated += ids.length;
+      newFirstByCampaign[c.id] = startIso;
+      newTodayByCampaign[c.id] = ids.length;
+      await admin.from("campaigns").update({
+        first_scheduled_at: startIso,
+        scheduled_start_at: startIso,
+        today_recipients_count: ids.length,
+        scheduled_dates: [todayKeyMain],
+      }).eq("id", c.id);
+      continue;
+    }
+
     const quota = overrideQuota ?? Math.max(1, Math.min(10000, c.per_number_quota || 200));
     const winStart = overrideWindowStart ?? String(c.schedule_window_start || "09:00:00").slice(0, 5);
     const winEnd = overrideWindowEnd ?? String(c.schedule_window_end || "18:00:00").slice(0, 5);
